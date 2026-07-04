@@ -61,7 +61,7 @@
 .clayer__grid label { font-size: var(--fs-xs); color: var(--text-muted); display: block; margin-bottom: 2px; }
 .clayer .input, .clayer .select { padding: 6px 10px; font-size: var(--fs-sm); }
 .clayer__chk { display: flex; align-items: center; gap: var(--sp-2); margin-top: var(--sp-2); font-size: var(--fs-sm); color: var(--text); }
-.clayer__chk input { width: 16px; height: 16px; accent-color: var(--brand); }
+.clayer__chk input { width: 16px; height: 16px; }
 
 /* --- run buttons -------------------------------------------------------- */
 .run { display: flex; gap: var(--sp-2); }
@@ -121,7 +121,7 @@
 .field > span { display: block; font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin-bottom: 4px; }
 .field--check { display: flex; align-items: center; gap: 8px; }
 .field--check > span { order: 2; margin: 0; text-transform: none; letter-spacing: 0; font-size: var(--fs-sm); color: var(--text); }
-.field--check input { width: 16px; height: 16px; accent-color: var(--brand); }
+.field--check input { width: 16px; height: 16px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: var(--sp-2); margin-top: var(--sp-4); }
 
 /* --- canvas context menu ------------------------------------------------ */
@@ -175,4 +175,4 @@
 .pos-fields label { font-size: var(--fs-xs); color: var(--text-muted); display: block; margin-bottom: 2px; }
 .pos-fields .input { padding: 6px 10px; font-size: var(--fs-sm); }
 .pos-prop { display: flex; align-items: center; gap: 6px; font-size: var(--fs-sm); grid-column: 1 / -1; }
-.pos-prop input { width: 15px; height: 15px; accent-color: var(--brand); }
+.pos-prop input { width: 15px; height: 15px; }
