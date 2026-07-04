@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, Menu } from "electron";
+import { app, BrowserWindow, ipcMain, dialog, Menu, nativeImage } from "electron";
 import { readFile, writeFile, mkdtemp, rm } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -10,6 +10,7 @@ app.name = "modCut"; // makes the macOS app menu read "modCut", not "Electron"
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
+const appIconPath = join(root, "assets", "modcut_logo.png");
 const isMac = process.platform === "darwin";
 let win;
 let sidecar;
@@ -63,6 +64,7 @@ function createWindow() {
   win = new BrowserWindow({
     width: 1360,
     height: 880,
+    icon: appIconPath,
     backgroundColor: "#FFFFFF",
     webPreferences: {
       preload: join(__dirname, "preload.cjs"),
@@ -81,7 +83,7 @@ function buildMenu() {
       ? [{
           label: "modCut",
           submenu: [
-            { label: "About modCut", click: () => send("about") },
+            { role: "about", label: "About modCut" },
             { type: "separator" },
             { label: "Preferences…", accelerator: "Cmd+,", click: () => send("preferences") },
             { type: "separator" },
@@ -184,6 +186,17 @@ function buildMenu() {
 }
 
 app.whenReady().then(() => {
+  const appIcon = nativeImage.createFromPath(appIconPath);
+  if (isMac && !appIcon.isEmpty()) app.dock.setIcon(appIcon);
+  app.setAboutPanelOptions({
+    applicationName: "modCut",
+    applicationVersion: app.getVersion(),
+    version: app.getVersion(),
+    copyright: "Horten Folkeverksted",
+    credits: "Modern laser control for Horten Folkeverksted.",
+    iconPath: appIconPath,
+  });
+
   // ponytail: dev spawns the JDK on PATH; packaging swaps this for the bundled
   // jlink JRE + LibLaserCut fat-jar under process.resourcesPath (see plan, M4).
   sidecar = createSidecar({ args: ["-cp", join(root, "sidecar", "out"), "Sidecar"] });

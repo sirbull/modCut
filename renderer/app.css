@@ -6,7 +6,7 @@
 .toolbar { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3);
            background: var(--bg); border-bottom: 1px solid var(--border); }
 .toolbar .brand { display: flex; align-items: center; gap: var(--sp-2); font-weight: 800; font-size: var(--fs-lg); }
-.toolbar .dot { width: 24px; height: 24px; border-radius: 7px; background: var(--grad-hero); }
+.toolbar .brand-logo { width: 28px; height: 28px; display: block; border-radius: 7px; box-shadow: var(--shadow-1); }
 .toolbar .spacer { flex: 1; }
 .tb-sep { width: 1px; height: 22px; background: var(--border); margin: 0 var(--sp-1); }
 .toolgroup { display: flex; gap: 4px; }
@@ -112,6 +112,11 @@
 /* --- modal -------------------------------------------------------------- */
 .modal-overlay { position: fixed; inset: 0; background: rgba(7,20,17,.45); display: grid; place-items: center; z-index: 50; }
 .modal { width: min(440px, 92vw); max-height: 88vh; overflow: auto; }
+.about-modal { width: min(380px, 92vw); text-align: center; }
+.about-logo { width: 96px; height: 96px; display: block; margin: var(--sp-2) auto var(--sp-4); border-radius: 19px; box-shadow: var(--shadow-1); }
+.about-title { margin: 0; font-size: var(--fs-xl); line-height: 1.2; }
+.about-copy { margin: var(--sp-2) auto 0; color: var(--text-muted); max-width: 28ch; }
+.about-meta { margin-top: var(--sp-4); font-size: var(--fs-xs); color: var(--text-muted); font-family: var(--font-mono); }
 .field { display: block; margin-bottom: var(--sp-3); }
 .field > span { display: block; font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin-bottom: 4px; }
 .field--check { display: flex; align-items: center; gap: 8px; }

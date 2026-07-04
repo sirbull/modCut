@@ -54,6 +54,32 @@ function toast(msg, kind = "info") {
   $("toasts").append(t);
   setTimeout(() => t.remove(), kind === "err" ? 7000 : 4000);
 }
+function showAbout() {
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `<div class="modal panel about-modal" role="dialog" aria-modal="true" aria-labelledby="aboutTitle">
+    <div class="panel__body">
+      <img class="about-logo" src="../modCut_logo.svg" alt="modCut logo">
+      <h2 class="about-title" id="aboutTitle">modCut</h2>
+      <p class="about-copy">Modern laser control for Horten Folkeverksted.</p>
+      <p class="about-meta">Horten Folkeverksted</p>
+      <div class="modal-actions">
+        <button class="btn btn--primary btn--sm" data-close>Close</button>
+      </div>
+    </div>
+  </div>`;
+  const close = () => {
+    document.removeEventListener("keydown", onKey);
+    overlay.remove();
+  };
+  function onKey(e) { if (e.key === "Escape") close(); }
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay || e.target.closest("[data-close]")) close();
+  });
+  document.addEventListener("keydown", onKey);
+  document.body.append(overlay);
+  overlay.querySelector("[data-close]")?.focus();
+}
 
 const material = () => materials.find((m) => m.id === state.materialId) || materials[0];
 const machine = () => machines.find((m) => m.id === state.machineId) || machines[0];
@@ -836,7 +862,7 @@ window.modcut.onMenu((cmd) => ({
   save: () => runJob("Save"), export: () => runJob("Export"), preferences: openSettings,
   "export-settings": exportSettings, "import-settings": importSettings,
   docs: () => window.open("../docs/index.html"),
-  about: () => toast("modCut — modern laser control for Horten Folkeverksted.", "info"),
+  about: showAbout,
 }[cmd]?.()));
 
 // --- boot -------------------------------------------------------------------
