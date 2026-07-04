@@ -1,0 +1,173 @@
+/* modCut workspace layout. Imports design tokens; adds only app-specific structure. */
+
+.app { height: 100vh; display: grid; grid-template-rows: auto auto 1fr auto auto; }
+
+/* --- toolbar ------------------------------------------------------------ */
+.toolbar { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3);
+           background: var(--bg); border-bottom: 1px solid var(--border); }
+.toolbar .brand { display: flex; align-items: center; gap: var(--sp-2); font-weight: 800; font-size: var(--fs-lg); }
+.toolbar .dot { width: 24px; height: 24px; border-radius: 7px; background: var(--grad-hero); }
+.toolbar .spacer { flex: 1; }
+.tb-sep { width: 1px; height: 22px; background: var(--border); margin: 0 var(--sp-1); }
+.toolgroup { display: flex; gap: 4px; }
+.tool-on { background: var(--grad-primary); color: var(--on-brand); }
+.mi { width: 17px; height: 17px; fill: currentColor; display: block; }
+.drawsize { position: fixed; z-index: 40; display: flex; gap: 6px; pointer-events: none; }
+.drawsize.hidden { display: none; }
+.ds-box { background: var(--brand-deep); color: #fff; border-radius: 8px; padding: 3px 8px;
+          font: 600 var(--fs-xs) var(--font-mono); box-shadow: var(--shadow-1); }
+.accent { height: 3px; background: var(--grad-hero); }
+
+/* --- workspace split ---------------------------------------------------- */
+.workspace { display: grid; grid-template-columns: 1fr 344px; min-height: 0; transition: grid-template-columns .18s ease; }
+.workspace.collapsed { grid-template-columns: 1fr 0; }
+.canvas { position: relative; overflow: hidden; background: var(--surface); }
+.side { border-left: 1px solid var(--border); background: var(--bg); overflow: auto; padding: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-5); }
+.workspace.collapsed .side { border-left: 0; }
+
+/* --- side sections ------------------------------------------------------ */
+.sec { display: flex; flex-direction: column; gap: var(--sp-2); }
+/* natural height + the whole side scrolls (no clipping/overlap between sections) */
+.sec--grow { flex: 0 0 auto; }
+.sec h3 { margin: 0; min-height: 24px; display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2);
+          font-size: var(--fs-xs); letter-spacing: .05em; text-transform: uppercase; color: var(--text-muted);
+          cursor: pointer; user-select: none; outline: none; }
+.sec h3::after { content: ""; width: 7px; height: 7px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+                 transform: rotate(45deg); transform-origin: 60% 60%; transition: transform .14s ease, color .14s ease; flex: none; }
+.sec h3:hover, .sec h3:focus-visible { color: var(--brand-deep); }
+.sec.collapsed > :not(h3) { display: none !important; }
+.sec.collapsed h3::after { transform: rotate(-45deg); }
+.hint { margin: 2px 0 0; font-size: var(--fs-sm); color: var(--text-muted); }
+.conn { display: inline-flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-sm); color: var(--text-muted); }
+.conn .led { width: 9px; height: 9px; border-radius: 50%; background: var(--warning); }
+.conn.ok .led { background: var(--brand-mid); }
+.conn.err .led { background: var(--danger); }
+
+/* --- segmented mapping control ----------------------------------------- */
+.seg { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; background: var(--surface-2);
+       margin-inline: calc(-1 * var(--sp-4)); padding: 8px var(--sp-4); border-radius: 0; }
+.seg button { border: 0; background: transparent; padding: 7px 10px; border-radius: 999px; cursor: pointer;
+              font: 600 var(--fs-sm) var(--font-sans); color: var(--text-muted); }
+.seg button.on { background: var(--grad-primary); color: var(--on-brand); }
+
+/* --- Cuts / Layers rows ------------------------------------------------- */
+.clayer { border: 1px solid var(--border); border-radius: 10px; padding: var(--sp-2) var(--sp-3); background: var(--bg); }
+.clayer + .clayer { margin-top: var(--sp-2); }
+.clayer__top { display: flex; align-items: center; gap: var(--sp-2); }
+.clayer__sw { width: 20px; height: 20px; border-radius: 6px; border: 1px solid rgba(0,0,0,.2); flex: none; }
+.clayer__op { flex: 1; }
+.clayer__grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-2); margin-top: var(--sp-2); }
+.clayer__grid.two { grid-template-columns: 1fr 1fr; }
+.clayer__grid label { font-size: var(--fs-xs); color: var(--text-muted); display: block; margin-bottom: 2px; }
+.clayer .input, .clayer .select { padding: 6px 10px; font-size: var(--fs-sm); }
+.clayer__chk { display: flex; align-items: center; gap: var(--sp-2); margin-top: var(--sp-2); font-size: var(--fs-sm); color: var(--text); }
+.clayer__chk input { width: 16px; height: 16px; accent-color: var(--brand); }
+
+/* --- run buttons -------------------------------------------------------- */
+.run { display: flex; gap: var(--sp-2); }
+.run .btn { flex: 1; justify-content: center; }
+
+/* --- material add row --------------------------------------------------- */
+.row-add { display: flex; gap: var(--sp-2); }
+.row-add .select { flex: 1; }
+
+/* --- bottom action bar -------------------------------------------------- */
+.actionbar { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-4);
+             background: var(--bg); border-top: 1px solid var(--border); }
+.actionbar .spacer { flex: 1; }
+.actionbar .est { font: 600 var(--fs-sm) var(--font-mono); color: var(--brand-deep); }
+.actionbar .fn-label { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); }
+.fn-wrap { display: flex; align-items: center; }
+.actionbar .filename { width: 150px; }
+.fn-ext { font: 500 var(--fs-sm) var(--font-mono); color: var(--text-muted); margin-left: 3px; }
+.units { display: flex; align-items: center; gap: 6px; }
+.units > span { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); }
+.units .select { width: auto; padding: 5px 8px; }
+
+/* properties (color + stroke width) */
+.swatches { display: flex; gap: 6px; }
+.swatches button { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--border); cursor: pointer; padding: 0; }
+.swatches button.on { border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand-mid); }
+.prop-row { display: flex; gap: var(--sp-2); align-items: center; margin-top: var(--sp-2); }
+.prop-color { width: 38px; height: 34px; border: 1px solid var(--border); border-radius: 8px; padding: 2px; background: var(--bg); cursor: pointer; }
+.prop-row .input { flex: 1; }
+.prop-w { display: block; margin-top: var(--sp-2); font-size: var(--fs-xs); color: var(--text-muted); }
+.prop-w .input { margin-top: 3px; }
+.hidden { display: none !important; }
+
+/* bitmap controls */
+.bitmap-sec { border-top: 1px solid var(--border); padding-top: var(--sp-4); }
+.range-row { display: grid; grid-template-columns: 86px 1fr 62px; align-items: center; gap: var(--sp-2);
+             font-size: var(--fs-xs); color: var(--text-muted); }
+.range-row input[type="range"] { width: 100%; accent-color: var(--brand); }
+.range-row .range-num { padding: 5px 7px; font-size: var(--fs-xs); font-family: var(--font-mono); }
+
+/* material library list */
+.mat-list { display: flex; flex-direction: column; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+.mat-row { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); border: 1px solid var(--border); border-radius: 10px; }
+.mat-row .mat-name { font-weight: 600; }
+.mat-row .mat-sub { font-size: var(--fs-xs); color: var(--text-muted); font-family: var(--font-mono); }
+.mat-row .grow { flex: 1; }
+
+/* --- modal -------------------------------------------------------------- */
+.modal-overlay { position: fixed; inset: 0; background: rgba(7,20,17,.45); display: grid; place-items: center; z-index: 50; }
+.modal { width: min(440px, 92vw); max-height: 88vh; overflow: auto; }
+.field { display: block; margin-bottom: var(--sp-3); }
+.field > span { display: block; font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin-bottom: 4px; }
+.field--check { display: flex; align-items: center; gap: 8px; }
+.field--check > span { order: 2; margin: 0; text-transform: none; letter-spacing: 0; font-size: var(--fs-sm); color: var(--text); }
+.field--check input { width: 16px; height: 16px; accent-color: var(--brand); }
+.modal-actions { display: flex; justify-content: flex-end; gap: var(--sp-2); margin-top: var(--sp-4); }
+
+/* --- canvas context menu ------------------------------------------------ */
+.ctx-menu { position: fixed; z-index: 80; min-width: 184px; padding: 6px; background: var(--bg);
+            border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-2); }
+.ctx-menu__label { padding: 7px 10px 4px; font-size: var(--fs-xs); text-transform: uppercase;
+                   letter-spacing: .04em; color: var(--text-muted); }
+.ctx-menu button { width: 100%; display: flex; align-items: center; justify-content: space-between;
+                   border: 0; background: transparent; color: var(--text); border-radius: 8px;
+                   padding: 7px 10px; cursor: pointer; font: 600 var(--fs-sm) var(--font-sans); }
+.ctx-menu button:hover { background: var(--surface-2); }
+.ctx-menu button:disabled { color: var(--text-muted); opacity: .55; cursor: default; }
+.ctx-menu button:disabled:hover { background: transparent; }
+.ctx-menu kbd { font: 600 var(--fs-xs) var(--font-mono); color: var(--text-muted); }
+
+/* --- statusbar ---------------------------------------------------------- */
+.statusbar { display: flex; align-items: center; gap: var(--sp-2); padding: 6px var(--sp-4);
+             background: var(--surface); border-top: 1px solid var(--border);
+             font-size: var(--fs-xs); color: var(--text-muted); font-family: var(--font-mono); }
+.statusbar .spacer { flex: 1; }
+.statusbar #msg { color: var(--brand-deep); font-family: var(--font-sans); font-weight: 600; }
+
+/* --- bed canvas (Paper.js draws the plate, grid, design and selection) --- */
+.canvas { cursor: default; }
+.bed-canvas { display: block; width: 100%; height: 100%; }
+
+/* --- toasts ------------------------------------------------------------- */
+.toasts { position: fixed; top: 14px; right: 14px; display: flex; flex-direction: column; gap: 8px; z-index: 70; }
+.toast { padding: 10px 14px; border-radius: 12px; color: #fff; font-size: var(--fs-sm); box-shadow: var(--shadow-2); max-width: 340px; animation: toastin .15s ease; }
+.toast--ok { background: var(--brand); color: var(--on-brand); }
+.toast--err { background: var(--danger); }
+.toast--info { background: var(--brand-deep); }
+@keyframes toastin { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; } }
+
+/* --- simulate control bar ---------------------------------------------- */
+.simbar { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%);
+          display: flex; align-items: center; gap: var(--sp-3); background: var(--bg);
+          border: 1px solid var(--border); border-radius: var(--r-pill); padding: 8px 14px; box-shadow: var(--shadow-2); z-index: 20; }
+.simbar.hidden { display: none; }
+.simbar .sp { display: flex; gap: 4px; }
+.simbar .sp button { border: 0; background: var(--surface-2); border-radius: var(--r-pill); padding: 5px 9px; font-size: var(--fs-xs); font-weight: 600; cursor: pointer; color: var(--text-muted); }
+.simbar .sp button.on { background: var(--grad-primary); color: var(--on-brand); }
+.simbar .sim-prog { font: 600 var(--fs-sm) var(--font-mono); color: var(--brand-deep); min-width: 40px; }
+
+/* --- position (9-dot reference + numeric) ------------------------------- */
+.pos { display: flex; gap: var(--sp-3); }
+.refdot { display: grid; grid-template-columns: repeat(3, 14px); grid-template-rows: repeat(3, 14px); gap: 6px; align-content: center; flex: none; }
+.refdot button { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--brand); background: var(--bg); padding: 0; cursor: pointer; }
+.refdot button.on { background: var(--brand); }
+.pos-fields { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
+.pos-fields label { font-size: var(--fs-xs); color: var(--text-muted); display: block; margin-bottom: 2px; }
+.pos-fields .input { padding: 6px 10px; font-size: var(--fs-sm); }
+.pos-prop { display: flex; align-items: center; gap: 6px; font-size: var(--fs-sm); grid-column: 1 / -1; }
+.pos-prop input { width: 15px; height: 15px; accent-color: var(--brand); }

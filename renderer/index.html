@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>modCut</title>
+<link rel="stylesheet" href="../design/tokens.css">
+<link rel="stylesheet" href="./app.css">
+</head>
+<body>
+<div class="app">
+  <header class="toolbar">
+    <div class="brand"><span class="dot"></span> modCut</div>
+    <span class="tb-sep"></span>
+    <button class="btn btn--ghost btn--sm" id="newDoc" title="Create a new empty document">New</button>
+    <button class="btn btn--secondary btn--sm" id="import" title="Import a file (SVG, EPS, PDF, AI, DXF, G-code, image). Colours become cut/engrave/score layers.">Import</button>
+    <span class="tb-sep"></span>
+    <span class="toolgroup" id="tools">
+      <button class="btn btn--ghost btn--sm btn--icon tool-on" data-tool="select" title="Move (V)"><svg class="mi" viewBox="0 -960 960 960"><path d="m320-410 79-110h170L320-716v306ZM551-80 406-392 240-160v-720l560 440H516l144 309-109 51ZM399-520Z"/></svg></button>
+      <button class="btn btn--ghost btn--sm btn--icon" data-tool="node" title="Edit points (A)"><svg class="mi" viewBox="0 -960 960 960"><path d="M600-80v-100L320-320H120v-240h172l108-124v-196h240v240H468L360-516v126l240 120v-50h240v240H600ZM480-720h80v-80h-80v80ZM200-400h80v-80h-80v80Zm480 240h80v-80h-80v80Z"/></svg></button>
+      <button class="btn btn--ghost btn--sm btn--icon" data-tool="pen" title="Pen — bezier (P)"><svg class="mi" viewBox="0 -960 960 960"><path d="M160-120v-170l527-526q12-12 27-18t30-6q16 0 30.5 6t25.5 18l56 56q12 11 18 25.5t6 30.5q0 15-6 30t-18 27L330-120H160Zm80-80h56l393-392-28-29-29-28-392 393v56Zm320 80q74 0 137-37t63-103q0-36-19-62t-51-45l-59 59q23 10 36 22t13 26q0 23-36.5 41.5T560-200q-17 0-28.5 11.5T520-160q0 17 11.5 28.5T560-120ZM183-426l60-60q-20-8-31.5-16.5T200-520q0-12 18-24t76-37q88-38 117-69t29-70q0-55-44-87.5T280-840q-45 0-80.5 16T145-785q-11 13-9 29t15 26q13 11 29 9t27-13q14-14 31-20t42-6q41 0 60.5 12t19.5 28q0 14-17.5 25.5T262-654q-80 35-111 63.5T120-520q0 32 17 54.5t46 39.5Z"/></svg></button>
+      <button class="btn btn--ghost btn--sm btn--icon" data-tool="rect" title="Rectangle (M) — drag to draw, or click for an exact size"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="5" width="16" height="14" rx="2"/></svg></button>
+      <button class="btn btn--ghost btn--sm btn--icon" data-tool="ellipse" title="Circle / ellipse (C) — drag to draw, or click for an exact size"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/></svg></button>
+      <button class="btn btn--ghost btn--sm btn--icon" data-tool="line" title="Line (L) — drag from start to end"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="5" y1="19" x2="19" y2="5"/></svg></button>
+    </span>
+    <span class="tb-sep"></span>
+    <button class="btn btn--ghost btn--sm btn--icon" id="zoomOut" title="Zoom out">−</button>
+    <button class="btn btn--ghost btn--sm" id="zoomFit" title="Fit to bed">Fit</button>
+    <button class="btn btn--ghost btn--sm btn--icon" id="zoomIn" title="Zoom in">+</button>
+    <span class="tb-sep"></span>
+    <button class="btn btn--ghost btn--sm" id="selMode" title="Selection scope: whole design vs single element">Mark whole</button>
+    <div class="spacer"></div>
+    <button class="btn btn--ghost btn--sm btn--icon" id="togglePanel" title="Show/hide panel">⟩</button>
+  </header>
+  <div class="accent"></div>
+
+  <main class="workspace" id="workspace">
+    <section class="canvas" id="stage">
+      <div class="simbar hidden" id="simbar">
+        <button class="btn btn--ghost btn--sm btn--icon" id="simPlay" title="Play/pause">⏸</button>
+        <div class="sp" id="simSpeeds">
+          <button data-x="1" class="on">1×</button><button data-x="2">2×</button><button data-x="5">5×</button>
+          <button data-x="10">10×</button><button data-x="20">20×</button><button data-x="50">50×</button>
+        </div>
+        <span class="sim-prog" id="simProg">0%</span>
+        <button class="btn btn--secondary btn--sm" id="simClose">Close</button>
+      </div>
+      <div class="drawsize hidden" id="drawsize">
+        <span class="ds-box">W&nbsp;<b id="dsW">0</b></span>
+        <span class="ds-box">H&nbsp;<b id="dsH">0</b></span>
+      </div>
+    </section>
+
+    <aside class="side" id="side">
+      <div class="sec">
+        <h3 title="The laser this job is for. Add or edit machines under the Machine menu (driver, USB/network, bed size).">Machine</h3>
+        <select class="select" id="device"></select>
+        <div class="conn" id="conn"><span class="led"></span><span id="connText">Connecting …</span></div>
+        <button class="btn btn--secondary btn--sm" id="connect" title="Connect to the selected machine over USB or network (coming in a later version).">Connect</button>
+      </div>
+
+      <div class="sec">
+        <h3 title="Saved power/speed presets per material and thickness. Picking one fills the layer settings; manage them in Materials ▸ Material library.">Material</h3>
+        <div class="row-add">
+          <select class="select" id="material"></select>
+          <button class="btn btn--secondary btn--sm btn--icon" id="addMaterial" title="Add material">+</button>
+        </div>
+        <p class="hint">Pick a material — power and speed fill in automatically per layer.</p>
+      </div>
+
+      <div class="sec hidden" id="propSec">
+        <h3 title="Colour and stroke width. With something selected it restyles it; with nothing selected it sets the defaults for the next shape you draw. Type any hex code or use the palette.">Properties</h3>
+        <div class="swatches" id="swatches">
+          <button data-c="#ff0000" style="background:#ff0000" title="Red"></button>
+          <button data-c="#00aa00" style="background:#00aa00" title="Green"></button>
+          <button data-c="#0000ff" style="background:#0000ff" title="Blue"></button>
+          <button data-c="#000000" style="background:#000000" title="Black"></button>
+        </div>
+        <div class="prop-row">
+          <input type="color" id="propColor" class="prop-color" value="#000000" title="Custom color">
+          <input type="text" id="propHex" class="input" value="#000000" spellcheck="false">
+        </div>
+        <label class="prop-w">Stroke width (mm)
+          <input type="number" id="propWidth" class="input" min="0.05" step="0.05" value="0.5">
+        </label>
+      </div>
+
+      <div class="sec bitmap-sec hidden" id="bitmapSec">
+        <h3 title="Raster image controls. The image is converted to black and white before engraving.">Bitmap</h3>
+        <label class="range-row">Brightness
+          <input type="range" id="bmpBrightness" min="-100" max="100" step="1" value="0">
+          <input class="input range-num" id="bmpBrightnessNum" type="number" min="-100" max="100" step="1" value="0">
+        </label>
+        <label class="range-row">Contrast
+          <input type="range" id="bmpContrast" min="-100" max="100" step="1" value="0">
+          <input class="input range-num" id="bmpContrastNum" type="number" min="-100" max="100" step="1" value="0">
+        </label>
+        <label class="range-row">Threshold
+          <input type="range" id="bmpThreshold" min="0" max="255" step="1" value="128">
+          <input class="input range-num" id="bmpThresholdNum" type="number" min="0" max="255" step="1" value="128">
+        </label>
+        <label class="range-row">Gamma
+          <input type="range" id="bmpGamma" min="0.2" max="3" step="0.05" value="1">
+          <input class="input range-num" id="bmpGammaNum" type="number" min="0.2" max="3" step="0.05" value="1">
+        </label>
+        <label class="clayer__chk"><input type="checkbox" id="bmpInvert"> Invert</label>
+        <button class="btn btn--ghost btn--sm" id="bmpReset">Reset bitmap</button>
+      </div>
+
+      <div class="sec">
+        <h3 title="Exact position, size and rotation of the whole design, in your chosen unit. The 9 dots pick which point of the design the X/Y refer to (e.g. top-left). Tick Proportional to lock the aspect ratio.">Position</h3>
+        <div class="pos">
+          <div class="refdot" id="refdot">
+            <button data-r="tl" class="on"></button><button data-r="tc"></button><button data-r="tr"></button>
+            <button data-r="lc"></button><button data-r="c"></button><button data-r="rc"></button>
+            <button data-r="bl"></button><button data-r="bc"></button><button data-r="br"></button>
+          </div>
+          <div class="pos-fields">
+            <div><label>X</label><input class="input" id="posX" type="number" step="0.1"></div>
+            <div><label>Y</label><input class="input" id="posY" type="number" step="0.1"></div>
+            <div><label>Width</label><input class="input" id="posW" type="number" step="0.1"></div>
+            <div><label>Height</label><input class="input" id="posH" type="number" step="0.1"></div>
+            <div><label>Angle °</label><input class="input" id="posA" type="number" step="1"></div>
+            <label class="pos-prop"><input type="checkbox" id="posProp" checked> Proportional</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="sec">
+        <h3 title="How colours turn into operations. 'By colour' gives one layer per colour so you assign each; 'All: Cut/Engrave/Score' forces every shape to a single operation.">Mapping</h3>
+        <div class="seg" id="mapmode">
+          <button data-mode="color" class="on">By color</button>
+          <button data-mode="cut">All: Cut</button>
+          <button data-mode="engrave">All: Engrave</button>
+          <button data-mode="score">All: Score</button>
+        </div>
+      </div>
+
+      <div class="sec">
+        <h3 title="The order the laser processes paths. Optimize = least head travel (usually fastest). Nearby elements keeps shapes/words together. Color order runs them top-to-bottom as listed below.">Path order</h3>
+        <select class="select" id="pathOrder">
+          <option value="optimize">Optimize (fastest)</option>
+          <option value="nearby">Nearby elements (group)</option>
+          <option value="color">Color order (as listed)</option>
+        </select>
+      </div>
+
+      <div class="sec sec--grow">
+        <h3 title="One row per colour. Choose the operation (Cut / Engrave / Score) and set power %, speed, frequency — plus DPI, dithering and direction for engraving. Toggle Output to include/exclude a layer.">Cuts / Layers</h3>
+        <div id="layers"></div>
+        <p class="hint" id="layersHint">Import a file to see its color layers here.</p>
+      </div>
+
+    </aside>
+  </main>
+
+  <div class="actionbar">
+    <label class="units"><span>Units</span>
+      <select id="units" class="select"><option value="mm">mm</option><option value="cm">cm</option><option value="in">in</option></select>
+    </label>
+    <span class="tb-sep"></span>
+    <button class="btn btn--ghost btn--sm" id="estimate" title="Rough run-time estimate from path lengths and each layer's speed. Recompute after changing speeds or the design.">Estimate time</button>
+    <span class="est" id="estimateOut"></span>
+    <div class="spacer"></div>
+    <span class="fn-label">File name</span>
+    <div class="fn-wrap"><input class="input filename" id="filename" value="job" spellcheck="false"><span class="fn-ext" id="fnExt">.gcode</span></div>
+    <button class="btn btn--secondary btn--sm" id="simulate" title="Preview the toolpath: a red dot runs the path in order — cuts leave a black line, engraving fills in. Adjust speed 1×–50×.">Simulate</button>
+    <button class="btn btn--secondary btn--sm" id="frame" title="Trace the job's outline with the beam OFF, so you can check placement on the material before running. It does not cut.">Frame</button>
+    <button class="btn btn--primary btn--sm" id="sendBtn" title="Send the job file to the machine's memory. You then start the job from the machine itself.">Send</button>
+  </div>
+
+  <footer class="statusbar">
+    <span id="coords">X 0.0  Y 0.0 mm</span>
+    <span class="sep">·</span>
+    <span id="sel">0 selected</span>
+    <span class="sep">·</span>
+    <span id="file">No file</span>
+    <div class="spacer"></div>
+    <span id="msg"></span>
+  </footer>
+</div>
+<div class="toasts" id="toasts"></div>
+<script src="../node_modules/paper/dist/paper-core.min.js"></script>
+<script type="module" src="./app.js"></script>
+</body>
+</html>

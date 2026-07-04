@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="no">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>modCut — Brukerveiledning</title>
+<link rel="stylesheet" href="../design/tokens.css">
+<style>
+  .layout { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
+  .side { background: var(--surface); border-right: 1px solid var(--border); padding: var(--sp-4); position: sticky; top: 0; height: 100vh; overflow: auto; }
+  .side .brand { display: flex; align-items: center; gap: var(--sp-2); font-weight: 800; font-size: var(--fs-lg); margin-bottom: var(--sp-4); }
+  .side .dot { width: 26px; height: 26px; border-radius: 8px; background: var(--grad-hero); }
+  .nav a { display: block; padding: 8px 12px; border-radius: var(--r-pill); color: var(--text); font-size: var(--fs-sm); }
+  .nav a:hover { background: var(--surface-2); text-decoration: none; }
+  main { padding: var(--sp-8) var(--sp-6); max-width: 760px; }
+  h1 { font-size: var(--fs-3xl); margin: 0 0 var(--sp-2); }
+  .lede { color: var(--text-muted); font-size: var(--fs-lg); margin-bottom: var(--sp-6); }
+  section { scroll-margin-top: var(--sp-4); margin-bottom: var(--sp-8); }
+  h2 { font-size: var(--fs-2xl); margin: 0 0 var(--sp-3); padding-top: var(--sp-4); border-top: 1px solid var(--border); }
+  h3 { font-size: var(--fs-lg); margin: var(--sp-5) 0 var(--sp-2); }
+  p, li { line-height: 1.65; }
+  ol, ul { padding-left: 1.3em; }
+  code { font-family: var(--font-mono); font-size: .9em; background: var(--surface-2); padding: 1px 6px; border-radius: 5px; }
+  .callout { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--brand-mid); border-radius: 10px; padding: var(--sp-4); margin: var(--sp-4) 0; }
+  .callout--warn { border-left-color: var(--danger); }
+  .steps { counter-reset: s; list-style: none; padding: 0; }
+  .steps li { counter-increment: s; position: relative; padding: 0 0 var(--sp-4) 44px; }
+  .steps li::before { content: counter(s); position: absolute; left: 0; top: 0; width: 30px; height: 30px; border-radius: 50%; background: var(--grad-primary); color: var(--on-brand); display: grid; place-items: center; font-weight: 700; }
+  table { border-collapse: collapse; width: 100%; margin: var(--sp-3) 0; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: var(--fs-sm); vertical-align: top; }
+  th { color: var(--text-muted); text-transform: uppercase; font-size: var(--fs-xs); letter-spacing: .03em; }
+  .op-tag { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: var(--r-pill); font: 700 var(--fs-xs) var(--font-sans); text-transform: uppercase; }
+  @media (max-width: 720px) { .layout { grid-template-columns: 1fr; } .side { position: static; height: auto; } }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="side">
+    <div class="brand"><span class="dot"></span> modCut</div>
+    <nav class="nav">
+      <a href="#start">Kom i gang</a>
+      <a href="#import">Importere en fil</a>
+      <a href="#modes">Cut, Engrave &amp; Score</a>
+      <a href="#colors">Farger → operasjoner</a>
+      <a href="#library">Material-bibliotek</a>
+      <a href="#run">Kjøre en jobb trygt</a>
+      <a href="#trouble">Feilsøking</a>
+    </nav>
+  </aside>
+
+  <main>
+    <h1>Brukerveiledning</h1>
+    <p class="lede">Alt du trenger for å gå fra en tegning til et ferdig laserkuttet resultat — skrevet for nybegynnere.</p>
+
+    <section id="start">
+      <h2>Kom i gang</h2>
+      <p>modCut styrer laserkutterne på Horten Folkeverksted. Grunnideen er enkel:
+         <strong>du tegner i fargelag, og hver farge blir en operasjon</strong> (kutt, gravering eller score).</p>
+      <ol class="steps">
+        <li><strong>Koble til maskinen.</strong> USB-kabel eller nettverk. Velg maskinen i <em>Laser</em>-panelet nede til høyre.</li>
+        <li><strong>Importer tegningen din</strong> (<code>Fil → Importer</code>, eller dra filen inn). SVG, DXF, PDF eller G-code.</li>
+        <li><strong>Sett fokus</strong> på materialet, og velg riktig <em>material + tykkelse</em> i biblioteket.</li>
+        <li><strong>Tilordne operasjoner</strong> til fargene i <em>Cuts / Layers</em>-panelet.</li>
+        <li><strong>Ramme</strong> jobben for å sjekke plasseringen, så trykk <em>Start</em>.</li>
+      </ol>
+    </section>
+
+    <section id="import">
+      <h2>Importere en fil</h2>
+      <p>modCut leser filen, plukker ut det som betyr noe (former og farger) og forkaster alt annet.
+         Derfor fungerer også SVG-er rett fra Adobe Illustrator — noe VisiCut ofte snublet på.</p>
+      <h3>Eksporter rent fra Illustrator / Inkscape</h3>
+      <ul>
+        <li>Gjør om <strong>tekst til baner</strong> (<em>Type → Create Outlines</em>). Laseren kutter baner, ikke fonter.</li>
+        <li>Bruk <strong>rene RGB-farger</strong> per operasjon — én farge = ett lag.</li>
+        <li>Sett en <strong>fast størrelse i mm</strong>. modCut respekterer målene; en 100&nbsp;mm firkant blir 100&nbsp;mm.</li>
+      </ul>
+      <div class="callout">
+        <strong>Hvorfor «farge = operasjon»?</strong> Det er den raskeste måten å styre laseren på:
+        du bestemmer hva som skjer med hver strek bare ved å gi den en farge. Rødt kutter, grønt graverer — du velger selv.
+      </div>
+      <table>
+        <tr><th>Format</th><th>Brukes til</th></tr>
+        <tr><td>SVG / AI / PDF</td><td>Vektortegninger fra Illustrator, Inkscape, Affinity</td></tr>
+        <tr><td>DXF</td><td>CAD-tegninger (Fusion, AutoCAD)</td></tr>
+        <tr><td>G-code</td><td>Ferdig maskinkode — kjøres direkte</td></tr>
+        <tr><td>PNG / JPG</td><td>Bilder for rastergravering</td></tr>
+      </table>
+    </section>
+
+    <section id="modes">
+      <h2>Cut, Engrave &amp; Score</h2>
+      <p>De tre måtene å bearbeide materialet på:</p>
+      <table>
+        <tr><th>Operasjon</th><th>Hva den gjør</th><th>Typisk innstilling</th></tr>
+        <tr>
+          <td><span class="op-tag" style="background:var(--danger);color:#fff">Cut</span></td>
+          <td>Kutter helt gjennom materialet. Følger banen med full stråle.</td>
+          <td>Lav fart, høy effekt</td>
+        </tr>
+        <tr>
+          <td><span class="op-tag" style="background:var(--brand-deep);color:#fff">Engrave</span></td>
+          <td>Graverer linje for linje oppover (raster), som en blekkskriver. Fyller flater.</td>
+          <td>Høy fart, moderat effekt</td>
+        </tr>
+        <tr>
+          <td><span class="op-tag" style="background:var(--brand);color:var(--on-brand)">Score</span></td>
+          <td>Følger banen som et kutt, men med svak stråle — «risser» en linje uten å kutte gjennom.</td>
+          <td>Middels fart, lav effekt</td>
+        </tr>
+      </table>
+      <div class="callout">
+        <strong>Cut vs. Score:</strong> begge følger streken (vektor). Forskjellen er bare effekt og fart —
+        Score bruker en svak stråle så du får en tynn markeringslinje i stedet for et gjennomkutt.
+      </div>
+    </section>
+
+    <section id="colors">
+      <h2>Farger → operasjoner</h2>
+      <p>Hver distinkte farge i tegningen dukker opp som en rad i <em>Cuts / Layers</em>. På hver rad velger du:</p>
+      <ul>
+        <li><strong>Operasjon</strong> — Cut, Engrave, Score eller Mark.</li>
+        <li><strong>Effekt (power)</strong> — hvor sterk strålen er, i prosent.</li>
+        <li><strong>Fart (speed)</strong> — hvor fort hodet beveger seg.</li>
+        <li><strong>Frekvens</strong> — pulsfrekvens (viktig på CO2 for rene kanter i tynne materialer).</li>
+        <li><strong>Offset</strong> — fokus-/høydejustering for laget.</li>
+      </ul>
+      <p>Rekkefølgen på radene er <strong>kuttrekkefølgen</strong>. Tips: graver først, kutt sist — da faller ikke delen ut før graveringen er gjort.</p>
+    </section>
+
+    <section id="library">
+      <h2>Material-bibliotek</h2>
+      <p>Lagrede innstillinger for <strong>material → tykkelse → operasjon</strong>. Har du først funnet gode verdier for
+         «3&nbsp;mm bjørkefiner, Cut», lagrer du dem én gang og gjenbruker dem for alltid.</p>
+      <ul>
+        <li><strong>Tilordne</strong> kopierer innstillingene inn i laget (en engangskopi).</li>
+        <li><strong>Koble</strong> binder laget til biblioteket — endrer du biblioteket, oppdateres alle koblede lag. Nyttig for et delt verksted.</li>
+      </ul>
+      <div class="callout">
+        <strong>Material-test:</strong> usikker på verdiene? Kjør en test-rute — et rutenett av små felt med
+        ulik effekt og fart — og se hvilken kombinasjon som gir best resultat på nettopp ditt materiale.
+      </div>
+    </section>
+
+    <section id="run">
+      <h2>Kjøre en jobb trygt</h2>
+      <ol class="steps">
+        <li><strong>Fokus:</strong> still høyden på materialet før noe annet.</li>
+        <li><strong>Origo:</strong> velg startpunkt (9-punkts velger) og «Start fra» (absolutt / gjeldende posisjon / brukerorigo).</li>
+        <li><strong>Ramme:</strong> trykk <em>Ramme</em> — hodet kjører rundt jobbens ytterkant uten stråle, så du ser plasseringen.</li>
+        <li><strong>Start</strong> kjører nå. <strong>Send</strong> legger jobben i maskinens minne (for DSP-/Ruida-maskiner).</li>
+      </ol>
+      <div class="callout callout--warn">
+        <strong>Aldri gå fra en laser som kjører.</strong> Ha vann/CO₂-slukker for hånden og avtrekket på.
+      </div>
+    </section>
+
+    <section id="trouble">
+      <h2>Feilsøking</h2>
+      <h3>SVG-en ser feil ut / alt ble svart</h3>
+      <p>Eksporter på nytt med <em>Presentation Attributes</em> (ikke <em>Internal CSS</em>) i Illustrator, og gjør tekst om til baner.</p>
+      <h3>Feil størrelse</h3>
+      <p>Sett en fast <code>width/height</code> i mm ved eksport. modCut leser <code>viewBox</code> og enheter riktig, men prosentmål blir gjetting.</p>
+      <h3>Får ikke kontakt med maskinen</h3>
+      <p>Sjekk USB-kabel/port eller IP-adresse i <em>Laser → Enheter</em>. Statuslinjen nederst viser tilkoblingen.</p>
+    </section>
+  </main>
+</div>
+</body>
+</html>

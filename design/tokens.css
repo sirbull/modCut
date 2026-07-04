@@ -1,0 +1,163 @@
+/* ============================================================================
+   modCut design system — single source of truth (app + docs both import this).
+   Source: Horten Folkeverksted profile gradient (#00AF96 -> #00AC69).
+   Rules are enforced by design/check-contrast.mjs. Follow slavishly.
+   ========================================================================== */
+
+:root {
+  /* ---- Brand ramp -------------------------------------------------------- */
+  --brand-deep:  #006B5C;  /* dark teal-green — links, text accents, outlines  */
+  --brand:       #00AC69;  /* gradient bottom — fills, active states, controls */
+  --brand-mid:   #00AF96;  /* gradient top — focus, accents                    */
+  --lime:        #BFEFE3;  /* light mint accent with dark text                  */
+  --lime-bright: #E1FAF1;  /* pale mint highlight                               */
+
+  /* ---- Gradients --------------------------------------------------------- */
+  /* Brand gradients are vertical: top #00AF96 -> bottom #00AC69. */
+  --grad-primary: linear-gradient(180deg, #00AF96 0%, #00AC69 100%);
+  --grad-hero:    linear-gradient(180deg, #00AF96 0%, #00AC69 100%);
+  --grad-accent:  linear-gradient(180deg, #00AF96 0%, #00AC69 100%);
+
+  /* ---- Neutrals (light theme, default) ---------------------------------- */
+  --bg:         #FFFFFF;
+  --surface:    #F5FBF7;
+  --surface-2:  #E7F5EF;
+  --border:     #CFE6DC;
+  --text:       #071411;   /* near-black, green-tinted — body text            */
+  --text-muted: #435A50;   /* secondary text — passes AA on bg + surface      */
+  --on-brand:   #071411;   /* readable text on bright logo colours/gradients   */
+
+  /* ---- Feedback (kept OUT of the green ramp so they read as distinct) ---- */
+  --danger:  #B4321F;      /* cut/stop/destructive — solid, white text        */
+  --warning: #94610E;
+  --ok:      var(--brand);
+
+  /* ---- Radius / spacing / elevation ------------------------------------- */
+  --r-pill: 999px;
+  --r-card: 14px;
+  --r-input: 10px;
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px;  --sp-4: 16px;
+  --sp-5: 24px; --sp-6: 32px; --sp-8: 48px;
+  --shadow-1: 0 1px 2px rgba(7,20,17,.08), 0 1px 3px rgba(7,20,17,.06);
+  --shadow-2: 0 4px 12px rgba(7,20,17,.10), 0 2px 4px rgba(7,20,17,.06);
+
+  /* ---- Type ------------------------------------------------------------- */
+  /* ponytail: system stack now; self-host Inter + a condensed display later. */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --fs-xs: 12px; --fs-sm: 13px; --fs-base: 15px; --fs-lg: 18px;
+  --fs-xl: 24px; --fs-2xl: 32px; --fs-3xl: 44px;
+  --lh: 1.5;
+}
+
+/* Light is the default. Dark is opt-in only (data-theme="dark"), never auto —
+   the makerspace wanted a bright, white UI. ponytail: add prefers-color-scheme
+   back if users ask for auto-dark. */
+:root[data-theme="dark"] {
+  --bg:        #071411;
+  --surface:   #0D221E;
+  --surface-2: #14352F;
+  --border:    #24584F;
+  --text:      #E9F7EF;
+  --text-muted:#A6C6B8;
+}
+
+/* ============================================================================
+   Base
+   ========================================================================== */
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--fs-base);
+  line-height: var(--lh);
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--brand-deep); text-decoration: none; }
+a:hover { text-decoration: underline; }
+:focus-visible { outline: 2px solid var(--brand-mid); outline-offset: 2px; border-radius: 4px; }
+
+/* ============================================================================
+   Components (both app + docs reuse these classes)
+   ========================================================================== */
+
+/* --- Pill buttons ------------------------------------------------------- */
+.btn {
+  display: inline-flex; align-items: center; gap: var(--sp-2);
+  padding: 10px 20px; border: 0; cursor: pointer;
+  border-radius: var(--r-pill);
+  font: 600 var(--fs-base)/1 var(--font-sans);
+  color: var(--brand-deep); background: transparent;
+  transition: filter .12s ease, transform .04s ease;
+}
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+
+.btn--primary { background: var(--grad-primary); color: var(--on-brand); box-shadow: var(--shadow-1); }
+.btn--primary:hover { filter: brightness(1.06); }
+
+.btn--secondary { background: transparent; color: var(--brand-deep); box-shadow: inset 0 0 0 2px var(--brand); }
+.btn--secondary:hover { background: color-mix(in srgb, var(--brand) 8%, transparent); }
+
+.btn--ghost { background: var(--surface-2); color: var(--text); }
+.btn--ghost:hover { filter: brightness(.97); }
+
+.btn--danger { background: var(--danger); color: #fff; }
+.btn--danger:hover { filter: brightness(1.06); }
+
+.btn--sm { padding: 6px 14px; font-size: var(--fs-sm); }
+/* Single-glyph buttons (+, −, ⟩) are circular, not oval. */
+.btn--icon { padding: 0; width: 34px; height: 34px; border-radius: 50%; justify-content: center; }
+.btn--sm.btn--icon { width: 28px; height: 28px; }
+
+/* --- Panels / cards ----------------------------------------------------- */
+.panel {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-card); box-shadow: var(--shadow-1);
+}
+.panel__header {
+  padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--border);
+  font-weight: 700; font-size: var(--fs-sm); letter-spacing: .02em;
+  text-transform: uppercase; color: var(--text-muted);
+}
+.panel__body { padding: var(--sp-4); }
+
+/* --- Inputs ------------------------------------------------------------- */
+.input, .select {
+  width: 100%; padding: 8px 12px; font-size: var(--fs-base);
+  color: var(--text); background: var(--bg);
+  border: 1px solid var(--border); border-radius: var(--r-input);
+}
+.input:focus, .select:focus { border-color: var(--brand-mid); outline: none; }
+
+/* --- Cuts / Layers row (the core screen of the app) --------------------- */
+.layer-row {
+  display: grid;
+  grid-template-columns: 28px 1fr 96px auto auto auto;
+  align-items: center; gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.layer-row + .layer-row { margin-top: var(--sp-2); }
+.layer-row__swatch { width: 22px; height: 22px; border-radius: 6px; border: 1px solid rgba(0,0,0,.15); }
+.layer-row__spd { font: 500 var(--fs-sm)/1.2 var(--font-mono); color: var(--text-muted); white-space: nowrap; }
+
+/* Semantic operation tag (modCut's clarity layer over LightBurn's raw mode) */
+.op-tag {
+  display: inline-flex; align-items: center; padding: 3px 10px;
+  border-radius: var(--r-pill); font: 700 var(--fs-xs)/1 var(--font-sans);
+  letter-spacing: .04em; text-transform: uppercase;
+}
+.op-tag--cut     { background: var(--danger);     color: #fff; }
+.op-tag--engrave { background: var(--brand-deep); color: #fff; }
+.op-tag--score   { background: var(--brand);      color: var(--on-brand); }
+.op-tag--mark    { background: var(--lime);       color: var(--text); } /* text on lime = --text */
+
+/* --- Toggle ------------------------------------------------------------- */
+.toggle { width: 40px; height: 22px; border-radius: var(--r-pill); background: var(--border); position: relative; cursor: pointer; border: 0; }
+.toggle[aria-checked="true"] { background: var(--brand); }
+.toggle::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: left .12s ease; }
+.toggle[aria-checked="true"]::after { left: 20px; }
