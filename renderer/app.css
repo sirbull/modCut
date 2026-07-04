@@ -151,7 +151,7 @@
 /* --- toasts ------------------------------------------------------------- */
 .toasts { position: fixed; top: 14px; right: 14px; display: flex; flex-direction: column; gap: 8px; z-index: 70; }
 .toast { padding: 10px 14px; border-radius: 12px; color: #fff; font-size: var(--fs-sm); box-shadow: var(--shadow-2); max-width: 340px; animation: toastin .15s ease; }
-.toast--ok { background: var(--brand); color: var(--on-brand); }
+.toast--ok { background: var(--grad-primary); color: var(--on-brand); }
 .toast--err { background: var(--danger); }
 .toast--info { background: var(--brand-deep); }
 @keyframes toastin { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; } }

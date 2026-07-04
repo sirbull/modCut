@@ -9,12 +9,15 @@
   --brand-deep:  #006B5C;  /* dark teal-green — links, text accents, outlines  */
   --brand:       #00AC69;  /* gradient bottom — fills, active states, controls */
   --brand-mid:   #00AF96;  /* gradient top — focus, accents                    */
+  --brand-fill:  #007A4B;  /* darker filled controls with white text            */
+  --brand-fill-top: #007D6B;
   --lime:        #BFEFE3;  /* light mint accent with dark text                  */
   --lime-bright: #E1FAF1;  /* pale mint highlight                               */
 
   /* ---- Gradients --------------------------------------------------------- */
-  /* Brand gradients are vertical: top #00AF96 -> bottom #00AC69. */
-  --grad-primary: linear-gradient(180deg, #00AF96 0%, #00AC69 100%);
+  /* Filled controls use a darker vertical variant so white text stays readable. */
+  --grad-primary: linear-gradient(180deg, #007D6B 0%, #007A4B 100%);
+  /* Profile gradients keep the requested top #00AF96 -> bottom #00AC69. */
   --grad-hero:    linear-gradient(180deg, #00AF96 0%, #00AC69 100%);
   --grad-accent:  linear-gradient(180deg, #00AF96 0%, #00AC69 100%);
 
@@ -25,7 +28,7 @@
   --border:     #CFE6DC;
   --text:       #071411;   /* near-black, green-tinted — body text            */
   --text-muted: #435A50;   /* secondary text — passes AA on bg + surface      */
-  --on-brand:   #071411;   /* readable text on bright logo colours/gradients   */
+  --on-brand:   #FFFFFF;   /* text on darker filled controls                   */
 
   /* ---- Feedback (kept OUT of the green ramp so they read as distinct) ---- */
   --danger:  #B4321F;      /* cut/stop/destructive — solid, white text        */
@@ -153,7 +156,7 @@ a:hover { text-decoration: underline; }
 }
 .op-tag--cut     { background: var(--danger);     color: #fff; }
 .op-tag--engrave { background: var(--brand-deep); color: #fff; }
-.op-tag--score   { background: var(--brand);      color: var(--on-brand); }
+.op-tag--score   { background: var(--brand);      color: var(--text); }
 .op-tag--mark    { background: var(--lime);       color: var(--text); } /* text on lime = --text */
 
 /* --- Toggle ------------------------------------------------------------- */

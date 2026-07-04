@@ -187,6 +187,7 @@ function buildMenu() {
 
 app.whenReady().then(() => {
   const appIcon = nativeImage.createFromPath(appIconPath);
+  appIcon.setTemplateImage?.(false);
   if (isMac && !appIcon.isEmpty()) app.dock.setIcon(appIcon);
   app.setAboutPanelOptions({
     applicationName: "modCut",
