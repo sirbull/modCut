@@ -323,12 +323,12 @@ function saveWorkDialog() {
   return new Promise((resolve) => {
     const overlay = document.createElement("div");
     overlay.className = "modal-overlay";
-    overlay.innerHTML = `<div class="modal panel"><div class="panel__header">Save work?</div>
+    overlay.innerHTML = `<div class="modal panel" role="dialog" aria-modal="true" aria-labelledby="saveWorkTitle"><div class="panel__header" id="saveWorkTitle">Save work?</div>
       <div class="panel__body">
         <p class="hint">Save the current document before continuing.</p>
-        <div class="modal-actions">
-          <button class="btn btn--ghost btn--sm" data-x="cancel">Cancel</button>
-          <button class="btn btn--secondary btn--sm" data-x="discard">Don't save</button>
+        <div class="modal-actions modal-actions--save-prompt">
+          <button class="btn btn--neutral-outline btn--sm" data-x="discard">Don't Save</button>
+          <button class="btn btn--neutral-outline btn--sm" data-x="cancel">Cancel</button>
           <button class="btn btn--primary btn--sm" data-x="save">Save</button>
         </div>
       </div></div>`;

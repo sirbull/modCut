@@ -104,8 +104,9 @@ sidecar must reject the job with an out-of-bounds error.
    only its own design and settings; changes in one tab must not affect another.
 3. Undo and redo in each tab. The history must belong to that tab and remain
    available after switching away and back.
-4. Close a dirty tab with its close button or **Cmd/Ctrl+W**. Save, Don't save
-   and Cancel must be available; Cancel must keep the tab unchanged.
+4. Close a dirty tab with its close button or **Cmd/Ctrl+W**. The prompt must
+   show **Don't Save**, **Cancel**, **Save** in that order, with Save using the
+   primary CTA color and keyboard focus. Cancel must keep the tab unchanged.
 5. Close the final tab. The window should close while modCut remains available
    on macOS; **Cmd+N** must reopen a new window with one blank tab.
 
