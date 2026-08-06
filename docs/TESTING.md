@@ -129,6 +129,13 @@ sidecar must reject the job with an out-of-bounds error.
    (<code>A</code>), click any anchor. Only that anchor must be selected. Delete
    and Backspace must remove the selected anchor rather than the whole path;
    Shift-click must allow an open endpoint to be selected instead of continued.
+7. A selected anchor must be shown slightly larger than an unselected anchor,
+   with a white center and green outline. Shift-click two adjacent anchors, then
+   drag the path segment between them. Both anchors and the segment between them
+   must move together while the remaining anchors stay in place.
+8. Switch to Select (<code>V</code>), select an element, then press and drag on
+   the selected element. It must begin moving without requiring a second click
+   or first clearing the selection.
 
 ### Transform modifier acceptance test
 

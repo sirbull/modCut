@@ -572,11 +572,25 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     return r;
   }
   let handles = [];
+  function drawNodeOverlay() {
+    if (!selectedSegments.size) return;
+    uiLayer.activate();
+    const radius = 5 / view.zoom;
+    for (const segment of selectedSegments) {
+      if (!segment?.path) continue;
+      const marker = new paper.Path.Circle(segment.point, radius);
+      marker.name = "selected-anchor";
+      marker.fillColor = "white";
+      marker.strokeColor = "#006B5C";
+      marker.strokeWidth = 1.6 / view.zoom;
+      marker.guide = true;
+    }
+  }
   function drawOverlay() {
     uiLayer.removeChildren();
     handles = [];
     const b = selectionBounds();
-    if (!b) { drawPenOverlay(); view.update(); return; }
+    if (!b) { drawNodeOverlay(); drawPenOverlay(); view.update(); return; }
     uiLayer.activate();
     const sw = 1 / view.zoom, hs = 4 / view.zoom;
     const box = new paper.Path.Rectangle(b);
@@ -595,6 +609,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     const rh = new paper.Path.Circle(rp, hs);
     rh.fillColor = "#006B5C"; rh.guide = true;
     handles.push({ type: "rotate", pos: rp });
+    drawNodeOverlay();
     designLayer.activate();
     drawPenOverlay();
     view.update();
@@ -894,9 +909,23 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     segment.selected = true;
     selectedSegments.add(segment);
   }
+  function selectedCurveSegments(hit) {
+    if (hit?.type !== "stroke") return null;
+    const curve = hit.location?.curve || hit.curve;
+    const first = curve?.segment1;
+    const second = curve?.segment2;
+    if (!first || !second || !selectedSegments.has(first) || !selectedSegments.has(second)) return null;
+    return first === second ? [first] : [first, second];
+  }
   function onNodeDown(e) {
     const hr = paper.project.hitTest(e.point, { segments: true, handles: true, stroke: true, fill: true, tolerance: 8 / view.zoom, match: (r) => r.item && r.item.layer === designLayer && (!activeGroup || isInsideGroup(r.item)) });
-    if (hr?.segment) {
+    const curveSegments = selectedCurveSegments(hr);
+    if (curveSegments) {
+      clearSel(); emitSel();
+      nodeEditItem = hr.item;
+      nodeHit = { kind: "curve", segments: curveSegments };
+      preDrag = snapshot(); dragChanged = false;
+    } else if (hr?.segment && hr.type !== "stroke") {
       const it = hr.item;
       clearSel(); emitSel();
       selectNodeSegment(hr.segment, !!e.event.shiftKey);
@@ -907,16 +936,20 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
             : hr.type === "handle-out" ? { seg: hr.segment, kind: "out" } : null;
       preDrag = snapshot(); dragChanged = false;
     } else clearNodeSelection();
-    view.update();
+    drawOverlay();
   }
   function onNodeDrag(e) {
     if (!nodeHit) return;
     dragChanged = true;
-    const s = nodeHit.seg;
-    if (nodeHit.kind === "point") for (const segment of selectedSegments) segment.point = segment.point.add(e.delta);
-    else if (nodeHit.kind === "in") s.handleIn = s.handleIn.add(e.delta);
-    else s.handleOut = s.handleOut.add(e.delta);
-    view.update();
+    if (nodeHit.kind === "curve") {
+      for (const segment of nodeHit.segments) segment.point = segment.point.add(e.delta);
+    } else {
+      const s = nodeHit.seg;
+      if (nodeHit.kind === "point") for (const segment of selectedSegments) segment.point = segment.point.add(e.delta);
+      else if (nodeHit.kind === "in") s.handleIn = s.handleIn.add(e.delta);
+      else s.handleOut = s.handleOut.add(e.delta);
+    }
+    drawOverlay();
   }
   function onNodeUp() {
     if (dragChanged && preDrag != null) { undoStack.push(preDrag); if (undoStack.length > 60) undoStack.shift(); redoStack.length = 0; notifyChange(); }

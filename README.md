@@ -16,8 +16,10 @@ The first complete, hardware-testable path is available:
   layers, raster settings, materials and undo/redo histories;
 - draw Illustrator-style Bézier paths with a live pen preview, editable handles,
   close-path feedback and continuation from either open endpoint;
-- delete individual anchors and scale selections with Shift aspect locking,
-  Alt/Option center scaling, or both modifiers together;
+- select individual anchors with high-visibility markers, drag a segment between
+  two selected adjacent anchors, and remove anchors with Delete/Backspace;
+- scale selections with Shift aspect locking, Alt/Option center scaling, or both
+  modifiers together;
 - engrave grayscale images with variable GRBL laser power, or select Jarvis,
   Floyd-Steinberg, Stucki or Bayer dithering;
 - preview Photoshop-style gray-level posterization, midtone adjustment and
