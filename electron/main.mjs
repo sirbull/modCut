@@ -3,6 +3,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join, extname, basename } from "node:path";
 import { createSidecar } from "./sidecar-bridge.mjs";
+import { createWindowCommandRouter } from "./window-lifecycle.mjs";
 
 app.name = "modCut"; // makes the macOS app menu read "modCut", not "Electron"
 
@@ -17,7 +18,7 @@ const TEXT_FORMATS = ["svg", "dxf", "gcode", "gc", "nc", "plt", "hpgl"];
 const IMAGE_FORMATS = ["png", "jpg", "jpeg", "bmp", "gif"];
 
 function createWindow() {
-  win = new BrowserWindow({
+  const nextWindow = new BrowserWindow({
     width: 1360,
     height: 880,
     icon: appIconPath,
@@ -28,10 +29,13 @@ function createWindow() {
       sandbox: false,
     },
   });
-  win.loadFile(join(root, "renderer", "index.html"));
+  win = nextWindow;
+  nextWindow.on("closed", () => { if (win === nextWindow) win = null; });
+  void nextWindow.loadFile(join(root, "renderer", "index.html"));
+  return nextWindow;
 }
 
-const send = (cmd) => win?.webContents.send("menu", cmd);
+const send = createWindowCommandRouter({ getWindow: () => win, createWindow });
 
 function buildMenu() {
   const template = [
@@ -247,6 +251,10 @@ app.whenReady().then(() => {
 });
 
 app.on("window-all-closed", () => {
-  sidecar?.close();
   if (!isMac) app.quit();
+});
+
+app.on("before-quit", () => {
+  sidecar?.close();
+  sidecar = null;
 });

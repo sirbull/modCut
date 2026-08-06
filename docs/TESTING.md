@@ -96,6 +96,16 @@ sidecar must reject the job with an out-of-bounds error.
 4. Confirm the File menu shortcuts: **Cmd/Ctrl+O** opens Import and
    **Cmd/Ctrl+Shift+O** opens Add.
 
+### macOS window lifecycle acceptance test
+
+1. On macOS, close the last modCut window without quitting the application. The
+   menu bar and Dock indicator should remain available.
+2. Press **Cmd+N**. A new blank modCut window must open without a JavaScript
+   main-process error.
+3. Close the window again and click the modCut Dock icon. A new window must open,
+   and Connect in dry-run must still work, confirming that the sidecar remained
+   available while the app had no windows.
+
 ## 3. GRBL preparation
 
 Before enabling a real connection:
