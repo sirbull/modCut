@@ -16,6 +16,7 @@ export function createWindowCommandRouter({ getWindow, createWindow, channel = "
     let target = getWindow();
     let created = false;
     if (!isUsableWindow(target)) {
+      if (command === "close-tab") return null;
       target = createWindow();
       created = true;
     }

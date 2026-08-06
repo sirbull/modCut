@@ -64,3 +64,8 @@ test("commands are delivered immediately to an existing live window", () => {
   route("new");
   assert.deepEqual(current.sent, [["menu", "new"]]);
 });
+
+test("Close Tab does nothing when the application has no window", () => {
+  const route = createWindowCommandRouter({ getWindow: () => null, createWindow: () => assert.fail("must not create") });
+  assert.equal(route("close-tab"), null);
+});

@@ -13,7 +13,7 @@
   <header class="toolbar">
     <div class="brand"><img class="brand-logo" src="../modCut_logo.svg" alt="" aria-hidden="true"> modCut</div>
     <span class="tb-sep"></span>
-    <button class="btn btn--ghost btn--sm" id="newDoc" title="Create a new empty document">New</button>
+    <button class="btn btn--ghost btn--sm" id="newDoc" title="Open a new empty project tab (Cmd/Ctrl+N)">New</button>
     <button class="btn btn--secondary btn--sm" id="import" title="Open a file and replace the current workspace">Import</button>
     <button class="btn btn--ghost btn--sm" id="add" title="Add one or more files to the current project">Add</button>
     <span class="tb-sep"></span>
@@ -34,6 +34,10 @@
     <div class="spacer"></div>
     <button class="btn btn--ghost btn--sm btn--icon" id="togglePanel" title="Show/hide panel">⟩</button>
   </header>
+  <nav class="doc-tabs" id="docTabs" aria-label="Open projects">
+    <div class="doc-tabs__items" id="tabItems" role="tablist"></div>
+    <button class="doc-tabs__new" id="addTab" type="button" title="New project tab (Cmd/Ctrl+N)" aria-label="New project tab">+</button>
+  </nav>
   <div class="accent"></div>
 
   <main class="workspace" id="workspace">

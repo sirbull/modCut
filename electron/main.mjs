@@ -63,6 +63,7 @@ function buildMenu() {
         { label: "New", accelerator: "CmdOrCtrl+N", click: () => send("new") },
         { label: "Import…", accelerator: "CmdOrCtrl+O", click: () => send("import") },
         { label: "Add…", accelerator: "CmdOrCtrl+Shift+O", click: () => send("add") },
+        { label: "Close Tab", accelerator: "CmdOrCtrl+W", click: () => send("close-tab") },
         { type: "separator" },
         { label: "Save document…", accelerator: "CmdOrCtrl+S", click: () => send("save-document") },
         { label: "Save document as…", accelerator: "CmdOrCtrl+Shift+S", click: () => send("save-document-as") },

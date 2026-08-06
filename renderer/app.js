@@ -144,14 +144,143 @@ function refreshPropsVisibility() {
   $("propSec").classList.toggle("hidden", selectedCount === 0 && !DRAW_TOOLS.has(activeTool));
 }
 bed.onSelection((n) => { selectedCount = n; $("sel").textContent = `${n} selected`; refreshProps(); refreshPropsVisibility(); });
-bed.onChange(() => { refreshPos(); markDirty(); });
+bed.onChange(() => { refreshPos(); if (!restoringTab) markDirty(); });
 
 let docPath = null;
 let dirty = false;
+let documentTabs = [];
+let activeTabId = null;
+let nextTabId = 1;
+let restoringTab = false;
 function pathBase(path) { return String(path || "").split(/[\\/]/).pop(); }
-function setFileLabel(name) { $("file").textContent = `${name || "Untitled"}${dirty ? " *" : ""}`; }
+function activeTab() { return documentTabs.find((tab) => tab.id === activeTabId) || null; }
+function setFileLabel(name) {
+  const title = name || "Untitled";
+  $("file").textContent = `${title}${dirty ? " *" : ""}`;
+  const tab = activeTab();
+  if (tab) { tab.title = title; tab.dirty = dirty; renderTabs(); }
+}
 function markDirty() { dirty = true; setFileLabel(docPath ? pathBase(docPath) : ($("file").textContent.replace(/\s\*$/, "") || "Untitled")); }
 function markClean() { dirty = false; setFileLabel(docPath ? pathBase(docPath) : ($("file").textContent.replace(/\s\*$/, "") || "Untitled")); }
+
+function renderTabs() {
+  const host = $("tabItems");
+  if (!host) return;
+  host.replaceChildren();
+  for (const tab of documentTabs) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `doc-tab${tab.id === activeTabId ? " is-active" : ""}`;
+    button.dataset.tabId = tab.id;
+    button.setAttribute("role", "tab");
+    button.setAttribute("aria-selected", String(tab.id === activeTabId));
+    button.title = tab.title || "Untitled";
+    if (tab.dirty) {
+      const dot = document.createElement("span");
+      dot.className = "doc-tab__dirty";
+      dot.title = "Unsaved changes";
+      button.append(dot);
+    }
+    const title = document.createElement("span");
+    title.className = "doc-tab__title";
+    title.textContent = tab.title || "Untitled";
+    const close = document.createElement("span");
+    close.className = "doc-tab__close";
+    close.dataset.closeTab = tab.id;
+    close.setAttribute("role", "button");
+    close.setAttribute("aria-label", `Close ${tab.title || "Untitled"}`);
+    close.textContent = "×";
+    button.append(title, close);
+    button.addEventListener("click", (event) => {
+      if (event.target.closest("[data-close-tab]")) closeDocumentTab(tab.id);
+      else switchDocumentTab(tab.id);
+    });
+    host.append(button);
+  }
+  host.querySelector(".doc-tab.is-active")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+}
+
+function captureWorkspace() {
+  return {
+    bed: bed.exportSession(),
+    docPath,
+    dirty,
+    title: $("file").textContent.replace(/\s\*$/, "") || "Untitled",
+    filename: $("filename").value,
+    mappingMode: state.mappingMode,
+    layers: structuredClone(state.layers),
+    units: state.units,
+    machineId: state.machineId,
+    materialId: state.materialId,
+    gridXmm: state.gridXmm,
+    gridYmm: state.gridYmm,
+    gridUnit: state.gridUnit,
+    refKey: state.refKey,
+    selectWhole: selWhole,
+    pathOrder: $("pathOrder").value,
+  };
+}
+
+function captureActiveTab() {
+  const tab = activeTab();
+  if (!tab || restoringTab) return;
+  tab.session = captureWorkspace();
+  tab.title = tab.session.title;
+  tab.dirty = tab.session.dirty;
+}
+
+function restoreWorkspace(session) {
+  if (!session) return;
+  restoringTab = true;
+  stopSimulate();
+  closeContextMenu();
+  docPath = session.docPath || null;
+  dirty = !!session.dirty;
+  state.mappingMode = session.mappingMode || "color";
+  state.layers = structuredClone(session.layers || []);
+  state.units = session.units || state.units;
+  state.machineId = machines.some((item) => item.id === session.machineId) ? session.machineId : machines[0].id;
+  state.materialId = materials.some((item) => item.id === session.materialId) ? session.materialId : materials[0].id;
+  state.gridXmm = +session.gridXmm || 10;
+  state.gridYmm = +session.gridYmm || 10;
+  state.gridUnit = session.gridUnit || "cm";
+  state.refKey = session.refKey || "tl";
+  selWhole = !!session.selectWhole;
+  $("filename").value = session.filename || "job";
+  $("units").value = state.units;
+  $("pathOrder").value = session.pathOrder || "optimize";
+  bed.setPathOrder($("pathOrder").value);
+  refreshMachines(state.machineId);
+  refreshMaterialSelect();
+  bed.setGrid(state.gridXmm, state.gridYmm);
+  bed.importSession(session.bed || {});
+  bed.setSelectionMode(selWhole ? "design" : "element");
+  $("selMode").textContent = selWhole ? "Mark whole" : "Mark elements";
+  [...$("mapmode").children].forEach((item) => item.classList.toggle("on", item.dataset.mode === state.mappingMode));
+  [...$("refdot").children].forEach((item) => item.classList.toggle("on", item.dataset.r === state.refKey));
+  syncColorsAndLayers();
+  setFileLabel(session.title || pathBase(docPath) || "Untitled");
+  refreshPos();
+  refreshProps();
+  restoringTab = false;
+  renderTabs();
+}
+
+function switchDocumentTab(id) {
+  if (id === activeTabId) return;
+  const target = documentTabs.find((tab) => tab.id === id);
+  if (!target) return;
+  captureActiveTab();
+  activeTabId = id;
+  restoreWorkspace(target.session);
+}
+
+function switchRelativeTab(offset) {
+  if (documentTabs.length < 2) return;
+  const index = documentTabs.findIndex((tab) => tab.id === activeTabId);
+  const next = (index + offset + documentTabs.length) % documentTabs.length;
+  switchDocumentTab(documentTabs[next].id);
+}
 
 function documentPayload() {
   return {
@@ -234,6 +363,10 @@ function applyDocument(p, path, name) {
   if (p.units) setUnits(p.units);
   if (p.mappingMode) state.mappingMode = p.mappingMode;
   if (Array.isArray(p.layers)) state.layers = p.layers;
+  if (p.machineId && machines.some((item) => item.id === p.machineId)) state.machineId = p.machineId;
+  if (p.materialId && materials.some((item) => item.id === p.materialId)) state.materialId = p.materialId;
+  refreshMachines(state.machineId);
+  refreshMaterialSelect();
   if (p.gridXmm) state.gridXmm = +p.gridXmm;
   if (p.gridYmm) state.gridYmm = +p.gridYmm;
   if (p.gridUnit) state.gridUnit = p.gridUnit;
@@ -352,10 +485,42 @@ async function addFiles() {
   toast(`Added ${added} file${added === 1 ? "" : "s"} to the project.`, "ok");
 }
 
-async function newDocument() {
-  if (!(await guardWorkBeforeContinue())) return;
+function newDocument() {
+  captureActiveTab();
+  const tab = { id: String(nextTabId++), title: "Untitled", dirty: false, session: null };
+  documentTabs.push(tab);
+  activeTabId = tab.id;
   resetWorkspace();
-  toast("New document.", "ok");
+  captureActiveTab();
+  renderTabs();
+  toast("New project tab.", "ok");
+}
+
+async function closeDocumentTab(id = activeTabId) {
+  if (!id) return;
+  if (id !== activeTabId) switchDocumentTab(id);
+  if (!(await guardWorkBeforeContinue())) return;
+  const index = documentTabs.findIndex((tab) => tab.id === id);
+  if (index < 0) return;
+  documentTabs.splice(index, 1);
+  if (!documentTabs.length) {
+    activeTabId = null;
+    window.close();
+    return;
+  }
+  const target = documentTabs[Math.min(index, documentTabs.length - 1)];
+  activeTabId = target.id;
+  restoreWorkspace(target.session);
+  renderTabs();
+}
+
+function initializeDocumentTabs() {
+  setFileLabel("Untitled");
+  const tab = { id: String(nextTabId++), title: "Untitled", dirty: false, session: null };
+  documentTabs = [tab];
+  activeTabId = tab.id;
+  captureActiveTab();
+  renderTabs();
 }
 
 // --- layers -----------------------------------------------------------------
@@ -812,6 +977,7 @@ function togglePanel() {
 
 // --- wire UI ----------------------------------------------------------------
 $("newDoc").addEventListener("click", newDocument);
+$("addTab").addEventListener("click", newDocument);
 $("import").addEventListener("click", doImport);
 $("add").addEventListener("click", addFiles);
 $("zoomIn").addEventListener("click", bed.zoomIn);
@@ -857,6 +1023,10 @@ bed.onDrawClick(async (type) => {
   syncColorsAndLayers();
 });
 $("pathOrder").addEventListener("change", (e) => { bed.setPathOrder(e.target.value); markDirty(); });
+$("filename").addEventListener("input", (e) => {
+  if (!docPath) setFileLabel(e.target.value.trim() || "Untitled");
+  markDirty();
+});
 
 function editAction(action) {
   const ok = ({
@@ -886,9 +1056,15 @@ window.addEventListener("keydown", (e) => {
   const key = e.key.toLowerCase();
   const mod = e.metaKey || e.ctrlKey;
   if (mod) {
+    if (key === "tab") {
+      e.preventDefault();
+      switchRelativeTab(e.shiftKey ? -1 : 1);
+      return;
+    }
     const command =
       key === "o" && e.shiftKey ? "add" :
       key === "o" ? "import" :
+      key === "w" ? "close-tab" :
       key === "n" && !e.altKey ? "new" :
       key === "s" && e.shiftKey ? "save-document-as" :
       key === "s" ? "save-document" :
@@ -911,6 +1087,7 @@ window.addEventListener("keydown", (e) => {
       if (command === "import") doImport();
       else if (command === "add") addFiles();
       else if (command === "new") newDocument();
+      else if (command === "close-tab") closeDocumentTab();
       else if (command === "save-document") saveDocument(false);
       else if (command === "save-document-as") saveDocument(true);
       else editAction(command);
@@ -1111,7 +1288,8 @@ $("mapmode").addEventListener("click", (e) => {
 });
 
 window.modcut.onMenu((cmd) => ({
-  new: newDocument, import: doImport, add: addFiles, "zoom-in": bed.zoomIn, "zoom-out": bed.zoomOut, "zoom-fit": bed.fit,
+  new: newDocument, import: doImport, add: addFiles, "close-tab": closeDocumentTab,
+  "zoom-in": bed.zoomIn, "zoom-out": bed.zoomOut, "zoom-fit": bed.fit,
   "toggle-panel": togglePanel, frame, simulate: startSimulate, connect,
   undo: () => editAction("undo"), redo: () => editAction("redo"),
   copy: () => editAction("copy"), paste: () => editAction("paste"), "paste-in-place": () => editAction("paste-in-place"),
@@ -1132,6 +1310,7 @@ window.modcut.onMenu((cmd) => ({
 initCollapsibleSections();
 refreshMachines(state.machineId);
 bed.setGrid(state.gridXmm, state.gridYmm);
+initializeDocumentTabs();
 refreshProps();
 refreshPropsVisibility();
 (async () => {

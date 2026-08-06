@@ -85,16 +85,29 @@ sidecar must reject the job with an out-of-bounds error.
 
 ### New, Import and Add acceptance test
 
-1. Create or import a design and make a change. Click **New**. The save prompt
-   must offer Save, Don't save and Cancel. Cancel must preserve the workspace;
-   Don't save must open an empty workspace; Save must save before opening it.
-2. Repeat with **Import**. Cancel must preserve the workspace, while Don't save
+1. Create or import a design and make a change. Click **New**. A second, blank
+   project tab must open without a save prompt, and the first tab must retain
+   its design and unsaved indicator.
+2. In a dirty tab, click **Import**. Cancel must preserve the workspace, while Don't save
    must open the selected file and replace the old workspace.
 3. Import one design, then click **Add** and select two supported artwork files.
    Both must be added as independent elements without removing the original
    design and without showing the destructive-action save prompt.
 4. Confirm the File menu shortcuts: **Cmd/Ctrl+O** opens Import and
    **Cmd/Ctrl+Shift+O** opens Add.
+
+### Project tabs acceptance test
+
+1. Open three tabs with **New** or the plus button. Give each tab different
+   geometry, layer operations, raster controls and material selections.
+2. Switch tabs by clicking and with **Cmd/Ctrl+Tab**. Each project must restore
+   only its own design and settings; changes in one tab must not affect another.
+3. Undo and redo in each tab. The history must belong to that tab and remain
+   available after switching away and back.
+4. Close a dirty tab with its close button or **Cmd/Ctrl+W**. Save, Don't save
+   and Cancel must be available; Cancel must keep the tab unchanged.
+5. Close the final tab. The window should close while modCut remains available
+   on macOS; **Cmd+N** must reopen a new window with one blank tab.
 
 ### macOS window lifecycle acceptance test
 

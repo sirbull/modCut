@@ -400,6 +400,19 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   function redo() { if (!redoStack.length) return; undoStack.push(snapshot()); restoreFrom(redoStack.pop()); }
   function resetHistory() { undoStack.length = 0; redoStack.length = 0; }
   function exportDesign() { return snapshot(); }
+  function exportSession() {
+    return {
+      design: snapshot(),
+      undo: undoStack.slice(),
+      redo: redoStack.slice(),
+      designAngle,
+      drawColor,
+      drawWidth,
+      selectionMode,
+      viewZoom: view.zoom,
+      viewCenter: [view.center.x, view.center.y],
+    };
+  }
   function importDesign(s) {
     resetGroupFocus();
     designLayer.removeChildren();
@@ -418,6 +431,19 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     resetHistory();
     reprocessRasters();
     emitSel();
+    drawOverlay();
+    view.update();
+  }
+  function importSession(session = {}) {
+    importDesign(session.design || "");
+    undoStack.push(...(Array.isArray(session.undo) ? session.undo : []));
+    redoStack.push(...(Array.isArray(session.redo) ? session.redo : []));
+    designAngle = Number(session.designAngle) || 0;
+    drawColor = session.drawColor || drawColor;
+    drawWidth = Math.max(0.01, Number(session.drawWidth) || drawWidth);
+    selectionMode = session.selectionMode === "design" ? "design" : "element";
+    if (Number(session.viewZoom) > 0) view.zoom = Number(session.viewZoom);
+    if (Array.isArray(session.viewCenter) && session.viewCenter.length === 2) view.center = P(+session.viewCenter[0], +session.viewCenter[1]);
     drawOverlay();
     view.update();
   }
@@ -1297,7 +1323,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     onSelection: (cb) => (selectionCb = cb),
     onChange: (cb) => (changeCb = cb),
     getDesign, geometryStats, getRect, getRef, applyRect, applyAngle, startSim, stopSim, buildGcodeJob,
-    setSelectionMode, undo, redo, resetHistory, exportDesign, importDesign,
+    setSelectionMode, undo, redo, resetHistory, exportDesign, importDesign, exportSession, importSession,
     groupSelected, ungroupSelected, arrangeSelected, copySelection, pasteSelection, duplicateSelection,
     canUngroup, selectAll, deleteSelection,
     setGrid, setTool, setPathOrder, getColors, addShape,

@@ -12,6 +12,8 @@ The first complete, hardware-testable path is available:
   engraving with non-destructive grayscale photo controls;
 - open artwork in a new workspace with Import, or combine multiple selected
   artwork files non-destructively with Add;
+- keep multiple independent projects open as tabs, including separate designs,
+  layers, raster settings, materials and undo/redo histories;
 - engrave grayscale images with variable GRBL laser power, or select Jarvis,
   Floyd-Steinberg, Stucki or Bayer dithering;
 - preview Photoshop-style gray-level posterization, midtone adjustment and

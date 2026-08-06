@@ -1,6 +1,6 @@
 /* modCut workspace layout. Imports design tokens; adds only app-specific structure. */
 
-.app { height: 100vh; display: grid; grid-template-rows: auto auto 1fr auto auto; }
+.app { height: 100vh; display: grid; grid-template-rows: auto auto auto 1fr auto auto; }
 
 /* --- toolbar ------------------------------------------------------------ */
 .toolbar { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3);
@@ -17,6 +17,24 @@
 .ds-box { background: var(--brand-deep); color: #fff; border-radius: 8px; padding: 3px 8px;
           font: 600 var(--fs-xs) var(--font-mono); box-shadow: var(--shadow-1); }
 .accent { height: 3px; background: var(--grad-hero); }
+
+/* --- document tabs ------------------------------------------------------ */
+.doc-tabs { min-width: 0; display: flex; align-items: stretch; gap: 3px; padding: 5px 8px 0;
+            background: var(--surface-2); border-bottom: 1px solid var(--border); overflow: hidden; }
+.doc-tabs__items { min-width: 0; display: flex; align-items: stretch; gap: 3px; overflow-x: auto; scrollbar-width: thin; }
+.doc-tab { flex: 0 1 210px; min-width: 116px; max-width: 240px; display: flex; align-items: center; gap: 7px;
+           padding: 7px 7px 7px 11px; border: 1px solid transparent; border-bottom: 0; border-radius: 9px 9px 0 0;
+           background: transparent; color: var(--text-muted); cursor: pointer; font: 600 var(--fs-sm) var(--font-sans); }
+.doc-tab:hover { background: color-mix(in srgb, var(--bg) 58%, transparent); color: var(--text); }
+.doc-tab.is-active { background: var(--bg); color: var(--text); border-color: var(--border); }
+.doc-tab__dirty { width: 7px; height: 7px; border-radius: 50%; background: var(--brand); flex: none; }
+.doc-tab__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; text-align: left; }
+.doc-tab__close { width: 21px; height: 21px; display: grid; place-items: center; border: 0; border-radius: 5px;
+                  background: transparent; color: inherit; cursor: pointer; font-size: 16px; line-height: 1; }
+.doc-tab__close:hover { background: var(--surface-2); color: var(--danger); }
+.doc-tabs__new { flex: none; width: 30px; margin-bottom: 4px; border: 0; border-radius: 7px; background: transparent;
+                 color: var(--text-muted); cursor: pointer; font: 500 20px/1 var(--font-sans); }
+.doc-tabs__new:hover { background: var(--bg); color: var(--brand-deep); }
 
 /* --- workspace split ---------------------------------------------------- */
 .workspace { display: grid; grid-template-columns: 1fr 344px; min-height: 0; transition: grid-template-columns .18s ease; }
