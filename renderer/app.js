@@ -197,26 +197,32 @@ function saveWorkDialog() {
         <p class="hint">Save the current document before continuing.</p>
         <div class="modal-actions">
           <button class="btn btn--ghost btn--sm" data-x="cancel">Cancel</button>
-          ${docPath ? `<button class="btn btn--secondary btn--sm" data-x="saveAs">Save as..</button>` : ""}
+          <button class="btn btn--secondary btn--sm" data-x="discard">Don't save</button>
           <button class="btn btn--primary btn--sm" data-x="save">Save</button>
         </div>
       </div></div>`;
-    const close = (v) => { overlay.remove(); resolve(v); };
+    const close = (v) => {
+      document.removeEventListener("keydown", onKey);
+      overlay.remove();
+      resolve(v);
+    };
+    function onKey(e) { if (e.key === "Escape") close("cancel"); }
     overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) return close(null);
+      if (e.target === overlay) return close("cancel");
       const b = e.target.closest("button[data-x]");
       if (b) close(b.dataset.x);
     });
+    document.addEventListener("keydown", onKey);
     document.body.append(overlay);
     overlay.querySelector('[data-x="save"]')?.focus();
   });
 }
 
 async function guardWorkBeforeContinue() {
-  if (!bed.getDesign() && !dirty) return true;
+  if (!dirty) return true;
   const choice = await saveWorkDialog();
   if (choice === "save") return saveDocument(false);
-  if (choice === "saveAs") return saveDocument(true);
+  if (choice === "discard") return true;
   return false;
 }
 
@@ -240,60 +246,115 @@ function applyDocument(p, path, name) {
   refreshPos();
 }
 
-// --- import -----------------------------------------------------------------
-async function doImport() {
-  let f;
-  try {
-    f = await window.modcut.openImport();
-  } catch (e) {
-    toast("Import failed: " + e.message, "err");
-    return;
-  }
-  if (!f) return;
-  if (!(await guardWorkBeforeContinue())) return;
-  const hadDesign = !!bed.getDesign();
-  setFileLabel(f.name);
-  try {
-    if (f.kind === "document") {
-      applyDocument(JSON.parse(f.text), f.path, f.name);
-      toast("Document opened.", "ok");
-      return;
-    } else if (f.ext === "svg" || f.ext === "dxf") {
-      const svgText = f.ext === "dxf" ? dxfToSvg(f.text) : f.text;
-      const { node, widthMm, heightMm, colors } = prepareSVG(svgText);
-      bed.loadSVG(node, widthMm, heightMm);
-      const d = bed.getDesign();
-      const from = f.sourceExt ? ` (converted from .${f.sourceExt})` : "";
-      toast(`Imported ${f.name}${from}: ${colors.length} color(s), ${dispNum(d.wMm)} × ${dispNum(d.hMm)} ${state.units}`, "ok");
-    } else if (f.dataUrl) {
-      await bed.loadImage(f.dataUrl, null);
-      state.mappingMode = "color";
-      [...$("mapmode").children].forEach((c) => c.classList.toggle("on", c.dataset.mode === "color"));
-      toast("Image imported as grayscale raster engraving.", "ok");
-    } else {
-      toast(`.${f.ext} import is coming in a later version (M3).`, "info");
-      return;
-    }
-  } catch (e) {
-    toast("Import failed: " + e.message, "err");
-    return;
-  }
-  if (!hadDesign) $("filename").value = f.name.replace(/\.[^.]+$/, ""); // base name only; extension is appended on Send
-  syncColorsAndLayers();
-}
-
-async function newDocument() {
-  if (!(await guardWorkBeforeContinue())) return;
+// --- new / import / add -----------------------------------------------------
+function resetWorkspace({ filename = "job", label = "Untitled" } = {}) {
   bed.clear();
   bed.resetHistory();
   docPath = null;
   state.colors = [];
   state.layers = [];
-  $("filename").value = "job";
-  setFileLabel("Untitled");
+  $("filename").value = filename;
+  setFileLabel(label);
   markClean();
   syncLayers();
   refreshPos();
+}
+
+function prepareArtwork(f) {
+  if (f.ext === "svg" || f.ext === "dxf") {
+    const svgText = f.ext === "dxf" ? dxfToSvg(f.text) : f.text;
+    return { kind: "vector", ...prepareSVG(svgText) };
+  }
+  if (f.dataUrl) return { kind: "image", dataUrl: f.dataUrl };
+  return null;
+}
+
+async function placeArtwork(prepared) {
+  if (prepared.kind === "vector") {
+    bed.loadSVG(prepared.node, prepared.widthMm, prepared.heightMm);
+    return;
+  }
+  await bed.loadImage(prepared.dataUrl, null);
+  state.mappingMode = "color";
+  [...$("mapmode").children].forEach((c) => c.classList.toggle("on", c.dataset.mode === "color"));
+}
+
+async function doImport() {
+  if (!(await guardWorkBeforeContinue())) return;
+  let f;
+  try {
+    f = await window.modcut.openImport({ multiple: false, allowDocuments: true });
+  } catch (e) {
+    toast("Import failed: " + e.message, "err");
+    return;
+  }
+  if (!f) return;
+  let documentData = null;
+  let prepared = null;
+  try {
+    if (f.kind === "document") documentData = JSON.parse(f.text);
+    else prepared = prepareArtwork(f);
+  } catch (e) {
+    toast("Import failed: " + e.message, "err");
+    return;
+  }
+  if (!documentData && !prepared) {
+    toast(`.${f.ext} import is coming in a later version (M3).`, "info");
+    return;
+  }
+  try {
+    if (documentData) {
+      applyDocument(documentData, f.path, f.name);
+      toast("Document opened.", "ok");
+      return;
+    }
+    const baseName = f.name.replace(/\.[^.]+$/, "");
+    resetWorkspace({ filename: baseName, label: f.name });
+    await placeArtwork(prepared);
+    syncColorsAndLayers();
+    markDirty();
+    toast(prepared.kind === "image"
+      ? "Image imported as grayscale raster engraving."
+      : `Imported ${f.name} into a new workspace.`, "ok");
+  } catch (e) {
+    toast("Import failed: " + e.message, "err");
+  }
+}
+
+async function addFiles() {
+  let files;
+  try {
+    files = await window.modcut.openImport({ multiple: true, allowDocuments: false });
+  } catch (e) {
+    toast("Add failed: " + e.message, "err");
+    return;
+  }
+  if (!files?.length) return;
+  const wasEmpty = !bed.getDesign();
+  let added = 0;
+  for (const f of files) {
+    try {
+      const prepared = prepareArtwork(f);
+      if (!prepared) throw new Error(`.${f.ext} files cannot be added yet.`);
+      await placeArtwork(prepared);
+      added++;
+    } catch (e) {
+      toast(`Could not add ${f.name}: ${e.message}`, "err");
+    }
+  }
+  if (!added) return;
+  if (wasEmpty) {
+    $("filename").value = files[0].name.replace(/\.[^.]+$/, "");
+    setFileLabel(files.length === 1 ? files[0].name : "Untitled");
+  }
+  syncColorsAndLayers();
+  markDirty();
+  toast(`Added ${added} file${added === 1 ? "" : "s"} to the project.`, "ok");
+}
+
+async function newDocument() {
+  if (!(await guardWorkBeforeContinue())) return;
+  resetWorkspace();
   toast("New document.", "ok");
 }
 
@@ -741,6 +802,7 @@ function togglePanel() {
 // --- wire UI ----------------------------------------------------------------
 $("newDoc").addEventListener("click", newDocument);
 $("import").addEventListener("click", doImport);
+$("add").addEventListener("click", addFiles);
 $("zoomIn").addEventListener("click", bed.zoomIn);
 $("zoomOut").addEventListener("click", bed.zoomOut);
 $("zoomFit").addEventListener("click", bed.fit);
@@ -814,6 +876,7 @@ window.addEventListener("keydown", (e) => {
   const mod = e.metaKey || e.ctrlKey;
   if (mod) {
     const command =
+      key === "o" && e.shiftKey ? "add" :
       key === "o" ? "import" :
       key === "n" && !e.altKey ? "new" :
       key === "s" && e.shiftKey ? "save-document-as" :
@@ -835,6 +898,7 @@ window.addEventListener("keydown", (e) => {
     if (command) {
       e.preventDefault();
       if (command === "import") doImport();
+      else if (command === "add") addFiles();
       else if (command === "new") newDocument();
       else if (command === "save-document") saveDocument(false);
       else if (command === "save-document-as") saveDocument(true);
@@ -1027,7 +1091,7 @@ $("mapmode").addEventListener("click", (e) => {
 });
 
 window.modcut.onMenu((cmd) => ({
-  new: newDocument, import: doImport, "zoom-in": bed.zoomIn, "zoom-out": bed.zoomOut, "zoom-fit": bed.fit,
+  new: newDocument, import: doImport, add: addFiles, "zoom-in": bed.zoomIn, "zoom-out": bed.zoomOut, "zoom-fit": bed.fit,
   "toggle-panel": togglePanel, frame, simulate: startSimulate, connect,
   undo: () => editAction("undo"), redo: () => editAction("redo"),
   copy: () => editAction("copy"), paste: () => editAction("paste"), "paste-in-place": () => editAction("paste-in-place"),

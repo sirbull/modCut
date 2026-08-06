@@ -10,6 +10,8 @@ The first complete, hardware-testable path is available:
 
 - import SVG and DXF artwork, and import PNG/JPG raster artwork automatically as
   engraving with non-destructive grayscale photo controls;
+- open artwork in a new workspace with Import, or combine multiple selected
+  artwork files non-destructively with Add;
 - engrave grayscale images with variable GRBL laser power, or select Jarvis,
   Floyd-Steinberg, Stucki or Bayer dithering;
 - move one or many selected elements between color layers from the properties

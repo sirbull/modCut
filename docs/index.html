@@ -58,7 +58,7 @@
          <strong>du tegner i fargelag, og hver farge blir en operasjon</strong> (kutt, gravering eller score).</p>
       <ol class="steps">
         <li><strong>Koble til maskinen.</strong> USB-kabel eller nettverk. Velg maskinen i <em>Laser</em>-panelet nede til høyre.</li>
-        <li><strong>Importer tegningen din</strong> (<code>Fil → Importer</code>, eller dra filen inn). SVG, DXF, PDF eller G-code.</li>
+        <li><strong>Importer tegningen din</strong> med <code>Import</code>, eller bruk <code>Add</code> for å legge flere filer i samme prosjekt.</li>
         <li><strong>Sett fokus</strong> på materialet, og velg riktig <em>material + tykkelse</em> i biblioteket.</li>
         <li><strong>Tilordne operasjoner</strong> til fargene i <em>Cuts / Layers</em>-panelet.</li>
         <li><strong>Ramme</strong> jobben for å sjekke plasseringen, så trykk <em>Start</em>.</li>
@@ -67,6 +67,15 @@
 
     <section id="import">
       <h2>Importere en fil</h2>
+      <p>Knappene øverst har ulike formål:</p>
+      <ul>
+        <li><strong>New</strong> åpner et nytt, tomt arbeidsområde.</li>
+        <li><strong>Import</strong> åpner én fil og erstatter det nåværende arbeidsområdet.</li>
+        <li><strong>Add</strong> legger én eller flere valgte filer til det åpne prosjektet uten å fjerne innholdet som allerede finnes.</li>
+      </ul>
+      <p>Hvis New eller Import vil erstatte arbeid som ikke er lagret, kan du velge <strong>Save</strong>,
+         <strong>Don't save</strong> eller <strong>Cancel</strong>. Don't save fortsetter handlingen uten å lagre;
+         Cancel lar dokumentet stå urørt.</p>
       <p>modCut leser filen, plukker ut det som betyr noe (former og farger) og forkaster alt annet.
          Derfor fungerer også SVG-er rett fra Adobe Illustrator — noe VisiCut ofte snublet på.</p>
       <h3>Eksporter rent fra Illustrator / Inkscape</h3>

@@ -80,6 +80,19 @@ sidecar must reject the job with an out-of-bounds error.
    **Cmd/Ctrl+Shift+G**, and the context menu, restoring its child elements at
    the same stacking position.
 
+### New, Import and Add acceptance test
+
+1. Create or import a design and make a change. Click **New**. The save prompt
+   must offer Save, Don't save and Cancel. Cancel must preserve the workspace;
+   Don't save must open an empty workspace; Save must save before opening it.
+2. Repeat with **Import**. Cancel must preserve the workspace, while Don't save
+   must open the selected file and replace the old workspace.
+3. Import one design, then click **Add** and select two supported artwork files.
+   Both must be added as independent elements without removing the original
+   design and without showing the destructive-action save prompt.
+4. Confirm the File menu shortcuts: **Cmd/Ctrl+O** opens Import and
+   **Cmd/Ctrl+Shift+O** opens Add.
+
 ## 3. GRBL preparation
 
 Before enabling a real connection:

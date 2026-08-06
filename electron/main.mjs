@@ -58,6 +58,7 @@ function buildMenu() {
       submenu: [
         { label: "New", accelerator: "CmdOrCtrl+N", click: () => send("new") },
         { label: "Import…", accelerator: "CmdOrCtrl+O", click: () => send("import") },
+        { label: "Add…", accelerator: "CmdOrCtrl+Shift+O", click: () => send("add") },
         { type: "separator" },
         { label: "Save document…", accelerator: "CmdOrCtrl+S", click: () => send("save-document") },
         { label: "Save document as…", accelerator: "CmdOrCtrl+Shift+S", click: () => send("save-document-as") },
@@ -168,33 +169,37 @@ app.whenReady().then(() => {
   // Native file picker that also returns the file's contents so the renderer
   // (sandboxed, no fs) can parse it. SVG/vector/g-code come back as text;
   // images as a data URL.
-  ipcMain.handle("importFile", async () => {
+  ipcMain.handle("importFile", async (_event, options = {}) => {
+    const multiple = !!options.multiple;
+    const allowDocuments = options.allowDocuments !== false;
+    const supported = [...TEXT_FORMATS, ...IMAGE_FORMATS, ...(allowDocuments ? ["modcut"] : [])];
     const { canceled, filePaths } = await dialog.showOpenDialog(win, {
-      title: "Importer fil",
-      properties: ["openFile"],
+      title: multiple ? "Add files to project" : "Import file",
+      properties: ["openFile", ...(multiple ? ["multiSelections"] : [])],
       filters: [
-        { name: "Alle støttede filer", extensions: [...TEXT_FORMATS, ...IMAGE_FORMATS, "modcut"] },
-        { name: "modCut document", extensions: ["modcut"] },
-        { name: "Vektor", extensions: ["svg", "dxf", "plt", "hpgl"] },
+        { name: "All supported files", extensions: supported },
+        ...(allowDocuments ? [{ name: "modCut document", extensions: ["modcut"] }] : []),
+        { name: "Vector", extensions: ["svg", "dxf", "plt", "hpgl"] },
         { name: "G-code", extensions: ["gcode", "gc", "nc"] },
-        { name: "Bilder", extensions: IMAGE_FORMATS },
-        { name: "Alle filer", extensions: ["*"] },
+        { name: "Images", extensions: IMAGE_FORMATS },
       ],
     });
     if (canceled || !filePaths.length) return null;
-    const path = filePaths[0];
-    const ext = extname(path).slice(1).toLowerCase();
-    const out = { path, name: basename(path), ext };
-    if (ext === "modcut") {
-      out.kind = "document";
-      out.text = await readFile(path, "utf8");
-    } else if (TEXT_FORMATS.includes(ext)) {
-      out.text = await readFile(path, "utf8");
-    } else if (IMAGE_FORMATS.includes(ext)) {
-      const mime = ext === "jpg" ? "jpeg" : ext;
-      out.dataUrl = `data:image/${mime};base64,` + (await readFile(path)).toString("base64");
-    }
-    return out;
+    const files = await Promise.all(filePaths.map(async (path) => {
+      const ext = extname(path).slice(1).toLowerCase();
+      const out = { path, name: basename(path), ext };
+      if (ext === "modcut") {
+        out.kind = "document";
+        out.text = await readFile(path, "utf8");
+      } else if (TEXT_FORMATS.includes(ext)) {
+        out.text = await readFile(path, "utf8");
+      } else if (IMAGE_FORMATS.includes(ext)) {
+        const mime = ext === "jpg" ? "jpeg" : ext;
+        out.dataUrl = `data:image/${mime};base64,` + (await readFile(path)).toString("base64");
+      }
+      return out;
+    }));
+    return multiple ? files : files[0];
   });
 
   ipcMain.handle("saveDocument", async (_e, { json, path, name, saveAs }) => {
