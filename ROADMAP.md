@@ -48,6 +48,8 @@ the same commit that completes an item.
 - [x] Individual anchor selection and Delete/Backspace removal.
 - [x] High-visibility selected anchors and direct dragging of a path segment
   between two selected adjacent anchors.
+- [x] Forgiving Edit Points path hit area with segment hover feedback and direct
+  adjacent-anchor selection.
 - [x] Shift aspect-ratio scaling, Alt center scaling and combined Shift+Alt scaling.
 - [x] Consistent delayed button tooltips with tool names and keyboard shortcuts.
 - [x] Adobe-style Don't Save / Cancel / Save confirmation dialog.

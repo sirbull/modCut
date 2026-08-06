@@ -58,7 +58,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   let drawColor = "#000000", drawWidth = 0.5; // style for new shapes
   let penPath = null, penHoverPoint = null, penEndpointHover = null, penInsertHover = null, penCloseHover = false;
   let penDragSegment = null, penDragHandleKind = null, penChanged = false, penResumeReversed = false;
-  let nodeHit = null, nodeEditItem = null;
+  let nodeHit = null, nodeEditItem = null, nodeStrokeHover = null;
 
   // --- bed + grid ---------------------------------------------------------
   function drawBed() {
@@ -573,8 +573,18 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   }
   let handles = [];
   function drawNodeOverlay() {
-    if (!selectedSegments.size) return;
+    if (!selectedSegments.size && !nodeStrokeHover) return;
     uiLayer.activate();
+    const curve = currentTool === "node" ? nodeStrokeHover?.location?.curve : null;
+    if (curve) {
+      const hover = new paper.Path({ name: "node-stroke-hover" });
+      hover.add(new paper.Segment(curve.segment1.point.clone(), null, curve.segment1.handleOut.clone()));
+      hover.add(new paper.Segment(curve.segment2.point.clone(), curve.segment2.handleIn.clone(), null));
+      hover.strokeColor = new paper.Color(0, 0.67, 0.41, 0.42);
+      hover.strokeWidth = 5 / view.zoom;
+      hover.strokeCap = "round";
+      hover.guide = true;
+    }
     const radius = 5 / view.zoom;
     for (const segment of selectedSegments) {
       if (!segment?.path) continue;
@@ -699,6 +709,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     view.center = P(pan.cx - (e.clientX - pan.sx) / view.zoom, pan.cy - (e.clientY - pan.sy) / view.zoom);
   });
   canvas.addEventListener("mouseleave", () => {
+    if (currentTool === "node") { nodeStrokeHover = null; drawOverlay(); return; }
     if (currentTool !== "pen" || penDragSegment) return;
     penHoverPoint = null; penEndpointHover = null; penInsertHover = null; penCloseHover = false;
     drawPenOverlay();
@@ -935,7 +946,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     for (const segment of selectedSegments) if (segment) segment.selected = false;
     selectedSegments.clear();
     if (nodeEditItem) nodeEditItem.selected = false;
-    nodeEditItem = null; nodeHit = null;
+    nodeEditItem = null; nodeHit = null; nodeStrokeHover = null;
   }
   function selectNodeSegment(segment, additive = false) {
     if (!additive) clearNodeSelection();
@@ -947,19 +958,51 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     segment.selected = true;
     selectedSegments.add(segment);
   }
-  function selectedCurveSegments(hit) {
+  function curveSegmentsAt(hit) {
     if (hit?.type !== "stroke") return null;
     const curve = hit.location?.curve || hit.curve;
     const first = curve?.segment1;
     const second = curve?.segment2;
-    if (!first || !second || !selectedSegments.has(first) || !selectedSegments.has(second)) return null;
+    if (!first || !second) return null;
     return first === second ? [first] : [first, second];
   }
+  function nodeStrokeAt(point) {
+    let best = null;
+    for (const path of editablePaths()) {
+      if (!path.visible || path.segments.length < 2) continue;
+      const location = path.getNearestLocation(point);
+      if (!location) continue;
+      const distance = location.point.getDistance(point);
+      if (distance <= 14 / view.zoom && (!best || distance < best.distance)) best = { type: "stroke", item: path, location, point: location.point, distance };
+    }
+    return best;
+  }
+  function nodeHitAt(point) {
+    return paper.project.hitTest(point, {
+      segments: true, handles: true, stroke: false, fill: false,
+      tolerance: 10 / view.zoom,
+      match: (result) => result.item && result.item.layer === designLayer && (!activeGroup || isInsideGroup(result.item)),
+    }) || nodeStrokeAt(point);
+  }
+  function onNodeMove(e) {
+    const hover = nodeStrokeAt(e.point);
+    if (hover?.location?.curve === nodeStrokeHover?.location?.curve) return;
+    nodeStrokeHover = hover;
+    drawOverlay();
+  }
   function onNodeDown(e) {
-    const hr = paper.project.hitTest(e.point, { segments: true, handles: true, stroke: true, fill: true, tolerance: 8 / view.zoom, match: (r) => r.item && r.item.layer === designLayer && (!activeGroup || isInsideGroup(r.item)) });
-    const curveSegments = selectedCurveSegments(hr);
+    const hr = nodeHitAt(e.point);
+    const curveSegments = curveSegmentsAt(hr);
     if (curveSegments) {
       clearSel(); emitSel();
+      if (!curveSegments.every((segment) => selectedSegments.has(segment))) {
+        if (!e.event.shiftKey) clearNodeSelection();
+        for (const segment of curveSegments) {
+          segment.selected = true;
+          selectedSegments.add(segment);
+        }
+      }
+      nodeStrokeHover = null;
       nodeEditItem = hr.item;
       nodeHit = { kind: "curve", segments: curveSegments };
       preDrag = snapshot(); dragChanged = false;
@@ -1033,6 +1076,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   tool.onMouseMove = (e) => {
     coordsCb && coordsCb(e.point.x, e.point.y);
     if (currentTool === "pen") updatePenHover(e.point);
+    else if (currentTool === "node") onNodeMove(e);
     updateCursor(e.point);
   };
   tool.onMouseDrag = (e) => {
