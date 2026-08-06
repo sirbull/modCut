@@ -463,24 +463,28 @@ function selectMachine(id) {
   $("fnExt").textContent = driverExt(m.driver); // shown next to the name field
 }
 const machineFields = (m) => [
-  { key: "name", label: "Name", value: m?.name, placeholder: "e.g. Epilog Fusion" },
+  { key: "name", label: "Name", value: m?.name, placeholder: "e.g. Workshop laser", required: true },
   { key: "driver", label: "Driver", type: "select", options: drivers, value: m?.driver },
   { key: "type", label: "Connection", type: "select", options: [{ value: "network", label: "Network (Ethernet / Wi-Fi)" }, { value: "usb", label: "USB / Serial" }], value: m?.conn.type },
-  { key: "host", label: "Host / IP", placeholder: "10.0.0.100", value: m?.conn.host, showIf: (v) => v.type === "network" },
-  { key: "netport", label: "Port", type: "number", value: m?.conn.type === "network" ? m.conn.port : 23, showIf: (v) => v.type === "network" },
+  { key: "host", label: "Host / IP", placeholder: "192.168.1.50 or laser.local", value: m?.conn.host, required: true, showIf: (v) => v.type === "network" },
+  { key: "netport", label: "Raw GRBL / Telnet port", type: "number", min: 1, max: 65535, step: 1, required: true, value: m?.conn.type === "network" ? m.conn.port : 23, showIf: (v) => v.type === "network" },
   { key: "serial", label: "Serial port", placeholder: "/dev/tty… or COM3", value: m?.conn.type === "usb" ? m.conn.serial : "", showIf: (v) => v.type === "usb" },
-  { key: "baud", label: "Baud rate", type: "number", value: m?.conn.baud || 115200, showIf: (v) => v.type === "usb" },
-  { key: "bedW", label: `Bed width (${state.units})`, type: "number", value: toDisp(m?.bedW || 600) },
-  { key: "bedH", label: `Bed height (${state.units})`, type: "number", value: toDisp(m?.bedH || 400) },
+  { key: "baud", label: "Baud rate", type: "number", min: 1, step: 1, value: m?.conn.baud || 115200, showIf: (v) => v.type === "usb" },
+  { key: "bedW", label: `Bed width (${state.units})`, type: "number", min: 1, required: true, value: toDisp(m?.bedW || 600) },
+  { key: "bedH", label: `Bed height (${state.units})`, type: "number", min: 1, required: true, value: toDisp(m?.bedH || 400) },
   { key: "advanced", label: "Show advanced settings", type: "checkbox", value: false },
   { key: "maxFeed", label: "Max feed (mm/min)", type: "number", value: m?.maxFeed || 12000, showIf: (v) => v.advanced },
+  { key: "connectTimeoutMs", label: "Network connect / handshake timeout (ms)", type: "number", min: 250, max: 30000, step: 250, value: m?.conn.connectTimeoutMs || 3000, showIf: (v) => v.advanced && v.type === "network" },
+  { key: "responseTimeoutMs", label: "GRBL command response timeout (ms)", type: "number", min: 1000, max: 120000, step: 1000, value: m?.conn.responseTimeoutMs || 30000, showIf: (v) => v.advanced && v.type === "network" },
   { key: "flipX", label: "Flip X axis", type: "checkbox", value: m?.adv?.flipX || false, showIf: (v) => v.advanced },
   { key: "flipY", label: "Flip Y axis", type: "checkbox", value: m?.adv?.flipY ?? true, showIf: (v) => v.advanced },
   { key: "home", label: "Home / origin", type: "select", value: m?.adv?.home || "front-left", options: [{ value: "front-left", label: "Front-left" }, { value: "rear-left", label: "Rear-left" }, { value: "front-right", label: "Front-right" }], showIf: (v) => v.advanced },
 ];
 const machineFrom = (v, id) => ({
-  id, name: v.name, driver: v.driver,
-  conn: v.type === "network" ? { type: "network", host: v.host, port: v.netport } : { type: "usb", serial: v.serial, baud: v.baud },
+  id, name: v.name.trim(), driver: v.driver,
+  conn: v.type === "network"
+    ? { type: "network", host: v.host.trim(), port: Math.round(v.netport), connectTimeoutMs: v.connectTimeoutMs || 3000, responseTimeoutMs: v.responseTimeoutMs || 30000 }
+    : { type: "usb", serial: v.serial?.trim() || "", baud: v.baud },
   bedW: toMm(v.bedW), bedH: toMm(v.bedH), maxFeed: Math.max(1, v.maxFeed || 12000), adv: { flipX: v.flipX, flipY: v.flipY, home: v.home },
 });
 async function addMachine() {
@@ -496,6 +500,12 @@ async function editMachine(m) {
   toast("Machine saved: " + m.name, "ok");
 }
 async function connect() {
+  const selected = machine();
+  if (selected.driver !== "Dummy" && selected.conn.type === "network") {
+    if (!selected.conn.host?.trim()) return toast("Enter the laser hostname or IP address in Machine settings.", "err");
+    const port = Number(selected.conn.port);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) return toast("Network port must be between 1 and 65535.", "err");
+  }
   try {
     if (machineStatus.connected) {
       machineStatus = await window.modcut.call("disconnect");
@@ -504,12 +514,15 @@ async function connect() {
       return;
     }
     const dryRun = $("dryRun").checked;
+    machineStatus = { ...machineStatus, connecting: true, lastError: "" };
+    renderMachineStatus();
     machineStatus = await window.modcut.call("connect", { machine: machine(), dryRun });
     reportedResult = machineStatus.lastResult;
     renderMachineStatus();
-    toast(machineStatus.dryRun ? "Dry-run connection ready — no hardware commands will be sent." : `Connected to ${machineStatus.target}.`, "ok");
+    const identity = machineStatus.deviceIdentity ? ` (${machineStatus.deviceIdentity})` : "";
+    toast(machineStatus.dryRun ? "Dry-run connection ready — no hardware commands will be sent." : `Verified GRBL at ${machineStatus.target}${identity}.`, "ok");
   } catch (e) {
-    machineStatus = { ...machineStatus, connected: false, running: false, lastError: e.message };
+    machineStatus = { ...machineStatus, connected: false, connecting: false, running: false, lastError: e.message };
     renderMachineStatus();
     toast("Connection failed: " + e.message, "err");
   }
@@ -518,12 +531,16 @@ function renderMachineStatus() {
   const conn = $("conn");
   conn.classList.toggle("ok", machineStatus.connected);
   conn.classList.toggle("err", !!machineStatus.lastError && !machineStatus.connected);
-  if (machineStatus.connected) {
-    $("connText").textContent = machineStatus.dryRun ? "Ready · dry run" : `Connected · ${machineStatus.target}`;
+  if (machineStatus.connecting) {
+    $("connText").textContent = "Connecting and verifying GRBL …";
+  } else if (machineStatus.connected) {
+    const identity = machineStatus.deviceIdentity?.match(/^<([^|>]+)/)?.[1] || machineStatus.deviceIdentity;
+    $("connText").textContent = machineStatus.dryRun ? "Ready · dry run" : `Connected · ${machineStatus.target}${identity ? ` · ${identity}` : ""}`;
   } else {
     $("connText").textContent = machineStatus.lastError ? "Connection error" : "Not connected";
   }
-  $("connect").textContent = machineStatus.connected ? "Disconnect" : "Connect";
+  $("connect").textContent = machineStatus.connecting ? "Connecting…" : machineStatus.connected ? "Disconnect" : "Connect";
+  $("connect").disabled = !!machineStatus.connecting;
   $("dryRun").disabled = machineStatus.connected;
   $("device").disabled = machineStatus.connected;
   $("sendBtn").disabled = !machineStatus.connected || machineStatus.running;

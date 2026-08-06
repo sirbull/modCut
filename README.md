@@ -12,6 +12,8 @@ The first complete, hardware-testable path is available:
   to Cut / Engrave / Score operations;
 - generate and simulate GRBL G-code;
 - connect to GRBL over serial or TCP;
+- verify that a configured TCP endpoint is a responsive GRBL controller before
+  reporting it connected;
 - validate every job against an allow-list, bed dimensions, maximum feed and
   laser power before transmission;
 - frame the design with the laser forced off;
@@ -74,6 +76,7 @@ matrix are documented in [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md).
 
 Only move on to hardware after the dry-run checklist passes. The full procedure,
 including GRBL setup and acceptance criteria, is in [`docs/TESTING.md`](docs/TESTING.md).
+Local-network setup and troubleshooting are in [`docs/NETWORK.md`](docs/NETWORK.md).
 
 ## Commands
 

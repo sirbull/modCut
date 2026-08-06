@@ -33,8 +33,10 @@ export function openModal({ title, fields, submitLabel = "Save" }) {
         if (f.placeholder) input.placeholder = f.placeholder;
         if (f.min != null) input.min = f.min;
         if (f.max != null) input.max = f.max;
+        if (f.step != null) input.step = f.step;
         if (f.value != null) input.value = f.value;
       }
+      if (f.required) input.required = true;
       input.name = f.key;
       label.append(input);
       form.append(label);
@@ -51,7 +53,11 @@ export function openModal({ title, fields, submitLabel = "Save" }) {
       const v = currentValues();
       for (const label of form.querySelectorAll("label.field")) {
         const f = label._field;
-        if (f && f.showIf) label.style.display = f.showIf(v) ? "" : "none";
+        if (f && f.showIf) {
+          const visible = f.showIf(v);
+          label.style.display = visible ? "" : "none";
+          label.querySelector("input,select").required = visible && !!f.required;
+        }
       }
     };
     form.addEventListener("input", applyVisibility);

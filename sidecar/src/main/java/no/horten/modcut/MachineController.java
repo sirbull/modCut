@@ -94,7 +94,11 @@ final class MachineController implements AutoCloseable {
     } else {
       if (!driver.equalsIgnoreCase("Grbl")) throw new IllegalArgumentException("M1 kan bare kjøre ekte jobber mot GRBL.");
       transport = type.equals("network")
-          ? GrblTransport.network(conn.path("host").asText(), conn.path("port").asInt(23))
+          ? GrblTransport.network(
+              conn.path("host").asText(),
+              conn.path("port").asInt(23),
+              boundedInt(conn, "connectTimeoutMs", 3_000, 250, 30_000),
+              boundedInt(conn, "responseTimeoutMs", 30_000, 1_000, 120_000))
           : GrblTransport.serial(conn.path("serial").asText(), conn.path("baud").asInt(115200));
     }
     lastError = "";
@@ -178,6 +182,7 @@ final class MachineController implements AutoCloseable {
         lastError = error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage();
         lastResult = "failed";
         try { activeTransport.emergencyStop(); } catch (Exception ignored) {}
+        dropTransport(activeTransport);
       } finally {
         running = false;
       }
@@ -205,6 +210,8 @@ final class MachineController implements AutoCloseable {
     out.put("lastResult", lastResult);
     out.put("jobName", jobName);
     out.put("target", transport == null ? "" : transport.description());
+    out.put("connectionType", transport == null ? "" : transport.connectionType());
+    out.put("deviceIdentity", transport == null ? "" : transport.identity());
     return out;
   }
 
@@ -236,6 +243,12 @@ final class MachineController implements AutoCloseable {
   private static double bedHeight(JsonNode params) { return params.path("bedHeight").asDouble(400); }
   private static double maxFeed(JsonNode params) { return params.path("maxFeed").asDouble(12_000); }
 
+  private static int boundedInt(JsonNode node, String key, int fallback, int min, int max) {
+    int value = node.path(key).asInt(fallback);
+    if (value < min || value > max) throw new IllegalArgumentException(key + " må være mellom " + min + " og " + max + ".");
+    return value;
+  }
+
   private static double requiredFinite(JsonNode params, String key) {
     double value = params.path(key).asDouble(Double.NaN);
     if (!Double.isFinite(value)) throw new IllegalArgumentException("Mangler gyldig " + key + ".");
@@ -248,6 +261,12 @@ final class MachineController implements AutoCloseable {
 
   private synchronized void closeTransport() throws IOException {
     if (transport != null) transport.close();
+    transport = null;
+  }
+
+  private synchronized void dropTransport(GrblTransport failed) {
+    if (transport != failed) return;
+    try { transport.close(); } catch (Exception ignored) {}
     transport = null;
   }
 

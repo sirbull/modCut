@@ -44,6 +44,10 @@ Before enabling a real connection:
 Create or edit the machine under **Machine → Manage machines** and select the
 GRBL driver. Uncheck **Dry run** only when the machine is ready.
 
+For a laser on the local network, follow [`NETWORK.md`](NETWORK.md). A successful
+connection now means the TCP endpoint returned a valid GRBL status response;
+an open port by itself is not accepted.
+
 ## 4. Hardware acceptance stages
 
 Perform these stages in order:
