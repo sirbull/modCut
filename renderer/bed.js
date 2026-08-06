@@ -56,7 +56,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   let pathOrder = "optimize";                 // "optimize" | "nearby" | "layer"
   let drawSizeCb = null, drawClickCb = null, toolResetCb = null;
   let drawColor = "#000000", drawWidth = 0.5; // style for new shapes
-  let penPath = null, penHoverPoint = null, penEndpointHover = null, penCloseHover = false;
+  let penPath = null, penHoverPoint = null, penEndpointHover = null, penInsertHover = null, penCloseHover = false;
   let penDragSegment = null, penDragHandleKind = null, penChanged = false, penResumeReversed = false;
   let nodeHit = null, nodeEditItem = null;
 
@@ -100,7 +100,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     clearNodeSelection();
     if (penPath) finishPen();
     currentTool = t;
-    penHoverPoint = null; penEndpointHover = null; penCloseHover = false;
+    penHoverPoint = null; penEndpointHover = null; penInsertHover = null; penCloseHover = false;
     clearSel(); emitSel(); drawPenOverlay();
     if (t === "pen") setPenCursor("new");
     else setCursor(cursorForTool(t));
@@ -631,17 +631,18 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   const PEN_ACTIVE_CURSOR = penCursor();
   const PEN_CONTINUE_CURSOR = penCursor("<path d='M18 12l8-8' fill='none' stroke='white' stroke-width='4'/><path d='M18 12l8-8' fill='none' stroke='#111' stroke-width='1.8'/>");
   const PEN_CLOSE_CURSOR = penCursor("<circle cx='22' cy='8' r='4' fill='white' stroke='#111' stroke-width='1.6'/>");
+  const PEN_ADD_CURSOR = penCursor("<circle cx='22' cy='8' r='6' fill='white' stroke='#006B5C' stroke-width='1.5'/><path d='M22 4.5v7M18.5 8h7' fill='none' stroke='#006B5C' stroke-width='1.7'/>");
   const ROT_SVG = "<svg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 24 24' fill='none' stroke='#071411' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 11a9 9 0 0 1 15-6l3 3'/><path d='M21 3v5h-5'/><path d='M21 13a9 9 0 0 1-15 6l-3-3'/><path d='M3 21v-5h5'/></svg>";
   const ROTATE_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(ROT_SVG)}") 11 11, grab`;
   const cursorForTool = (tool) => tool === "select" ? SELECT_CURSOR : tool === "node" ? NODE_CURSOR : tool === "pen" ? PEN_NEW_CURSOR : DRAW_CURSOR;
   function setPenCursor(mode) {
     canvas.dataset.penCursor = mode;
-    setCursor(mode === "continue" ? PEN_CONTINUE_CURSOR : mode === "close" ? PEN_CLOSE_CURSOR : mode === "active" ? PEN_ACTIVE_CURSOR : PEN_NEW_CURSOR);
+    setCursor(mode === "continue" ? PEN_CONTINUE_CURSOR : mode === "close" ? PEN_CLOSE_CURSOR : mode === "add" ? PEN_ADD_CURSOR : mode === "active" ? PEN_ACTIVE_CURSOR : PEN_NEW_CURSOR);
   }
   function updateCursor(pt) {
     if (spaceDown) return; // grab already set on keydown
     if (currentTool === "pen") {
-      setPenCursor(penCloseHover ? "close" : penEndpointHover ? "continue" : penPath ? "active" : "new");
+      setPenCursor(penCloseHover ? "close" : penEndpointHover ? "continue" : penInsertHover ? "add" : penPath ? "active" : "new");
       return;
     }
     if (currentTool !== "select") { setCursor(cursorForTool(currentTool)); return; }
@@ -699,7 +700,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   });
   canvas.addEventListener("mouseleave", () => {
     if (currentTool !== "pen" || penDragSegment) return;
-    penHoverPoint = null; penEndpointHover = null; penCloseHover = false;
+    penHoverPoint = null; penEndpointHover = null; penInsertHover = null; penCloseHover = false;
     drawPenOverlay();
   });
   const endPan = (e) => { if (!pan) return; pan = null; if (spaceDown) setCursor("grab"); else restoreToolCursor(); try { canvas.releasePointerCapture(e.pointerId); } catch {} };
@@ -719,16 +720,24 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   // --- pen tool (bezier) --------------------------------------------------
   function abandonPenInteraction() {
     if (penPath && !penChanged && penResumeReversed) penPath.reverse();
-    penPath = null; penHoverPoint = null; penEndpointHover = null; penCloseHover = false;
+    penPath = null; penHoverPoint = null; penEndpointHover = null; penInsertHover = null; penCloseHover = false;
     penDragSegment = null; penDragHandleKind = null; penChanged = false; penResumeReversed = false;
     penLayer.removeChildren();
   }
   function finishDrawing() { if (penPath) finishPen(); }
-  function openEndpointAt(pt) {
+  function editablePaths() {
     const root = selectionRoot();
+    const paths = [];
+    for (const item of root.children) {
+      if (item.className === "Path") paths.push(item);
+      else if (item.className === "CompoundPath") paths.push(...item.children.filter((child) => child.className === "Path"));
+    }
+    return paths;
+  }
+  function openEndpointAt(pt) {
     let best = null;
-    for (const path of root.children) {
-      if (path === penPath || path.className !== "Path" || path.closed || !path.visible || !path.segments.length) continue;
+    for (const path of editablePaths()) {
+      if (path === penPath || path.closed || !path.visible || !path.segments.length) continue;
       const candidates = [
         { path, segment: path.firstSegment, atStart: true },
         { path, segment: path.lastSegment, atStart: false },
@@ -741,14 +750,26 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     return best;
   }
   function anchorAt(pt) {
-    const root = selectionRoot();
     let best = null;
-    for (const path of root.children) {
-      if (path === penPath || path.className !== "Path" || !path.visible) continue;
+    for (const path of editablePaths()) {
+      if (path === penPath || !path.visible) continue;
       for (const segment of path.segments) {
         const distance = pt.getDistance(segment.point);
         if (distance <= 8 / view.zoom && (!best || distance < best.distance)) best = { path, segment, distance };
       }
+    }
+    return best;
+  }
+  function insertionAt(pt) {
+    let best = null;
+    for (const path of editablePaths()) {
+      if (path === penPath || !path.visible || path.segments.length < 2) continue;
+      const location = path.getNearestLocation(pt);
+      if (!location) continue;
+      const distance = location.point.getDistance(pt);
+      if (distance > 7 / view.zoom) continue;
+      if (path.segments.some((segment) => segment.point.getDistance(location.point) <= 8 / view.zoom)) continue;
+      if (!best || distance < best.distance) best = { path, location, distance };
     }
     return best;
   }
@@ -810,6 +831,8 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       }
     } else if (penEndpointHover) {
       penGuidePoint(penEndpointHover.segment.point, { ring: true });
+    } else if (penInsertHover) {
+      penGuidePoint(penInsertHover.location.point, { ring: true });
     }
     designLayer.activate();
   }
@@ -817,6 +840,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     if (currentTool !== "pen") return;
     penHoverPoint = point.clone();
     penEndpointHover = penPath ? null : openEndpointAt(point);
+    penInsertHover = penPath || penEndpointHover ? null : insertionAt(point);
     penCloseHover = !!(penPath?.segments.length > 1 && point.getDistance(penPath.firstSegment.point) <= 9 / view.zoom);
     drawPenOverlay();
   }
@@ -830,6 +854,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     penPath = null; // stay in the pen tool, ready for the next path
     penDragSegment = null; penDragHandleKind = null; penChanged = false; penResumeReversed = false;
     penEndpointHover = penHoverPoint ? openEndpointAt(penHoverPoint) : null;
+    penInsertHover = penHoverPoint && !penEndpointHover ? insertionAt(penHoverPoint) : null;
     penCloseHover = false;
     drawPenOverlay(); updateCursor(penHoverPoint || P(-1e6, -1e6));
     if (committed) { notifyChange(); toolResetCb && toolResetCb(); }
@@ -851,8 +876,21 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
         penChanged = false; penResumeReversed = continuation.atStart;
         if (penResumeReversed) penPath.reverse();
         penDragSegment = penPath.lastSegment; penDragHandleKind = "symmetric";
-        penEndpointHover = null; penCloseHover = false;
+        penEndpointHover = null; penInsertHover = null; penCloseHover = false;
         drawPenOverlay(); setPenCursor("active");
+        return;
+      }
+      const insertion = insertionAt(e.point);
+      if (insertion) {
+        clearNodeSelection();
+        const inserted = insertion.path.divideAt(insertion.location);
+        if (inserted) {
+          undoStack.push(preDraw); if (undoStack.length > 60) undoStack.shift(); redoStack.length = 0;
+          selectNodeSegment(inserted);
+          nodeEditItem = insertion.path;
+          penInsertHover = null;
+          drawOverlay(); updatePenHover(e.point); notifyChange();
+        }
         return;
       }
       clearNodeSelection();
@@ -874,7 +912,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       return;
     }
     penDragSegment = penPath.add(e.point); penDragHandleKind = "symmetric"; penChanged = true;
-    penEndpointHover = null; penCloseHover = false;
+    penEndpointHover = null; penInsertHover = null; penCloseHover = false;
     drawPenOverlay(); view.update();
   }
   function onPenDrag(e) {

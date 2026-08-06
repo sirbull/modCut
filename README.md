@@ -15,7 +15,8 @@ The first complete, hardware-testable path is available:
 - keep multiple independent projects open as tabs, including separate designs,
   layers, raster settings, materials and undo/redo histories;
 - draw Illustrator-style Bézier paths with a live pen preview, editable handles,
-  close-path feedback and continuation from either open endpoint;
+  close-path feedback, continuation from either open endpoint and point insertion
+  directly on existing path segments;
 - select individual anchors with high-visibility markers, drag a segment between
   two selected adjacent anchors, and remove anchors with Delete/Backspace;
 - scale selections with Shift aspect locking, Alt/Option center scaling, or both

@@ -44,6 +44,7 @@ the same commit that completes an item.
 
 - [x] Independent project tabs with per-tab design, layers, settings and history.
 - [x] Illustrator-style Pen preview, handles, close/continue cursors and endpoint continuation.
+- [x] Pen add-anchor cursor and shape-preserving insertion on existing paths.
 - [x] Individual anchor selection and Delete/Backspace removal.
 - [x] High-visibility selected anchors and direct dragging of a path segment
   between two selected adjacent anchors.

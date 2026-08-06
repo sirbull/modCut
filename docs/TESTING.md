@@ -136,6 +136,11 @@ sidecar must reject the job with an out-of-bounds error.
 8. Switch to Select (<code>V</code>), select an element, then press and drag on
    the selected element. It must begin moving without requiring a second click
    or first clearing the selection.
+9. Finish a straight and a curved path, then hover Pen over the middle of each
+   path segment. The cursor must show a small plus and the exact insertion point
+   must be highlighted. Click once: one anchor must be added without changing
+   the visible path shape. Undo must remove the new anchor. Hovering an existing
+   open endpoint must still show Continue rather than Add.
 
 ### Transform modifier acceptance test
 
