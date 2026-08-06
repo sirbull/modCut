@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 import { dirname, join, extname, basename } from "node:path";
 import { createSidecar } from "./sidecar-bridge.mjs";
 import { createWindowCommandRouter } from "./window-lifecycle.mjs";
+import { createRecoveryStore } from "./recovery-store.mjs";
+import { IMAGE_FORMATS, TEXT_FORMATS } from "./import-formats.mjs";
 
 app.name = "modCut"; // makes the macOS app menu read "modCut", not "Electron"
 
@@ -13,9 +15,14 @@ const appIconPath = join(root, "assets", "modcut_logo.png");
 const isMac = process.platform === "darwin";
 let win;
 let sidecar;
-
-const TEXT_FORMATS = ["svg", "dxf", "gcode", "gc", "nc", "plt", "hpgl"];
-const IMAGE_FORMATS = ["png", "jpg", "jpeg", "bmp", "gif"];
+let recoveryStore;
+let quitRequested = false;
+let quitAllowed = false;
+const closeAllowed = new WeakSet();
+const closePending = new WeakSet();
+const rendererGone = new WeakSet();
+const isE2E = process.env.MODCUT_E2E === "1";
+const e2eImportResults = [];
 
 function createWindow() {
   const nextWindow = new BrowserWindow({
@@ -30,9 +37,26 @@ function createWindow() {
     },
   });
   win = nextWindow;
+  nextWindow.webContents.on("render-process-gone", () => rendererGone.add(nextWindow));
+  nextWindow.on("close", (event) => {
+    if (closeAllowed.has(nextWindow) || rendererGone.has(nextWindow)) return;
+    event.preventDefault();
+    if (closePending.has(nextWindow)) return;
+    closePending.add(nextWindow);
+    nextWindow.webContents.send("app-close-request", { reason: quitRequested ? "quit" : "window" });
+  });
   nextWindow.on("closed", () => { if (win === nextWindow) win = null; });
   void nextWindow.loadFile(join(root, "renderer", "index.html"));
   return nextWindow;
+}
+
+function requestQuit() {
+  quitRequested = true;
+  if (win && !win.isDestroyed()) win.close();
+  else {
+    quitAllowed = true;
+    app.quit();
+  }
 }
 
 const send = createWindowCommandRouter({ getWindow: () => win, createWindow });
@@ -53,7 +77,7 @@ function buildMenu() {
             { role: "hideOthers", label: "Hide Others" },
             { role: "unhide", label: "Show All" },
             { type: "separator" },
-            { role: "quit", label: "Quit modCut" },
+            { label: "Quit modCut", accelerator: "Cmd+Q", click: requestQuit },
           ],
         }]
       : []),
@@ -73,7 +97,7 @@ function buildMenu() {
         { type: "separator" },
         { label: "Export settings…", click: () => send("export-settings") },
         { label: "Import settings…", click: () => send("import-settings") },
-        ...(isMac ? [] : [{ type: "separator" }, { role: "quit", label: "Quit" }]),
+        ...(isMac ? [] : [{ type: "separator" }, { label: "Quit", accelerator: "Ctrl+Q", click: requestQuit }]),
       ],
     },
     {
@@ -148,6 +172,7 @@ function buildMenu() {
 }
 
 app.whenReady().then(() => {
+  recoveryStore = createRecoveryStore(app.getPath("userData"));
   const appIcon = nativeImage.createFromPath(appIconPath);
   appIcon.setTemplateImage?.(false);
   if (isMac && !appIcon.isEmpty()) app.dock.setIcon(appIcon);
@@ -170,11 +195,34 @@ app.whenReady().then(() => {
     : join(root, "sidecar", "target", "modcut-sidecar.jar");
   sidecar = createSidecar({ command: java, args: ["-jar", sidecarJar] });
   ipcMain.handle("sidecar", (_e, method, params) => sidecar.call(method, params));
+  ipcMain.handle("readRecovery", () => recoveryStore.read());
+  ipcMain.handle("writeRecovery", (_event, json) => recoveryStore.write(json));
+  ipcMain.handle("clearRecovery", () => recoveryStore.clear());
+  ipcMain.handle("windowCloseResponse", (_event, allowed) => {
+    const target = BrowserWindow.fromWebContents(_event.sender);
+    if (!target || target.isDestroyed()) return false;
+    closePending.delete(target);
+    if (!allowed) {
+      quitRequested = false;
+      return false;
+    }
+    closeAllowed.add(target);
+    if (quitRequested) {
+      quitAllowed = true;
+      app.quit();
+    } else target.close();
+    return true;
+  });
+  if (isE2E) {
+    ipcMain.handle("e2eSetImportResult", (_event, result) => { e2eImportResults.push(result); return true; });
+    ipcMain.handle("e2eRequestQuit", () => { requestQuit(); return true; });
+  }
 
   // Native file picker that also returns the file's contents so the renderer
-  // (sandboxed, no fs) can parse it. SVG/vector/g-code come back as text;
+  // (sandboxed, no fs) can parse it. SVG/DXF come back as text;
   // images as a data URL.
   ipcMain.handle("importFile", async (_event, options = {}) => {
+    if (isE2E && e2eImportResults.length) return e2eImportResults.shift();
     const multiple = !!options.multiple;
     const allowDocuments = options.allowDocuments !== false;
     const supported = [...TEXT_FORMATS, ...IMAGE_FORMATS, ...(allowDocuments ? ["modcut"] : [])];
@@ -184,8 +232,7 @@ app.whenReady().then(() => {
       filters: [
         { name: "All supported files", extensions: supported },
         ...(allowDocuments ? [{ name: "modCut document", extensions: ["modcut"] }] : []),
-        { name: "Vector", extensions: ["svg", "dxf", "plt", "hpgl"] },
-        { name: "G-code", extensions: ["gcode", "gc", "nc"] },
+        { name: "Vector", extensions: TEXT_FORMATS },
         { name: "Images", extensions: IMAGE_FORMATS },
       ],
     });
@@ -255,7 +302,13 @@ app.on("window-all-closed", () => {
   if (!isMac) app.quit();
 });
 
-app.on("before-quit", () => {
+app.on("before-quit", (event) => {
+  if (quitAllowed) return;
+  event.preventDefault();
+  requestQuit();
+});
+
+app.on("will-quit", () => {
   sidecar?.close();
   sidecar = null;
 });

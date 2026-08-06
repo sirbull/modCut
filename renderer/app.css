@@ -96,6 +96,7 @@
 .clayer__ignored { padding: 3px 7px; border-radius: 999px; background: var(--surface-2); color: var(--text-muted);
                     font: 700 var(--fs-xs) var(--font-sans); text-transform: uppercase; }
 .clayer__note { margin: var(--sp-2) 0 0; font-size: var(--fs-xs); color: var(--text-muted); }
+.clayer__note.is-warning { color: var(--danger); font-weight: 700; }
 .clayer:has(.clayer__ignored) { border-style: dashed; background: var(--surface); }
 
 /* --- run buttons -------------------------------------------------------- */

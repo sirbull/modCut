@@ -198,7 +198,7 @@ function refreshPropsVisibility() {
   $("propSec").classList.toggle("hidden", selectedCount === 0 && !DRAW_TOOLS.has(activeTool));
 }
 bed.onSelection((n) => { selectedCount = n; $("sel").textContent = `${n} selected`; refreshProps(); refreshPropsVisibility(); });
-bed.onChange(() => { refreshPos(); if (!restoringTab) markDirty(); });
+bed.onChange(() => { refreshPos(); scheduleQualityRefresh(); if (!restoringTab) markDirty(); });
 
 let docPath = null;
 let dirty = false;
@@ -206,6 +206,10 @@ let documentTabs = [];
 let activeTabId = null;
 let nextTabId = 1;
 let restoringTab = false;
+let recoveryTimer = null;
+let closeGuardRunning = false;
+const RECOVERY_VERSION = 1;
+const RECOVERY_DELAY_MS = 350;
 function pathBase(path) { return String(path || "").split(/[\\/]/).pop(); }
 function activeTab() { return documentTabs.find((tab) => tab.id === activeTabId) || null; }
 function setFileLabel(name) {
@@ -214,8 +218,8 @@ function setFileLabel(name) {
   const tab = activeTab();
   if (tab) { tab.title = title; tab.dirty = dirty; renderTabs(); }
 }
-function markDirty() { dirty = true; setFileLabel(docPath ? pathBase(docPath) : ($("file").textContent.replace(/\s\*$/, "") || "Untitled")); }
-function markClean() { dirty = false; setFileLabel(docPath ? pathBase(docPath) : ($("file").textContent.replace(/\s\*$/, "") || "Untitled")); }
+function markDirty() { dirty = true; setFileLabel(docPath ? pathBase(docPath) : ($("file").textContent.replace(/\s\*$/, "") || "Untitled")); scheduleRecovery(); }
+function markClean() { dirty = false; setFileLabel(docPath ? pathBase(docPath) : ($("file").textContent.replace(/\s\*$/, "") || "Untitled")); scheduleRecovery(); }
 
 function renderTabs() {
   const host = $("tabItems");
@@ -284,6 +288,73 @@ function captureActiveTab() {
   tab.dirty = tab.session.dirty;
 }
 
+function recoverySession(session) {
+  if (!session) return null;
+  return {
+    ...session,
+    bed: session.bed ? { ...session.bed, undo: [], redo: [] } : {},
+  };
+}
+
+function recoveryPayload() {
+  captureActiveTab();
+  return {
+    app: "modCut",
+    recoveryVersion: RECOVERY_VERSION,
+    savedAt: new Date().toISOString(),
+    activeTabId,
+    nextTabId,
+    tabs: documentTabs.map((tab) => ({
+      id: tab.id,
+      title: tab.title,
+      dirty: tab.dirty,
+      session: recoverySession(tab.session),
+    })),
+  };
+}
+
+async function flushRecovery() {
+  if (recoveryTimer) { clearTimeout(recoveryTimer); recoveryTimer = null; }
+  if (!documentTabs.length) return;
+  try {
+    await window.modcut.writeRecovery(JSON.stringify(recoveryPayload()));
+  } catch (error) {
+    console.warn("Could not write recovery session", error);
+  }
+}
+
+function scheduleRecovery() {
+  if (!documentTabs.length || restoringTab || closeGuardRunning) return;
+  if (recoveryTimer) clearTimeout(recoveryTimer);
+  recoveryTimer = setTimeout(() => { recoveryTimer = null; void flushRecovery(); }, RECOVERY_DELAY_MS);
+}
+
+async function restoreRecoverySession() {
+  try {
+    const json = await window.modcut.readRecovery();
+    if (!json) return false;
+    const recovery = JSON.parse(json);
+    if (recovery?.app !== "modCut" || recovery.recoveryVersion !== RECOVERY_VERSION || !Array.isArray(recovery.tabs) || !recovery.tabs.length) return false;
+    const tabs = recovery.tabs.filter((tab) => tab?.id && tab.session).map((tab) => ({
+      id: String(tab.id),
+      title: tab.title || "Untitled",
+      dirty: !!tab.dirty,
+      session: tab.session,
+    }));
+    if (!tabs.length) return false;
+    documentTabs = tabs;
+    const requested = tabs.find((tab) => tab.id === String(recovery.activeTabId));
+    activeTabId = (requested || tabs[0]).id;
+    nextTabId = Math.max(Number(recovery.nextTabId) || 1, ...tabs.map((tab) => (Number(tab.id) || 0) + 1));
+    restoreWorkspace(activeTab().session);
+    toast(`Recovered ${tabs.length} project tab${tabs.length === 1 ? "" : "s"} from the previous session.`, "info");
+    return true;
+  } catch (error) {
+    console.warn("Could not restore recovery session", error);
+    return false;
+  }
+}
+
 function restoreWorkspace(session) {
   if (!session) return;
   restoringTab = true;
@@ -329,6 +400,7 @@ function switchDocumentTab(id) {
   captureActiveTab();
   activeTabId = id;
   restoreWorkspace(target.session);
+  scheduleRecovery();
 }
 
 function switchRelativeTab(offset) {
@@ -374,19 +446,22 @@ async function saveDocument(saveAs = false) {
   }
 }
 
-function saveWorkDialog() {
+function saveWorkDialog(tabName = null) {
   return new Promise((resolve) => {
     const overlay = document.createElement("div");
     overlay.className = "modal-overlay";
     overlay.innerHTML = `<div class="modal panel" role="dialog" aria-modal="true" aria-labelledby="saveWorkTitle"><div class="panel__header" id="saveWorkTitle">Save work?</div>
       <div class="panel__body">
-        <p class="hint">Save the current document before continuing.</p>
+        <p class="hint" data-save-work-hint></p>
         <div class="modal-actions modal-actions--save-prompt">
           <button class="btn btn--neutral-outline btn--sm" data-x="discard">Don't Save</button>
           <button class="btn btn--neutral-outline btn--sm" data-x="cancel">Cancel</button>
           <button class="btn btn--primary btn--sm" data-x="save">Save</button>
         </div>
       </div></div>`;
+    overlay.querySelector("[data-save-work-hint]").textContent = tabName
+      ? `Save “${tabName}” before continuing.`
+      : "Save the current document before continuing.";
     const close = (v) => {
       document.removeEventListener("keydown", onKey);
       overlay.remove();
@@ -407,10 +482,40 @@ function saveWorkDialog() {
 async function guardWorkBeforeContinue() {
   bed.finishDrawing();
   if (!dirty) return true;
-  const choice = await saveWorkDialog();
+  const choice = await saveWorkDialog(activeTab()?.title);
   if (choice === "save") return saveDocument(false);
   if (choice === "discard") return true;
   return false;
+}
+
+async function guardAllWorkBeforeWindowClose() {
+  if (closeGuardRunning) return false;
+  closeGuardRunning = true;
+  if (recoveryTimer) { clearTimeout(recoveryTimer); recoveryTimer = null; }
+  const originalTabId = activeTabId;
+  try {
+    captureActiveTab();
+    for (const tab of documentTabs.filter((item) => item.dirty)) {
+      if (tab.id !== activeTabId) switchDocumentTab(tab.id);
+      const choice = await saveWorkDialog(tab.title);
+      if (choice === "cancel") {
+        if (originalTabId && originalTabId !== activeTabId) switchDocumentTab(originalTabId);
+        return false;
+      }
+      if (choice === "save" && !(await saveDocument(false))) {
+        if (originalTabId && originalTabId !== activeTabId) switchDocumentTab(originalTabId);
+        return false;
+      }
+      captureActiveTab();
+    }
+    await window.modcut.clearRecovery();
+    return true;
+  } catch (error) {
+    toast("Could not finish the close operation safely: " + error.message, "err");
+    return false;
+  } finally {
+    closeGuardRunning = false;
+  }
 }
 
 function applyDocument(p, path, name) {
@@ -552,6 +657,7 @@ function newDocument() {
   resetWorkspace();
   captureActiveTab();
   renderTabs();
+  scheduleRecovery();
   toast("New project tab.", "ok");
 }
 
@@ -571,6 +677,7 @@ async function closeDocumentTab(id = activeTabId) {
   activeTabId = target.id;
   restoreWorkspace(target.session);
   renderTabs();
+  scheduleRecovery();
 }
 
 function initializeDocumentTabs() {
@@ -631,6 +738,41 @@ function renderLayers() {
   $("layersHint").style.display = state.layers.length ? "none" : "";
   state.layers.forEach((l) => host.append(layerRow(l)));
 }
+let qualityRefreshTimer = null;
+function qualityForLayer(layer) {
+  return bed.outputQuality([{
+    color: state.mappingMode === "color" ? layer.color : null,
+    op: layer.op, dpi: layer.dpi, dither: layer.dither, bottomUp: layer.bottomUp,
+  }]);
+}
+function qualitySummary(report) {
+  if (report.blocked) return `Output blocked: ${report.problems.join(" ")}`;
+  const parts = [];
+  if (report.rasters.length) {
+    const largest = report.rasters.reduce((best, item) => item.samples > best.samples ? item : best, report.rasters[0]);
+    parts.push(`Raster output ${largest.columns.toLocaleString("en-US")} × ${largest.rows.toLocaleString("en-US")} samples at ${largest.effectiveDpi} DPI${report.rasters.length > 1 ? ` (${report.rasters.length} images)` : ""}`);
+  }
+  if (report.filledScans.length) {
+    const lines = report.filledScans.reduce((sum, item) => sum + item.rows, 0);
+    parts.push(`${lines.toLocaleString("en-US")} filled-vector scan lines at requested DPI`);
+  }
+  if (report.vectorPoints) parts.push(`vector tolerance ${report.vectorStepMm} mm · about ${Math.ceil(report.vectorPoints).toLocaleString("en-US")} points`);
+  return parts.length ? parts.join(" · ") : "No output geometry on this layer.";
+}
+function updateLayerQuality(row, layer) {
+  const note = row.querySelector("[data-quality]");
+  if (!note) return;
+  const report = qualityForLayer(layer);
+  note.textContent = qualitySummary(report);
+  note.classList.toggle("is-warning", report.blocked);
+}
+function refreshLayerQuality() {
+  [...$("layers").children].forEach((row, index) => { if (state.layers[index]) updateLayerQuality(row, state.layers[index]); });
+}
+function scheduleQualityRefresh() {
+  if (qualityRefreshTimer) clearTimeout(qualityRefreshTimer);
+  qualityRefreshTimer = setTimeout(() => { qualityRefreshTimer = null; refreshLayerQuality(); }, 120);
+}
 function layerRow(l) {
   l.speed = clampSpeedPct(l.speed);
   const row = document.createElement("div");
@@ -659,7 +801,10 @@ function layerRow(l) {
       <div><label>DPI (1–1000)</label><input class="input" type="number" min="1" max="1000" value="${l.dpi}" data-k="dpi"></div>
       <div><label>Raster mode</label><select class="select" data-k="dither">${DITHERS.map((d) => `<option ${d === l.dither ? "selected" : ""}>${d}</option>`).join("")}</select></div>
     </div>
-    <label class="clayer__chk"><input type="checkbox" ${l.bottomUp ? "checked" : ""} data-k="bottomUp"> Engrave bottom → top (less soot)</label>` : ""}`}`;
+    <label class="clayer__chk"><input type="checkbox" ${l.bottomUp ? "checked" : ""} data-k="bottomUp"> Engrave bottom → top (less soot)</label>` : ""}
+    <p class="clayer__note" data-quality></p>`}`;
+
+  updateLayerQuality(row, l);
 
   const op = row.querySelector("select.clayer__op");
   if (op) op.addEventListener("change", () => {
@@ -676,7 +821,7 @@ function layerRow(l) {
       if (k === "dither") { syncRasterModes(); refreshBitmapControls(); }
       markDirty();
     });
-    else el.addEventListener("input", () => { l[k] = k === "speed" ? clampSpeedPct(el.value) : Number(el.value); markDirty(); });
+    else el.addEventListener("input", () => { l[k] = k === "speed" ? clampSpeedPct(el.value) : Number(el.value); updateLayerQuality(row, l); markDirty(); });
   });
   return row;
 }
@@ -692,6 +837,8 @@ async function runJob(label) {
   if (!connectionMatchesMachine()) return toast(`This project targets ${machine().name}, but the app is connected to ${machineStatus.connectedMachineName || "another machine"}. Disconnect and reconnect before running.`, "err");
   const ops = jobOps();
   if (!ops.length) return toast("No active layers to run.", "info");
+  const quality = bed.outputQuality(ops);
+  if (quality.blocked) return toast("Job blocked: " + quality.problems.join(" "), "err");
   const base = ($("filename").value.trim() || "job").replace(/\.[^.]+$/, "");
   const filename = base + driverExt(machine().driver);
   try {
@@ -1369,6 +1516,10 @@ window.modcut.onMenu((cmd) => ({
   docs: () => window.open("../docs/index.html"),
   about: showAbout,
 }[cmd]?.()));
+window.modcut.onCloseRequest(async () => {
+  const allowed = await guardAllWorkBeforeWindowClose();
+  await window.modcut.respondToCloseRequest(allowed);
+});
 
 // --- boot -------------------------------------------------------------------
 initCollapsibleSections();
@@ -1376,6 +1527,7 @@ initTooltips();
 refreshMachines(state.machineId);
 bed.setGrid(state.gridXmm, state.gridYmm);
 initializeDocumentTabs();
+void restoreRecoverySession().then((restored) => { if (!restored) scheduleRecovery(); });
 refreshProps();
 refreshPropsVisibility();
 (async () => {

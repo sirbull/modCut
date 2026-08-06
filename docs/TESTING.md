@@ -12,8 +12,10 @@ npm install
 npm test
 ```
 
-Expected result: all Java unit tests, the Node/Java bridge test, SVG conversion
-tests and contrast checks pass.
+Expected result: all Java unit tests, Node/Java bridge tests, renderer tests,
+contrast checks and the real Electron E2E workflow pass. The E2E run opens the
+app in an isolated profile, exercises editing/import/tabs, simulates a crash and
+verifies session recovery after restart.
 
 ## 2. Dry-run acceptance test
 
@@ -109,6 +111,24 @@ sidecar must reject the job with an out-of-bounds error.
    primary CTA color and keyboard focus. Cancel must keep the tab unchanged.
 5. Close the final tab. The window should close while modCut remains available
    on macOS; **Cmd+N** must reopen a new window with one blank tab.
+6. Make two tabs dirty and press the native window close control, then repeat
+   with application Quit. Every dirty tab must receive its own Don't Save /
+   Cancel / Save decision. Cancel must abort the complete close operation.
+7. Make changes, wait one second, then force-terminate modCut without closing it
+   normally. Restart: every open tab, its artwork and dirty state must be
+   restored automatically. A normal confirmed Close/Quit must clear recovery.
+
+### Output quality acceptance test
+
+1. Import a raster, resize it and change its layer DPI. The layer must show the
+   effective sample dimensions and the same requested/effective DPI.
+2. Use a size/DPI combination above the safe sample limit. The layer note must
+   turn into an explicit warning and Run must be blocked with instructions to
+   reduce DPI or physical size; modCut must not silently reduce rows or columns.
+3. Generate a long curved vector path. The job must use the documented 0.2 mm
+   physical sampling tolerance rather than a fixed maximum number of points.
+4. Confirm that Import only offers modCut, SVG, DXF, PNG, JPG/JPEG, BMP and GIF.
+   AI, PDF, PLT, HPGL and existing G-code must not be offered.
 
 ### Pen tool acceptance test
 
@@ -236,3 +256,6 @@ emergency stop; it does not replace it.
 - Raster workflows generate line-based G-code. Grayscale mode uses variable
   `M4 S` power; support and useful tone range must be tested on the actual GRBL
   controller, laser and material before production use.
+- Raster output above 8,000,000 samples, or vector output above approximately
+  1,000,000 sampled points, is blocked with a visible quality warning instead
+  of being silently reduced.

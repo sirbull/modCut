@@ -14,6 +14,8 @@ The first complete, hardware-testable path is available:
   artwork files non-destructively with Add;
 - keep multiple independent projects open as tabs, including separate designs,
   layers, raster settings, materials and undo/redo histories;
+- guard every dirty tab during native Close/Quit and recover all open tabs from
+  an atomic on-disk autosave after an unexpected app or renderer crash;
 - draw Illustrator-style Bézier paths with a live pen preview, editable handles,
   close-path feedback, continuation from either open endpoint and point insertion
   directly on existing path segments;
@@ -31,6 +33,8 @@ The first complete, hardware-testable path is available:
 - group selected objects with Cmd/Ctrl+G, isolate a group by double-clicking it,
   and return to the main canvas by double-clicking outside;
 - generate and simulate GRBL G-code;
+- honor requested raster DPI and a fixed 0.2 mm vector tolerance, with visible
+  effective-quality details and blocking warnings instead of silent reduction;
 - connect to GRBL over serial or TCP;
 - bind a live connection to its machine profile so another project's machine
   limits can never be used for the connected laser;
@@ -104,10 +108,11 @@ Local-network setup and troubleshooting are in [`docs/NETWORK.md`](docs/NETWORK.
 
 | Command | Purpose |
 |---|---|
-| `npm test` | Java unit tests, bridge test, renderer test and WCAG check |
+| `npm test` | Java/bridge/renderer tests, WCAG check and Electron E2E suite |
 | `npm run test:sidecar` | Maven/JUnit sidecar tests |
 | `npm run test:bridge` | Build the fat JAR and test Node ↔ Java JSON-RPC |
-| `npm run test:renderer` | SVG unit conversion tests |
+| `npm run test:renderer` | Import, layer, raster, toolpath and quality unit tests |
+| `npm run test:e2e` | Real Electron workflows, native close and crash recovery |
 | `npm run check:contrast` | WCAG AA palette guardrail |
 | `npm start` | Build the sidecar and start Electron |
 | `npm run pack` | Build and verify an unpacked native application |

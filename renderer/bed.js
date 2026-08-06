@@ -8,6 +8,7 @@ import {
   tintGray,
 } from "./raster-processing.mjs";
 import { itemLayerColor, setItemLayerColor } from "./layer-model.mjs";
+import { VECTOR_SAMPLE_STEP_MM, assessOutputQuality, rasterGrid } from "./output-quality.mjs";
 
 // The bed, on Paper.js. Project coordinates are millimetres (1 unit = 1 mm).
 // - Space (or middle mouse) + drag = pan (hand cursor), tracked in absolute pixels
@@ -1383,24 +1384,45 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     const all = laserItems();
     return color ? all.filter((it) => logicalColor(it) === String(color).toLowerCase()) : all;
   }
-  function vectorSeg(it, sp, out) {
-    if (it.className === "CompoundPath") { for (const c of it.children) vectorSeg(c, sp, out); return; }
+  function vectorPointCount(item) {
+    if (item.className === "CompoundPath") return item.children.reduce((sum, child) => sum + vectorPointCount(child), 0);
+    return item.length ? Math.ceil(item.length / VECTOR_SAMPLE_STEP_MM) + 1 + (item.closed ? 1 : 0) : 0;
+  }
+  function outputQuality(specs) {
+    const rasters = [];
+    const filledScans = [];
+    let vectorPoints = 0;
+    for (const spec of specs) for (const item of itemsForColor(spec.color)) {
+      if (spec.op === "Engrave" && engraveStrategy(item) === "raster") {
+        const grid = rasterGrid(item.bounds.width, item.bounds.height, spec.dpi || 300);
+        const entry = { ...grid, color: spec.color, kind: item.className === "Raster" ? "image" : "filled-vector" };
+        if (item.className === "Raster") rasters.push(entry);
+        else filledScans.push(entry);
+      } else vectorPoints += vectorPointCount(item);
+    }
+    return { ...assessOutputQuality({ rasters, vectorPoints }), rasters, filledScans, vectorStepMm: VECTOR_SAMPLE_STEP_MM };
+  }
+  function vectorSeg(it, sp, out, preview = false) {
+    if (it.className === "CompoundPath") { for (const c of it.children) vectorSeg(c, sp, out, preview); return; }
     if (typeof it.getPointAt !== "function" || !it.length) return;
-    const len = it.length, step = Math.max(0.5, len / 400), pts = [];
+    const len = it.length, step = preview ? Math.max(VECTOR_SAMPLE_STEP_MM, len / 2000) : VECTOR_SAMPLE_STEP_MM, pts = [];
     for (let d = 0; d < len; d += step) pts.push(it.getPointAt(d));
     pts.push(it.getPointAt(Math.max(0, len - 1e-3)));
     if (it.closed && it.firstSegment) pts.push(it.firstSegment.point);
     if (pts.length) out.push({ pts, speed: sp.speed, power: sp.power, freq: sp.freq, op: sp.op });
   }
-  function rasterImageScan(it, sp, out) {
+  function rasterImageScan(it, sp, out, preview = false) {
     const b = it.bounds;
     if (!b.width || !b.height) return;
     let image;
     try { image = it.getImageData(); } catch { return; }
     const { width, height, data } = image;
     if (!width || !height) return;
-    let interval = 25.4 / Math.max(1, sp.dpi || 300);
-    if (b.height / interval > 500) interval = b.height / 500;
+    const grid = rasterGrid(b.width, b.height, sp.dpi || 300);
+    let interval = grid.intervalMm;
+    let columns = grid.columns;
+    if (preview && grid.rows > 500) interval = b.height / 500;
+    if (preview) columns = Math.min(columns, 2000);
     const rows = [];
     for (let y = b.bottom; y >= b.top; y -= interval) rows.push(y);
     if (!sp.bottomUp) rows.reverse();
@@ -1409,30 +1431,32 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       const py = Math.max(0, Math.min(height - 1, Math.floor(((y - b.top) / b.height) * height)));
       const runs = [];
       let start = null;
-      for (let px = 0; px < width; px++) {
+      for (let column = 0; column < columns; column++) {
+        const px = Math.max(0, Math.min(width - 1, Math.floor(((column + 0.5) / columns) * width)));
         const i = (py * width + px) * 4;
         const dark = data[i + 3] > 8 && data[i] < 128;
-        if (dark && start == null) start = px;
-        if ((!dark || px === width - 1) && start != null) {
-          const end = dark && px === width - 1 ? px + 1 : px;
+        if (dark && start == null) start = column;
+        if ((!dark || column === columns - 1) && start != null) {
+          const end = dark && column === columns - 1 ? column + 1 : column;
           runs.push([start, end]);
           start = null;
         }
       }
       for (const [aPx, cPx] of runs) {
-        let a = P(b.left + (aPx / width) * b.width, y);
-        let c = P(b.left + (cPx / width) * b.width, y);
+        let a = P(b.left + (aPx / columns) * b.width, y);
+        let c = P(b.left + (cPx / columns) * b.width, y);
         if (flip) { const t = a; a = c; c = t; }
         out.push({ pts: [a, c], speed: sp.speed, power: sp.power, freq: sp.freq, dpi: sp.dpi, dither: sp.dither, op: "Engrave" });
       }
       flip = !flip;
     }
   }
-  function rasterScan(it, sp, out) {
-    if (it.className === "Raster") { rasterImageScan(it, sp, out); return; }
+  function rasterScan(it, sp, out, preview = false) {
+    if (it.className === "Raster") { rasterImageScan(it, sp, out, preview); return; }
     const b = it.bounds; if (!b.height) return;
-    let interval = 25.4 / Math.max(1, sp.dpi || 300);
-    if (b.height / interval > 200) interval = b.height / 200; // cap rows for preview perf
+    const grid = rasterGrid(b.width, b.height, sp.dpi || 300);
+    let interval = grid.intervalMm;
+    if (preview && grid.rows > 200) interval = b.height / 200;
     const ys = [];
     for (let y = b.bottom; y >= b.top; y -= interval) ys.push(y);
     if (!sp.bottomUp) ys.reverse();
@@ -1449,16 +1473,16 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       flip = !flip;
     }
   }
-  function engraveSeg(it, sp, out) {
-    if (engraveStrategy(it) === "raster") rasterScan(it, sp, out);
-    else vectorSeg(it, sp, out);
+  function engraveSeg(it, sp, out, preview = false) {
+    if (engraveStrategy(it) === "raster") rasterScan(it, sp, out, preview);
+    else vectorSeg(it, sp, out, preview);
   }
   // Collect segments grouped per source shape (keeps a shape's paths together).
   function collectSegs(specs) {
     const groups = [];
     for (const sp of specs) for (const it of itemsForColor(sp.color)) {
       const g = [];
-      sp.op === "Engrave" ? engraveSeg(it, sp, g) : vectorSeg(it, sp, g);
+      sp.op === "Engrave" ? engraveSeg(it, sp, g, true) : vectorSeg(it, sp, g, true);
       if (g.length) groups.push(g);
       if (groups.length > 5000) break;
     }
@@ -1535,14 +1559,14 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   }
   async function rasterDitherScan(it, sp, out) {
     const image = await loadRasterImageData(it);
-    if (!image) return rasterImageScan(it, sp, out);
+    if (!image) return rasterImageScan(it, sp, out, false);
     const b = it.bounds;
     if (!b.width || !b.height) return;
     const { gray, settings } = grayscaleImageData(image, it.data?.rasterSettings);
     const mask = ditherMask(gray, image.width, image.height, settings, sp.dither);
-    let interval = 25.4 / Math.max(1, sp.dpi || 300);
-    if (b.height / interval > 1200) interval = b.height / 1200;
-    const columns = Math.max(1, Math.min(4000, Math.ceil(b.width / interval)));
+    const grid = rasterGrid(b.width, b.height, sp.dpi || 300);
+    const interval = grid.intervalMm;
+    const columns = grid.columns;
     const rows = [];
     for (let y = b.bottom; y >= b.top; y -= interval) rows.push(y);
     if (!sp.bottomUp) rows.reverse();
@@ -1572,13 +1596,13 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   }
   async function rasterGrayscaleScan(it, sp, out) {
     const image = await loadRasterImageData(it);
-    if (!image) return rasterImageScan(it, sp, out);
+    if (!image) return rasterImageScan(it, sp, out, false);
     const b = it.bounds;
     if (!b.width || !b.height) return;
     const { gray, settings } = grayscaleImageData(image, it.data?.rasterSettings);
-    let interval = 25.4 / Math.max(1, sp.dpi || 300);
-    if (b.height / interval > 1200) interval = b.height / 1200;
-    const columns = Math.max(1, Math.min(4000, Math.ceil(b.width / interval)));
+    const grid = rasterGrid(b.width, b.height, sp.dpi || 300);
+    const interval = grid.intervalMm;
+    const columns = grid.columns;
     const rows = [];
     for (let y = b.bottom; y >= b.top; y -= interval) rows.push(y);
     if (!sp.bottomUp) rows.reverse();
@@ -1610,7 +1634,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       const g = [];
       if (sp.op === "Engrave" && it.className === "Raster" && String(sp.dither).toLowerCase() === "grayscale") await rasterGrayscaleScan(it, sp, g);
       else if (sp.op === "Engrave" && it.className === "Raster") await rasterDitherScan(it, sp, g);
-      else sp.op === "Engrave" ? engraveSeg(it, sp, g) : vectorSeg(it, sp, g);
+      else sp.op === "Engrave" ? engraveSeg(it, sp, g, false) : vectorSeg(it, sp, g, false);
       if (g.length) groups.push(g);
       if (groups.length > 10000) break;
     }
@@ -1637,6 +1661,8 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   const feedFromPct = (pct, maxFeed = 12000) => Math.round((Math.max(1, Math.min(100, pct || 1)) / 100) * maxFeed);
   const powerToS = (power) => Math.round(Math.max(0, Math.min(100, power || 0)) * 10);
   async function buildGcodeJob(specs, { maxFeed = 12000 } = {}) {
+    const quality = outputQuality(specs);
+    if (quality.blocked) throw new Error("Output quality limit: " + quality.problems.join(" "));
     const segs = await orderJobSegs(specs);
     const lines = [
       "; Generated by modCut",
@@ -1659,7 +1685,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       lines.push("M5");
     }
     lines.push("G0 X0 Y0");
-    return { lines, opCount: specs.length, segmentCount: segs.length, burnMoves };
+    return { lines, opCount: specs.length, segmentCount: segs.length, burnMoves, quality };
   }
   let sim = null;
   function startSim(specs) {
@@ -1722,7 +1748,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     onCoords: (cb) => (coordsCb = cb),
     onSelection: (cb) => (selectionCb = cb),
     onChange: (cb) => (changeCb = cb),
-    getDesign, geometryStats, getRect, getRef, applyRect, applyAngle, startSim, stopSim, buildGcodeJob,
+    getDesign, geometryStats, getRect, getRef, applyRect, applyAngle, startSim, stopSim, buildGcodeJob, outputQuality,
     setSelectionMode, undo, redo, resetHistory, exportDesign, importDesign, exportSession, importSession,
     groupSelected, ungroupSelected, arrangeSelected, copySelection, pasteSelection, duplicateSelection,
     canUngroup, selectAll, deleteSelection,

@@ -5,7 +5,9 @@ includes Electron, `modcut-sidecar.jar`, a minimal Java runtime made with
 `jlink`, Paper.js and all application assets. A clean end-user machine therefore
 does not need Node.js, Maven, a JDK or a separately installed JRE.
 
-The formats offered by the installed file picker are handled in-process. It does
+Every format offered by the installed file picker is handled in-process: modCut
+documents, SVG, DXF, PNG, JPG/JPEG, BMP and GIF. AI, PDF, PLT, HPGL and existing
+G-code are intentionally hidden until real import support exists. The app does
 not depend on Inkscape, pdf2svg, MuPDF or pstoedit being installed separately.
 
 ## Build locally
