@@ -24,6 +24,10 @@ jobs:
   package:
     strategy:
       fail-fast: false
+      # This repository currently has one hosted runner slot. Keeping the
+      # matrix serial prevents later platforms timing out in GitHub's runner
+      # queue while an earlier native installer is being built.
+      max-parallel: 1
       matrix:
         include:
           - os: macos-15
