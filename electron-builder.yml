@@ -1,0 +1,76 @@
+appId: no.horten.folkeverksted.modcut
+productName: modCut
+copyright: Copyright © Horten Folkeverksted
+
+directories:
+  output: dist
+  buildResources: assets
+
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+asar: true
+npmRebuild: false
+
+files:
+  - electron/**/*
+  - renderer/**/*
+  - design/**/*
+  - docs/**/*
+  - assets/**/*
+  - modCut_logo.svg
+  - package.json
+  - node_modules/paper/**/*
+
+extraResources:
+  - from: build/runtime
+    to: runtime
+    filter:
+      - "**/*"
+  - from: sidecar/target/modcut-sidecar.jar
+    to: sidecar/modcut-sidecar.jar
+
+mac:
+  category: public.app-category.graphics-design
+  icon: modcut_logo.png
+  target:
+    - dmg
+    - zip
+
+dmg:
+  title: ${productName} ${version}
+  backgroundColor: "#F5FBF8"
+  window:
+    width: 540
+    height: 380
+  contents:
+    - x: 130
+      y: 200
+      type: file
+    - x: 410
+      y: 200
+      type: link
+      path: /Applications
+
+win:
+  icon: modcut_logo.png
+  target:
+    - nsis
+    - portable
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: modCut
+
+linux:
+  icon: modcut_logo.png
+  category: Graphics
+  synopsis: Safe cross-platform laser control
+  target:
+    - AppImage
+    - deb
+
+deb:
+  priority: optional
+  maintainer: Horten Folkeverksted

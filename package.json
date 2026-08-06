@@ -1,21 +1,28 @@
 {
   "name": "modcut",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Modern cross-platform laser control for Horten Folkeverksted (a modernized VisiCut).",
+  "author": "Horten Folkeverksted",
+  "desktopName": "modCut.desktop",
   "type": "module",
   "main": "electron/main.mjs",
   "scripts": {
-    "build:sidecar": "./sidecar/mvnw -q -f sidecar/pom.xml package -DskipTests",
+    "build:sidecar": "node scripts/maven.mjs package -DskipTests",
+    "build:runtime": "node scripts/build-runtime.mjs",
+    "bundle": "npm run build:sidecar && npm run build:runtime",
     "prestart": "npm run build:sidecar",
     "start": "electron .",
-    "test:sidecar": "./sidecar/mvnw -q -f sidecar/pom.xml test",
+    "test:sidecar": "node scripts/maven.mjs test",
     "test:bridge": "npm run build:sidecar && node electron/test-bridge.mjs",
     "test:renderer": "node --test renderer/test-lengthToMm.mjs",
     "check:contrast": "node design/check-contrast.mjs",
-    "test": "npm run test:sidecar && npm run test:bridge && npm run test:renderer && npm run check:contrast"
+    "test": "npm run test:sidecar && npm run test:bridge && npm run test:renderer && npm run check:contrast",
+    "pack": "npm run bundle && electron-builder --dir && node scripts/verify-package.mjs",
+    "dist": "npm run bundle && electron-builder"
   },
   "devDependencies": {
-    "electron": "^33.0.0"
+    "electron": "43.3.0",
+    "electron-builder": "26.15.3"
   },
   "dependencies": {
     "paper": "^0.12.18"

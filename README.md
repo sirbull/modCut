@@ -21,7 +21,20 @@ The first complete, hardware-testable path is available:
 Ruida and Epilog are not enabled for real execution yet. The UI only offers
 drivers that the M1 sidecar can safely execute: Dummy and GRBL.
 
-## Requirements
+## Install modCut
+
+Download the installer for your operating system from the release or CI
+artifacts and install it as a normal desktop application. Everything required at
+runtime is included: Electron, the Java sidecar, a private Java runtime and the
+application assets. Users do not need to install Node.js, Java or Maven.
+
+| Platform | Packages |
+|---|---|
+| macOS Apple Silicon and Intel | DMG and ZIP |
+| Windows x64 | assisted installer and portable EXE |
+| Linux x64 | AppImage and DEB |
+
+## Developer requirements
 
 - Node.js 18+
 - JDK 17+
@@ -37,6 +50,18 @@ npm start
 ```
 
 `npm start` builds the self-contained Java sidecar before Electron opens.
+
+## Build an installer
+
+```sh
+npm run pack
+npm run dist
+```
+
+`npm run pack` creates an unpacked application and verifies that its bundled
+Java runtime can start the bundled sidecar. `npm run dist` creates the native
+installer(s) for the current platform. Release signing and the complete build
+matrix are documented in [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md).
 
 ## Safe first test
 
@@ -60,6 +85,8 @@ including GRBL setup and acceptance criteria, is in [`docs/TESTING.md`](docs/TES
 | `npm run test:renderer` | SVG unit conversion tests |
 | `npm run check:contrast` | WCAG AA palette guardrail |
 | `npm start` | Build the sidecar and start Electron |
+| `npm run pack` | Build and verify an unpacked native application |
+| `npm run dist` | Build native installer files for the current platform |
 
 ## Architecture
 

@@ -1,9 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog, Menu, nativeImage } from "electron";
-import { readFile, writeFile, mkdtemp, rm } from "node:fs/promises";
-import { execFile } from "node:child_process";
+import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join, extname, basename } from "node:path";
-import { tmpdir } from "node:os";
 import { createSidecar } from "./sidecar-bridge.mjs";
 
 app.name = "modCut"; // makes the macOS app menu read "modCut", not "Electron"
@@ -16,49 +14,7 @@ let win;
 let sidecar;
 
 const TEXT_FORMATS = ["svg", "dxf", "gcode", "gc", "nc", "plt", "hpgl"];
-const CONVERTIBLE_VECTOR_FORMATS = ["eps", "ai", "pdf"];
 const IMAGE_FORMATS = ["png", "jpg", "jpeg", "bmp", "gif"];
-
-function execFileP(file, args) {
-  return new Promise((resolve, reject) => {
-    execFile(file, args, { timeout: 30000, maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
-      if (error) {
-        error.stdout = stdout;
-        error.stderr = stderr;
-        reject(error);
-      } else {
-        resolve({ stdout, stderr });
-      }
-    });
-  });
-}
-
-async function convertVectorToSvg(path, ext) {
-  const dir = await mkdtemp(join(tmpdir(), "modcut-vector-"));
-  const out = join(dir, `${basename(path, extname(path))}.svg`);
-  const inkscapeArgs = [path, "--export-type=svg", `--export-filename=${out}`];
-  const candidates = [
-    { file: "inkscape", args: inkscapeArgs },
-    { file: "/Applications/Inkscape.app/Contents/MacOS/inkscape", args: inkscapeArgs },
-    ...(ext === "pdf" || ext === "ai" ? [{ file: "pdf2svg", args: [path, out] }] : []),
-    ...(ext === "pdf" || ext === "ai" ? [{ file: "mutool", args: ["convert", "-o", out, path] }] : []),
-    { file: "pstoedit", args: ["-f", "plot-svg", path, out] },
-  ];
-  const errors = [];
-  try {
-    for (const cmd of candidates) {
-      try {
-        await execFileP(cmd.file, cmd.args);
-        return await readFile(out, "utf8");
-      } catch (e) {
-        errors.push(e.stderr || e.message);
-      }
-    }
-  } finally {
-    rm(dir, { recursive: true, force: true }).catch(() => {});
-  }
-  throw new Error(`Could not convert .${ext} to SVG. Install Inkscape to import EPS, PDF or AI as vector paths.`);
-}
 
 function createWindow() {
   win = new BrowserWindow({
@@ -198,9 +154,15 @@ app.whenReady().then(() => {
     iconPath: appIconPath,
   });
 
-  // The Maven build creates a self-contained sidecar jar. Packaging can later
-  // swap `java` for a bundled jlink runtime without changing this IPC contract.
-  sidecar = createSidecar({ args: ["-jar", join(root, "sidecar", "target", "modcut-sidecar.jar")] });
+  // Installed builds never depend on system Java: electron-builder places the
+  // jlink runtime and shaded sidecar outside app.asar in process.resourcesPath.
+  const java = app.isPackaged
+    ? join(process.resourcesPath, "runtime", "bin", process.platform === "win32" ? "java.exe" : "java")
+    : "java";
+  const sidecarJar = app.isPackaged
+    ? join(process.resourcesPath, "sidecar", "modcut-sidecar.jar")
+    : join(root, "sidecar", "target", "modcut-sidecar.jar");
+  sidecar = createSidecar({ command: java, args: ["-jar", sidecarJar] });
   ipcMain.handle("sidecar", (_e, method, params) => sidecar.call(method, params));
 
   // Native file picker that also returns the file's contents so the renderer
@@ -211,9 +173,9 @@ app.whenReady().then(() => {
       title: "Importer fil",
       properties: ["openFile"],
       filters: [
-        { name: "Alle støttede filer", extensions: [...TEXT_FORMATS, ...CONVERTIBLE_VECTOR_FORMATS, ...IMAGE_FORMATS, "modcut"] },
+        { name: "Alle støttede filer", extensions: [...TEXT_FORMATS, ...IMAGE_FORMATS, "modcut"] },
         { name: "modCut document", extensions: ["modcut"] },
-        { name: "Vektor", extensions: ["svg", "dxf", ...CONVERTIBLE_VECTOR_FORMATS, "plt", "hpgl"] },
+        { name: "Vektor", extensions: ["svg", "dxf", "plt", "hpgl"] },
         { name: "G-code", extensions: ["gcode", "gc", "nc"] },
         { name: "Bilder", extensions: IMAGE_FORMATS },
         { name: "Alle filer", extensions: ["*"] },
@@ -228,11 +190,6 @@ app.whenReady().then(() => {
       out.text = await readFile(path, "utf8");
     } else if (TEXT_FORMATS.includes(ext)) {
       out.text = await readFile(path, "utf8");
-    } else if (CONVERTIBLE_VECTOR_FORMATS.includes(ext)) {
-      out.text = await convertVectorToSvg(path, ext);
-      out.sourceExt = ext;
-      out.ext = "svg";
-      out.name = `${basename(path, extname(path))}.svg`;
     } else if (IMAGE_FORMATS.includes(ext)) {
       const mime = ext === "jpg" ? "jpeg" : ext;
       out.dataUrl = `data:image/${mime};base64,` + (await readFile(path)).toString("base64");
