@@ -3,10 +3,12 @@ import test from "node:test";
 
 import {
   adjustedGray,
+  ditherMask,
   grayToPower,
   grayscaleImageData,
   grayscaleRuns,
   normalizeRasterSettings,
+  posterizeGray,
   tintGray,
 } from "./raster-processing.mjs";
 
@@ -40,6 +42,20 @@ test("gray levels quantize laser power and preserve the layer maximum", () => {
   assert.equal(grayToPower(255, 4, 60), 0);
   assert.equal(grayToPower(0, 4, 60), 60);
   assert.equal(grayToPower(128, 4, 60), 20);
+});
+
+test("gray levels posterize neighboring tones into visible bands", () => {
+  assert.equal(posterizeGray(0, 4), 0);
+  assert.equal(posterizeGray(40, 4), 0);
+  assert.equal(posterizeGray(80, 4), 85);
+  assert.equal(posterizeGray(128, 4), 170);
+  assert.equal(posterizeGray(255, 4), 255);
+});
+
+test("dither threshold changes which adjusted tones are engraved", () => {
+  const gray = new Float32Array([150]);
+  assert.deepEqual([...ditherMask(gray, 1, 1, { threshold: 128 }, "Floyd-Steinberg")], [0]);
+  assert.deepEqual([...ditherMask(gray, 1, 1, { threshold: 200 }, "Floyd-Steinberg")], [1]);
 });
 
 test("grayscale scanlines are run-length encoded by variable power", () => {

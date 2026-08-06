@@ -90,7 +90,7 @@
 
       <div class="sec bitmap-sec hidden" id="bitmapSec">
         <h3 title="Non-destructive grayscale controls for raster engraving. Darker tones use more laser power.">Bitmap engraving</h3>
-        <p class="hint">The preview keeps its grayscale. Darker tones use more laser power in Grayscale mode.</p>
+        <p class="hint" id="bmpModeHint">Grayscale preview is posterized into the selected number of laser-power levels.</p>
         <label class="range-row">Brightness
           <input type="range" id="bmpBrightness" min="-100" max="100" step="1" value="0">
           <input class="input range-num" id="bmpBrightnessNum" type="number" min="-100" max="100" step="1" value="0">
@@ -107,15 +107,15 @@
           <input type="range" id="bmpWhitePoint" min="1" max="255" step="1" value="255">
           <input class="input range-num" id="bmpWhitePointNum" type="number" min="1" max="255" step="1" value="255">
         </label>
-        <label class="range-row" title="Used by Jarvis, Floyd-Steinberg, Stucki and Bayer modes.">Dither threshold
+        <label class="range-row" id="bmpThresholdRow" title="Used by Jarvis, Floyd-Steinberg, Stucki and Bayer modes.">Dither threshold
           <input type="range" id="bmpThreshold" min="0" max="255" step="1" value="128">
           <input class="input range-num" id="bmpThresholdNum" type="number" min="0" max="255" step="1" value="128">
         </label>
-        <label class="range-row">Gamma
+        <label class="range-row" title="Adjust only the tones between black and white. 1 is neutral; higher values brighten midtones.">Midtones
           <input type="range" id="bmpGamma" min="0.2" max="3" step="0.05" value="1">
           <input class="input range-num" id="bmpGammaNum" type="number" min="0.2" max="3" step="0.05" value="1">
         </label>
-        <label class="range-row" title="Number of laser power steps used by Grayscale mode.">Gray levels
+        <label class="range-row" id="bmpGrayLevelsRow" title="Posterize the preview and laser output into this many power steps in Grayscale mode.">Gray levels
           <input type="range" id="bmpGrayLevels" min="2" max="32" step="1" value="16">
           <input class="input range-num" id="bmpGrayLevelsNum" type="number" min="2" max="32" step="1" value="16">
         </label>

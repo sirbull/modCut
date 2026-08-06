@@ -374,6 +374,12 @@ function syncColorsAndLayers() {
   }
   syncLayers();
 }
+function syncRasterModes() {
+  bed.setRasterModes(state.layers.filter((layer) => layer.raster).map((layer) => ({
+    color: layer.color,
+    mode: layer.dither || "Grayscale",
+  })));
+}
 function syncLayers() {
   if (state.mappingMode === "color") {
     const prev = new Map(state.layers.filter((l) => l.key).map((l) => [l.key, l]));
@@ -391,6 +397,7 @@ function syncLayers() {
     const hasRaster = state.colors.some((color) => color.raster);
     state.layers = state.colors.length ? [state.layers[0] && state.layers[0].color === null ? state.layers[0] : newLayer(null, op, hasRaster && op === "Engrave")] : [];
   }
+  syncRasterModes();
   renderLayers();
 }
 function applyMaterialToLayers() { for (const l of state.layers) Object.assign(l, defaultsFor(l.op)); renderLayers(); }
@@ -440,7 +447,11 @@ function layerRow(l) {
   row.querySelectorAll("[data-k]").forEach((el) => {
     const k = el.dataset.k;
     if (el.type === "checkbox") el.addEventListener("change", () => { l[k] = el.checked; markDirty(); });
-    else if (el.tagName === "SELECT") el.addEventListener("change", () => { l[k] = el.value; markDirty(); });
+    else if (el.tagName === "SELECT") el.addEventListener("change", () => {
+      l[k] = el.value;
+      if (k === "dither") { syncRasterModes(); refreshBitmapControls(); }
+      markDirty();
+    });
     else el.addEventListener("input", () => { l[k] = k === "speed" ? clampSpeedPct(el.value) : Number(el.value); markDirty(); });
   });
   return row;
@@ -968,6 +979,15 @@ function refreshBitmapControls() {
   if (!settings) return;
   for (const key of Object.keys(bitmapFields)) setBitmapPair(key, settings[key]);
   $("bmpInvert").checked = settings.invert;
+  const mode = bed.getRasterMode();
+  const grayscaleMode = String(mode).toLowerCase() === "grayscale";
+  $("bmpThresholdRow").classList.toggle("is-inactive", grayscaleMode);
+  $("bmpGrayLevelsRow").classList.toggle("is-inactive", !grayscaleMode);
+  for (const id of bitmapFields.threshold) $(id).disabled = grayscaleMode;
+  for (const id of bitmapFields.grayLevels) $(id).disabled = !grayscaleMode;
+  $("bmpModeHint").textContent = grayscaleMode
+    ? "Gray levels posterize neighboring tones in both the preview and laser output. Midtones change tones between black and white."
+    : `${mode} uses black/white dots. Dither threshold now updates the preview and laser output.`;
 }
 function applyBitmapValue(key, value) {
   const next = bed.updateRasterSettings({ [key]: Number(value) });

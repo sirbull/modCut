@@ -14,6 +14,8 @@ The first complete, hardware-testable path is available:
   artwork files non-destructively with Add;
 - engrave grayscale images with variable GRBL laser power, or select Jarvis,
   Floyd-Steinberg, Stucki or Bayer dithering;
+- preview Photoshop-style gray-level posterization, midtone adjustment and
+  dither threshold before generating the laser job;
 - move one or many selected elements between color layers from the properties
   panel or context menu, and retain reference geometry with Ignore;
 - group selected objects with Cmd/Ctrl+G, isolate a group by double-clicking it,

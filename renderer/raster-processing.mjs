@@ -68,6 +68,49 @@ export function grayToPower(gray, levels = 16, maxPower = 100) {
   return level === 0 ? 0 : (safePower * level) / (safeLevels - 1);
 }
 
+// Photoshop-style posterization: collapse neighboring tones into a fixed
+// number of evenly spaced gray bands, including pure black and white.
+export function posterizeGray(gray, levels = 16) {
+  const safeLevels = Math.round(clamp(levels, 2, 32));
+  const step = 255 / (safeLevels - 1);
+  return Math.round(clamp(gray, 0, 255) / step) * step;
+}
+
+export function ditherMask(gray, width, height, settings, dither = "Jarvis") {
+  const normalized = normalizeRasterSettings(settings);
+  const mask = new Uint8Array(width * height);
+  const threshold = normalized.threshold;
+  const type = String(dither).toLowerCase();
+  const mark = (idx, black) => (mask[idx] = black ? 1 : 0);
+  if (type.includes("bayer")) {
+    const bayer = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+      const idx = y * width + x;
+      const value = threshold + (bayer[(y & 3) * 4 + (x & 3)] - 7.5) * 10;
+      mark(idx, gray[idx] < value);
+    }
+    return mask;
+  }
+  const work = new Float32Array(gray);
+  const kernels = type.includes("floyd")
+    ? [[1, 0, 7 / 16], [-1, 1, 3 / 16], [0, 1, 5 / 16], [1, 1, 1 / 16]]
+    : type.includes("stucki")
+      ? [[1, 0, 8 / 42], [2, 0, 4 / 42], [-2, 1, 2 / 42], [-1, 1, 4 / 42], [0, 1, 8 / 42], [1, 1, 4 / 42], [2, 1, 2 / 42], [-2, 2, 1 / 42], [-1, 2, 2 / 42], [0, 2, 4 / 42], [1, 2, 2 / 42], [2, 2, 1 / 42]]
+      : [[1, 0, 7 / 48], [2, 0, 5 / 48], [-2, 1, 3 / 48], [-1, 1, 5 / 48], [0, 1, 7 / 48], [1, 1, 5 / 48], [2, 1, 3 / 48], [-2, 2, 1 / 48], [-1, 2, 3 / 48], [0, 2, 5 / 48], [1, 2, 3 / 48], [2, 2, 1 / 48]];
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+    const idx = y * width + x;
+    const old = clamp(work[idx], 0, 255);
+    const next = old < threshold ? 0 : 255;
+    mark(idx, next === 0);
+    const error = old - next;
+    for (const [dx, dy, weight] of kernels) {
+      const nx = x + dx, ny = y + dy;
+      if (nx >= 0 && nx < width && ny >= 0 && ny < height) work[ny * width + nx] += error * weight;
+    }
+  }
+  return mask;
+}
+
 // Turn one sampled scanline into consecutive, variable-power laser runs.
 export function grayscaleRuns(samples, levels = 16, maxPower = 100) {
   const runs = [];

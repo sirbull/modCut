@@ -115,6 +115,7 @@
              font-size: var(--fs-xs); color: var(--text-muted); }
 .range-row input[type="range"] { width: 100%; accent-color: var(--brand); }
 .range-row .range-num { padding: 5px 7px; font-size: var(--fs-xs); font-family: var(--font-mono); }
+.range-row.is-inactive { opacity: .48; }
 
 /* material library list */
 .mat-list { display: flex; flex-direction: column; gap: var(--sp-2); margin-bottom: var(--sp-3); }

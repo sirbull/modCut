@@ -36,14 +36,17 @@ sidecar must reject the job with an out-of-bounds error.
    **Engrave**; Cut and Score must not be available for that raster layer.
 2. Confirm that the preview contains multiple gray tones rather than only black
    and white.
-3. Move Brightness, Contrast, Black point, White point and Gamma. The preview
-   must update without permanently changing the source image; Reset bitmap must
-   restore it.
-4. Leave Raster mode at **Grayscale**, choose 4 Gray levels and run in dry-run.
-   The generated job must complete and contain multiple laser-power steps, none
-   above the layer's configured Power percentage.
-5. Repeat with Jarvis or Floyd-Steinberg. Dither threshold should affect the
-   dot pattern, while the raster still remains an Engrave operation.
+3. Move Brightness, Contrast, Black point, White point and Midtones. The preview
+   must update without permanently changing the source image; Midtones must
+   change values between black and white while preserving the end points, and
+   Reset bitmap must restore it.
+4. Leave Raster mode at **Grayscale** and choose 4 Gray levels. The preview must
+   visibly posterize neighboring tones into no more than four gray bands. Run in
+   dry-run: the job must contain matching laser-power steps, none above the
+   layer's configured Power percentage.
+5. Repeat with Jarvis or Floyd-Steinberg. Gray levels must become inactive and
+   Dither threshold active. Moving Threshold must update the black/white preview
+   and generated dot pattern, while the raster remains an Engrave operation.
 
 ### Layer color and Ignore acceptance test
 

@@ -1,8 +1,10 @@
 import {
   DEFAULT_RASTER_SETTINGS,
+  ditherMask,
   grayscaleImageData,
   grayscaleRuns,
   normalizeRasterSettings,
+  posterizeGray,
   tintGray,
 } from "./raster-processing.mjs";
 import { itemLayerColor, setItemLayerColor } from "./layer-model.mjs";
@@ -145,6 +147,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     raster.data.modcutColor = "#000000";
     raster.data.originalDataUrl = dataUrl;
     raster.data.rasterSettings = { ...DEFAULT_RASTER_SETTINGS };
+    raster.data.rasterMode = "Grayscale";
     raster.smoothing = false;
     return new Promise((resolve, reject) => {
       raster.onLoad = () => {
@@ -439,10 +442,15 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       const image = ctx.getImageData(0, 0, c.width, c.height);
       const data = image.data;
       const { gray } = grayscaleImageData(image, settings);
+      const mode = raster.data.rasterMode || "Grayscale";
+      const grayscaleMode = String(mode).toLowerCase() === "grayscale";
+      const mask = grayscaleMode ? null : ditherMask(gray, image.width, image.height, settings, mode);
       const tinted = !isSelectedLaser(raster);
       const color = logicalColor(raster);
       for (let i = 0, pixel = 0; i < data.length; i += 4, pixel++) {
-        const v = Math.round(gray[pixel]);
+        const v = grayscaleMode
+          ? Math.round(posterizeGray(gray[pixel], settings.grayLevels))
+          : (mask[pixel] ? 0 : 255);
         if (tinted) [data[i], data[i + 1], data[i + 2]] = tintGray(v, color);
         else data[i] = data[i + 1] = data[i + 2] = v;
       }
@@ -476,6 +484,20 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   function getRasterSettings() {
     const raster = selectedRaster();
     return raster ? normalizeRasterSettings(raster.data.rasterSettings) : null;
+  }
+  function getRasterMode() {
+    const raster = selectedRaster();
+    return raster?.data?.rasterMode || "Grayscale";
+  }
+  function setRasterModes(entries = []) {
+    const byColor = new Map(entries.filter((entry) => entry.color).map((entry) => [entry.color.toLowerCase(), entry.mode]));
+    const fallback = entries.find((entry) => !entry.color)?.mode;
+    for (const raster of laserItems().filter((it) => it.className === "Raster")) {
+      const mode = byColor.get(logicalColor(raster).toLowerCase()) || fallback || "Grayscale";
+      if (raster.data.rasterMode === mode) continue;
+      raster.data.rasterMode = mode;
+      applyRasterSettings(raster);
+    }
   }
   function updateRasterSettings(partial) {
     const raster = selectedRaster();
@@ -1085,39 +1107,6 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       img.src = src;
     });
   }
-  function ditherMask(gray, width, height, settings, dither) {
-    const mask = new Uint8Array(width * height);
-    const threshold = settings.threshold;
-    const type = String(dither || "Jarvis").toLowerCase();
-    const mark = (idx, black) => (mask[idx] = black ? 1 : 0);
-    if (type.includes("bayer")) {
-      const bayer = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
-      for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
-        const idx = y * width + x;
-        const t = threshold + (bayer[(y & 3) * 4 + (x & 3)] - 7.5) * 10;
-        mark(idx, gray[idx] < t);
-      }
-      return mask;
-    }
-    const work = new Float32Array(gray);
-    const kernels = type.includes("floyd")
-      ? [[1, 0, 7 / 16], [-1, 1, 3 / 16], [0, 1, 5 / 16], [1, 1, 1 / 16]]
-      : type.includes("stucki")
-        ? [[1, 0, 8 / 42], [2, 0, 4 / 42], [-2, 1, 2 / 42], [-1, 1, 4 / 42], [0, 1, 8 / 42], [1, 1, 4 / 42], [2, 1, 2 / 42], [-2, 2, 1 / 42], [-1, 2, 2 / 42], [0, 2, 4 / 42], [1, 2, 2 / 42], [2, 2, 1 / 42]]
-        : [[1, 0, 7 / 48], [2, 0, 5 / 48], [-2, 1, 3 / 48], [-1, 1, 5 / 48], [0, 1, 7 / 48], [1, 1, 5 / 48], [2, 1, 3 / 48], [-2, 2, 1 / 48], [-1, 2, 3 / 48], [0, 2, 5 / 48], [1, 2, 3 / 48], [2, 2, 1 / 48]];
-    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
-      const idx = y * width + x;
-      const old = clamp(work[idx], 0, 255);
-      const next = old < threshold ? 0 : 255;
-      mark(idx, next === 0);
-      const err = old - next;
-      for (const [dx, dy, weight] of kernels) {
-        const nx = x + dx, ny = y + dy;
-        if (nx >= 0 && nx < width && ny >= 0 && ny < height) work[ny * width + nx] += err * weight;
-      }
-    }
-    return mask;
-  }
   async function rasterDitherScan(it, sp, out) {
     const image = await loadRasterImageData(it);
     if (!image) return rasterImageScan(it, sp, out);
@@ -1314,7 +1303,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     setGrid, setTool, setPathOrder, getColors, addShape,
     setDrawStyle, applyStyle, getStyle,
     getSelectionInfo: () => ({ hasRaster: selectionHasRaster(), count: selected.size }),
-    getRasterSettings, beginRasterEdit, updateRasterSettings, endRasterEdit, resetRasterSettings,
+    getRasterSettings, getRasterMode, setRasterModes, beginRasterEdit, updateRasterSettings, endRasterEdit, resetRasterSettings,
     onDrawSize: (cb) => (drawSizeCb = cb),
     onDrawClick: (cb) => (drawClickCb = cb),
     onToolReset: (cb) => (toolResetCb = cb),
