@@ -12,6 +12,13 @@ export function isOutputLayer(layer) {
   return Boolean(layer?.output) && layer.op !== "Ignore";
 }
 
+export function distinctVectorColor(currentColor, colors, palette = ["#ff0000", "#00aa00", "#0000ff", "#000000"]) {
+  const current = String(currentColor || "#000000").toLowerCase();
+  const rasterColors = new Set((colors || []).filter((entry) => entry.raster).map((entry) => String(entry.color).toLowerCase()));
+  if (!rasterColors.has(current)) return current;
+  return palette.find((color) => !rasterColors.has(color.toLowerCase())) || current;
+}
+
 export function itemLayerColor(item, colorToCss = (color) => String(color || "")) {
   const stored = item?.data?.modcutColor;
   if (stored) return String(stored).toLowerCase();

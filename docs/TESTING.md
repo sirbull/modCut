@@ -62,6 +62,24 @@ sidecar must reject the job with an out-of-bounds error.
 5. Confirm that Cut and Score targets are unavailable for a selected raster,
    while Engrave and Ignore remain available.
 
+### Group isolation acceptance test
+
+1. Import a PNG and draw two vector shapes. Element selection must be the
+   default, and clicking one vector shape must not select or move the PNG or the
+   other vector shape. New vectors should avoid the raster's default color
+   layer unless the user assigns that color explicitly.
+2. Select both vector shapes. Group must be available in Edit, with
+   **Cmd/Ctrl+G**, and in the context menu. Group must be disabled in the context
+   menu when fewer than two elements are selected.
+3. Double-click the resulting group. A `Main view › Group` breadcrumb must
+   appear at the top-left of the bed. Group contents remain selectable, while
+   all outside elements are rendered at 50% opacity and cannot be selected.
+4. Double-click outside the group contents. The breadcrumb must disappear and
+   outside elements must become fully visible and selectable again.
+5. Select the group. Ungroup must be available via Edit,
+   **Cmd/Ctrl+Shift+G**, and the context menu, restoring its child elements at
+   the same stacking position.
+
 ## 3. GRBL preparation
 
 Before enabling a real connection:

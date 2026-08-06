@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   OPERATIONS,
   canAssignRasterToOperation,
+  distinctVectorColor,
   isOutputLayer,
   itemLayerColor,
   operationsForLayer,
@@ -45,4 +46,9 @@ test("changing a stroke layer does not add a fill, and raster stores its layer c
   const raster = { className: "Raster", data: {} };
   setItemLayerColor(raster, "#00aa00");
   assert.equal(itemLayerColor(raster), "#00aa00");
+});
+
+test("new vector tools avoid the current raster layer color", () => {
+  assert.equal(distinctVectorColor("#000000", [{ color: "#000000", raster: true }]), "#ff0000");
+  assert.equal(distinctVectorColor("#0000ff", [{ color: "#000000", raster: true }]), "#0000ff");
 });

@@ -14,6 +14,8 @@ The first complete, hardware-testable path is available:
   Floyd-Steinberg, Stucki or Bayer dithering;
 - move one or many selected elements between color layers from the properties
   panel or context menu, and retain reference geometry with Ignore;
+- group selected objects with Cmd/Ctrl+G, isolate a group by double-clicking it,
+  and return to the main canvas by double-clicking outside;
 - generate and simulate GRBL G-code;
 - connect to GRBL over serial or TCP;
 - verify that a configured TCP endpoint is a responsive GRBL controller before

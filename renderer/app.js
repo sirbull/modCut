@@ -1,7 +1,7 @@
 import { createBed } from "./bed.js";
 import { prepareSVG } from "./svgimport.js";
 import { dxfToSvg } from "./dxfimport.js";
-import { OPERATIONS, canAssignRasterToOperation, isOutputLayer, operationsForLayer } from "./layer-model.mjs";
+import { OPERATIONS, canAssignRasterToOperation, distinctVectorColor, isOutputLayer, operationsForLayer } from "./layer-model.mjs";
 import { openModal } from "./ui.js";
 
 const $ = (id) => document.getElementById(id);
@@ -747,7 +747,7 @@ $("zoomFit").addEventListener("click", bed.fit);
 $("frame").addEventListener("click", frame);
 $("connect").addEventListener("click", connect);
 $("togglePanel").addEventListener("click", togglePanel);
-let selWhole = true;
+let selWhole = false;
 $("selMode").addEventListener("click", () => {
   selWhole = !selWhole;
   bed.setSelectionMode(selWhole ? "design" : "element");
@@ -756,7 +756,15 @@ $("selMode").addEventListener("click", () => {
 
 // draw tools (select / rectangle / ellipse / line)
 const updateToolButtons = (tool) => [...$("tools").children].forEach((b) => b.classList.toggle("tool-on", b.dataset.tool === tool));
-const selectTool = (tool) => { activeTool = tool; bed.setTool(tool); updateToolButtons(tool); refreshProps(); refreshPropsVisibility(); };
+const selectTool = (tool) => {
+  activeTool = tool;
+  bed.setTool(tool);
+  if (DRAW_TOOLS.has(tool)) {
+    const style = bed.getStyle();
+    bed.setDrawStyle(distinctVectorColor(style.color, state.colors), style.width);
+  }
+  updateToolButtons(tool); refreshProps(); refreshPropsVisibility();
+};
 $("tools").addEventListener("click", (e) => { const b = e.target.closest("button[data-tool]"); if (b) selectTool(b.dataset.tool); });
 bed.onToolReset(() => syncColorsAndLayers()); // after a draw: sync colours, keep the tool active
 bed.onDrawSize((wMm, hMm, x, y) => {
@@ -941,7 +949,7 @@ function openContextMenu(info) {
       ${paletteChoices.map((color) => colorButton(color, color.toUpperCase())).join("")}
     </div>
     <div class="ctx-menu__sep"></div>
-    <button data-act="group">Group <kbd>⌘G</kbd></button>
+    <button data-act="group" ${info.canGroup ? "" : "disabled"}>Group <kbd>⌘G</kbd></button>
     <button data-act="ungroup" ${info.canUngroup ? "" : "disabled"}>Ungroup <kbd>⇧⌘G</kbd></button>
     <div class="ctx-menu__label">Arrange</div>
     <button data-act="move-up">Move up <kbd>⌘U</kbd></button>

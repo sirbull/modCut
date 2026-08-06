@@ -23,6 +23,10 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   const canvas = document.createElement("canvas");
   canvas.className = "bed-canvas";
   stage.append(canvas);
+  const groupNav = document.createElement("div");
+  groupNav.className = "group-nav hidden";
+  groupNav.innerHTML = `<button type="button" class="group-nav__back" title="Leave group">←</button><span class="group-nav__path"></span>`;
+  stage.append(groupNav);
   paper.setup(canvas);
   const view = paper.view;
   const P = (x, y) => new paper.Point(x, y);
@@ -32,6 +36,8 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   const uiLayer = new paper.Layer(); // transform box + handles (guides)
   const simLayer = new paper.Layer(); // simulation ghost/trail/dot (kept off uiLayer so overlay redraws don't wipe it)
   const selected = new Set();
+  let activeGroup = null;
+  const focusOpacity = new Map();
   let coordsCb = null, selectionCb = null, contextCb = null, spaceDown = false, changeCb = null, designAngle = 0;
   let gridX = 10, gridY = 10;                 // grid spacing in mm
   let currentTool = "select";                 // select | node | pen | rect | ellipse | line
@@ -90,6 +96,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   // --- import (flattened into designLayer) --------------------------------
   const notifyChange = () => changeCb && changeCb();
   function clearDesign() {
+    resetGroupFocus();
     designLayer.removeChildren();
     selected.clear();
     designAngle = 0;
@@ -111,6 +118,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     if (item.children) for (const child of item.children.slice()) releaseClipping(child);
   }
   function loadSVG(node, wMm) {
+    resetGroupFocus();
     pushHistory();
     designLayer.activate();
     const before = new Set(designLayer.children);
@@ -129,6 +137,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     return getDesign();
   }
   function loadImage(dataUrl, wMm) {
+    resetGroupFocus();
     pushHistory();
     designLayer.activate();
     const raster = new paper.Raster({ source: dataUrl, position: P(bedWmm / 2, bedHmm / 2) });
@@ -182,6 +191,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     item.strokeColor = drawColor;
     item.strokeWidth = drawWidth;
     item.fillColor = null;
+    if (activeGroup) activeGroup.addChild(item);
     return item;
   }
   function addShape(type, wMm, hMm) {
@@ -222,7 +232,8 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   const isUserGroup = (it) => it && it.className === "Group" && it.data && it.data.modcutGroup;
   const isSelectableItem = (it) => isLaserItem(it) || isUserGroup(it);
   const laserItems = () => designLayer.getItems({ recursive: true, match: isLaserItem });
-  const selectable = () => designLayer.children.filter(isSelectableItem);
+  const selectionRoot = () => activeGroup || designLayer;
+  const selectable = () => selectionRoot().children.filter(isSelectableItem);
   function firstLaserIn(it, match = () => true) {
     if (!it) return null;
     if (isLaserItem(it) && match(it)) return it;
@@ -245,17 +256,18 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     return out;
   }
   function toSelectable(it) {
-    let cur = it, top = null, group = null;
-    while (cur && cur !== designLayer && cur.layer === designLayer) {
-      if (isUserGroup(cur)) group = cur;
-      if (cur.parent === designLayer && isSelectableItem(cur)) top = cur;
+    const root = selectionRoot();
+    let cur = it, top = null;
+    while (cur && cur !== root && cur.layer === designLayer) {
+      if (cur.parent === root && isSelectableItem(cur)) top = cur;
       cur = cur.parent;
     }
-    return group || top;
+    return cur === root ? top : null;
   }
   function toEditableVector(it) {
     let cur = it;
-    while (cur && cur !== designLayer && cur.layer === designLayer) {
+    const root = selectionRoot();
+    while (cur && cur !== root && cur.layer === designLayer) {
       if (cur.className === "CompoundPath") return cur;
       if (cur.className === "Path") return cur.parent?.className === "CompoundPath" ? cur.parent : cur;
       cur = cur.parent;
@@ -270,16 +282,102 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   function clearSel() { selected.clear(); }
   function addSel(it) { selected.add(it); }
   function emitSel() { selectionCb && selectionCb(selected.size); reprocessRasters(); drawOverlay(); }
-  let selectionMode = "design"; // "design" = whole design, "element" = single shapes
+  let selectionMode = "element"; // "design" = whole current scope, "element" = individual items
   function setSelectionMode(m) { selectionMode = m; clearSel(); emitSel(); }
   // Whole-design selection = EVERY item on the layer (paths, text, rasters), so a
   // move/scale/rotate can never leave part of the design behind.
   function selectAllItems() { clearSel(); for (const it of selectable()) addSel(it); }
 
+  // --- group isolation ----------------------------------------------------
+  function isInsideGroup(item, group = activeGroup) {
+    if (!group || !item) return !group;
+    let cur = item;
+    while (cur && cur !== designLayer) {
+      if (cur === group) return true;
+      cur = cur.parent;
+    }
+    return false;
+  }
+  function isAncestorOf(ancestor, item) {
+    let cur = item?.parent;
+    while (cur && cur !== designLayer) {
+      if (cur === ancestor) return true;
+      cur = cur.parent;
+    }
+    return false;
+  }
+  function restoreFocusOpacity() {
+    for (const [item, opacity] of focusOpacity) if (item) item.opacity = opacity;
+    focusOpacity.clear();
+  }
+  function dimItem(item) {
+    if (!focusOpacity.has(item)) focusOpacity.set(item, item.opacity);
+    item.opacity = focusOpacity.get(item) * 0.5;
+  }
+  function updateGroupNav() {
+    if (!activeGroup) {
+      groupNav.classList.add("hidden");
+      groupNav.querySelector(".group-nav__path").textContent = "";
+      return;
+    }
+    const names = [];
+    let cur = activeGroup;
+    while (cur && cur !== designLayer) {
+      if (isUserGroup(cur)) names.unshift(cur.data.modcutGroupName || "Group");
+      cur = cur.parent;
+    }
+    groupNav.querySelector(".group-nav__path").textContent = `Main view  ›  ${names.join("  ›  ")}`;
+    groupNav.classList.remove("hidden");
+  }
+  function applyGroupFocus() {
+    restoreFocusOpacity();
+    updateGroupNav();
+    if (!activeGroup) { view.update(); return; }
+    const visit = (container) => {
+      for (const child of container.children || []) {
+        if (child === activeGroup) continue;
+        if (isAncestorOf(child, activeGroup)) visit(child);
+        else dimItem(child);
+      }
+    };
+    visit(designLayer);
+    view.update();
+  }
+  function resetGroupFocus(emit = false) {
+    restoreFocusOpacity();
+    activeGroup = null;
+    updateGroupNav();
+    if (emit) { clearSel(); emitSel(); view.update(); }
+  }
+  function enterGroup(group) {
+    if (!isUserGroup(group)) return false;
+    activeGroup = group;
+    clearSel();
+    applyGroupFocus();
+    emitSel();
+    return true;
+  }
+  function leaveGroupLevel() {
+    if (!activeGroup) return false;
+    let parent = activeGroup.parent;
+    while (parent && parent !== designLayer && !isUserGroup(parent)) parent = parent.parent;
+    if (isUserGroup(parent)) return enterGroup(parent);
+    resetGroupFocus(true);
+    return true;
+  }
+  groupNav.querySelector(".group-nav__back").addEventListener("click", leaveGroupLevel);
+  groupNav.querySelector(".group-nav__path").addEventListener("click", () => resetGroupFocus(true));
+
   // --- undo / redo (round-trips the design layer through Paper JSON) -------
   const undoStack = [], redoStack = [];
-  function snapshot() { return designLayer.children.length ? designLayer.exportJSON({ asString: true }) : ""; }
+  function snapshot() {
+    restoreFocusOpacity();
+    const result = designLayer.children.length ? designLayer.exportJSON({ asString: true }) : "";
+    if (activeGroup) applyGroupFocus();
+    return result;
+  }
   function restoreFrom(s) {
+    resetGroupFocus();
     designLayer.removeChildren(); selected.clear();
     if (s) {
       designLayer.activate();
@@ -300,6 +398,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   function resetHistory() { undoStack.length = 0; redoStack.length = 0; }
   function exportDesign() { return snapshot(); }
   function importDesign(s) {
+    resetGroupFocus();
     designLayer.removeChildren();
     selected.clear();
     designAngle = 0;
@@ -448,7 +547,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     if (h && selected.size) { setCursor(h.type === "rotate" ? ROTATE_CURSOR : SCALE_CURSORS[h.key] || "default"); return; }
     const b = selectionBounds();
     if (b && b.contains(pt)) { setCursor(SELECT_CURSOR); return; }
-    const hit = paper.project.hitTest(pt, { fill: true, stroke: true, tolerance: 5 / view.zoom, match: (r) => r.item && r.item.layer === designLayer });
+    const hit = paper.project.hitTest(pt, { fill: true, stroke: true, tolerance: 5 / view.zoom, match: (r) => r.item && r.item.layer === designLayer && (!activeGroup || isInsideGroup(r.item)) });
     setCursor(hit ? SELECT_CURSOR : SELECT_CURSOR);
   }
 
@@ -458,7 +557,18 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   window.addEventListener("keydown", (e) => { if (e.code === "Space" && !spaceDown) { spaceDown = true; if (!pan) setCursor("grab"); } });
   window.addEventListener("keyup", (e) => { if (e.code === "Space") { spaceDown = false; if (!pan) setCursor(cursorForTool(currentTool)); } });
   window.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === "Escape") && currentTool === "pen" && penPath) finishPen(); });
-  canvas.addEventListener("dblclick", () => { if (currentTool === "pen" && penPath) finishPen(); });
+  canvas.addEventListener("dblclick", (e) => {
+    if (currentTool === "pen" && penPath) { finishPen(); return; }
+    if (currentTool !== "select") return;
+    const pt = view.viewToProject(P(e.offsetX, e.offsetY));
+    const hit = paper.project.hitTest(pt, { fill: true, stroke: true, tolerance: 5 / view.zoom, match: (r) => r.item && r.item.layer === designLayer });
+    if (activeGroup && (!hit || !isInsideGroup(hit.item))) {
+      resetGroupFocus(true);
+      return;
+    }
+    const item = hit && toSelectable(hit.item);
+    if (isUserGroup(item)) enterGroup(item);
+  });
   canvas.addEventListener("pointerdown", (e) => {
     if (!(spaceDown || e.button === 1)) return;
     pan = { sx: e.clientX, sy: e.clientY, cx: view.center.x, cy: view.center.y };
@@ -492,7 +602,12 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     notifyChange(); toolResetCb && toolResetCb();
   }
   function onPenDown(e) {
-    if (!penPath) { designLayer.activate(); penPath = new paper.Path({ strokeColor: drawColor, strokeWidth: drawWidth, fillColor: null }); preDraw = snapshot(); }
+    if (!penPath) {
+      designLayer.activate();
+      penPath = new paper.Path({ strokeColor: drawColor, strokeWidth: drawWidth, fillColor: null });
+      if (activeGroup) activeGroup.addChild(penPath);
+      preDraw = snapshot();
+    }
     if (penPath.segments.length > 1 && e.point.getDistance(penPath.firstSegment.point) < 8 / view.zoom) { penPath.closed = true; finishPen(); return; }
     penPath.add(e.point); view.update();
   }
@@ -505,7 +620,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   }
   // --- node edit tool -----------------------------------------------------
   function onNodeDown(e) {
-    const hr = paper.project.hitTest(e.point, { segments: true, handles: true, stroke: true, fill: true, tolerance: 8 / view.zoom, match: (r) => r.item && r.item.layer === designLayer });
+    const hr = paper.project.hitTest(e.point, { segments: true, handles: true, stroke: true, fill: true, tolerance: 8 / view.zoom, match: (r) => r.item && r.item.layer === designLayer && (!activeGroup || isInsideGroup(r.item)) });
     if (hr) {
       const it = toEditableVector(hr.item) || hr.item;
       if (nodeEditItem && nodeEditItem !== it) nodeEditItem.fullySelected = false;
@@ -547,7 +662,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     // drag anywhere inside the selection box = move (LightBurn-style)
     const selBounds = selectionBounds();
     if (selBounds && selBounds.contains(e.point)) { mode = "move"; moveItems = [...selected]; preDrag = snapshot(); dragChanged = false; return; }
-    const hit = paper.project.hitTest(e.point, { fill: true, stroke: true, tolerance: 5 / view.zoom, match: (r) => r.item && r.item.layer === designLayer });
+    const hit = paper.project.hitTest(e.point, { fill: true, stroke: true, tolerance: 5 / view.zoom, match: (r) => r.item && r.item.layer === designLayer && (!activeGroup || isInsideGroup(r.item)) });
     if (hit) {
       const it = toSelectable(hit.item);
       if (it) {
@@ -657,14 +772,14 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   canvas.addEventListener("contextmenu", (e) => {
     e.preventDefault();
     const pt = view.viewToProject(P(e.offsetX, e.offsetY));
-    const hit = paper.project.hitTest(pt, { fill: true, stroke: true, tolerance: 5 / view.zoom, match: (r) => r.item && r.item.layer === designLayer });
+    const hit = paper.project.hitTest(pt, { fill: true, stroke: true, tolerance: 5 / view.zoom, match: (r) => r.item && r.item.layer === designLayer && (!activeGroup || isInsideGroup(r.item)) });
     const it = hit && toSelectable(hit.item);
     if (it && !selected.has(it)) {
       if (!e.shiftKey) clearSel();
       addSel(it);
       emitSel();
     }
-    contextCb && contextCb({ x: e.clientX, y: e.clientY, hasSelection: selected.size > 0, hasRaster: selectionHasRaster(), canUngroup: canUngroup() });
+    contextCb && contextCb({ x: e.clientX, y: e.clientY, hasSelection: selected.size > 0, hasRaster: selectionHasRaster(), canGroup: selectedItems().length > 1, canUngroup: canUngroup() });
   });
 
   // --- geometry stats for time estimation ---------------------------------
@@ -684,33 +799,36 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   const logicalColor = (it) => itemLayerColor(it, css);
 
   // --- position (whole design) --------------------------------------------
-  const items = () => designLayer.children.slice();
+  const items = () => selectionRoot().children.slice();
   const REF = (b, k) => ({ tl: b.topLeft, tc: b.topCenter, tr: b.topRight, lc: b.leftCenter, c: b.center, rc: b.rightCenter, bl: b.bottomLeft, bc: b.bottomCenter, br: b.bottomRight }[k] || b.topLeft);
   function getRect() {
-    if (!designLayer.children.length) return null;
-    const b = designLayer.bounds;
+    const root = selectionRoot();
+    if (!root.children.length) return null;
+    const b = root.bounds;
     return { x: b.x, y: b.y, w: b.width, h: b.height, angle: designAngle };
   }
-  function refX(key) { const b = designLayer.bounds; return REF(b, key); }
+  function refX(key) { const b = selectionRoot().bounds; return REF(b, key); }
   function applyRect(key, x, y, w, h) {
-    if (!designLayer.children.length) return;
+    const root = selectionRoot();
+    if (!root.children.length) return;
     pushHistory();
-    let b = designLayer.bounds, anchor = REF(b, key);
+    let b = root.bounds, anchor = REF(b, key);
     const sx = w > 0 && b.width ? w / b.width : 1, sy = h > 0 && b.height ? h / b.height : 1;
-    if (sx !== 1 || sy !== 1) { for (const it of items()) it.scale(sx, sy, anchor); b = designLayer.bounds; }
+    if (sx !== 1 || sy !== 1) { for (const it of items()) it.scale(sx, sy, anchor); b = root.bounds; }
     const d = P(x, y).subtract(REF(b, key));
     for (const it of items()) it.position = it.position.add(d);
     view.update(); drawOverlay(); notifyChange();
   }
   function applyAngle(deg) {
-    if (!designLayer.children.length) return;
+    const root = selectionRoot();
+    if (!root.children.length) return;
     pushHistory();
-    const c = designLayer.bounds.center;
+    const c = root.bounds.center;
     for (const it of items()) it.rotate(deg - designAngle, c);
     designAngle = deg; view.update(); drawOverlay(); notifyChange();
   }
   // reference point coordinates for the position readout (respects the 9-dot)
-  function getRef(key) { const p = designLayer.children.length ? REF(designLayer.bounds, key) : null; return p && { x: p.x, y: p.y }; }
+  function getRef(key) { const root = selectionRoot(); const p = root.children.length ? REF(root.bounds, key) : null; return p && { x: p.x, y: p.y }; }
 
   // --- grouping, arrange, clipboard ---------------------------------------
   const stackSort = (arr) => arr.slice().sort((a, b) => a.index - b.index);
@@ -728,12 +846,14 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   }
   function groupSelected() {
     const roots = selectedItems();
-    if (roots.length < 2) return false;
+    const parent = selectionRoot();
+    if (roots.length < 2 || roots.some((it) => it.parent !== parent)) return false;
     pushHistory();
     const index = Math.min(...roots.map((it) => it.index));
     const group = new paper.Group();
     group.data.modcutGroup = true;
-    designLayer.insertChild(index, group);
+    group.data.modcutGroupName = "Group";
+    parent.insertChild(index, group);
     for (const it of roots) group.addChild(it);
     clearSel(); addSel(group); emitSel(); view.update(); notifyChange();
     return true;
@@ -787,17 +907,19 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     pushHistory();
     clearSel();
     const offset = inPlace ? P(0, 0) : P(8 * (pasteStep + 1), 8 * (pasteStep + 1));
+    const container = selectionRoot();
     for (const def of defs) {
       designLayer.activate();
       const item = designLayer.importJSON(def);
       if (item && item.className === "Layer" && item.children?.length) {
         for (const child of item.children.slice()) {
-          designLayer.addChild(child);
+          container.addChild(child);
           child.position = child.position.add(offset);
           if (isSelectableItem(child)) addSel(child);
         }
         item.remove();
       } else if (item) {
+        container.addChild(item);
         item.position = item.position.add(offset);
         if (isSelectableItem(item)) addSel(item);
       }
