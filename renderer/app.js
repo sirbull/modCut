@@ -40,6 +40,9 @@ const state = {
   gridUnit: localStorage.getItem("modcut_gridUnit") || "cm",
 };
 let drivers = ["Dummy"];
+let machineStatus = { connected: false, running: false, dryRun: true, lastResult: "idle", progress: 0 };
+let statusPollBusy = false;
+let reportedResult = "idle";
 
 // --- units + toast ----------------------------------------------------------
 const UNIT = { mm: 1, cm: 10, in: 25.4 };
@@ -354,22 +357,44 @@ function layerRow(l) {
 // --- run + estimate ---------------------------------------------------------
 const activeLayers = () => state.layers.filter((l) => l.output);
 const jobOps = () => activeLayers().map((l) => ({ op: l.op, color: l.color, power: l.power, speed: clampSpeedPct(l.speed), freq: l.freq, ...(l.op === "Engrave" ? { dpi: l.dpi, dither: l.dither, bottomUp: l.bottomUp } : {}) }));
+const machineLimits = () => ({ bedWidth: machine().bedW || 600, bedHeight: machine().bedH || 400, maxFeed: machine().maxFeed || 12000 });
 async function runJob(label) {
   if (!bed.getDesign()) return toast("Nothing imported yet.", "info");
+  if (!machineStatus.connected) return toast("Connect to the machine or dry-run first.", "info");
   const ops = jobOps();
   if (!ops.length) return toast("No active layers to run.", "info");
   const base = ($("filename").value.trim() || "job").replace(/\.[^.]+$/, "");
   const filename = base + driverExt(machine().driver);
   try {
     const job = await bed.buildGcodeJob(ops, { maxFeed: machine().maxFeed || 12000 });
-    const r = await window.modcut.call("buildJob", { machine: machine().name, driver: machine().driver, material: state.materialId, mappingMode: state.mappingMode, filename, ops, gcodeLines: job.lines });
-    toast(`${label} OK: ${r.opCount} layer(s), ${r.preview.length}/${r.lineCount} G-code lines → ${filename} (${machine().driver}).`, "ok");
+    const confirmed = machineStatus.dryRun || window.confirm(
+      `Start REAL laser job on ${machine().name}?\n\n` +
+      "Confirm material, focus, ventilation, clear work area and that the lid/interlocks are ready."
+    );
+    if (!confirmed) return;
+    const r = await window.modcut.call("startJob", {
+      machine: machine().name, driver: machine().driver, material: state.materialId,
+      mappingMode: state.mappingMode, filename, ops, gcodeLines: job.lines,
+      confirmed, ...machineLimits(),
+    });
+    reportedResult = "running";
+    toast(`${label} started: ${r.motionCount} moves, ${r.lineCount} G-code lines → ${filename}${r.dryRun ? " (dry run)" : ""}.`, "ok");
+    await pollMachineStatus();
   } catch (e) { toast(`${label} failed: ${e.message}`, "err"); }
 }
-function frame() {
+async function frame() {
   const d = bed.getDesign();
   if (!d) return toast("Nothing to frame.", "info");
-  toast(`Framing ${dispNum(d.wMm)} × ${dispNum(d.hMm)} ${state.units} at (${dispNum(d.xMm)}, ${dispNum(d.yMm)}). Head traces the outline, beam off.`, "info");
+  if (!machineStatus.connected) return toast("Connect to the machine or dry-run first.", "info");
+  try {
+    const r = await window.modcut.call("frameJob", {
+      minX: d.xMm, minY: d.yMm, maxX: d.xMm + d.wMm, maxY: d.yMm + d.hMm,
+      ...machineLimits(),
+    });
+    reportedResult = "running";
+    toast(`Framing ${dispNum(d.wMm)} × ${dispNum(d.hMm)} ${state.units}; beam is forced OFF${r.dryRun ? " (dry run)" : ""}.`, "info");
+    await pollMachineStatus();
+  } catch (e) { toast("Frame failed: " + e.message, "err"); }
 }
 function estimate() {
   if (!bed.getDesign()) return ($("estimateOut").textContent = "");
@@ -470,10 +495,66 @@ async function editMachine(m) {
   Object.assign(m, machineFrom(v, m.id)); saveMachines(); refreshMachines(m.id);
   toast("Machine saved: " + m.name, "ok");
 }
-function connect() {
-  const m = machine();
-  const target = m.conn.type === "network" ? `${m.conn.host || "?"}:${m.conn.port || "?"}` : (m.conn.serial || "USB");
-  toast(`(M2) Would connect to ${m.name} via ${m.conn.type} at ${target}.`, "info");
+async function connect() {
+  try {
+    if (machineStatus.connected) {
+      machineStatus = await window.modcut.call("disconnect");
+      renderMachineStatus();
+      toast("Machine disconnected.", "info");
+      return;
+    }
+    const dryRun = $("dryRun").checked;
+    machineStatus = await window.modcut.call("connect", { machine: machine(), dryRun });
+    reportedResult = machineStatus.lastResult;
+    renderMachineStatus();
+    toast(machineStatus.dryRun ? "Dry-run connection ready — no hardware commands will be sent." : `Connected to ${machineStatus.target}.`, "ok");
+  } catch (e) {
+    machineStatus = { ...machineStatus, connected: false, running: false, lastError: e.message };
+    renderMachineStatus();
+    toast("Connection failed: " + e.message, "err");
+  }
+}
+function renderMachineStatus() {
+  const conn = $("conn");
+  conn.classList.toggle("ok", machineStatus.connected);
+  conn.classList.toggle("err", !!machineStatus.lastError && !machineStatus.connected);
+  if (machineStatus.connected) {
+    $("connText").textContent = machineStatus.dryRun ? "Ready · dry run" : `Connected · ${machineStatus.target}`;
+  } else {
+    $("connText").textContent = machineStatus.lastError ? "Connection error" : "Not connected";
+  }
+  $("connect").textContent = machineStatus.connected ? "Disconnect" : "Connect";
+  $("dryRun").disabled = machineStatus.connected;
+  $("device").disabled = machineStatus.connected;
+  $("sendBtn").disabled = !machineStatus.connected || machineStatus.running;
+  $("sendBtn").textContent = (machineStatus.connected ? machineStatus.dryRun : $("dryRun").checked) ? "Run dry-run" : "Start job";
+  $("frame").disabled = !machineStatus.connected || machineStatus.running;
+  $("stopBtn").classList.toggle("hidden", !machineStatus.running);
+  $("jobState").textContent = machineStatus.running ? `${Math.round((machineStatus.progress || 0) * 100)}%` : "";
+}
+async function pollMachineStatus() {
+  if (statusPollBusy) return;
+  statusPollBusy = true;
+  try {
+    machineStatus = await window.modcut.call("status");
+    renderMachineStatus();
+    if (!machineStatus.running && machineStatus.lastResult !== reportedResult) {
+      reportedResult = machineStatus.lastResult;
+      if (machineStatus.lastResult === "completed") toast("Job completed successfully.", "ok");
+      else if (machineStatus.lastResult === "cancelled") toast("Job cancelled.", "info");
+      else if (machineStatus.lastResult === "failed") toast("Job failed: " + machineStatus.lastError, "err");
+    }
+  } catch (e) {
+    machineStatus = { ...machineStatus, connected: false, running: false, lastError: e.message };
+    renderMachineStatus();
+  } finally { statusPollBusy = false; }
+}
+async function stopJob() {
+  try {
+    machineStatus = await window.modcut.call("cancelJob");
+    renderMachineStatus();
+    toast("Emergency stop sent; waiting for the job to stop.", "info");
+  } catch (e) { toast("Could not stop job: " + e.message, "err"); }
 }
 
 // --- materials --------------------------------------------------------------
@@ -810,8 +891,10 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeConte
 $("estimate").addEventListener("click", estimate);
 $("simulate").addEventListener("click", startSimulate);
 $("sendBtn").addEventListener("click", () => runJob("Send"));
+$("stopBtn").addEventListener("click", stopJob);
 $("addMaterial").addEventListener("click", addMaterial);
 $("device").addEventListener("change", (e) => selectMachine(e.target.value));
+$("dryRun").addEventListener("change", renderMachineStatus);
 
 // simulate controls
 $("simPlay").addEventListener("click", () => {
@@ -874,11 +957,12 @@ refreshPropsVisibility();
 (async () => {
   try {
     const pong = await window.modcut.call("ping");
-    $("conn").classList.add("ok");
-    $("connText").textContent = "Connected · " + pong.driver;
+    machineStatus = pong;
+    renderMachineStatus();
     drivers = (await window.modcut.call("listDrivers")).drivers;
   } catch {
-    $("conn").classList.add("err");
-    $("connText").textContent = "Sidecar unavailable";
+    machineStatus = { connected: false, running: false, dryRun: true, lastError: "Sidecar unavailable" };
+    renderMachineStatus();
   }
 })();
+setInterval(pollMachineStatus, 500);

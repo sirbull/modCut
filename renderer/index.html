@@ -56,8 +56,9 @@
       <div class="sec">
         <h3 title="The laser this job is for. Add or edit machines under the Machine menu (driver, USB/network, bed size).">Machine</h3>
         <select class="select" id="device"></select>
-        <div class="conn" id="conn"><span class="led"></span><span id="connText">Connecting …</span></div>
-        <button class="btn btn--secondary btn--sm" id="connect" title="Connect to the selected machine over USB or network (coming in a later version).">Connect</button>
+        <div class="conn" id="conn"><span class="led"></span><span id="connText">Starting sidecar …</span></div>
+        <label class="clayer__chk dry-run"><input type="checkbox" id="dryRun" checked> Dry run — do not send to hardware</label>
+        <button class="btn btn--secondary btn--sm" id="connect" title="Connect to the selected machine, or create a safe dry-run connection.">Connect</button>
       </div>
 
       <div class="sec">
@@ -167,7 +168,9 @@
     <div class="fn-wrap"><input class="input filename" id="filename" value="job" spellcheck="false"><span class="fn-ext" id="fnExt">.gcode</span></div>
     <button class="btn btn--secondary btn--sm" id="simulate" title="Preview the toolpath: a red dot runs the path in order — cuts leave a black line, engraving fills in. Adjust speed 1×–50×.">Simulate</button>
     <button class="btn btn--secondary btn--sm" id="frame" title="Trace the job's outline with the beam OFF, so you can check placement on the material before running. It does not cut.">Frame</button>
-    <button class="btn btn--primary btn--sm" id="sendBtn" title="Send the job file to the machine's memory. You then start the job from the machine itself.">Send</button>
+    <span class="job-state" id="jobState"></span>
+    <button class="btn btn--danger btn--sm hidden" id="stopBtn" title="Immediately stop the active job. On GRBL this sends feed-hold followed by soft reset.">Stop</button>
+    <button class="btn btn--primary btn--sm" id="sendBtn" title="Validate and run the job. Dry run is enabled by default.">Run dry-run</button>
   </div>
 
   <footer class="statusbar">

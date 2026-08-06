@@ -198,9 +198,9 @@ app.whenReady().then(() => {
     iconPath: appIconPath,
   });
 
-  // ponytail: dev spawns the JDK on PATH; packaging swaps this for the bundled
-  // jlink JRE + LibLaserCut fat-jar under process.resourcesPath (see plan, M4).
-  sidecar = createSidecar({ args: ["-cp", join(root, "sidecar", "out"), "Sidecar"] });
+  // The Maven build creates a self-contained sidecar jar. Packaging can later
+  // swap `java` for a bundled jlink runtime without changing this IPC contract.
+  sidecar = createSidecar({ args: ["-jar", join(root, "sidecar", "target", "modcut-sidecar.jar")] });
   ipcMain.handle("sidecar", (_e, method, params) => sidecar.call(method, params));
 
   // Native file picker that also returns the file's contents so the renderer

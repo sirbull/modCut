@@ -5,11 +5,14 @@
   "type": "module",
   "main": "electron/main.mjs",
   "scripts": {
-    "build:sidecar": "javac -d sidecar/out sidecar/Sidecar.java",
+    "build:sidecar": "./sidecar/mvnw -q -f sidecar/pom.xml package -DskipTests",
     "prestart": "npm run build:sidecar",
     "start": "electron .",
+    "test:sidecar": "./sidecar/mvnw -q -f sidecar/pom.xml test",
     "test:bridge": "npm run build:sidecar && node electron/test-bridge.mjs",
-    "check:contrast": "node design/check-contrast.mjs"
+    "test:renderer": "node --test renderer/test-lengthToMm.mjs",
+    "check:contrast": "node design/check-contrast.mjs",
+    "test": "npm run test:sidecar && npm run test:bridge && npm run test:renderer && npm run check:contrast"
   },
   "devDependencies": {
     "electron": "^33.0.0"

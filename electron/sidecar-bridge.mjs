@@ -3,10 +3,11 @@
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 
-export function createSidecar({ command = "java", args = [], cwd } = {}) {
+export function createSidecar({ command = "java", args = [], cwd, timeoutMs = 35000 } = {}) {
   const proc = spawn(command, args, { cwd, stdio: ["pipe", "pipe", "inherit"] });
   const pending = new Map();
   let nextId = 1;
+  let stopped = false;
 
   createInterface({ input: proc.stdout }).on("line", (line) => {
     if (!line.trim()) return;
@@ -15,19 +16,31 @@ export function createSidecar({ command = "java", args = [], cwd } = {}) {
     const p = pending.get(msg.id);
     if (!p) return;
     pending.delete(msg.id);
+    clearTimeout(p.timer);
     msg.error ? p.reject(new Error(msg.error.message)) : p.resolve(msg.result);
   });
 
-  proc.on("exit", (code) => {
-    for (const p of pending.values()) p.reject(new Error(`sidecar exited (${code})`));
+  const rejectAll = (message) => {
+    stopped = true;
+    for (const p of pending.values()) { clearTimeout(p.timer); p.reject(new Error(message)); }
     pending.clear();
-  });
+  };
+  proc.on("error", (error) => rejectAll(`sidecar failed to start: ${error.message}`));
+  proc.on("exit", (code) => rejectAll(`sidecar exited (${code})`));
 
   function call(method, params) {
+    if (stopped) return Promise.reject(new Error("sidecar is not running"));
     const id = nextId++;
     return new Promise((resolve, reject) => {
-      pending.set(id, { resolve, reject });
-      proc.stdin.write(JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n");
+      const timer = setTimeout(() => {
+        pending.delete(id);
+        reject(new Error(`sidecar request timed out: ${method}`));
+      }, timeoutMs);
+      pending.set(id, { resolve, reject, timer });
+      proc.stdin.write(JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n", (error) => {
+        if (!error) return;
+        clearTimeout(timer); pending.delete(id); reject(error);
+      });
     });
   }
 

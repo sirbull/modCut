@@ -1,41 +1,76 @@
 # modCut
 
-Modern, cross-platform laser control for **Horten Folkeverksted** — a modernized
-[VisiCut](https://github.com/t-oster/VisiCut). Electron UI + a Java sidecar that
-reuses VisiCut's proven driver engine ([LibLaserCut](https://github.com/t-oster/LibLaserCut))
-to drive Epilog, Ruida/Chinese CO2, GRBL and more over USB or network.
+Modern, cross-platform laser control for **Horten Folkeverksted** — an Electron
+UI with a Java sidecar that integrates [LibLaserCut](https://github.com/t-oster/LibLaserCut)
+and provides a guarded GRBL execution path.
 
-Full design + roadmap: `../.claude/plans/jeg-nsker-bygge-reactive-popcorn.md`.
+## Status — M1 testing
 
-## Status — M0 (skeleton)
+The first complete, hardware-testable path is available:
 
-Proven so far, no laser hardware required:
+- import SVG, DXF and raster artwork, arrange it on the laser bed and map colors
+  to Cut / Engrave / Score operations;
+- generate and simulate GRBL G-code;
+- connect to GRBL over serial or TCP;
+- validate every job against an allow-list, bed dimensions, maximum feed and
+  laser power before transmission;
+- frame the design with the laser forced off;
+- run a job asynchronously and stop it with GRBL feed-hold + soft reset;
+- exercise the complete flow without hardware using the default dry-run mode.
 
-- **Design system** — `design/tokens.css` (green-gradient palette, pill buttons), a
-  living style guide, and a WCAG contrast guardrail.
-- **Docs** — beginner user guide in `docs/index.html`.
-- **Architecture** — Electron ⇄ Java sidecar over line-delimited JSON-RPC (stdio),
-  answered by a Dummy driver.
+Ruida and Epilog are not enabled for real execution yet. The UI only offers
+drivers that the M1 sidecar can safely execute: Dummy and GRBL.
 
-## Try it
+## Requirements
+
+- Node.js 18+
+- JDK 17+
+- Internet access on the first build (the included Maven wrapper downloads Maven
+  and the pinned dependencies)
+
+## Run
 
 ```sh
-node design/check-contrast.mjs      # WCAG AA check over the palette
-npm run test:bridge                 # compile sidecar + prove the Node<->Java round-trip
-open design/styleguide.html         # the design language (toggle light/dark)
-open docs/index.html                # beginner user guide
-
-npm install && npm start            # boot the Electron shell (needs `electron` installed)
+npm install
+npm test
+npm start
 ```
 
-Requires Node 18+ and a JDK (17+). Maven arrives at M1 with the real LibLaserCut dependency.
+`npm start` builds the self-contained Java sidecar before Electron opens.
 
-## Layout
+## Safe first test
 
-| Path | What |
-|------|------|
-| `design/` | `tokens.css` design system, style guide, contrast check |
-| `docs/` | beginner documentation site |
-| `electron/` | main process, preload, sidecar bridge + bridge test |
-| `renderer/` | app window (M0 shell; LightBurn-style layout lands M1+) |
-| `sidecar/` | Java JSON-RPC sidecar (`javac` now; Maven + LibLaserCut at M1) |
+1. Leave **Dry run — do not send to hardware** checked.
+2. Click **Connect**.
+3. Import or draw a small design inside the bed.
+4. Assign a material and verify every active layer.
+5. Click **Frame**, then **Run dry-run**.
+6. Verify that the job finishes and that Stop can cancel a longer job.
+
+Only move on to hardware after the dry-run checklist passes. The full procedure,
+including GRBL setup and acceptance criteria, is in [`docs/TESTING.md`](docs/TESTING.md).
+
+## Commands
+
+| Command | Purpose |
+|---|---|
+| `npm test` | Java unit tests, bridge test, renderer test and WCAG check |
+| `npm run test:sidecar` | Maven/JUnit sidecar tests |
+| `npm run test:bridge` | Build the fat JAR and test Node ↔ Java JSON-RPC |
+| `npm run test:renderer` | SVG unit conversion tests |
+| `npm run check:contrast` | WCAG AA palette guardrail |
+| `npm start` | Build the sidecar and start Electron |
+
+## Architecture
+
+| Path | Responsibility |
+|---|---|
+| `design/` | Design tokens, style guide and contrast test |
+| `docs/` | User and hardware-testing documentation |
+| `electron/` | Main process, preload bridge and sidecar lifecycle |
+| `renderer/` | Editor, imports, toolpath generation, simulation and machine UI |
+| `sidecar/` | Maven module, JSON-RPC, validation and GRBL transports |
+
+The sidecar is deliberately the final safety boundary. Renderer-generated G-code
+is treated as untrusted input and is revalidated in Java immediately before
+framing or execution.
