@@ -20,6 +20,14 @@ import { itemLayerColor, setItemLayerColor } from "./layer-model.mjs";
 
 const MM_PER_PX = 25.4 / 96;
 
+export function engraveStrategy(item) {
+  if (item?.className === "Raster") return "raster";
+  const alpha = item?.fillColor == null ? 0 : Number(item.fillColor.alpha ?? 1);
+  const hasVisibleFill = Number.isFinite(alpha) && alpha > 0.001;
+  if (item?.className === "CompoundPath") return hasVisibleFill ? "raster" : "trace";
+  return item?.closed && hasVisibleFill ? "raster" : "trace";
+}
+
 export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   const paper = window.paper;
   const canvas = document.createElement("canvas");
@@ -39,9 +47,10 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   const uiLayer = new paper.Layer(); // transform box + handles (guides)
   const simLayer = new paper.Layer(); // simulation ghost/trail/dot (kept off uiLayer so overlay redraws don't wipe it)
   const selected = new Set();
+  const selectedSegments = new Set();
   let activeGroup = null;
   const focusOpacity = new Map();
-  let coordsCb = null, selectionCb = null, contextCb = null, spaceDown = false, changeCb = null, designAngle = 0;
+  let coordsCb = null, selectionCb = null, contextCb = null, spaceDown = false, altDown = false, shiftDown = false, changeCb = null, designAngle = 0;
   let gridX = 10, gridY = 10;                 // grid spacing in mm
   let currentTool = "select";                 // select | node | pen | rect | ellipse | line
   let pathOrder = "optimize";                 // "optimize" | "nearby" | "layer"
@@ -88,7 +97,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   function setBedSize(w, h) { bedWmm = w; bedHmm = h; drawBed(); fit(); }
   function setGrid(x, y) { gridX = Math.max(0.5, x || 10); gridY = Math.max(0.5, y || 10); drawBed(); view.update(); }
   function setTool(t) {
-    if (nodeEditItem) { nodeEditItem.fullySelected = false; nodeEditItem = null; }
+    clearNodeSelection();
     if (penPath) finishPen();
     currentTool = t;
     penHoverPoint = null; penEndpointHover = null; penCloseHover = false;
@@ -107,6 +116,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   const notifyChange = () => changeCb && changeCb();
   function clearDesign() {
     abandonPenInteraction();
+    clearNodeSelection();
     resetGroupFocus();
     designLayer.removeChildren();
     selected.clear();
@@ -389,6 +399,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     return result;
   }
   function restoreFrom(s) {
+    clearNodeSelection();
     resetGroupFocus();
     designLayer.removeChildren(); selected.clear();
     if (s) {
@@ -424,6 +435,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   }
   function importDesign(s) {
     abandonPenInteraction();
+    clearNodeSelection();
     resetGroupFocus();
     designLayer.removeChildren();
     selected.clear();
@@ -636,6 +648,15 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     canvas.style.cursor = c;
     if (currentTool !== "pen") delete canvas.dataset.penCursor;
   };
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Alt" || e.altKey) altDown = true;
+    if (e.key === "Shift" || e.shiftKey) shiftDown = true;
+  });
+  window.addEventListener("keyup", (e) => {
+    if (e.key === "Alt") altDown = false;
+    if (e.key === "Shift") shiftDown = false;
+  });
+  window.addEventListener("blur", () => { altDown = false; shiftDown = false; });
   window.addEventListener("keydown", (e) => { if (e.code === "Space" && !spaceDown) { spaceDown = true; if (!pan) setCursor("grab"); } });
   window.addEventListener("keyup", (e) => { if (e.code === "Space") { spaceDown = false; if (!pan) restoreToolCursor(); } });
   window.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === "Escape") && currentTool === "pen" && penPath) finishPen(); });
@@ -673,7 +694,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   // --- select / move / scale / rotate / marquee (Paper tool) --------------
   const tool = new paper.Tool();
   let mode = null, moveItems = null, marquee = null, downPt = null;
-  let anchor = null, scaleKey = null, lastVec = null, lastAngle = null;
+  let anchor = null, scaleKey = null, scaleCenter = null, scaleOpposite = null, scaleDownPoint = null, scaleFromCenter = false, lastVec = null, lastAngle = null;
   let preDrag = null, dragChanged = false;
   let drawStart = null, drawPreview = null, drawMoved = false, preDraw = null;
 
@@ -700,6 +721,18 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       for (const candidate of candidates) {
         const distance = pt.getDistance(candidate.segment.point);
         if (distance <= 9 / view.zoom && (!best || distance < best.distance)) best = { ...candidate, distance };
+      }
+    }
+    return best;
+  }
+  function anchorAt(pt) {
+    const root = selectionRoot();
+    let best = null;
+    for (const path of root.children) {
+      if (path === penPath || path.className !== "Path" || !path.visible) continue;
+      for (const segment of path.segments) {
+        const distance = pt.getDistance(segment.point);
+        if (distance <= 8 / view.zoom && (!best || distance < best.distance)) best = { path, segment, distance };
       }
     }
     return best;
@@ -789,8 +822,16 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   function onPenDown(e) {
     if (!penPath) {
       preDraw = snapshot();
+      const anchorHit = anchorAt(e.point);
+      if (anchorHit && (e.event.shiftKey || (anchorHit.segment !== anchorHit.path.firstSegment && anchorHit.segment !== anchorHit.path.lastSegment) || anchorHit.path.closed)) {
+        selectNodeSegment(anchorHit.segment, !!e.event.shiftKey);
+        nodeEditItem = anchorHit.path;
+        view.update();
+        return;
+      }
       const continuation = openEndpointAt(e.point);
       if (continuation) {
+        clearNodeSelection();
         penPath = continuation.path;
         penChanged = false; penResumeReversed = continuation.atStart;
         if (penResumeReversed) penPath.reverse();
@@ -799,6 +840,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
         drawPenOverlay(); setPenCursor("active");
         return;
       }
+      clearNodeSelection();
       designLayer.activate();
       penPath = new paper.Path({ strokeColor: drawColor, strokeWidth: drawWidth, fillColor: null });
       if (activeGroup) activeGroup.addChild(penPath);
@@ -836,25 +878,42 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     drawPenOverlay();
   }
   // --- node edit tool -----------------------------------------------------
+  function clearNodeSelection() {
+    for (const segment of selectedSegments) if (segment) segment.selected = false;
+    selectedSegments.clear();
+    if (nodeEditItem) nodeEditItem.selected = false;
+    nodeEditItem = null; nodeHit = null;
+  }
+  function selectNodeSegment(segment, additive = false) {
+    if (!additive) clearNodeSelection();
+    if (additive && selectedSegments.has(segment)) {
+      segment.selected = false;
+      selectedSegments.delete(segment);
+      return;
+    }
+    segment.selected = true;
+    selectedSegments.add(segment);
+  }
   function onNodeDown(e) {
     const hr = paper.project.hitTest(e.point, { segments: true, handles: true, stroke: true, fill: true, tolerance: 8 / view.zoom, match: (r) => r.item && r.item.layer === designLayer && (!activeGroup || isInsideGroup(r.item)) });
-    if (hr) {
-      const it = toEditableVector(hr.item) || hr.item;
-      if (nodeEditItem && nodeEditItem !== it) nodeEditItem.fullySelected = false;
+    if (hr?.segment) {
+      const it = hr.item;
       clearSel(); emitSel();
-      nodeEditItem = it; it.fullySelected = true;
-      nodeHit = hr.type === "segment" ? { seg: hr.segment, kind: "point" }
-        : hr.type === "handle-in" ? { seg: hr.segment, kind: "in" }
-        : hr.type === "handle-out" ? { seg: hr.segment, kind: "out" } : null;
+      selectNodeSegment(hr.segment, !!e.event.shiftKey);
+      nodeEditItem = it;
+      nodeHit = !selectedSegments.has(hr.segment) ? null
+        : hr.type === "segment" ? { seg: hr.segment, kind: "point" }
+          : hr.type === "handle-in" ? { seg: hr.segment, kind: "in" }
+            : hr.type === "handle-out" ? { seg: hr.segment, kind: "out" } : null;
       preDrag = snapshot(); dragChanged = false;
-    } else if (nodeEditItem) { nodeEditItem.fullySelected = false; nodeEditItem = null; nodeHit = null; }
+    } else clearNodeSelection();
     view.update();
   }
   function onNodeDrag(e) {
     if (!nodeHit) return;
     dragChanged = true;
     const s = nodeHit.seg;
-    if (nodeHit.kind === "point") s.point = s.point.add(e.delta);
+    if (nodeHit.kind === "point") for (const segment of selectedSegments) segment.point = segment.point.add(e.delta);
     else if (nodeHit.kind === "in") s.handleIn = s.handleIn.add(e.delta);
     else s.handleOut = s.handleOut.add(e.delta);
     view.update();
@@ -872,7 +931,13 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     const h = handleAt(e.point);
     if (h && selected.size) {
       preDrag = snapshot(); dragChanged = false;
-      if (h.type === "scale") { mode = "scale"; anchor = h.anchor; scaleKey = h.key; lastVec = e.point.subtract(anchor); }
+      if (h.type === "scale") {
+        mode = "scale"; scaleKey = h.key; scaleCenter = selectionBounds().center;
+        scaleOpposite = h.anchor; scaleDownPoint = e.point.clone();
+        scaleFromCenter = altDown || !!e.event.altKey || paper.Key.isDown("alt") || paper.Key.isDown("option");
+        anchor = scaleFromCenter ? scaleCenter : scaleOpposite;
+        lastVec = e.point.subtract(anchor);
+      }
       else { mode = "rotate"; anchor = selectionBounds().center; lastAngle = e.point.subtract(anchor).angle; }
       return;
     }
@@ -914,12 +979,22 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     }
     if (mode === "move") { dragChanged = true; for (const it of moveItems) it.position = it.position.add(e.delta); drawOverlay(); return; }
     if (mode === "scale") {
+      const wantsCenter = altDown || !!e.event.altKey || paper.Key.isDown("alt") || paper.Key.isDown("option");
+      if (!dragChanged && wantsCenter !== scaleFromCenter) {
+        scaleFromCenter = wantsCenter;
+        anchor = scaleFromCenter ? scaleCenter : scaleOpposite;
+        lastVec = scaleDownPoint.subtract(anchor);
+      }
       dragChanged = true;
       const cur = e.point.subtract(anchor);
       let sx = lastVec.x ? cur.x / lastVec.x : 1, sy = lastVec.y ? cur.y / lastVec.y : 1;
       if (scaleKey === "tc" || scaleKey === "bc") sx = 1;
       if (scaleKey === "lc" || scaleKey === "rc") sy = 1;
-      if (e.event.shiftKey && sx !== 1 && sy !== 1) { const s = Math.max(Math.abs(sx), Math.abs(sy)); sx = Math.sign(sx) * s; sy = Math.sign(sy) * s; }
+      if (shiftDown || e.event.shiftKey) {
+        if (scaleKey === "tc" || scaleKey === "bc") sx = sy;
+        else if (scaleKey === "lc" || scaleKey === "rc") sy = sx;
+        else { const s = Math.abs(sx - 1) >= Math.abs(sy - 1) ? sx : sy; sx = s; sy = s; }
+      }
       for (const it of selected) it.scale(sx, sy, anchor);
       lastVec = cur; drawOverlay(); return;
     }
@@ -1057,6 +1132,19 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   function canUngroup() { return selectedItems().some(isUserGroup); }
   function selectAll() { selectAllItems(); emitSel(); return selected.size > 0; }
   function deleteSelection() {
+    if (selectedSegments.size) {
+      pushHistory();
+      const paths = new Set([...selectedSegments].map((segment) => segment.path).filter(Boolean));
+      for (const segment of [...selectedSegments].sort((a, b) => b.index - a.index)) if (segment.path) segment.remove();
+      clearNodeSelection();
+      for (const path of paths) if (path.parent && path.segments.length < 2) {
+        const parent = path.parent;
+        path.remove();
+        if (parent.className === "CompoundPath" && !parent.children.length) parent.remove();
+      }
+      drawPenOverlay(); view.update(); notifyChange();
+      return true;
+    }
     const roots = selectedItems();
     if (!roots.length) return false;
     pushHistory();
@@ -1226,12 +1314,16 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       flip = !flip;
     }
   }
+  function engraveSeg(it, sp, out) {
+    if (engraveStrategy(it) === "raster") rasterScan(it, sp, out);
+    else vectorSeg(it, sp, out);
+  }
   // Collect segments grouped per source shape (keeps a shape's paths together).
   function collectSegs(specs) {
     const groups = [];
     for (const sp of specs) for (const it of itemsForColor(sp.color)) {
       const g = [];
-      sp.op === "Engrave" ? rasterScan(it, sp, g) : vectorSeg(it, sp, g);
+      sp.op === "Engrave" ? engraveSeg(it, sp, g) : vectorSeg(it, sp, g);
       if (g.length) groups.push(g);
       if (groups.length > 5000) break;
     }
@@ -1383,7 +1475,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       const g = [];
       if (sp.op === "Engrave" && it.className === "Raster" && String(sp.dither).toLowerCase() === "grayscale") await rasterGrayscaleScan(it, sp, g);
       else if (sp.op === "Engrave" && it.className === "Raster") await rasterDitherScan(it, sp, g);
-      else sp.op === "Engrave" ? rasterScan(it, sp, g) : vectorSeg(it, sp, g);
+      else sp.op === "Engrave" ? engraveSeg(it, sp, g) : vectorSeg(it, sp, g);
       if (g.length) groups.push(g);
       if (groups.length > 10000) break;
     }

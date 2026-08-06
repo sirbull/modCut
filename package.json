@@ -15,7 +15,7 @@
     "test:sidecar": "node scripts/maven.mjs test",
     "test:bridge": "npm run build:sidecar && node electron/test-bridge.mjs",
     "test:main": "node --test electron/test-window-lifecycle.mjs",
-    "test:renderer": "node --test renderer/test-lengthToMm.mjs renderer/test-layer-model.mjs renderer/test-raster-processing.mjs",
+    "test:renderer": "node --test renderer/test-lengthToMm.mjs renderer/test-layer-model.mjs renderer/test-raster-processing.mjs renderer/test-toolpath-policy.mjs",
     "check:contrast": "node design/check-contrast.mjs",
     "test": "npm run test:sidecar && npm run test:bridge && npm run test:main && npm run test:renderer && npm run check:contrast",
     "pack": "npm run bundle && electron-builder --dir && node scripts/verify-package.mjs",

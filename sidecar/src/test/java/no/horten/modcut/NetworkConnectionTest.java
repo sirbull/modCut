@@ -24,7 +24,7 @@ class NetworkConnectionTest {
   void verifiesGrblAndCompletesAJobOverLocalTcp() throws Exception {
     try (var laser = new FakeGrblServer(); var controller = new MachineController(json)) {
       var connect = json.readTree("""
-          {"dryRun":false,"machine":{"name":"LAN laser","driver":"Grbl","conn":{
+          {"dryRun":false,"machine":{"id":"lan","name":"LAN laser","driver":"Grbl","bedW":600,"bedH":400,"maxFeed":12000,"conn":{
             "type":"network","host":"127.0.0.1","port":%d,
             "connectTimeoutMs":1000,"responseTimeoutMs":2000}}}
           """.formatted(laser.port()));
@@ -36,7 +36,7 @@ class NetworkConnectionTest {
       assertTrue(connected.path("deviceIdentity").asText().startsWith("<Idle|"));
 
       var job = json.readTree("""
-          {"filename":"network-test.gcode","bedWidth":600,"bedHeight":400,"maxFeed":12000,"confirmed":true,
+          {"machineId":"lan","filename":"network-test.gcode","bedWidth":600,"bedHeight":400,"maxFeed":12000,"confirmed":true,
            "ops":[{"op":"Cut"}],"gcodeLines":["G21","G90","M5","G0 X1 Y1","M4 S100","G1 X2 Y2 F1200","M5"]}
           """);
       assertTrue(controller.handle("startJob", job).path("started").asBoolean());
@@ -63,7 +63,7 @@ class NetworkConnectionTest {
       responder.start();
 
       var connect = json.readTree("""
-          {"dryRun":false,"machine":{"name":"Wrong service","driver":"Grbl","conn":{
+          {"dryRun":false,"machine":{"id":"wrong","name":"Wrong service","driver":"Grbl","bedW":600,"bedH":400,"maxFeed":12000,"conn":{
             "type":"network","host":"127.0.0.1","port":%d,
             "connectTimeoutMs":500,"responseTimeoutMs":1000}}}
           """.formatted(service.getLocalPort()));

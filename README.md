@@ -16,6 +16,8 @@ The first complete, hardware-testable path is available:
   layers, raster settings, materials and undo/redo histories;
 - draw Illustrator-style Bézier paths with a live pen preview, editable handles,
   close-path feedback and continuation from either open endpoint;
+- delete individual anchors and scale selections with Shift aspect locking,
+  Alt/Option center scaling, or both modifiers together;
 - engrave grayscale images with variable GRBL laser power, or select Jarvis,
   Floyd-Steinberg, Stucki or Bayer dithering;
 - preview Photoshop-style gray-level posterization, midtone adjustment and
@@ -26,6 +28,8 @@ The first complete, hardware-testable path is available:
   and return to the main canvas by double-clicking outside;
 - generate and simulate GRBL G-code;
 - connect to GRBL over serial or TCP;
+- bind a live connection to its machine profile so another project's machine
+  limits can never be used for the connected laser;
 - verify that a configured TCP endpoint is a responsive GRBL controller before
   reporting it connected;
 - validate every job against an allow-list, bed dimensions, maximum feed and

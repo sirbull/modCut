@@ -22,6 +22,11 @@ final class MachineController implements AutoCloseable {
   });
   private final AtomicBoolean cancelRequested = new AtomicBoolean();
   private volatile GrblTransport transport;
+  private volatile String connectedMachineId = "";
+  private volatile String connectedMachineName = "";
+  private volatile double connectedBedWidth = 600;
+  private volatile double connectedBedHeight = 400;
+  private volatile double connectedMaxFeed = 12_000;
   private volatile boolean dryRun = true;
   private volatile boolean running;
   private volatile int linesSent;
@@ -82,6 +87,11 @@ final class MachineController implements AutoCloseable {
     if (running) throw new IllegalStateException("Kan ikke bytte tilkobling mens en jobb kjører.");
     closeTransport();
     JsonNode machine = params.path("machine");
+    String machineId = machine.path("id").asText().trim();
+    if (machineId.isBlank()) throw new IllegalArgumentException("Maskinprofilen mangler en stabil ID.");
+    double machineBedWidth = positiveMachineLimit(machine, "bedW", 600);
+    double machineBedHeight = positiveMachineLimit(machine, "bedH", 400);
+    double machineMaxFeed = positiveMachineLimit(machine, "maxFeed", 12_000);
     String driver = machine.path("driver").asText("Dummy");
     dryRun = params.path("dryRun").asBoolean(true) || driver.equalsIgnoreCase("Dummy");
     JsonNode conn = machine.path("conn");
@@ -101,6 +111,11 @@ final class MachineController implements AutoCloseable {
               boundedInt(conn, "responseTimeoutMs", 30_000, 1_000, 120_000))
           : GrblTransport.serial(conn.path("serial").asText(), conn.path("baud").asInt(115200));
     }
+    connectedMachineId = machineId;
+    connectedMachineName = machine.path("name").asText("maskin");
+    connectedBedWidth = machineBedWidth;
+    connectedBedHeight = machineBedHeight;
+    connectedMaxFeed = machineMaxFeed;
     lastError = "";
     lastResult = "connected";
     return status();
@@ -124,17 +139,17 @@ final class MachineController implements AutoCloseable {
   }
 
   private ObjectNode frameJob(JsonNode params) {
+    requireConnected(params);
     double minX = requiredFinite(params, "minX");
     double minY = requiredFinite(params, "minY");
     double maxX = requiredFinite(params, "maxX");
     double maxY = requiredFinite(params, "maxY");
-    double frameFeed = Math.min(maxFeed(params), 3_000);
+    double frameFeed = Math.min(connectedMaxFeed, 3_000);
     List<String> frame = List.of(
         "; modCut frame - laser off", "G21", "G90", "M5",
         point("G0", minX, minY), point("G1", maxX, minY) + " F" + Math.round(frameFeed), point("G1", maxX, maxY),
         point("G1", minX, maxY), point("G1", minX, minY), "M5", "G0 X0 Y0");
-    GcodeValidator.Report report = GcodeValidator.validate(frame, bedWidth(params), bedHeight(params), maxFeed(params));
-    requireConnected();
+    GcodeValidator.Report report = GcodeValidator.validate(frame, connectedBedWidth, connectedBedHeight, connectedMaxFeed);
     startAsync("frame", frame);
     ObjectNode out = reportNode(report);
     out.put("started", true);
@@ -143,12 +158,12 @@ final class MachineController implements AutoCloseable {
   }
 
   private ObjectNode startJob(JsonNode params) {
-    requireConnected();
+    requireConnected(params);
     if (!dryRun && !params.path("confirmed").asBoolean(false)) {
       throw new IllegalArgumentException("Ekte kjøring krever eksplisitt sikkerhetsbekreftelse.");
     }
     List<String> lines = lines(params);
-    GcodeValidator.Report report = GcodeValidator.validate(lines, bedWidth(params), bedHeight(params), maxFeed(params));
+    GcodeValidator.Report report = GcodeValidator.validate(lines, connectedBedWidth, connectedBedHeight, connectedMaxFeed);
     startAsync(params.path("filename").asText("job.gcode"), lines);
     ObjectNode out = reportNode(report);
     out.put("started", true);
@@ -212,6 +227,8 @@ final class MachineController implements AutoCloseable {
     out.put("target", transport == null ? "" : transport.description());
     out.put("connectionType", transport == null ? "" : transport.connectionType());
     out.put("deviceIdentity", transport == null ? "" : transport.identity());
+    out.put("connectedMachineId", transport == null ? "" : connectedMachineId);
+    out.put("connectedMachineName", transport == null ? "" : connectedMachineName);
     return out;
   }
 
@@ -228,8 +245,18 @@ final class MachineController implements AutoCloseable {
     return out;
   }
 
-  private void requireConnected() {
+  private void requireConnected(JsonNode params) {
     if (transport == null) throw new IllegalStateException("Koble til maskinen (eller dry-run) først.");
+    String requestedMachineId = params.path("machineId").asText().trim();
+    if (!connectedMachineId.equals(requestedMachineId)) {
+      throw new IllegalStateException("Aktivt prosjekt bruker en annen maskin enn tilkoblingen. Koble fra og koble til riktig maskinprofil.");
+    }
+  }
+
+  private static double positiveMachineLimit(JsonNode machine, String key, double fallback) {
+    double value = machine.path(key).asDouble(fallback);
+    if (!Double.isFinite(value) || value <= 0) throw new IllegalArgumentException("Maskinprofilen har ugyldig " + key + ".");
+    return value;
   }
 
   private static List<String> lines(JsonNode params) {
@@ -260,14 +287,25 @@ final class MachineController implements AutoCloseable {
   }
 
   private synchronized void closeTransport() throws IOException {
-    if (transport != null) transport.close();
+    GrblTransport active = transport;
     transport = null;
+    clearConnectedMachine();
+    if (active != null) active.close();
   }
 
   private synchronized void dropTransport(GrblTransport failed) {
     if (transport != failed) return;
-    try { transport.close(); } catch (Exception ignored) {}
     transport = null;
+    clearConnectedMachine();
+    try { failed.close(); } catch (Exception ignored) {}
+  }
+
+  private void clearConnectedMachine() {
+    connectedMachineId = "";
+    connectedMachineName = "";
+    connectedBedWidth = 600;
+    connectedBedHeight = 400;
+    connectedMaxFeed = 12_000;
   }
 
   public void close() {

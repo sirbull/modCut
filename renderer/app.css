@@ -14,6 +14,9 @@
 .mi { width: 17px; height: 17px; fill: currentColor; display: block; }
 .drawsize { position: fixed; z-index: 40; display: flex; gap: 6px; pointer-events: none; }
 .drawsize.hidden { display: none; }
+.app-tooltip { position: fixed; z-index: 200; max-width: min(320px, calc(100vw - 16px)); padding: 7px 10px;
+               border-radius: 7px; background: var(--text); color: var(--bg); box-shadow: var(--shadow-2);
+               font: 600 var(--fs-xs)/1.35 var(--font-sans); text-align: center; pointer-events: none; }
 .ds-box { background: var(--brand-deep); color: #fff; border-radius: 8px; padding: 3px 8px;
           font: 600 var(--fs-xs) var(--font-mono); box-shadow: var(--shadow-1); }
 .accent { height: 3px; background: var(--grad-hero); }

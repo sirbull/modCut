@@ -85,6 +85,60 @@ function showAbout() {
   overlay.querySelector("[data-close]")?.focus();
 }
 
+// Consistent delayed tooltips. Native title bubbles are removed on first hover
+// so every button uses the same one-second delay and visual treatment.
+function initTooltips() {
+  let timer = null, tooltip = null, target = null;
+  const textFor = (element) => {
+    if (!element.dataset.tooltip && element.hasAttribute("title")) {
+      element.dataset.tooltip = element.getAttribute("title");
+      element.removeAttribute("title");
+    }
+    return (element.dataset.tooltip || element.getAttribute("aria-label") || element.textContent || "").trim();
+  };
+  const hide = () => {
+    clearTimeout(timer); timer = null;
+    if (target) target.removeAttribute("aria-describedby");
+    tooltip?.remove(); tooltip = null; target = null;
+  };
+  const show = (element) => {
+    const label = textFor(element);
+    if (!label || target !== element) return;
+    tooltip = document.createElement("div");
+    tooltip.className = "app-tooltip"; tooltip.id = "appTooltip"; tooltip.role = "tooltip";
+    tooltip.textContent = label;
+    document.body.append(tooltip);
+    element.setAttribute("aria-describedby", tooltip.id);
+    const anchor = element.getBoundingClientRect(), box = tooltip.getBoundingClientRect();
+    const left = Math.max(8, Math.min(innerWidth - box.width - 8, anchor.left + (anchor.width - box.width) / 2));
+    const below = anchor.bottom + 9;
+    tooltip.style.left = `${left}px`;
+    tooltip.style.top = `${below + box.height <= innerHeight - 8 ? below : anchor.top - box.height - 9}px`;
+  };
+  const schedule = (element, delay = 1000) => {
+    hide(); target = element;
+    if (!textFor(element)) { target = null; return; }
+    timer = setTimeout(() => show(element), delay);
+  };
+  document.addEventListener("pointerover", (event) => {
+    const element = event.target.closest("button,[data-tooltip]");
+    if (!element || element.contains(event.relatedTarget)) return;
+    schedule(element);
+  });
+  document.addEventListener("pointerout", (event) => {
+    if (!target || target !== event.target.closest("button,[data-tooltip]") || target.contains(event.relatedTarget)) return;
+    hide();
+  });
+  document.addEventListener("focusin", (event) => {
+    const element = event.target.closest("button,[data-tooltip]");
+    if (element) schedule(element, 350);
+  });
+  document.addEventListener("focusout", hide);
+  document.addEventListener("pointerdown", hide, true);
+  document.addEventListener("keydown", hide, true);
+  window.addEventListener("scroll", hide, true);
+}
+
 const material = () => materials.find((m) => m.id === state.materialId) || materials[0];
 const machine = () => machines.find((m) => m.id === state.machineId) || machines[0];
 const defaultsFor = (op) => {
@@ -253,6 +307,7 @@ function restoreWorkspace(session) {
   bed.setPathOrder($("pathOrder").value);
   refreshMachines(state.machineId);
   refreshMaterialSelect();
+  renderMachineStatus();
   bed.setGrid(state.gridXmm, state.gridYmm);
   bed.importSession(session.bed || {});
   bed.setSelectionMode(selWhole ? "design" : "element");
@@ -630,9 +685,11 @@ function layerRow(l) {
 const activeLayers = () => state.layers.filter(isOutputLayer);
 const jobOps = () => activeLayers().map((l) => ({ op: l.op, color: l.color, power: l.power, speed: clampSpeedPct(l.speed), freq: l.freq, ...(l.op === "Engrave" ? { dpi: l.dpi, dither: l.dither, bottomUp: l.bottomUp } : {}) }));
 const machineLimits = () => ({ bedWidth: machine().bedW || 600, bedHeight: machine().bedH || 400, maxFeed: machine().maxFeed || 12000 });
+const connectionMatchesMachine = () => !machineStatus.connected || machineStatus.connectedMachineId === state.machineId;
 async function runJob(label) {
   if (!bed.getDesign()) return toast("Nothing imported yet.", "info");
   if (!machineStatus.connected) return toast("Connect to the machine or dry-run first.", "info");
+  if (!connectionMatchesMachine()) return toast(`This project targets ${machine().name}, but the app is connected to ${machineStatus.connectedMachineName || "another machine"}. Disconnect and reconnect before running.`, "err");
   const ops = jobOps();
   if (!ops.length) return toast("No active layers to run.", "info");
   const base = ($("filename").value.trim() || "job").replace(/\.[^.]+$/, "");
@@ -645,7 +702,7 @@ async function runJob(label) {
     );
     if (!confirmed) return;
     const r = await window.modcut.call("startJob", {
-      machine: machine().name, driver: machine().driver, material: state.materialId,
+      machineId: state.machineId, machine: machine().name, driver: machine().driver, material: state.materialId,
       mappingMode: state.mappingMode, filename, ops, gcodeLines: job.lines,
       confirmed, ...machineLimits(),
     });
@@ -658,9 +715,10 @@ async function frame() {
   const d = bed.getDesign();
   if (!d) return toast("Nothing to frame.", "info");
   if (!machineStatus.connected) return toast("Connect to the machine or dry-run first.", "info");
+  if (!connectionMatchesMachine()) return toast(`Reconnect to ${machine().name} before framing this project.`, "err");
   try {
     const r = await window.modcut.call("frameJob", {
-      minX: d.xMm, minY: d.yMm, maxX: d.xMm + d.wMm, maxY: d.yMm + d.hMm,
+      machineId: state.machineId, minX: d.xMm, minY: d.yMm, maxX: d.xMm + d.wMm, maxY: d.yMm + d.hMm,
       ...machineLimits(),
     });
     reportedResult = "running";
@@ -807,7 +865,9 @@ function renderMachineStatus() {
     $("connText").textContent = "Connecting and verifying GRBL …";
   } else if (machineStatus.connected) {
     const identity = machineStatus.deviceIdentity?.match(/^<([^|>]+)/)?.[1] || machineStatus.deviceIdentity;
-    $("connText").textContent = machineStatus.dryRun ? "Ready · dry run" : `Connected · ${machineStatus.target}${identity ? ` · ${identity}` : ""}`;
+    $("connText").textContent = !connectionMatchesMachine()
+      ? `Connected to ${machineStatus.connectedMachineName || "another machine"} · reconnect for ${machine().name}`
+      : machineStatus.dryRun ? "Ready · dry run" : `Connected · ${machineStatus.target}${identity ? ` · ${identity}` : ""}`;
   } else {
     $("connText").textContent = machineStatus.lastError ? "Connection error" : "Not connected";
   }
@@ -815,9 +875,9 @@ function renderMachineStatus() {
   $("connect").disabled = !!machineStatus.connecting;
   $("dryRun").disabled = machineStatus.connected;
   $("device").disabled = machineStatus.connected;
-  $("sendBtn").disabled = !machineStatus.connected || machineStatus.running;
+  $("sendBtn").disabled = !machineStatus.connected || machineStatus.running || !connectionMatchesMachine();
   $("sendBtn").textContent = (machineStatus.connected ? machineStatus.dryRun : $("dryRun").checked) ? "Run dry-run" : "Start job";
-  $("frame").disabled = !machineStatus.connected || machineStatus.running;
+  $("frame").disabled = !machineStatus.connected || machineStatus.running || !connectionMatchesMachine();
   $("stopBtn").classList.toggle("hidden", !machineStatus.running);
   $("jobState").textContent = machineStatus.running ? `${Math.round((machineStatus.progress || 0) * 100)}%` : "";
 }
@@ -1312,6 +1372,7 @@ window.modcut.onMenu((cmd) => ({
 
 // --- boot -------------------------------------------------------------------
 initCollapsibleSections();
+initTooltips();
 refreshMachines(state.machineId);
 bed.setGrid(state.gridXmm, state.gridYmm);
 initializeDocumentTabs();

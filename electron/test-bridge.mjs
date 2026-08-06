@@ -27,10 +27,10 @@ try {
   assert.deepEqual(gcode.preview, lines);
   console.log("PASS buildJob gcodeLines -> %d bytes", gcode.bytes);
 
-  const connected = await sidecar.call("connect", { dryRun: true, machine: { name: "CI", driver: "Grbl", conn: { type: "usb", serial: "none", baud: 115200 } } });
+  const connected = await sidecar.call("connect", { dryRun: true, machine: { id: "ci", name: "CI", driver: "Grbl", bedW: 600, bedH: 400, maxFeed: 12000, conn: { type: "usb", serial: "none", baud: 115200 } } });
   assert.equal(connected.connected, true);
   assert.equal(connected.dryRun, true);
-  const started = await sidecar.call("startJob", { filename: "ci.gcode", gcodeLines: lines, bedWidth: 600, bedHeight: 400, maxFeed: 12000 });
+  const started = await sidecar.call("startJob", { machineId: "ci", filename: "ci.gcode", gcodeLines: lines, bedWidth: 600, bedHeight: 400, maxFeed: 12000 });
   assert.equal(started.started, true);
   await new Promise((resolve) => setTimeout(resolve, 25));
   const status = await sidecar.call("status");

@@ -125,6 +125,44 @@ sidecar must reject the job with an out-of-bounds error.
 5. Hover the first anchor while drawing. The pointer must show the close-circle;
    clicking must close the path. Undo must restore the state before the completed
    drawing or continuation.
+6. With Pen, click an internal anchor on a completed path. With Edit points
+   (<code>A</code>), click any anchor. Only that anchor must be selected. Delete
+   and Backspace must remove the selected anchor rather than the whole path;
+   Shift-click must allow an open endpoint to be selected instead of continued.
+
+### Transform modifier acceptance test
+
+1. Select a raster image or vector element and drag a corner transform handle
+   while holding Shift. Its width/height ratio must remain unchanged.
+2. Undo, then hold Alt/Option before dragging a corner. The element's center
+   must remain fixed while both opposite sides scale.
+3. Undo and repeat with Shift+Alt/Option. Both the aspect ratio and center must
+   remain fixed.
+
+### Delayed tooltip acceptance test
+
+1. Hover a toolbar button for less than one second. No tooltip should appear.
+2. Continue hovering beyond one second. A styled tooltip must show the action
+   name and its keyboard shortcut when one exists.
+3. Move away, click, press a key or scroll. The tooltip must disappear.
+
+### Connected-machine binding acceptance test
+
+1. Configure two machine profiles. Select machine A in one project tab and
+   machine B in another.
+2. Connect tab A in dry-run, then switch to tab B. Frame and Start must be
+   disabled and status must say that reconnection to B is required.
+3. Attempt the same mismatch directly against the sidecar. It must reject the
+   job by machine ID, and job-supplied bed/feed values must not override the
+   limits captured from the connected profile.
+
+### Vector Engrave acceptance test
+
+1. Draw an open three-anchor Pen path with no fill and assign it to Engrave.
+   Dry-run must generate and complete a traced line-engraving job.
+2. Repeat with a closed stroke-only path; it must trace its outline.
+3. Give a closed path a visible fill. Engrave must use scan/hatch lines across
+   the filled region instead of treating it as a stroke-only path.
 
 ### macOS window lifecycle acceptance test
 
