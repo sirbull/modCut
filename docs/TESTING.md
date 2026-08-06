@@ -30,6 +30,21 @@ Run `npm start` and keep **Dry run** checked.
 Boundary test: move part of the design outside the bed and run again. The Java
 sidecar must reject the job with an out-of-bounds error.
 
+### Raster photo acceptance test
+
+1. Import a small color PNG or JPG. Its layer must read **Raster → Engrave**;
+   Cut and Score must not be available for that raster layer.
+2. Confirm that the preview contains multiple gray tones rather than only black
+   and white.
+3. Move Brightness, Contrast, Black point, White point and Gamma. The preview
+   must update without permanently changing the source image; Reset bitmap must
+   restore it.
+4. Leave Raster mode at **Grayscale**, choose 4 Gray levels and run in dry-run.
+   The generated job must complete and contain multiple laser-power steps, none
+   above the layer's configured Power percentage.
+5. Repeat with Jarvis or Floyd-Steinberg. Dither threshold should affect the
+   dot pattern, while the raster still remains an Engrave operation.
+
 ## 3. GRBL preparation
 
 Before enabling a real connection:
@@ -72,5 +87,6 @@ emergency stop; it does not replace it.
   orientation; modCut does not automatically issue `$H`.
 - Job streaming waits for GRBL `ok` after every line for conservative flow
   control rather than maximum throughput.
-- Raster workflows generate line-based G-code and need machine-specific speed
-  testing before production use.
+- Raster workflows generate line-based G-code. Grayscale mode uses variable
+  `M4 S` power; support and useful tone range must be tested on the actual GRBL
+  controller, laser and material before production use.

@@ -1,3 +1,10 @@
+import {
+  DEFAULT_RASTER_SETTINGS,
+  grayscaleImageData,
+  grayscaleRuns,
+  normalizeRasterSettings,
+} from "./raster-processing.mjs";
+
 // The bed, on Paper.js. Project coordinates are millimetres (1 unit = 1 mm).
 // - Space (or middle mouse) + drag = pan (hand cursor), tracked in absolute pixels
 //   so it never judders.
@@ -78,8 +85,6 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   // calls drawOverlay(), which touches `handles` (declared below). Running it here
   // would hit that `let` in its temporal dead zone and throw, killing the app.
 
-  const DEFAULT_RASTER_SETTINGS = { brightness: 0, contrast: 0, threshold: 128, gamma: 1, invert: false };
-
   // --- import (flattened into designLayer) --------------------------------
   const notifyChange = () => changeCb && changeCb();
   function clearDesign() {
@@ -129,16 +134,23 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     raster.data.originalDataUrl = dataUrl;
     raster.data.rasterSettings = { ...DEFAULT_RASTER_SETTINGS };
     raster.smoothing = false;
-    raster.onLoad = () => {
-      if (wMm && raster.width) raster.scale(wMm / raster.width);
-      raster.position = P(bedWmm / 2, bedHmm / 2);
-      applyRasterSettings(raster);
-      clearSel();
-      addSel(raster);
-      emitSel();
-      view.update();
-      notifyChange();
-    };
+    return new Promise((resolve, reject) => {
+      raster.onLoad = () => {
+        if (raster.width) raster.scale((wMm || raster.width * MM_PER_PX) / raster.width);
+        raster.position = P(bedWmm / 2, bedHmm / 2);
+        applyRasterSettings(raster);
+        clearSel();
+        addSel(raster);
+        emitSel();
+        view.update();
+        notifyChange();
+        resolve(getDesign());
+      };
+      raster.onError = () => {
+        raster.remove();
+        reject(new Error("The raster image could not be decoded."));
+      };
+    });
   }
   function getDesign() {
     if (!designLayer.children.length) return null;
@@ -149,10 +161,14 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   function getColors() {
     const map = new Map();
     for (const it of laserItems()) {
-      const hex = it.className === "Raster" ? "#000000" : (css(it.strokeColor) || css(it.fillColor) || "#000000");
-      map.set(hex, (map.get(hex) || 0) + 1);
+      const raster = it.className === "Raster";
+      const hex = raster ? "#000000" : (css(it.strokeColor) || css(it.fillColor) || "#000000");
+      const key = `${raster ? "raster" : "vector"}:${hex}`;
+      const entry = map.get(key) || { key, color: hex, count: 0, raster };
+      entry.count++;
+      map.set(key, entry);
     }
-    return [...map.entries()].map(([color, count]) => ({ color, count }));
+    return [...map.values()];
   }
   function makeShape(type, a, b) {
     designLayer.activate();
@@ -290,15 +306,6 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   }
 
   const clamp = (v, min, max) => Math.max(min, Math.min(max, Number(v)));
-  function normalizeRasterSettings(settings = {}) {
-    return {
-      brightness: clamp(settings.brightness ?? DEFAULT_RASTER_SETTINGS.brightness, -100, 100),
-      contrast: clamp(settings.contrast ?? DEFAULT_RASTER_SETTINGS.contrast, -100, 100),
-      threshold: clamp(settings.threshold ?? DEFAULT_RASTER_SETTINGS.threshold, 0, 255),
-      gamma: clamp(settings.gamma ?? DEFAULT_RASTER_SETTINGS.gamma, 0.2, 3),
-      invert: !!settings.invert,
-    };
-  }
   function applyRasterSettings(raster) {
     if (!raster || raster.className !== "Raster") return;
     const original = raster.data.originalDataUrl || (typeof raster.toDataURL === "function" ? raster.toDataURL() : null);
@@ -317,20 +324,9 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       ctx.drawImage(img, 0, 0);
       const image = ctx.getImageData(0, 0, c.width, c.height);
       const data = image.data;
-      const contrast = settings.contrast * 2.55;
-      const factor = (259 * (contrast + 255)) / (255 * (259 - contrast));
-      const brightness = settings.brightness * 2.55;
-      for (let i = 0; i < data.length; i += 4) {
-        const alpha = data[i + 3];
-        if (alpha < 8) {
-          data[i] = data[i + 1] = data[i + 2] = 255;
-          continue;
-        }
-        let gray = data[i] * 0.2126 + data[i + 1] * 0.7152 + data[i + 2] * 0.0722;
-        gray = factor * (gray - 128) + 128 + brightness;
-        gray = 255 * Math.pow(clamp(gray, 0, 255) / 255, 1 / settings.gamma);
-        const bw = gray >= settings.threshold ? 255 : 0;
-        const v = settings.invert ? 255 - bw : bw;
+      const { gray } = grayscaleImageData(image, settings);
+      for (let i = 0, pixel = 0; i < data.length; i += 4, pixel++) {
+        const v = Math.round(gray[pixel]);
         data[i] = data[i + 1] = data[i + 2] = v;
       }
       raster.setImageData(image);
@@ -651,11 +647,13 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   function geometryStats() {
     const map = new Map();
     for (const it of laserItems()) {
-      const hex = it.className === "Raster" ? "#000000" : (css(it.strokeColor) || css(it.fillColor) || "#000000");
-      const cur = map.get(hex) || { length: 0, area: 0 };
-      cur.length += it.className === "Raster" ? 0 : (it.length || 0);
-      cur.area += it.className === "Raster" ? Math.abs(it.bounds.area || 0) : Math.abs(it.area || 0);
-      map.set(hex, cur);
+      const raster = it.className === "Raster";
+      const hex = raster ? "#000000" : (css(it.strokeColor) || css(it.fillColor) || "#000000");
+      const key = `${raster ? "raster" : "vector"}:${hex}`;
+      const cur = map.get(key) || { length: 0, area: 0 };
+      cur.length += raster ? 0 : (it.length || 0);
+      cur.area += raster ? Math.abs(it.bounds.area || 0) : Math.abs(it.area || 0);
+      map.set(key, cur);
     }
     return map;
   }
@@ -791,9 +789,14 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   }
 
   // --- simulation (red dot tracing the real toolpath) ---------------------
-  function itemsForColor(color) {
+  function itemsForColor(color, rasterOnly) {
     const all = laserItems();
-    return color ? all.filter((it) => (it.className === "Raster" ? "#000000" : css(it.strokeColor) || css(it.fillColor)) === color) : all;
+    return all.filter((it) => {
+      const raster = it.className === "Raster";
+      if (rasterOnly === true && !raster) return false;
+      if (rasterOnly === false && raster) return false;
+      return !color || (raster ? "#000000" : css(it.strokeColor) || css(it.fillColor)) === color;
+    });
   }
   function vectorSeg(it, sp, out) {
     if (it.className === "CompoundPath") { for (const c of it.children) vectorSeg(c, sp, out); return; }
@@ -864,7 +867,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   // Collect segments grouped per source shape (keeps a shape's paths together).
   function collectSegs(specs) {
     const groups = [];
-    for (const sp of specs) for (const it of itemsForColor(sp.color)) {
+    for (const sp of specs) for (const it of itemsForColor(sp.color, sp.raster)) {
       const g = [];
       sp.op === "Engrave" ? rasterScan(it, sp, g) : vectorSeg(it, sp, g);
       if (g.length) groups.push(g);
@@ -941,27 +944,11 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       img.src = src;
     });
   }
-  function grayscaleForRaster(image, settings) {
-    const gray = new Float32Array(image.width * image.height);
-    const data = image.data;
-    const s = normalizeRasterSettings(settings);
-    const contrast = s.contrast * 2.55;
-    const factor = (259 * (contrast + 255)) / (255 * (259 - contrast));
-    const brightness = s.brightness * 2.55;
-    for (let i = 0, p = 0; i < data.length; i += 4, p++) {
-      if (data[i + 3] < 8) { gray[p] = 255; continue; }
-      let g = data[i] * 0.2126 + data[i + 1] * 0.7152 + data[i + 2] * 0.0722;
-      g = factor * (g - 128) + 128 + brightness;
-      gray[p] = 255 * Math.pow(clamp(g, 0, 255) / 255, 1 / s.gamma);
-    }
-    return { gray, settings: s };
-  }
   function ditherMask(gray, width, height, settings, dither) {
     const mask = new Uint8Array(width * height);
     const threshold = settings.threshold;
-    const invert = settings.invert;
     const type = String(dither || "Jarvis").toLowerCase();
-    const mark = (idx, black) => (mask[idx] = invert ? (black ? 0 : 1) : (black ? 1 : 0));
+    const mark = (idx, black) => (mask[idx] = black ? 1 : 0);
     if (type.includes("bayer")) {
       const bayer = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
       for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
@@ -995,10 +982,11 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     if (!image) return rasterImageScan(it, sp, out);
     const b = it.bounds;
     if (!b.width || !b.height) return;
-    const { gray, settings } = grayscaleForRaster(image, it.data?.rasterSettings);
+    const { gray, settings } = grayscaleImageData(image, it.data?.rasterSettings);
     const mask = ditherMask(gray, image.width, image.height, settings, sp.dither);
     let interval = 25.4 / Math.max(1, sp.dpi || 300);
     if (b.height / interval > 1200) interval = b.height / 1200;
+    const columns = Math.max(1, Math.min(4000, Math.ceil(b.width / interval)));
     const rows = [];
     for (let y = b.bottom; y >= b.top; y -= interval) rows.push(y);
     if (!sp.bottomUp) rows.reverse();
@@ -1007,28 +995,65 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       const py = Math.max(0, Math.min(image.height - 1, Math.floor(((y - b.top) / b.height) * image.height)));
       let start = null;
       const runs = [];
-      for (let px = 0; px < image.width; px++) {
+      for (let column = 0; column < columns; column++) {
+        const px = Math.max(0, Math.min(image.width - 1, Math.floor(((column + 0.5) / columns) * image.width)));
         const dark = mask[py * image.width + px] === 1;
-        if (dark && start == null) start = px;
-        if ((!dark || px === image.width - 1) && start != null) {
-          runs.push([start, dark && px === image.width - 1 ? px + 1 : px]);
+        if (dark && start == null) start = column;
+        if ((!dark || column === columns - 1) && start != null) {
+          runs.push([start, dark && column === columns - 1 ? column + 1 : column]);
           start = null;
         }
       }
-      for (const [aPx, cPx] of runs) {
-        let a = P(b.left + (aPx / image.width) * b.width, y);
-        let c = P(b.left + (cPx / image.width) * b.width, y);
+      const ordered = flip ? runs.slice().reverse() : runs;
+      for (const [aPx, cPx] of ordered) {
+        let a = P(b.left + (aPx / columns) * b.width, y);
+        let c = P(b.left + (cPx / columns) * b.width, y);
         if (flip) { const t = a; a = c; c = t; }
-        out.push({ pts: [a, c], speed: sp.speed, power: sp.power, freq: sp.freq, dpi: sp.dpi, dither: sp.dither, op: "Engrave" });
+        out.push({ pts: [a, c], speed: sp.speed, power: sp.power, freq: sp.freq, dpi: sp.dpi, dither: sp.dither, op: "Engrave", raster: true });
+      }
+      flip = !flip;
+    }
+  }
+  async function rasterGrayscaleScan(it, sp, out) {
+    const image = await loadRasterImageData(it);
+    if (!image) return rasterImageScan(it, sp, out);
+    const b = it.bounds;
+    if (!b.width || !b.height) return;
+    const { gray, settings } = grayscaleImageData(image, it.data?.rasterSettings);
+    let interval = 25.4 / Math.max(1, sp.dpi || 300);
+    if (b.height / interval > 1200) interval = b.height / 1200;
+    const columns = Math.max(1, Math.min(4000, Math.ceil(b.width / interval)));
+    const rows = [];
+    for (let y = b.bottom; y >= b.top; y -= interval) rows.push(y);
+    if (!sp.bottomUp) rows.reverse();
+    let flip = false;
+    for (const y of rows) {
+      const py = Math.max(0, Math.min(image.height - 1, Math.floor(((y - b.top) / b.height) * image.height)));
+      const samples = new Float32Array(columns);
+      for (let column = 0; column < columns; column++) {
+        const px = Math.max(0, Math.min(image.width - 1, Math.floor(((column + 0.5) / columns) * image.width)));
+        samples[column] = gray[py * image.width + px];
+      }
+      const runs = grayscaleRuns(samples, settings.grayLevels, sp.power);
+      const ordered = flip ? runs.slice().reverse() : runs;
+      for (const run of ordered) {
+        let a = P(b.left + (run.start / columns) * b.width, y);
+        let c = P(b.left + (run.end / columns) * b.width, y);
+        if (flip) { const t = a; a = c; c = t; }
+        out.push({
+          pts: [a, c], speed: sp.speed, power: run.power, freq: sp.freq,
+          dpi: sp.dpi, dither: "Grayscale", op: "Engrave", raster: true,
+        });
       }
       flip = !flip;
     }
   }
   async function collectJobSegs(specs) {
     const groups = [];
-    for (const sp of specs) for (const it of itemsForColor(sp.color)) {
+    for (const sp of specs) for (const it of itemsForColor(sp.color, sp.raster)) {
       const g = [];
-      if (sp.op === "Engrave" && it.className === "Raster") await rasterDitherScan(it, sp, g);
+      if (sp.op === "Engrave" && it.className === "Raster" && String(sp.dither).toLowerCase() === "grayscale") await rasterGrayscaleScan(it, sp, g);
+      else if (sp.op === "Engrave" && it.className === "Raster") await rasterDitherScan(it, sp, g);
       else sp.op === "Engrave" ? rasterScan(it, sp, g) : vectorSeg(it, sp, g);
       if (g.length) groups.push(g);
       if (groups.length > 10000) break;
@@ -1037,6 +1062,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   }
   async function orderJobSegs(specs) {
     const groups = await collectJobSegs(specs);
+    if (groups.some((group) => group.some((segment) => segment.raster))) return groups.flat();
     if (pathOrder === "color") return groups.flat();
     if (pathOrder === "nearby") {
       const rest = groups.slice(), out = [];

@@ -5,7 +5,7 @@ import { openModal } from "./ui.js";
 
 const $ = (id) => document.getElementById(id);
 const OPS = ["Cut", "Engrave", "Score"];
-const DITHERS = ["Jarvis", "Floyd-Steinberg", "Stucki", "Bayer"]; // Jarvis default
+const DITHERS = ["Grayscale", "Jarvis", "Floyd-Steinberg", "Stucki", "Bayer"];
 const clampSpeedPct = (v) => Math.max(1, Math.min(100, Number(v) || 1));
 
 // --- persisted stores (seeded from presets on first run, then fully editable) --
@@ -265,8 +265,10 @@ async function doImport() {
       const from = f.sourceExt ? ` (converted from .${f.sourceExt})` : "";
       toast(`Imported ${f.name}${from}: ${colors.length} color(s), ${dispNum(d.wMm)} × ${dispNum(d.hMm)} ${state.units}`, "ok");
     } else if (f.dataUrl) {
-      bed.loadImage(f.dataUrl, null);
-      toast("Image imported (raster engrave).", "ok");
+      await bed.loadImage(f.dataUrl, null);
+      state.mappingMode = "color";
+      [...$("mapmode").children].forEach((c) => c.classList.toggle("on", c.dataset.mode === "color"));
+      toast("Image imported as grayscale raster engraving.", "ok");
     } else {
       toast(`.${f.ext} import is coming in a later version (M3).`, "info");
       return;
@@ -295,17 +297,40 @@ async function newDocument() {
 }
 
 // --- layers -----------------------------------------------------------------
-const newLayer = (color, op) => ({ color, op, output: true, dpi: 300, dither: "Jarvis", bottomUp: true, ...defaultsFor(op) });
+const newLayer = (color, op, raster = false, key = null) => ({
+  key, color, raster, op: raster ? "Engrave" : op, output: true,
+  dpi: 300, dither: raster ? "Grayscale" : "Jarvis", bottomUp: true,
+  ...defaultsFor(raster ? "Engrave" : op),
+});
 // Re-read colors from the bed (import + drawn shapes) and reconcile the layer list,
 // preserving settings for colors that still exist.
-function syncColorsAndLayers() { state.colors = bed.getColors(); syncLayers(); }
+function syncColorsAndLayers() {
+  state.colors = bed.getColors();
+  if (state.colors.some((color) => color.raster) && ["cut", "score"].includes(state.mappingMode)) {
+    state.mappingMode = "color";
+    [...$("mapmode").children].forEach((c) => c.classList.toggle("on", c.dataset.mode === "color"));
+  }
+  syncLayers();
+}
 function syncLayers() {
   if (state.mappingMode === "color") {
-    const prev = new Map(state.layers.map((l) => [l.color, l]));
-    state.layers = state.colors.map((c) => prev.get(c.color) || newLayer(c.color, "Cut"));
+    const prev = new Map(state.layers.filter((l) => l.key).map((l) => [l.key, l]));
+    const legacy = new Map(state.layers.filter((l) => !l.key).map((l) => [l.color, l]));
+    state.layers = state.colors.map((c) => {
+      const existing = prev.get(c.key) || legacy.get(c.color);
+      if (!existing) return newLayer(c.color, c.raster ? "Engrave" : "Cut", c.raster, c.key);
+      const wasRaster = existing.raster === true;
+      const layer = { ...existing, key: c.key, color: c.color, raster: c.raster };
+      if (c.raster) {
+        layer.op = "Engrave";
+        if (!wasRaster) layer.dither = "Grayscale";
+      }
+      return layer;
+    });
   } else {
     const op = state.mappingMode[0].toUpperCase() + state.mappingMode.slice(1);
-    state.layers = state.colors.length ? [state.layers[0] && state.layers[0].color === null ? state.layers[0] : newLayer(null, op)] : [];
+    const hasRaster = state.colors.some((color) => color.raster);
+    state.layers = state.colors.length ? [state.layers[0] && state.layers[0].color === null ? state.layers[0] : newLayer(null, op, hasRaster && op === "Engrave")] : [];
   }
   renderLayers();
 }
@@ -319,13 +344,16 @@ function renderLayers() {
 function layerRow(l) {
   l.speed = clampSpeedPct(l.speed);
   const row = document.createElement("div");
-  row.className = "clayer";
+  row.className = `clayer${l.raster ? " clayer--raster" : ""}`;
   const byColor = state.mappingMode === "color";
+  if (l.raster) l.op = "Engrave";
   const engrave = l.op === "Engrave";
   row.innerHTML = `
     <div class="clayer__top">
       <span class="clayer__sw" style="background:${l.color || "linear-gradient(135deg,#888,#ccc)"}"></span>
-      ${byColor
+      ${byColor && l.raster
+        ? `<strong class="clayer__op">Raster → Engrave</strong>`
+        : byColor
         ? `<select class="select clayer__op">${OPS.map((o) => `<option ${o === l.op ? "selected" : ""}>${o}</option>`).join("")}</select>`
         : `<strong class="clayer__op">All shapes → ${l.op}</strong>`}
       <button class="toggle" aria-checked="${l.output}" title="Output"></button>
@@ -338,7 +366,7 @@ function layerRow(l) {
     ${engrave ? `
     <div class="clayer__grid two">
       <div><label>DPI (1–1000)</label><input class="input" type="number" min="1" max="1000" value="${l.dpi}" data-k="dpi"></div>
-      <div><label>Dithering</label><select class="select" data-k="dither">${DITHERS.map((d) => `<option ${d === l.dither ? "selected" : ""}>${d}</option>`).join("")}</select></div>
+      <div><label>Raster mode</label><select class="select" data-k="dither">${DITHERS.map((d) => `<option ${d === l.dither ? "selected" : ""}>${d}</option>`).join("")}</select></div>
     </div>
     <label class="clayer__chk"><input type="checkbox" ${l.bottomUp ? "checked" : ""} data-k="bottomUp"> Engrave bottom → top (less soot)</label>` : ""}`;
 
@@ -356,7 +384,7 @@ function layerRow(l) {
 
 // --- run + estimate ---------------------------------------------------------
 const activeLayers = () => state.layers.filter((l) => l.output);
-const jobOps = () => activeLayers().map((l) => ({ op: l.op, color: l.color, power: l.power, speed: clampSpeedPct(l.speed), freq: l.freq, ...(l.op === "Engrave" ? { dpi: l.dpi, dither: l.dither, bottomUp: l.bottomUp } : {}) }));
+const jobOps = () => activeLayers().map((l) => ({ op: l.op, color: l.color, raster: state.mappingMode === "color" ? l.raster : undefined, power: l.power, speed: clampSpeedPct(l.speed), freq: l.freq, ...(l.op === "Engrave" ? { dpi: l.dpi, dither: l.dither, bottomUp: l.bottomUp } : {}) }));
 const machineLimits = () => ({ bedWidth: machine().bedW || 600, bedHeight: machine().bedH || 400, maxFeed: machine().maxFeed || 12000 });
 async function runJob(label) {
   if (!bed.getDesign()) return toast("Nothing imported yet.", "info");
@@ -404,7 +432,7 @@ function estimate() {
   for (const v of stats.values()) { total.length += v.length; total.area += v.area; }
   let sec = 3;
   for (const l of activeLayers()) {
-    const s = byColor ? (stats.get(l.color) || { length: 0, area: 0 }) : total;
+    const s = byColor ? (stats.get(l.key || `${l.raster ? "raster" : "vector"}:${l.color}`) || { length: 0, area: 0 }) : total;
     const speed = Math.max(1, l.speed);
     sec += l.op === "Engrave" ? (s.area / (25.4 / Math.max(1, l.dpi))) / speed : s.length / speed;
   }
@@ -414,7 +442,7 @@ function estimate() {
 
 // --- simulate ---------------------------------------------------------------
 let simCtl = null;
-const simSpecs = () => activeLayers().map((l) => ({ color: state.mappingMode === "color" ? l.color : null, op: l.op, speed: l.speed, dpi: l.dpi, bottomUp: l.bottomUp }));
+const simSpecs = () => activeLayers().map((l) => ({ color: state.mappingMode === "color" ? l.color : null, raster: state.mappingMode === "color" ? l.raster : undefined, op: l.op, speed: l.speed, power: l.power, dpi: l.dpi, dither: l.dither, bottomUp: l.bottomUp }));
 function startSimulate() {
   if (!bed.getDesign()) return toast("Import a design first.", "info");
   const specs = simSpecs();
@@ -842,8 +870,11 @@ $("propWidth").addEventListener("change", applyProps);
 const bitmapFields = {
   brightness: ["bmpBrightness", "bmpBrightnessNum"],
   contrast: ["bmpContrast", "bmpContrastNum"],
+  blackPoint: ["bmpBlackPoint", "bmpBlackPointNum"],
+  whitePoint: ["bmpWhitePoint", "bmpWhitePointNum"],
   threshold: ["bmpThreshold", "bmpThresholdNum"],
   gamma: ["bmpGamma", "bmpGammaNum"],
+  grayLevels: ["bmpGrayLevels", "bmpGrayLevelsNum"],
 };
 function setBitmapPair(key, value) {
   const [rangeId, numId] = bitmapFields[key];
@@ -859,7 +890,7 @@ function refreshBitmapControls() {
 }
 function applyBitmapValue(key, value) {
   const next = bed.updateRasterSettings({ [key]: Number(value) });
-  if (next) setBitmapPair(key, next[key]);
+  if (next) for (const field of Object.keys(bitmapFields)) setBitmapPair(field, next[field]);
 }
 for (const [key, ids] of Object.entries(bitmapFields)) {
   for (const id of ids) {
@@ -941,6 +972,10 @@ $("units").addEventListener("change", (e) => { setUnits(e.target.value); markDir
 
 $("mapmode").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-mode]"); if (!b) return;
+  if (state.colors.some((color) => color.raster) && ["cut", "score"].includes(b.dataset.mode)) {
+    toast("Raster images can only be engraved. Use Map by color to keep vector cutting separate.", "info");
+    return;
+  }
   state.mappingMode = b.dataset.mode;
   [...e.currentTarget.children].forEach((c) => c.classList.toggle("on", c === b));
   syncLayers();

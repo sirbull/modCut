@@ -8,8 +8,10 @@ and provides a guarded GRBL execution path.
 
 The first complete, hardware-testable path is available:
 
-- import SVG, DXF and raster artwork, arrange it on the laser bed and map colors
-  to Cut / Engrave / Score operations;
+- import SVG and DXF artwork, and import PNG/JPG raster artwork automatically as
+  engraving with non-destructive grayscale photo controls;
+- engrave grayscale images with variable GRBL laser power, or select Jarvis,
+  Floyd-Steinberg, Stucki or Bayer dithering;
 - generate and simulate GRBL G-code;
 - connect to GRBL over serial or TCP;
 - verify that a configured TCP endpoint is a responsive GRBL controller before

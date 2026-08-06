@@ -84,7 +84,7 @@
         <tr><td>SVG / AI / PDF</td><td>Vektortegninger fra Illustrator, Inkscape, Affinity</td></tr>
         <tr><td>DXF</td><td>CAD-tegninger (Fusion, AutoCAD)</td></tr>
         <tr><td>G-code</td><td>Ferdig maskinkode — kjøres direkte</td></tr>
-        <tr><td>PNG / JPG</td><td>Bilder for rastergravering</td></tr>
+        <tr><td>PNG / JPG</td><td>Bilder og fotografier — legges automatisk inn som rastergravering med gråtoner</td></tr>
       </table>
     </section>
 
@@ -112,6 +112,19 @@
       <div class="callout">
         <strong>Cut vs. Score:</strong> begge følger streken (vektor). Forskjellen er bare effekt og fart —
         Score bruker en svak stråle så du får en tynn markeringslinje i stedet for et gjennomkutt.
+      </div>
+      <h3>Gravere fotografier</h3>
+      <p>Når du importerer PNG eller JPG, oppretter modCut automatisk et låst <strong>Raster → Engrave</strong>-lag.
+         Fargebildet vises som ekte gråtoner; det terskles ikke til rent svart/hvitt.</p>
+      <ul>
+        <li>Juster <strong>Brightness</strong>, <strong>Contrast</strong>, svartpunkt, hvitpunkt og gamma mens bildet er markert.</li>
+        <li>Velg antall <strong>Gray levels</strong>. I Grayscale-modus blir mørke toner gravert med høyere lasereffekt og lyse toner med lavere effekt.</li>
+        <li>Velg Jarvis, Floyd-Steinberg, Stucki eller Bayer under <strong>Raster mode</strong> hvis materialet gir bedre resultat med svart/hvitt-punkter.</li>
+        <li><strong>Dither threshold</strong> brukes bare av punktmønstrene; det påvirker ikke Grayscale-modus.</li>
+      </ul>
+      <div class="callout">
+        <strong>Test først:</strong> Fotoresultatet avhenger av materiale, fokus, DPI, fart og maksimal effekt.
+        Kjør en liten gråtoneprøve på samme materiale før et stort bilde.
       </div>
     </section>
 
