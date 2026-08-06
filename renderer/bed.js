@@ -3,7 +3,9 @@ import {
   grayscaleImageData,
   grayscaleRuns,
   normalizeRasterSettings,
+  tintGray,
 } from "./raster-processing.mjs";
+import { itemLayerColor, setItemLayerColor } from "./layer-model.mjs";
 
 // The bed, on Paper.js. Project coordinates are millimetres (1 unit = 1 mm).
 // - Space (or middle mouse) + drag = pan (hand cursor), tracked in absolute pixels
@@ -131,6 +133,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     designLayer.activate();
     const raster = new paper.Raster({ source: dataUrl, position: P(bedWmm / 2, bedHmm / 2) });
     raster.data.modcutRaster = true;
+    raster.data.modcutColor = "#000000";
     raster.data.originalDataUrl = dataUrl;
     raster.data.rasterSettings = { ...DEFAULT_RASTER_SETTINGS };
     raster.smoothing = false;
@@ -162,11 +165,11 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     const map = new Map();
     for (const it of laserItems()) {
       const raster = it.className === "Raster";
-      const hex = raster ? "#000000" : (css(it.strokeColor) || css(it.fillColor) || "#000000");
-      const key = `${raster ? "raster" : "vector"}:${hex}`;
-      const entry = map.get(key) || { key, color: hex, count: 0, raster };
+      const hex = logicalColor(it);
+      const entry = map.get(hex) || { key: hex, color: hex, count: 0, raster: false };
       entry.count++;
-      map.set(key, entry);
+      entry.raster ||= raster;
+      map.set(hex, entry);
     }
     return [...map.values()];
   }
@@ -192,17 +195,23 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   function setDrawStyle(color, width) { if (color) drawColor = color; if (width != null) drawWidth = width; }
   function applyStyle(color, width) {
     const roots = selected.size ? [...selected] : (nodeEditItem ? [nodeEditItem] : []);
-    const targets = roots.flatMap((it) => vectorTargets(it));
+    const targets = roots.flatMap((it) => laserTargets(it));
     if (!targets.length) return;
     pushHistory();
-    for (const it of targets) { if (color) it.strokeColor = color; if (width != null) it.strokeWidth = width; }
+    for (const it of targets) {
+      if (color) {
+        setItemLayerColor(it, color);
+        if (it.className === "Raster") applyRasterSettings(it);
+      }
+      if (width != null && it.className !== "Raster") it.strokeWidth = width;
+    }
     if (color) drawColor = color; if (width != null) drawWidth = width;
     drawOverlay(); view.update(); notifyChange();
   }
   function getStyle() {
     const root = [...selected][0] || nodeEditItem;
-    const it = firstLaserIn(root, isVectorItem) || root;
-    if (it) return { color: css(it.strokeColor) || css(it.fillColor) || "#000000", width: it.strokeWidth || drawWidth };
+    const it = firstLaserIn(root) || root;
+    if (it) return { color: logicalColor(it), width: it.strokeWidth || drawWidth };
     return { color: drawColor, width: drawWidth };
   }
 
@@ -227,6 +236,12 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     if (!it) return out;
     if (isVectorItem(it)) out.push(it);
     else if (it.children) for (const child of it.children) vectorTargets(child, out);
+    return out;
+  }
+  function laserTargets(it, out = []) {
+    if (!it) return out;
+    if (isLaserItem(it)) out.push(it);
+    else if (it.children) for (const child of it.children) laserTargets(child, out);
     return out;
   }
   function toSelectable(it) {
@@ -254,7 +269,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   // handle and looks like clutter).
   function clearSel() { selected.clear(); }
   function addSel(it) { selected.add(it); }
-  function emitSel() { selectionCb && selectionCb(selected.size); drawOverlay(); }
+  function emitSel() { selectionCb && selectionCb(selected.size); reprocessRasters(); drawOverlay(); }
   let selectionMode = "design"; // "design" = whole design, "element" = single shapes
   function setSelectionMode(m) { selectionMode = m; clearSel(); emitSel(); }
   // Whole-design selection = EVERY item on the layer (paths, text, rasters), so a
@@ -325,9 +340,12 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       const image = ctx.getImageData(0, 0, c.width, c.height);
       const data = image.data;
       const { gray } = grayscaleImageData(image, settings);
+      const tinted = !isSelectedLaser(raster);
+      const color = logicalColor(raster);
       for (let i = 0, pixel = 0; i < data.length; i += 4, pixel++) {
         const v = Math.round(gray[pixel]);
-        data[i] = data[i + 1] = data[i + 2] = v;
+        if (tinted) [data[i], data[i + 1], data[i + 2]] = tintGray(v, color);
+        else data[i] = data[i + 1] = data[i + 2] = v;
       }
       raster.setImageData(image);
       raster.smoothing = false;
@@ -346,6 +364,12 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       if (raster) return raster;
     }
     return null;
+  }
+  function isSelectedLaser(item) {
+    return [...selected].some((root) => firstLaserIn(root, (candidate) => candidate === item));
+  }
+  function selectionHasRaster() {
+    return [...selected].some((root) => firstLaserIn(root, (candidate) => candidate.className === "Raster"));
   }
   let rasterEditOpen = false;
   function beginRasterEdit() { if (selectedRaster() && !rasterEditOpen) { pushHistory(); rasterEditOpen = true; } }
@@ -640,7 +664,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       addSel(it);
       emitSel();
     }
-    contextCb && contextCb({ x: e.clientX, y: e.clientY, hasSelection: selected.size > 0, canUngroup: canUngroup() });
+    contextCb && contextCb({ x: e.clientX, y: e.clientY, hasSelection: selected.size > 0, hasRaster: selectionHasRaster(), canUngroup: canUngroup() });
   });
 
   // --- geometry stats for time estimation ---------------------------------
@@ -648,16 +672,16 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     const map = new Map();
     for (const it of laserItems()) {
       const raster = it.className === "Raster";
-      const hex = raster ? "#000000" : (css(it.strokeColor) || css(it.fillColor) || "#000000");
-      const key = `${raster ? "raster" : "vector"}:${hex}`;
-      const cur = map.get(key) || { length: 0, area: 0 };
+      const hex = logicalColor(it);
+      const cur = map.get(hex) || { length: 0, area: 0 };
       cur.length += raster ? 0 : (it.length || 0);
       cur.area += raster ? Math.abs(it.bounds.area || 0) : Math.abs(it.area || 0);
-      map.set(key, cur);
+      map.set(hex, cur);
     }
     return map;
   }
   const css = (c) => (c ? c.toCSS(true) : null);
+  const logicalColor = (it) => itemLayerColor(it, css);
 
   // --- position (whole design) --------------------------------------------
   const items = () => designLayer.children.slice();
@@ -789,14 +813,9 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   }
 
   // --- simulation (red dot tracing the real toolpath) ---------------------
-  function itemsForColor(color, rasterOnly) {
+  function itemsForColor(color) {
     const all = laserItems();
-    return all.filter((it) => {
-      const raster = it.className === "Raster";
-      if (rasterOnly === true && !raster) return false;
-      if (rasterOnly === false && raster) return false;
-      return !color || (raster ? "#000000" : css(it.strokeColor) || css(it.fillColor)) === color;
-    });
+    return color ? all.filter((it) => logicalColor(it) === String(color).toLowerCase()) : all;
   }
   function vectorSeg(it, sp, out) {
     if (it.className === "CompoundPath") { for (const c of it.children) vectorSeg(c, sp, out); return; }
@@ -867,7 +886,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   // Collect segments grouped per source shape (keeps a shape's paths together).
   function collectSegs(specs) {
     const groups = [];
-    for (const sp of specs) for (const it of itemsForColor(sp.color, sp.raster)) {
+    for (const sp of specs) for (const it of itemsForColor(sp.color)) {
       const g = [];
       sp.op === "Engrave" ? rasterScan(it, sp, g) : vectorSeg(it, sp, g);
       if (g.length) groups.push(g);
@@ -1050,7 +1069,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   }
   async function collectJobSegs(specs) {
     const groups = [];
-    for (const sp of specs) for (const it of itemsForColor(sp.color, sp.raster)) {
+    for (const sp of specs) for (const it of itemsForColor(sp.color)) {
       const g = [];
       if (sp.op === "Engrave" && it.className === "Raster" && String(sp.dither).toLowerCase() === "grayscale") await rasterGrayscaleScan(it, sp, g);
       else if (sp.op === "Engrave" && it.className === "Raster") await rasterDitherScan(it, sp, g);
@@ -1172,6 +1191,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     canUngroup, selectAll, deleteSelection,
     setGrid, setTool, setPathOrder, getColors, addShape,
     setDrawStyle, applyStyle, getStyle,
+    getSelectionInfo: () => ({ hasRaster: selectionHasRaster(), count: selected.size }),
     getRasterSettings, beginRasterEdit, updateRasterSettings, endRasterEdit, resetRasterSettings,
     onDrawSize: (cb) => (drawSizeCb = cb),
     onDrawClick: (cb) => (drawClickCb = cb),

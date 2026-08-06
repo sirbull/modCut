@@ -32,8 +32,8 @@ sidecar must reject the job with an out-of-bounds error.
 
 ### Raster photo acceptance test
 
-1. Import a small color PNG or JPG. Its layer must read **Raster → Engrave**;
-   Cut and Score must not be available for that raster layer.
+1. Import a small color PNG or JPG. Its layer operation must default to
+   **Engrave**; Cut and Score must not be available for that raster layer.
 2. Confirm that the preview contains multiple gray tones rather than only black
    and white.
 3. Move Brightness, Contrast, Black point, White point and Gamma. The preview
@@ -44,6 +44,23 @@ sidecar must reject the job with an out-of-bounds error.
    above the layer's configured Power percentage.
 5. Repeat with Jarvis or Floyd-Steinberg. Dither threshold should affect the
    dot pattern, while the raster still remains an Engrave operation.
+
+### Layer color and Ignore acceptance test
+
+1. Import an SVG containing at least one stroked object and one filled object.
+   Switch to element selection, select an object and change its color under
+   Properties. Click outside and select it again: the chosen color must remain.
+2. Select several elements, right-click and choose an existing color under
+   **Move selection to layer**. Their existing strokes and fills must use that
+   color, and the source/target rows under Cuts / Layers must update.
+3. Set one layer to **Ignore**, connect in dry-run and run the job. Geometry on
+   that layer must remain visible in the design but must not appear in the
+   simulated or generated laser job.
+4. Move a raster to a blue Engrave layer. When unselected, the preview should
+   use blue tones; when selected, it should return to neutral grayscale. The
+   generated engraving must still use the original adjusted grayscale values.
+5. Confirm that Cut and Score targets are unavailable for a selected raster,
+   while Engrave and Ignore remain available.
 
 ## 3. GRBL preparation
 

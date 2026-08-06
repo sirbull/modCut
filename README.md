@@ -12,6 +12,8 @@ The first complete, hardware-testable path is available:
   engraving with non-destructive grayscale photo controls;
 - engrave grayscale images with variable GRBL laser power, or select Jarvis,
   Floyd-Steinberg, Stucki or Bayer dithering;
+- move one or many selected elements between color layers from the properties
+  panel or context menu, and retain reference geometry with Ignore;
 - generate and simulate GRBL G-code;
 - connect to GRBL over serial or TCP;
 - verify that a configured TCP endpoint is a responsive GRBL controller before

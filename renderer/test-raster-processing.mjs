@@ -7,6 +7,7 @@ import {
   grayscaleImageData,
   grayscaleRuns,
   normalizeRasterSettings,
+  tintGray,
 } from "./raster-processing.mjs";
 
 test("color raster pixels remain continuous grayscale instead of binary", () => {
@@ -60,4 +61,10 @@ test("raster settings are clamped and keep valid tone points", () => {
     grayLevels: 32,
     invert: false,
   });
+});
+
+test("layer tint preserves white and maps black to the selected layer color", () => {
+  assert.deepEqual(tintGray(0, "#0000ff"), [0, 0, 255]);
+  assert.deepEqual(tintGray(255, "#0000ff"), [255, 255, 255]);
+  assert.deepEqual(tintGray(128, "#ff0000"), [255, 128, 128]);
 });

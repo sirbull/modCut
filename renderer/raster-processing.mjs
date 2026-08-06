@@ -82,3 +82,11 @@ export function grayscaleRuns(samples, levels = 16, maxPower = 100) {
   }
   return runs;
 }
+
+export function tintGray(gray, hexColor = "#000000") {
+  const match = /^#([0-9a-f]{6})$/i.exec(String(hexColor));
+  const hex = match ? match[1] : "000000";
+  const amount = clamp(gray, 0, 255) / 255;
+  const base = [0, 2, 4].map((offset) => Number.parseInt(hex.slice(offset, offset + 2), 16));
+  return base.map((channel) => Math.round(channel + (255 - channel) * amount));
+}

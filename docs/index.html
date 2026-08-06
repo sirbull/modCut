@@ -108,13 +108,18 @@
           <td>Følger banen som et kutt, men med svak stråle — «risser» en linje uten å kutte gjennom.</td>
           <td>Middels fart, lav effekt</td>
         </tr>
+        <tr>
+          <td><span class="op-tag" style="background:var(--surface-2);color:var(--text-muted)">Ignore</span></td>
+          <td>Beholder elementene synlige i designet, men sender dem aldri til laseren.</td>
+          <td>Ingen maskinbevegelse</td>
+        </tr>
       </table>
       <div class="callout">
         <strong>Cut vs. Score:</strong> begge følger streken (vektor). Forskjellen er bare effekt og fart —
         Score bruker en svak stråle så du får en tynn markeringslinje i stedet for et gjennomkutt.
       </div>
       <h3>Gravere fotografier</h3>
-      <p>Når du importerer PNG eller JPG, oppretter modCut automatisk et låst <strong>Raster → Engrave</strong>-lag.
+      <p>Når du importerer PNG eller JPG, oppretter modCut automatisk et <strong>Raster → Engrave</strong>-lag.
          Fargebildet vises som ekte gråtoner; det terskles ikke til rent svart/hvitt.</p>
       <ul>
         <li>Juster <strong>Brightness</strong>, <strong>Contrast</strong>, svartpunkt, hvitpunkt og gamma mens bildet er markert.</li>
@@ -132,12 +137,20 @@
       <h2>Farger → operasjoner</h2>
       <p>Hver distinkte farge i tegningen dukker opp som en rad i <em>Cuts / Layers</em>. På hver rad velger du:</p>
       <ul>
-        <li><strong>Operasjon</strong> — Cut, Engrave, Score eller Mark.</li>
+        <li><strong>Operasjon</strong> — Cut, Engrave, Score eller Ignore.</li>
         <li><strong>Effekt (power)</strong> — hvor sterk strålen er, i prosent.</li>
         <li><strong>Fart (speed)</strong> — hvor fort hodet beveger seg.</li>
         <li><strong>Frekvens</strong> — pulsfrekvens (viktig på CO2 for rene kanter i tynne materialer).</li>
         <li><strong>Offset</strong> — fokus-/høydejustering for laget.</li>
       </ul>
+      <h3>Flytte elementer mellom lag</h3>
+      <p>Marker ett eller flere elementer, høyreklikk og velg et fargelag under <strong>Move selection to layer</strong>.
+         Du kan også bruke fargevalget under Properties. Stroke og eksisterende fill endres sammen, og fargen lagres på selve elementet.</p>
+      <p>Rasterbilder vises i lagets fargetoner når de ikke er markert, men originalbildet og gråtoneverdiene som brukes til gravering endres ikke.
+         Når rasteret markeres, vises det i nøytral gråtone slik at bildejusteringene er enkle å vurdere.</p>
+      <div class="callout">
+        <strong>Raster-sikkerhet:</strong> Raster kan bare flyttes til Engrave- eller Ignore-lag. Flytt vektorelementer til en egen farge hvis de skal kuttes eller scores.
+      </div>
       <p>Rekkefølgen på radene er <strong>kuttrekkefølgen</strong>. Tips: graver først, kutt sist — da faller ikke delen ut før graveringen er gjort.</p>
     </section>
 

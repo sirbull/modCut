@@ -1,10 +1,11 @@
 import { createBed } from "./bed.js";
 import { prepareSVG } from "./svgimport.js";
 import { dxfToSvg } from "./dxfimport.js";
+import { OPERATIONS, canAssignRasterToOperation, isOutputLayer, operationsForLayer } from "./layer-model.mjs";
 import { openModal } from "./ui.js";
 
 const $ = (id) => document.getElementById(id);
-const OPS = ["Cut", "Engrave", "Score"];
+const OPS = OPERATIONS;
 const DITHERS = ["Grayscale", "Jarvis", "Floyd-Steinberg", "Stucki", "Bayer"];
 const clampSpeedPct = (v) => Math.max(1, Math.min(100, Number(v) || 1));
 
@@ -315,16 +316,13 @@ function syncColorsAndLayers() {
 function syncLayers() {
   if (state.mappingMode === "color") {
     const prev = new Map(state.layers.filter((l) => l.key).map((l) => [l.key, l]));
-    const legacy = new Map(state.layers.filter((l) => !l.key).map((l) => [l.color, l]));
     state.layers = state.colors.map((c) => {
-      const existing = prev.get(c.key) || legacy.get(c.color);
+      const candidates = state.layers.filter((layer) => layer.color?.toLowerCase() === c.color.toLowerCase());
+      const existing = prev.get(c.key) || candidates.find((layer) => c.raster && layer.raster) || candidates[0];
       if (!existing) return newLayer(c.color, c.raster ? "Engrave" : "Cut", c.raster, c.key);
-      const wasRaster = existing.raster === true;
       const layer = { ...existing, key: c.key, color: c.color, raster: c.raster };
-      if (c.raster) {
-        layer.op = "Engrave";
-        if (!wasRaster) layer.dither = "Grayscale";
-      }
+      if (c.raster && !canAssignRasterToOperation(layer.op)) layer.op = "Engrave";
+      if (c.raster && !layer.dither) layer.dither = "Grayscale";
       return layer;
     });
   } else {
@@ -346,18 +344,19 @@ function layerRow(l) {
   const row = document.createElement("div");
   row.className = `clayer${l.raster ? " clayer--raster" : ""}`;
   const byColor = state.mappingMode === "color";
-  if (l.raster) l.op = "Engrave";
+  if (l.raster && !canAssignRasterToOperation(l.op)) l.op = "Engrave";
   const engrave = l.op === "Engrave";
+  const ignored = l.op === "Ignore";
+  const layerOps = operationsForLayer(l.raster);
   row.innerHTML = `
     <div class="clayer__top">
       <span class="clayer__sw" style="background:${l.color || "linear-gradient(135deg,#888,#ccc)"}"></span>
-      ${byColor && l.raster
-        ? `<strong class="clayer__op">Raster → Engrave</strong>`
-        : byColor
-        ? `<select class="select clayer__op">${OPS.map((o) => `<option ${o === l.op ? "selected" : ""}>${o}</option>`).join("")}</select>`
+      ${byColor
+        ? `<select class="select clayer__op">${layerOps.map((o) => `<option ${o === l.op ? "selected" : ""}>${o}</option>`).join("")}</select>`
         : `<strong class="clayer__op">All shapes → ${l.op}</strong>`}
-      <button class="toggle" aria-checked="${l.output}" title="Output"></button>
+      ${ignored ? `<span class="clayer__ignored">Ignored</span>` : `<button class="toggle" aria-checked="${l.output}" title="Output"></button>`}
     </div>
+    ${ignored ? `<p class="clayer__note">This layer is kept in the design but is not sent to the laser.</p>` : `
     <div class="clayer__grid">
       <div><label>Power %</label><input class="input" type="number" min="0" max="100" value="${l.power}" data-k="power"></div>
       <div><label>Speed %</label><input class="input" type="number" min="1" max="100" value="${l.speed}" data-k="speed"></div>
@@ -368,11 +367,15 @@ function layerRow(l) {
       <div><label>DPI (1–1000)</label><input class="input" type="number" min="1" max="1000" value="${l.dpi}" data-k="dpi"></div>
       <div><label>Raster mode</label><select class="select" data-k="dither">${DITHERS.map((d) => `<option ${d === l.dither ? "selected" : ""}>${d}</option>`).join("")}</select></div>
     </div>
-    <label class="clayer__chk"><input type="checkbox" ${l.bottomUp ? "checked" : ""} data-k="bottomUp"> Engrave bottom → top (less soot)</label>` : ""}`;
+    <label class="clayer__chk"><input type="checkbox" ${l.bottomUp ? "checked" : ""} data-k="bottomUp"> Engrave bottom → top (less soot)</label>` : ""}`}`;
 
   const op = row.querySelector("select.clayer__op");
-  if (op) op.addEventListener("change", () => { l.op = op.value; Object.assign(l, defaultsFor(l.op)); renderLayers(); markDirty(); });
-  row.querySelector(".toggle").addEventListener("click", (e) => { l.output = !l.output; e.currentTarget.setAttribute("aria-checked", l.output); markDirty(); });
+  if (op) op.addEventListener("change", () => {
+    l.op = op.value;
+    if (l.op !== "Ignore") Object.assign(l, defaultsFor(l.op));
+    renderLayers(); markDirty();
+  });
+  row.querySelector(".toggle")?.addEventListener("click", (e) => { l.output = !l.output; e.currentTarget.setAttribute("aria-checked", l.output); markDirty(); });
   row.querySelectorAll("[data-k]").forEach((el) => {
     const k = el.dataset.k;
     if (el.type === "checkbox") el.addEventListener("change", () => { l[k] = el.checked; markDirty(); });
@@ -383,8 +386,8 @@ function layerRow(l) {
 }
 
 // --- run + estimate ---------------------------------------------------------
-const activeLayers = () => state.layers.filter((l) => l.output);
-const jobOps = () => activeLayers().map((l) => ({ op: l.op, color: l.color, raster: state.mappingMode === "color" ? l.raster : undefined, power: l.power, speed: clampSpeedPct(l.speed), freq: l.freq, ...(l.op === "Engrave" ? { dpi: l.dpi, dither: l.dither, bottomUp: l.bottomUp } : {}) }));
+const activeLayers = () => state.layers.filter(isOutputLayer);
+const jobOps = () => activeLayers().map((l) => ({ op: l.op, color: l.color, power: l.power, speed: clampSpeedPct(l.speed), freq: l.freq, ...(l.op === "Engrave" ? { dpi: l.dpi, dither: l.dither, bottomUp: l.bottomUp } : {}) }));
 const machineLimits = () => ({ bedWidth: machine().bedW || 600, bedHeight: machine().bedH || 400, maxFeed: machine().maxFeed || 12000 });
 async function runJob(label) {
   if (!bed.getDesign()) return toast("Nothing imported yet.", "info");
@@ -432,7 +435,7 @@ function estimate() {
   for (const v of stats.values()) { total.length += v.length; total.area += v.area; }
   let sec = 3;
   for (const l of activeLayers()) {
-    const s = byColor ? (stats.get(l.key || `${l.raster ? "raster" : "vector"}:${l.color}`) || { length: 0, area: 0 }) : total;
+    const s = byColor ? (stats.get(l.color) || { length: 0, area: 0 }) : total;
     const speed = Math.max(1, l.speed);
     sec += l.op === "Engrave" ? (s.area / (25.4 / Math.max(1, l.dpi))) / speed : s.length / speed;
   }
@@ -442,7 +445,7 @@ function estimate() {
 
 // --- simulate ---------------------------------------------------------------
 let simCtl = null;
-const simSpecs = () => activeLayers().map((l) => ({ color: state.mappingMode === "color" ? l.color : null, raster: state.mappingMode === "color" ? l.raster : undefined, op: l.op, speed: l.speed, power: l.power, dpi: l.dpi, dither: l.dither, bottomUp: l.bottomUp }));
+const simSpecs = () => activeLayers().map((l) => ({ color: state.mappingMode === "color" ? l.color : null, op: l.op, speed: l.speed, power: l.power, dpi: l.dpi, dither: l.dither, bottomUp: l.bottomUp }));
 function startSimulate() {
   if (!bed.getDesign()) return toast("Import a design first.", "info");
   const specs = simSpecs();
@@ -852,6 +855,12 @@ function refreshProps() {
 }
 function applyProps() {
   const c = $("propColor").value, w = +$("propWidth").value || 0.5;
+  const targetLayer = state.layers.find((layer) => layer.color?.toLowerCase() === c.toLowerCase());
+  if (bed.getSelectionInfo().hasRaster && targetLayer && !canAssignRasterToOperation(targetLayer.op)) {
+    toast("A raster image can only be moved to an Engrave or Ignore layer.", "info");
+    refreshProps();
+    return;
+  }
   bed.setDrawStyle(c, w);
   bed.applyStyle(c, w);
   updateSwatchSel(c);
@@ -913,9 +922,25 @@ function closeContextMenu() { if (ctxMenu) { ctxMenu.remove(); ctxMenu = null; }
 function openContextMenu(info) {
   closeContextMenu();
   if (!info.hasSelection) return;
+  const layerChoices = [...new Map(state.layers.filter((layer) => layer.color).map((layer) => [layer.color.toLowerCase(), layer])).values()];
+  const layerColors = new Set(layerChoices.map((layer) => layer.color.toLowerCase()));
+  const paletteChoices = ["#ff0000", "#00aa00", "#0000ff", "#000000"].filter((color) => !layerColors.has(color));
+  const colorButton = (color, label, op = "New layer") => {
+    const safeColor = /^#[0-9a-f]{6}$/i.test(color) ? color.toLowerCase() : "#000000";
+    const blocked = info.hasRaster && op !== "New layer" && !canAssignRasterToOperation(op);
+    return `<button class="ctx-menu__color" data-color="${safeColor}" ${blocked ? "disabled" : ""} title="${blocked ? "Raster images can only use Engrave or Ignore layers" : `Move selection to ${label}`}">
+      <span class="ctx-menu__sw" style="background:${safeColor}"></span><span>${label}</span><small>${op}</small>
+    </button>`;
+  };
   ctxMenu = document.createElement("div");
   ctxMenu.className = "ctx-menu";
   ctxMenu.innerHTML = `
+    <div class="ctx-menu__label">Move selection to layer</div>
+    <div class="ctx-menu__colors">
+      ${layerChoices.map((layer) => colorButton(layer.color, layer.color.toUpperCase(), layer.op)).join("")}
+      ${paletteChoices.map((color) => colorButton(color, color.toUpperCase())).join("")}
+    </div>
+    <div class="ctx-menu__sep"></div>
     <button data-act="group">Group <kbd>⌘G</kbd></button>
     <button data-act="ungroup" ${info.canUngroup ? "" : "disabled"}>Ungroup <kbd>⇧⌘G</kbd></button>
     <div class="ctx-menu__label">Arrange</div>
@@ -923,9 +948,20 @@ function openContextMenu(info) {
     <button data-act="move-down">Move down <kbd>⌥⌘N</kbd></button>
     <button data-act="move-to-top">Move to top <kbd>⇧⌘U</kbd></button>
     <button data-act="move-to-bottom">Move to bottom <kbd>⌥⇧⌘N</kbd></button>`;
-  ctxMenu.style.left = Math.min(info.x, window.innerWidth - 196) + "px";
-  ctxMenu.style.top = Math.min(info.y, window.innerHeight - 218) + "px";
+  ctxMenu.style.left = Math.min(info.x, window.innerWidth - 252) + "px";
+  ctxMenu.style.top = Math.max(8, Math.min(info.y, window.innerHeight - 420)) + "px";
   ctxMenu.addEventListener("click", (e) => {
+    const colorChoice = e.target.closest("button[data-color]");
+    if (colorChoice && !colorChoice.disabled) {
+      const color = colorChoice.dataset.color;
+      bed.setDrawStyle(color, +$("propWidth").value || 0.5);
+      bed.applyStyle(color, null);
+      syncColorsAndLayers();
+      refreshProps();
+      markDirty();
+      closeContextMenu();
+      return;
+    }
     const b = e.target.closest("button[data-act]");
     if (!b || b.disabled) return;
     editAction(b.dataset.act);

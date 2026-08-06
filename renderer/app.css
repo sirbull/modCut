@@ -64,6 +64,10 @@
 .clayer .input, .clayer .select { padding: 6px 10px; font-size: var(--fs-sm); }
 .clayer__chk { display: flex; align-items: center; gap: var(--sp-2); margin-top: var(--sp-2); font-size: var(--fs-sm); color: var(--text); }
 .clayer__chk input { width: 16px; height: 16px; }
+.clayer__ignored { padding: 3px 7px; border-radius: 999px; background: var(--surface-2); color: var(--text-muted);
+                    font: 700 var(--fs-xs) var(--font-sans); text-transform: uppercase; }
+.clayer__note { margin: var(--sp-2) 0 0; font-size: var(--fs-xs); color: var(--text-muted); }
+.clayer:has(.clayer__ignored) { border-style: dashed; background: var(--surface); }
 
 /* --- run buttons -------------------------------------------------------- */
 .run { display: flex; gap: var(--sp-2); }
@@ -128,7 +132,7 @@
 
 /* --- canvas context menu ------------------------------------------------ */
 .ctx-menu { position: fixed; z-index: 80; min-width: 184px; padding: 6px; background: var(--bg);
-            border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-2); }
+            max-height: calc(100vh - 16px); overflow: auto; border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-2); }
 .ctx-menu__label { padding: 7px 10px 4px; font-size: var(--fs-xs); text-transform: uppercase;
                    letter-spacing: .04em; color: var(--text-muted); }
 .ctx-menu button { width: 100%; display: flex; align-items: center; justify-content: space-between;
@@ -137,6 +141,11 @@
 .ctx-menu button:hover { background: var(--surface-2); }
 .ctx-menu button:disabled { color: var(--text-muted); opacity: .55; cursor: default; }
 .ctx-menu button:disabled:hover { background: transparent; }
+.ctx-menu__colors { display: grid; gap: 2px; }
+.ctx-menu button.ctx-menu__color { display: grid; grid-template-columns: 18px 1fr auto; gap: 8px; align-items: center; text-align: left; }
+.ctx-menu__color small { color: var(--text-muted); font-size: 10px; }
+.ctx-menu__sw { width: 16px; height: 16px; border-radius: 4px; border: 1px solid rgba(0,0,0,.2); }
+.ctx-menu__sep { height: 1px; background: var(--border); margin: 6px 4px; }
 .ctx-menu kbd { font: 600 var(--fs-xs) var(--font-mono); color: var(--text-muted); }
 
 /* --- statusbar ---------------------------------------------------------- */
