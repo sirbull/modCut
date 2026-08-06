@@ -977,12 +977,25 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     }
     return best;
   }
+  function nodeFillAt(point) {
+    const hit = paper.project.hitTest(point, {
+      segments: false, handles: false, stroke: false, fill: true,
+      match: (result) => !!toEditableVector(result.item) && (!activeGroup || isInsideGroup(result.item)),
+    });
+    return hit ? { type: "fill", item: hit.item, point: hit.point } : null;
+  }
+  function vectorSegments(item) {
+    const vector = toEditableVector(item);
+    if (!vector) return { vector: null, segments: [] };
+    const paths = vector.className === "CompoundPath" ? vector.children : [vector];
+    return { vector, segments: paths.flatMap((path) => path.segments) };
+  }
   function nodeHitAt(point) {
     return paper.project.hitTest(point, {
       segments: true, handles: true, stroke: false, fill: false,
       tolerance: 10 / view.zoom,
       match: (result) => result.item && result.item.layer === designLayer && (!activeGroup || isInsideGroup(result.item)),
-    }) || nodeStrokeAt(point);
+    }) || nodeStrokeAt(point) || nodeFillAt(point);
   }
   function onNodeMove(e) {
     const hover = nodeStrokeAt(e.point);
@@ -993,15 +1006,8 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   function onNodeDown(e) {
     const hr = nodeHitAt(e.point);
     const curveSegments = curveSegmentsAt(hr);
-    if (curveSegments) {
+    if (curveSegments?.every((segment) => selectedSegments.has(segment))) {
       clearSel(); emitSel();
-      if (!curveSegments.every((segment) => selectedSegments.has(segment))) {
-        if (!e.event.shiftKey) clearNodeSelection();
-        for (const segment of curveSegments) {
-          segment.selected = true;
-          selectedSegments.add(segment);
-        }
-      }
       nodeStrokeHover = null;
       nodeEditItem = hr.item;
       nodeHit = { kind: "curve", segments: curveSegments };
@@ -1016,13 +1022,27 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
           : hr.type === "handle-in" ? { seg: hr.segment, kind: "in" }
             : hr.type === "handle-out" ? { seg: hr.segment, kind: "out" } : null;
       preDrag = snapshot(); dragChanged = false;
+    } else if (hr?.type === "stroke" || hr?.type === "fill") {
+      const target = vectorSegments(hr.item);
+      if (target.segments.length) {
+        clearSel(); emitSel();
+        if (!e.event.shiftKey) clearNodeSelection();
+        for (const segment of target.segments) {
+          segment.selected = true;
+          selectedSegments.add(segment);
+        }
+        nodeStrokeHover = null;
+        nodeEditItem = target.vector;
+        nodeHit = { kind: "shape", segments: [...selectedSegments] };
+        preDrag = snapshot(); dragChanged = false;
+      }
     } else clearNodeSelection();
     drawOverlay();
   }
   function onNodeDrag(e) {
     if (!nodeHit) return;
     dragChanged = true;
-    if (nodeHit.kind === "curve") {
+    if (nodeHit.kind === "curve" || nodeHit.kind === "shape") {
       for (const segment of nodeHit.segments) segment.point = segment.point.add(e.delta);
     } else {
       const s = nodeHit.seg;

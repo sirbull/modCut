@@ -18,8 +18,8 @@ The first complete, hardware-testable path is available:
   close-path feedback, continuation from either open endpoint and point insertion
   directly on existing path segments;
 - select individual anchors with high-visibility markers, drag a segment between
-  two selected adjacent anchors, use a forgiving highlighted path hit area, and
-  remove anchors with Delete/Backspace;
+  two selected adjacent anchors, select every anchor by clicking the shape, use
+  a forgiving highlighted path hit area, and remove anchors with Delete/Backspace;
 - scale selections with Shift aspect locking, Alt/Option center scaling, or both
   modifiers together;
 - engrave grayscale images with variable GRBL laser power, or select Jarvis,

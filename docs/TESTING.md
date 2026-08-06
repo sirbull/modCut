@@ -134,8 +134,10 @@ sidecar must reject the job with an out-of-bounds error.
    drag the path segment between them. Both anchors and the segment between them
    must move together while the remaining anchors stay in place.
    Edit Points must also recognize the segment within a 14-screen-pixel hit area
-   and show a translucent green hover highlight. Clicking a segment directly
-   selects both adjacent anchors; click-dragging it moves the segment immediately.
+   and show a translucent green hover highlight. With no selected segment, click
+   either the path or the interior of a filled shape: every anchor in that shape
+   must be selected. When two adjacent anchors are selected, click-dragging the
+   segment between them must move only that segment.
 8. Switch to Select (<code>V</code>), select an element, then press and drag on
    the selected element. It must begin moving without requiring a second click
    or first clearing the selection.
