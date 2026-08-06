@@ -109,6 +109,22 @@ sidecar must reject the job with an out-of-bounds error.
 5. Close the final tab. The window should close while modCut remains available
    on macOS; **Cmd+N** must reopen a new window with one blank tab.
 
+### Pen tool acceptance test
+
+1. Select **Pen** and place the first anchor. Moving the pointer without clicking
+   must show a live preview from the last anchor to the pointer.
+2. Click-drag an anchor to make a curve. Anchor points, direction lines and
+   Bézier handles must remain visible while the path is active.
+3. Finish the open path with Enter, Escape or double-click. Move Pen over either
+   endpoint. The endpoint must be highlighted and a small continuation slash
+   must appear beside the pointer.
+4. Click the indicated endpoint, move the pointer and place another anchor. The
+   existing path must be extended instead of creating a second path. This must
+   work from either end of the path.
+5. Hover the first anchor while drawing. The pointer must show the close-circle;
+   clicking must close the path. Undo must restore the state before the completed
+   drawing or continuation.
+
 ### macOS window lifecycle acceptance test
 
 1. On macOS, close the last modCut window without quitting the application. The

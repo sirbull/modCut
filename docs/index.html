@@ -40,6 +40,7 @@
     <nav class="nav">
       <a href="#start">Kom i gang</a>
       <a href="#import">Importere en fil</a>
+      <a href="#drawing">Tegne med Pen</a>
       <a href="#modes">Cut, Engrave &amp; Score</a>
       <a href="#colors">Farger → operasjoner</a>
       <a href="#library">Material-bibliotek</a>
@@ -98,6 +99,19 @@
         <tr><td>G-code</td><td>Ferdig maskinkode — kjøres direkte</td></tr>
         <tr><td>PNG / JPG</td><td>Bilder og fotografier — legges automatisk inn som rastergravering med gråtoner</td></tr>
       </table>
+    </section>
+
+    <section id="drawing">
+      <h2>Tegne med Pen</h2>
+      <p>Velg <strong>Pen</strong> eller trykk <code>P</code>. Etter første anker viser modCut en levende
+         forhåndsvisning frem til musepekeren. Klikk for rette segmenter, eller klikk og dra for å lage
+         en kurve. Synlige retninglinjer og håndtak kan dras for å finjustere kurven.</p>
+      <ul>
+        <li>Avslutt en åpen bane med Enter, Escape eller dobbeltklikk.</li>
+        <li>Hold Pen over et åpent endepunkt. En ring på punktet og en liten skråstrek ved pekeren betyr at et klikk fortsetter den eksisterende banen.</li>
+        <li>Dette virker fra begge ender av banen, også etter at den har vært avmarkert.</li>
+        <li>Hold pekeren over første anker mens du tegner. En liten sirkel ved pekeren betyr at et klikk lukker banen.</li>
+      </ul>
     </section>
 
     <section id="modes">

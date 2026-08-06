@@ -224,6 +224,7 @@ function captureWorkspace() {
 function captureActiveTab() {
   const tab = activeTab();
   if (!tab || restoringTab) return;
+  bed.finishDrawing();
   tab.session = captureWorkspace();
   tab.title = tab.session.title;
   tab.dirty = tab.session.dirty;
@@ -302,6 +303,7 @@ function documentPayload() {
 }
 
 async function saveDocument(saveAs = false) {
+  bed.finishDrawing();
   const base = ($("filename").value.trim() || "untitled").replace(/\.[^.]+$/, "") + ".modcut";
   const json = JSON.stringify(documentPayload(), null, 2);
   try {
@@ -348,6 +350,7 @@ function saveWorkDialog() {
 }
 
 async function guardWorkBeforeContinue() {
+  bed.finishDrawing();
   if (!dirty) return true;
   const choice = await saveWorkDialog();
   if (choice === "save") return saveDocument(false);
@@ -455,6 +458,7 @@ async function doImport() {
 }
 
 async function addFiles() {
+  bed.finishDrawing();
   let files;
   try {
     files = await window.modcut.openImport({ multiple: true, allowDocuments: false });

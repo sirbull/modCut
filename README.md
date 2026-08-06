@@ -14,6 +14,8 @@ The first complete, hardware-testable path is available:
   artwork files non-destructively with Add;
 - keep multiple independent projects open as tabs, including separate designs,
   layers, raster settings, materials and undo/redo histories;
+- draw Illustrator-style Bézier paths with a live pen preview, editable handles,
+  close-path feedback and continuation from either open endpoint;
 - engrave grayscale images with variable GRBL laser power, or select Jarvis,
   Floyd-Steinberg, Stucki or Bayer dithering;
 - preview Photoshop-style gray-level posterization, midtone adjustment and

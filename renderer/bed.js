@@ -35,6 +35,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
 
   const bedLayer = new paper.Layer();
   const designLayer = new paper.Layer();
+  const penLayer = new paper.Layer(); // live pen preview, anchors and bezier handles
   const uiLayer = new paper.Layer(); // transform box + handles (guides)
   const simLayer = new paper.Layer(); // simulation ghost/trail/dot (kept off uiLayer so overlay redraws don't wipe it)
   const selected = new Set();
@@ -46,7 +47,9 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   let pathOrder = "optimize";                 // "optimize" | "nearby" | "layer"
   let drawSizeCb = null, drawClickCb = null, toolResetCb = null;
   let drawColor = "#000000", drawWidth = 0.5; // style for new shapes
-  let penPath = null, nodeHit = null, nodeEditItem = null;
+  let penPath = null, penHoverPoint = null, penEndpointHover = null, penCloseHover = false;
+  let penDragSegment = null, penDragHandleKind = null, penChanged = false, penResumeReversed = false;
+  let nodeHit = null, nodeEditItem = null;
 
   // --- bed + grid ---------------------------------------------------------
   function drawBed() {
@@ -87,7 +90,12 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   function setTool(t) {
     if (nodeEditItem) { nodeEditItem.fullySelected = false; nodeEditItem = null; }
     if (penPath) finishPen();
-    currentTool = t; clearSel(); emitSel(); setCursor(cursorForTool(t)); view.update();
+    currentTool = t;
+    penHoverPoint = null; penEndpointHover = null; penCloseHover = false;
+    clearSel(); emitSel(); drawPenOverlay();
+    if (t === "pen") setPenCursor("new");
+    else setCursor(cursorForTool(t));
+    view.update();
   }
   function setPathOrder(o) { pathOrder = o; }
   window.addEventListener("resize", sizeCanvas);
@@ -98,6 +106,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   // --- import (flattened into designLayer) --------------------------------
   const notifyChange = () => changeCb && changeCb();
   function clearDesign() {
+    abandonPenInteraction();
     resetGroupFocus();
     designLayer.removeChildren();
     selected.clear();
@@ -396,8 +405,8 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     drawOverlay(); view.update(); notifyChange();
   }
   function pushHistory() { undoStack.push(snapshot()); if (undoStack.length > 60) undoStack.shift(); redoStack.length = 0; }
-  function undo() { if (!undoStack.length) return; redoStack.push(snapshot()); restoreFrom(undoStack.pop()); }
-  function redo() { if (!redoStack.length) return; undoStack.push(snapshot()); restoreFrom(redoStack.pop()); }
+  function undo() { finishDrawing(); if (!undoStack.length) return; redoStack.push(snapshot()); restoreFrom(undoStack.pop()); }
+  function redo() { finishDrawing(); if (!redoStack.length) return; undoStack.push(snapshot()); restoreFrom(redoStack.pop()); }
   function resetHistory() { undoStack.length = 0; redoStack.length = 0; }
   function exportDesign() { return snapshot(); }
   function exportSession() {
@@ -414,6 +423,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     };
   }
   function importDesign(s) {
+    abandonPenInteraction();
     resetGroupFocus();
     designLayer.removeChildren();
     selected.clear();
@@ -554,7 +564,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     uiLayer.removeChildren();
     handles = [];
     const b = selectionBounds();
-    if (!b) { view.update(); return; }
+    if (!b) { drawPenOverlay(); view.update(); return; }
     uiLayer.activate();
     const sw = 1 / view.zoom, hs = 4 / view.zoom;
     const box = new paper.Path.Rectangle(b);
@@ -574,6 +584,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     rh.fillColor = "#006B5C"; rh.guide = true;
     handles.push({ type: "rotate", pos: rp });
     designLayer.activate();
+    drawPenOverlay();
     view.update();
   }
   const handleAt = (pt) => handles.find((h) => pt.getDistance(h.pos) <= 7 / view.zoom) || null;
@@ -585,11 +596,27 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   const SELECT_CURSOR = arrowCursor("#111111", "#ffffff");
   const NODE_CURSOR = arrowCursor("#ffffff", "#111111");
   const DRAW_CURSOR = "crosshair";
+  const penCursor = (badge = "") => `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'>
+    <g fill='white' stroke='#111' stroke-width='1.6' stroke-linejoin='round'><path d='M3 2l13 13-5.1 1.2-3 5.7-3-3 5.7-3L3 2z'/></g>
+    ${badge}
+  </svg>`)}") 3 2, crosshair`;
+  const PEN_NEW_CURSOR = penCursor("<path d='M22 4v9M17.5 8.5h9' fill='none' stroke='white' stroke-width='4'/><path d='M22 4v9M17.5 8.5h9' fill='none' stroke='#111' stroke-width='1.5'/>");
+  const PEN_ACTIVE_CURSOR = penCursor();
+  const PEN_CONTINUE_CURSOR = penCursor("<path d='M18 12l8-8' fill='none' stroke='white' stroke-width='4'/><path d='M18 12l8-8' fill='none' stroke='#111' stroke-width='1.8'/>");
+  const PEN_CLOSE_CURSOR = penCursor("<circle cx='22' cy='8' r='4' fill='white' stroke='#111' stroke-width='1.6'/>");
   const ROT_SVG = "<svg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 24 24' fill='none' stroke='#071411' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 11a9 9 0 0 1 15-6l3 3'/><path d='M21 3v5h-5'/><path d='M21 13a9 9 0 0 1-15 6l-3-3'/><path d='M3 21v-5h5'/></svg>";
   const ROTATE_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(ROT_SVG)}") 11 11, grab`;
-  const cursorForTool = (tool) => tool === "select" ? SELECT_CURSOR : tool === "node" ? NODE_CURSOR : DRAW_CURSOR;
+  const cursorForTool = (tool) => tool === "select" ? SELECT_CURSOR : tool === "node" ? NODE_CURSOR : tool === "pen" ? PEN_NEW_CURSOR : DRAW_CURSOR;
+  function setPenCursor(mode) {
+    canvas.dataset.penCursor = mode;
+    setCursor(mode === "continue" ? PEN_CONTINUE_CURSOR : mode === "close" ? PEN_CLOSE_CURSOR : mode === "active" ? PEN_ACTIVE_CURSOR : PEN_NEW_CURSOR);
+  }
   function updateCursor(pt) {
     if (spaceDown) return; // grab already set on keydown
+    if (currentTool === "pen") {
+      setPenCursor(penCloseHover ? "close" : penEndpointHover ? "continue" : penPath ? "active" : "new");
+      return;
+    }
     if (currentTool !== "select") { setCursor(cursorForTool(currentTool)); return; }
     const h = handleAt(pt);
     if (h && selected.size) { setCursor(h.type === "rotate" ? ROTATE_CURSOR : SCALE_CURSORS[h.key] || "default"); return; }
@@ -598,12 +625,19 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     const hit = paper.project.hitTest(pt, { fill: true, stroke: true, tolerance: 5 / view.zoom, match: (r) => r.item && r.item.layer === designLayer && (!activeGroup || isInsideGroup(r.item)) });
     setCursor(hit ? SELECT_CURSOR : SELECT_CURSOR);
   }
+  function restoreToolCursor() {
+    if (currentTool === "pen") updateCursor(penHoverPoint || P(-1e6, -1e6));
+    else setCursor(cursorForTool(currentTool));
+  }
 
   // --- pan (native, absolute pixel tracking = no judder) ------------------
   let pan = null;
-  const setCursor = (c) => (canvas.style.cursor = c);
+  const setCursor = (c) => {
+    canvas.style.cursor = c;
+    if (currentTool !== "pen") delete canvas.dataset.penCursor;
+  };
   window.addEventListener("keydown", (e) => { if (e.code === "Space" && !spaceDown) { spaceDown = true; if (!pan) setCursor("grab"); } });
-  window.addEventListener("keyup", (e) => { if (e.code === "Space") { spaceDown = false; if (!pan) setCursor(cursorForTool(currentTool)); } });
+  window.addEventListener("keyup", (e) => { if (e.code === "Space") { spaceDown = false; if (!pan) restoreToolCursor(); } });
   window.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === "Escape") && currentTool === "pen" && penPath) finishPen(); });
   canvas.addEventListener("dblclick", (e) => {
     if (currentTool === "pen" && penPath) { finishPen(); return; }
@@ -627,7 +661,12 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     if (!pan) return;
     view.center = P(pan.cx - (e.clientX - pan.sx) / view.zoom, pan.cy - (e.clientY - pan.sy) / view.zoom);
   });
-  const endPan = (e) => { if (!pan) return; pan = null; setCursor(spaceDown ? "grab" : cursorForTool(currentTool)); try { canvas.releasePointerCapture(e.pointerId); } catch {} };
+  canvas.addEventListener("mouseleave", () => {
+    if (currentTool !== "pen" || penDragSegment) return;
+    penHoverPoint = null; penEndpointHover = null; penCloseHover = false;
+    drawPenOverlay();
+  });
+  const endPan = (e) => { if (!pan) return; pan = null; if (spaceDown) setCursor("grab"); else restoreToolCursor(); try { canvas.releasePointerCapture(e.pointerId); } catch {} };
   canvas.addEventListener("pointerup", endPan);
   canvas.addEventListener("pointercancel", endPan);
 
@@ -642,29 +681,159 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   function endDrawTool() { drawStart = null; drawPreview = null; drawSizeCb && drawSizeCb(null); toolResetCb && toolResetCb(); }
 
   // --- pen tool (bezier) --------------------------------------------------
+  function abandonPenInteraction() {
+    if (penPath && !penChanged && penResumeReversed) penPath.reverse();
+    penPath = null; penHoverPoint = null; penEndpointHover = null; penCloseHover = false;
+    penDragSegment = null; penDragHandleKind = null; penChanged = false; penResumeReversed = false;
+    penLayer.removeChildren();
+  }
+  function finishDrawing() { if (penPath) finishPen(); }
+  function openEndpointAt(pt) {
+    const root = selectionRoot();
+    let best = null;
+    for (const path of root.children) {
+      if (path === penPath || path.className !== "Path" || path.closed || !path.visible || !path.segments.length) continue;
+      const candidates = [
+        { path, segment: path.firstSegment, atStart: true },
+        { path, segment: path.lastSegment, atStart: false },
+      ];
+      for (const candidate of candidates) {
+        const distance = pt.getDistance(candidate.segment.point);
+        if (distance <= 9 / view.zoom && (!best || distance < best.distance)) best = { ...candidate, distance };
+      }
+    }
+    return best;
+  }
+  function penGuideLine(from, to) {
+    const line = new paper.Path.Line(from, to);
+    line.name = "pen-handle-line";
+    line.strokeColor = "#006B5C"; line.strokeWidth = 1 / view.zoom; line.guide = true;
+  }
+  function penGuidePoint(point, { active = false, ring = false } = {}) {
+    const radius = (ring ? 5 : 3.5) / view.zoom;
+    const marker = ring
+      ? new paper.Path.Circle(point, radius)
+      : new paper.Path.Rectangle(new paper.Rectangle(point.x - radius, point.y - radius, radius * 2, radius * 2));
+    marker.name = ring ? "pen-endpoint-indicator" : "pen-anchor";
+    marker.fillColor = ring ? new paper.Color(1, 1, 1, 0.9) : active ? "#006B5C" : "white";
+    marker.strokeColor = "#006B5C"; marker.strokeWidth = 1 / view.zoom; marker.guide = true;
+  }
+  function penHandle(segment, vector) {
+    if (!vector || vector.length < 0.01) return;
+    const point = segment.point.add(vector);
+    penGuideLine(segment.point, point);
+    const marker = new paper.Path.Circle(point, 3.5 / view.zoom);
+    marker.name = "pen-handle";
+    marker.fillColor = "white"; marker.strokeColor = "#006B5C"; marker.strokeWidth = 1 / view.zoom; marker.guide = true;
+  }
+  function activePenHandleAt(point) {
+    const segment = penPath?.lastSegment;
+    if (!segment) return null;
+    const handles = [
+      { kind: "in", vector: segment.handleIn },
+      { kind: "out", vector: segment.handleOut },
+    ];
+    for (const handle of handles) {
+      if (handle.vector.length > 0.01 && point.getDistance(segment.point.add(handle.vector)) <= 7 / view.zoom) return { segment, kind: handle.kind };
+    }
+    return null;
+  }
+  function drawPenOverlay() {
+    penLayer.removeChildren();
+    if (currentTool !== "pen") { designLayer.activate(); return; }
+    penLayer.activate();
+    if (penPath?.segments.length) {
+      for (const segment of penPath.segments) penGuidePoint(segment.point, { active: segment === penPath.lastSegment });
+      const active = penPath.lastSegment;
+      penHandle(active, active.handleIn);
+      penHandle(active, active.handleOut);
+      if (penHoverPoint && !penHoverPoint.equals(active.point)) {
+        const destination = penCloseHover ? penPath.firstSegment : null;
+        const preview = new paper.Path({ name: "pen-preview" });
+        preview.add(new paper.Segment(active.point.clone(), active.handleIn.clone(), active.handleOut.clone()));
+        preview.add(new paper.Segment(
+          destination ? destination.point.clone() : penHoverPoint.clone(),
+          destination ? destination.handleIn.clone() : null,
+          destination ? destination.handleOut.clone() : null,
+        ));
+        preview.strokeColor = "#007A66"; preview.strokeWidth = 1.2 / view.zoom;
+        preview.dashArray = [5 / view.zoom, 3 / view.zoom]; preview.guide = true;
+        if (!destination) penGuidePoint(penHoverPoint, { ring: true });
+      }
+    } else if (penEndpointHover) {
+      penGuidePoint(penEndpointHover.segment.point, { ring: true });
+    }
+    designLayer.activate();
+  }
+  function updatePenHover(point) {
+    if (currentTool !== "pen") return;
+    penHoverPoint = point.clone();
+    penEndpointHover = penPath ? null : openEndpointAt(point);
+    penCloseHover = !!(penPath?.segments.length > 1 && point.getDistance(penPath.firstSegment.point) <= 9 / view.zoom);
+    drawPenOverlay();
+  }
   function finishPen() {
     if (!penPath) return;
-    if (penPath.segments.length < 2) penPath.remove();
-    else { undoStack.push(preDraw); if (undoStack.length > 60) undoStack.shift(); redoStack.length = 0; }
+    const discarded = penPath.segments.length < 2;
+    if (discarded) penPath.remove();
+    else if (!penChanged && penResumeReversed) penPath.reverse();
+    else if (penChanged) { undoStack.push(preDraw); if (undoStack.length > 60) undoStack.shift(); redoStack.length = 0; }
+    const committed = !discarded && penChanged;
     penPath = null; // stay in the pen tool, ready for the next path
-    notifyChange(); toolResetCb && toolResetCb();
+    penDragSegment = null; penDragHandleKind = null; penChanged = false; penResumeReversed = false;
+    penEndpointHover = penHoverPoint ? openEndpointAt(penHoverPoint) : null;
+    penCloseHover = false;
+    drawPenOverlay(); updateCursor(penHoverPoint || P(-1e6, -1e6));
+    if (committed) { notifyChange(); toolResetCb && toolResetCb(); }
   }
   function onPenDown(e) {
     if (!penPath) {
+      preDraw = snapshot();
+      const continuation = openEndpointAt(e.point);
+      if (continuation) {
+        penPath = continuation.path;
+        penChanged = false; penResumeReversed = continuation.atStart;
+        if (penResumeReversed) penPath.reverse();
+        penDragSegment = penPath.lastSegment; penDragHandleKind = "symmetric";
+        penEndpointHover = null; penCloseHover = false;
+        drawPenOverlay(); setPenCursor("active");
+        return;
+      }
       designLayer.activate();
       penPath = new paper.Path({ strokeColor: drawColor, strokeWidth: drawWidth, fillColor: null });
       if (activeGroup) activeGroup.addChild(penPath);
-      preDraw = snapshot();
+      penChanged = true; penResumeReversed = false;
     }
-    if (penPath.segments.length > 1 && e.point.getDistance(penPath.firstSegment.point) < 8 / view.zoom) { penPath.closed = true; finishPen(); return; }
-    penPath.add(e.point); view.update();
+    const handle = activePenHandleAt(e.point);
+    if (handle) {
+      penDragSegment = handle.segment; penDragHandleKind = handle.kind;
+      return;
+    }
+    if (penPath.segments.length > 1 && e.point.getDistance(penPath.firstSegment.point) < 9 / view.zoom) {
+      penPath.closed = true; penChanged = true; finishPen(); return;
+    }
+    if (penPath.lastSegment && e.point.getDistance(penPath.lastSegment.point) < 9 / view.zoom) {
+      penDragSegment = penPath.lastSegment; penDragHandleKind = "symmetric";
+      return;
+    }
+    penDragSegment = penPath.add(e.point); penDragHandleKind = "symmetric"; penChanged = true;
+    penEndpointHover = null; penCloseHover = false;
+    drawPenOverlay(); view.update();
   }
   function onPenDrag(e) {
-    if (!penPath || !penPath.lastSegment) return;
-    const seg = penPath.lastSegment;
-    seg.handleOut = e.point.subtract(seg.point);   // click-drag pulls a bezier handle
-    seg.handleIn = seg.handleOut.multiply(-1);
-    view.update();
+    if (!penPath || !penDragSegment) return;
+    const seg = penDragSegment;
+    const vector = e.point.subtract(seg.point);
+    if (penDragHandleKind === "in") {
+      seg.handleIn = vector; seg.handleOut = vector.multiply(-1);
+    } else {
+      seg.handleOut = vector; seg.handleIn = vector.multiply(-1);
+    }
+    penChanged = true; drawPenOverlay(); view.update();
+  }
+  function onPenUp() {
+    penDragSegment = null; penDragHandleKind = null;
+    drawPenOverlay();
   }
   // --- node edit tool -----------------------------------------------------
   function onNodeDown(e) {
@@ -725,7 +894,11 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     if (!e.event.shiftKey) { clearSel(); emitSel(); }
     mode = "marquee"; downPt = e.point; marquee = null;
   };
-  tool.onMouseMove = (e) => { coordsCb && coordsCb(e.point.x, e.point.y); updateCursor(e.point); };
+  tool.onMouseMove = (e) => {
+    coordsCb && coordsCb(e.point.x, e.point.y);
+    if (currentTool === "pen") updatePenHover(e.point);
+    updateCursor(e.point);
+  };
   tool.onMouseDrag = (e) => {
     if (pan) return;
     coordsCb && coordsCb(e.point.x, e.point.y);
@@ -767,7 +940,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     }
   };
   tool.onMouseUp = (e) => {
-    if (currentTool === "pen") return;          // pen commits via click / dbl-click / Enter / Esc
+    if (currentTool === "pen") return onPenUp(e); // pen commits via dbl-click / Enter / Esc
     if (currentTool === "node") return onNodeUp(e);
     if (currentTool !== "select" && drawStart) {
       if (drawMoved && drawPreview && (drawPreview.bounds.width > 0.5 || drawPreview.bounds.height > 0.5)) {
@@ -1326,7 +1499,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     setSelectionMode, undo, redo, resetHistory, exportDesign, importDesign, exportSession, importSession,
     groupSelected, ungroupSelected, arrangeSelected, copySelection, pasteSelection, duplicateSelection,
     canUngroup, selectAll, deleteSelection,
-    setGrid, setTool, setPathOrder, getColors, addShape,
+    setGrid, setTool, setPathOrder, getColors, addShape, finishDrawing,
     setDrawStyle, applyStyle, getStyle,
     getSelectionInfo: () => ({ hasRaster: selectionHasRaster(), count: selected.size }),
     getRasterSettings, getRasterMode, setRasterModes, beginRasterEdit, updateRasterSettings, endRasterEdit, resetRasterSettings,
