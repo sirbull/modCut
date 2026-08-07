@@ -1,6 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { applyProcessProfile, normalizeProcessProfile, profilesForOperation } from "./process-profiles.mjs";
+import { applyProcessProfile, combinedFocusOffset, normalizeProcessProfile, profilesForOperation } from "./process-profiles.mjs";
+
+test("machine and layer focus offsets combine without changing either source value", () => {
+  assert.equal(combinedFocusOffset(0.25, -1), -0.75);
+  assert.ok(Math.abs(combinedFocusOffset("0.1", "0.2") - 0.3) < 1e-9);
+  assert.equal(combinedFocusOffset(undefined, undefined), 0);
+});
 
 test("process profiles normalize unsafe and missing values", () => {
   const profile = normalizeProcessProfile({ id: "p", name: "  Photo  ", op: "Engrave", power: 140, speed: 0, dpi: 1200, zOffset: "-1.25" });

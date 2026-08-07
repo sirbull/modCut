@@ -31,6 +31,7 @@ final class MachineController implements AutoCloseable {
   private volatile double connectedZMin;
   private volatile double connectedZMax;
   private volatile double connectedZFeed = 300;
+  private volatile double connectedZGlobalOffset;
   private volatile boolean dryRun = true;
   private volatile boolean running;
   private volatile int linesSent;
@@ -101,10 +102,16 @@ final class MachineController implements AutoCloseable {
     double machineZMin = zAxis.path("min").asDouble(-10);
     double machineZMax = zAxis.path("max").asDouble(10);
     double machineZFeed = zAxis.path("feed").asDouble(300);
+    double machineZGlobalOffset = zAxis.path("globalOffset").asDouble(0);
     if (machineZEnabled && (!Double.isFinite(machineZMin) || !Double.isFinite(machineZMax)
         || machineZMin > 0 || machineZMax < 0 || machineZMin >= machineZMax
-        || !Double.isFinite(machineZFeed) || machineZFeed <= 0)) {
+        || !Double.isFinite(machineZFeed) || machineZFeed <= 0
+        || !Double.isFinite(machineZGlobalOffset)
+        || machineZGlobalOffset < machineZMin || machineZGlobalOffset > machineZMax)) {
       throw new IllegalArgumentException("Maskinprofilen har ugyldige Z-aksegrenser.");
+    }
+    if (!machineZEnabled && Math.abs(machineZGlobalOffset) > 0.0001) {
+      throw new IllegalArgumentException("Globalt fokusavvik krever aktivert Z-akse.");
     }
     String driver = machine.path("driver").asText("Dummy");
     dryRun = params.path("dryRun").asBoolean(true) || driver.equalsIgnoreCase("Dummy");
@@ -134,6 +141,7 @@ final class MachineController implements AutoCloseable {
     connectedZMin = machineZMin;
     connectedZMax = machineZMax;
     connectedZFeed = machineZFeed;
+    connectedZGlobalOffset = machineZGlobalOffset;
     lastError = "";
     lastResult = "connected";
     return status();
@@ -249,6 +257,7 @@ final class MachineController implements AutoCloseable {
     out.put("connectedMachineId", transport == null ? "" : connectedMachineId);
     out.put("connectedMachineName", transport == null ? "" : connectedMachineName);
     out.put("connectedZEnabled", transport != null && connectedZEnabled);
+    out.put("connectedZGlobalOffset", transport == null ? 0 : connectedZGlobalOffset);
     return out;
   }
 
@@ -330,6 +339,7 @@ final class MachineController implements AutoCloseable {
     connectedZMin = 0;
     connectedZMax = 0;
     connectedZFeed = 300;
+    connectedZGlobalOffset = 0;
   }
 
   public void close() {

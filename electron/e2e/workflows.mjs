@@ -14,7 +14,7 @@ const near = (a, b, epsilon = 0.03) => Math.abs(a - b) <= epsilon;
 const zMachine = [{
   id: "dummy-z", name: "Dummy Z", driver: "Dummy", bedW: 600, bedH: 400, maxFeed: 12000,
   conn: { type: "usb", serial: "", baud: 115200 },
-  zAxis: { enabled: true, min: -5, max: 3, feed: 250 },
+  zAxis: { enabled: true, min: -5, max: 3, feed: 250, globalOffset: 0.25 },
   adv: { flipX: false, flipY: true, home: "front-left" },
 }];
 const processProfiles = [{
@@ -43,7 +43,13 @@ export async function runWorkflows(client) {
   await evaluate("document.querySelector('[data-tool=pen]').click()");
   await click(p1);
   await mouse("mouseMoved", p2);
-  assert.equal(await evaluate("paper.project.getItems({name:'pen-preview'}).length"), 1, "Pen must show a live preview");
+  const previewDeadline = Date.now() + 2_000;
+  let penPreviewCount = 0;
+  while (!penPreviewCount && Date.now() < previewDeadline) {
+    penPreviewCount = await evaluate("paper.project.getItems({name:'pen-preview'}).length");
+    if (!penPreviewCount) await wait(50);
+  }
+  assert.equal(penPreviewCount, 1, "Pen must show a live preview");
   await click(p2); await click(p3); await key("Enter");
   assert.equal(await evaluate("paper.project.layers[1].children[0].segments.length"), 3);
 
@@ -87,9 +93,10 @@ export async function runWorkflows(client) {
   const alt = await transformState();
   assert.ok(near(alt.cx, beforeAlt.cx) && near(alt.cy, beforeAlt.cy), "Alt must scale around the center");
 
-  assert.equal(await evaluate("document.querySelector('[data-k=zOffset]').disabled"), false, "Z offset must be available for a Z-enabled machine profile");
+  assert.equal(await evaluate("document.querySelector('[data-k=zOffset]').disabled"), false, "Focus offset must be available for a Z-enabled machine profile");
   await evaluate("(() => { const select=document.querySelector('[data-profile]'); select.value='cut-z-test'; select.dispatchEvent(new Event('change',{bubbles:true})); })()");
   assert.deepEqual(await evaluate("(() => ({power:+document.querySelector('[data-k=power]').value,speed:+document.querySelector('[data-k=speed]').value,z:+document.querySelector('[data-k=zOffset]').value,profile:document.querySelector('[data-profile]').value}))()"), { power: 37, speed: 24, z: -1, profile: "cut-z-test" }, "a named process profile must apply all output settings together");
+  assert.equal(await evaluate("document.querySelector('.clayer__z-hint').textContent.includes('Z -0.75 mm')"), true, "machine and layer focus offsets must be shown as one resulting Z position");
   await evaluate("(() => { const input=document.querySelector('[data-k=power]'); input.value=38; input.dispatchEvent(new Event('input',{bubbles:true})); })()");
   assert.equal(await evaluate("document.querySelector('[data-profile]').value"), "custom", "manual changes must detach the layer from its named profile");
   await evaluate("(() => { const select=document.querySelector('[data-profile]'); select.value='cut-z-test'; select.dispatchEvent(new Event('change',{bubbles:true})); })()");
@@ -108,7 +115,7 @@ export async function runWorkflows(client) {
     started = await evaluate("[...document.querySelectorAll('.toast')].some(toast=>toast.textContent.includes('started'))");
     if (!started) await wait(100);
   }
-  assert.equal(started, true, "a Z-offset job must pass renderer and sidecar validation");
+  assert.equal(started, true, "a focus-adjusted Z job must pass renderer and sidecar validation");
 
   const artworkBeforeImport = await evaluate("paper.project.layers[1].exportJSON({asString:true})");
   await evaluate(`window.modcut.setE2EImportResult(${JSON.stringify(svg("replacement", "#ff0000"))})`);

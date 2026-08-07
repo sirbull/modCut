@@ -9,6 +9,7 @@ import {
 } from "./raster-processing.mjs";
 import { itemLayerColor, setItemLayerColor } from "./layer-model.mjs";
 import { VECTOR_SAMPLE_STEP_MM, assessOutputQuality, rasterGrid } from "./output-quality.mjs";
+import { combinedFocusOffset } from "./process-profiles.mjs";
 
 // The bed, on Paper.js. Project coordinates are millimetres (1 unit = 1 mm).
 // - Space (or middle mouse) + drag = pan (hand cursor), tracked in absolute pixels
@@ -1665,15 +1666,16 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   async function buildGcodeJob(specs, { maxFeed = 12000, zAxis = null } = {}) {
     const quality = outputQuality(specs);
     if (quality.blocked) throw new Error("Output quality limit: " + quality.problems.join(" "));
-    const requestedZ = specs.map((spec) => Number(spec.zOffset) || 0);
+    const machineFocusOffset = zAxis?.enabled ? Number(zAxis.globalOffset) || 0 : 0;
+    const requestedZ = specs.map((spec) => combinedFocusOffset(machineFocusOffset, spec.zOffset));
     if (requestedZ.some((offset) => offset !== 0) && !zAxis?.enabled) {
-      throw new Error("One or more layers use a Z offset, but the selected machine profile has no controlled Z axis enabled.");
+      throw new Error("One or more layers use a focus offset, but the selected machine profile has no controlled Z axis enabled.");
     }
     if (zAxis?.enabled) {
       const minZ = Number(zAxis.min), maxZ = Number(zAxis.max);
       if (!Number.isFinite(minZ) || !Number.isFinite(maxZ) || minZ > 0 || maxZ < 0 || minZ >= maxZ) throw new Error("The selected machine profile has an invalid Z range.");
       const outside = requestedZ.find((offset) => offset < minZ || offset > maxZ);
-      if (outside != null) throw new Error(`Z offset ${outside} mm is outside the machine range ${minZ}…${maxZ} mm.`);
+      if (outside != null) throw new Error(`Combined focus position ${outside} mm is outside the machine Z range ${minZ}…${maxZ} mm.`);
     }
     const segs = await orderJobSegs(specs);
     const lines = [
@@ -1687,10 +1689,10 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     const zFeed = Math.max(1, Number(zAxis?.feed) || 300);
     for (const seg of segs) {
       if (!seg.pts || seg.pts.length < 2) continue;
-      const nextZ = Number(seg.zOffset) || 0;
+      const nextZ = combinedFocusOffset(machineFocusOffset, seg.zOffset);
       if (nextZ !== currentZ) {
         lines.push("M5");
-        lines.push(`G1 Z${fmt(nextZ)} F${Math.round(zFeed)} ; set Z offset with laser off`);
+        lines.push(`G1 Z${fmt(nextZ)} F${Math.round(zFeed)} ; set combined focus position with laser off`);
         currentZ = nextZ;
       }
       const start = seg.pts[0];

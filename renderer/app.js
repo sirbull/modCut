@@ -2,7 +2,7 @@ import { createBed } from "./bed.js";
 import { prepareSVG } from "./svgimport.js";
 import { dxfToSvg } from "./dxfimport.js";
 import { OPERATIONS, canAssignRasterToOperation, distinctVectorColor, isOutputLayer, operationsForLayer } from "./layer-model.mjs";
-import { RASTER_MODES, applyProcessProfile, normalizeProcessProfile, profilesForOperation } from "./process-profiles.mjs";
+import { RASTER_MODES, applyProcessProfile, combinedFocusOffset, normalizeProcessProfile, profilesForOperation } from "./process-profiles.mjs";
 import { openModal } from "./ui.js";
 
 const $ = (id) => document.getElementById(id);
@@ -48,6 +48,7 @@ function normalizeMachines() {
       min: Number.isFinite(Number(m.zAxis?.min)) ? Number(m.zAxis.min) : -10,
       max: Number.isFinite(Number(m.zAxis?.max)) ? Number(m.zAxis.max) : 10,
       feed: Math.max(1, Number(m.zAxis?.feed) || 300),
+      globalOffset: m.zAxis?.enabled && Number.isFinite(Number(m.zAxis?.globalOffset)) ? Number(m.zAxis.globalOffset) : 0,
     };
   }
 }
@@ -804,6 +805,12 @@ function scheduleQualityRefresh() {
   if (qualityRefreshTimer) clearTimeout(qualityRefreshTimer);
   qualityRefreshTimer = setTimeout(() => { qualityRefreshTimer = null; refreshLayerQuality(); }, 120);
 }
+function layerFocusSummary(layer) {
+  if (!machine().zAxis?.enabled) return "Enable Z axis in the machine profile to adjust focus.";
+  const machineOffset = Number(machine().zAxis.globalOffset) || 0;
+  const layerOffset = Number(layer.zOffset) || 0;
+  return `Machine ${machineOffset} mm + layer ${layerOffset} mm = Z ${combinedFocusOffset(machineOffset, layerOffset)} mm · allowed ${machine().zAxis.min}…${machine().zAxis.max}`;
+}
 function layerRow(l) {
   l.speed = clampSpeedPct(l.speed);
   l.zOffset = Number.isFinite(Number(l.zOffset)) ? Number(l.zOffset) : 0;
@@ -842,8 +849,8 @@ function layerRow(l) {
       <div><label>Freq Hz</label><input class="input" type="number" min="0" value="${l.freq}" data-k="freq"></div>
     </div>
     <div class="clayer__grid two">
-      <div><label title="Relative to the focused Z=0 work coordinate. The machine profile must explicitly enable a Z axis.">Z offset (mm)</label><input class="input" type="number" step="0.1" value="${l.zOffset}" data-k="zOffset" ${zEnabled ? "" : "disabled"}></div>
-      <p class="clayer__z-hint">${zEnabled ? `Allowed ${machine().zAxis.min}…${machine().zAxis.max} mm` : "Enable Z axis in the machine profile to use offsets."}</p>
+      <div><label title="Layer-specific focus adjustment, added to the machine's global Z offset.">Focus offset (mm)</label><input class="input" type="number" step="0.1" value="${l.zOffset}" data-k="zOffset" ${zEnabled ? "" : "disabled"}></div>
+      <p class="clayer__z-hint">${safeHtml(layerFocusSummary(l))}</p>
     </div>
     ${engrave ? `
     <div class="clayer__grid two">
@@ -887,6 +894,7 @@ function layerRow(l) {
       l.profileId = null;
       const profileSelect = row.querySelector("[data-profile]");
       if (profileSelect) profileSelect.value = "custom";
+      if (k === "zOffset") row.querySelector(".clayer__z-hint").textContent = layerFocusSummary(l);
       updateLayerQuality(row, l); markDirty();
     });
   });
@@ -910,10 +918,11 @@ async function runJob(label) {
   const filename = base + driverExt(machine().driver);
   try {
     const job = await bed.buildGcodeJob(ops, { maxFeed: machine().maxFeed || 12000, zAxis: machine().zAxis });
-    const offsets = [...new Set(ops.map((op) => Number(op.zOffset) || 0))].filter((offset) => offset !== 0);
+    const layerOffsets = [...new Set(ops.map((op) => Number(op.zOffset) || 0))];
+    const focusPositions = [...new Set(layerOffsets.map((offset) => combinedFocusOffset(machine().zAxis?.globalOffset, offset)))];
     const confirmed = machineStatus.dryRun || window.confirm(
       `Start REAL laser job on ${machine().name}?\n\n` +
-      (offsets.length ? `Z offsets: ${offsets.join(", ")} mm relative to focused Z=0.\n\n` : "") +
+      (machine().zAxis?.enabled ? `Machine global Z offset: ${machine().zAxis.globalOffset || 0} mm. Layer focus offsets: ${layerOffsets.join(", ")} mm. Resulting Z positions: ${focusPositions.join(", ")} mm.\n\n` : "") +
       "Confirm material, focus, ventilation, clear work area and that the lid/interlocks are ready."
     );
     if (!confirmed) return;
@@ -1025,6 +1034,7 @@ const machineFields = (m) => [
   { key: "zMin", label: "Minimum Z offset (mm, must include 0)", type: "number", step: 0.1, value: m?.zAxis?.min ?? -10, showIf: (v) => v.advanced && v.zEnabled },
   { key: "zMax", label: "Maximum Z offset (mm, must include 0)", type: "number", step: 0.1, value: m?.zAxis?.max ?? 10, showIf: (v) => v.advanced && v.zEnabled },
   { key: "zFeed", label: "Maximum Z feed (mm/min)", type: "number", min: 1, step: 1, value: m?.zAxis?.feed || 300, showIf: (v) => v.advanced && v.zEnabled },
+  { key: "zGlobal", label: "Global Z offset / focus calibration (mm)", type: "number", step: 0.1, value: m?.zAxis?.globalOffset ?? 0, showIf: (v) => v.advanced && v.zEnabled },
   { key: "connectTimeoutMs", label: "Network connect / handshake timeout (ms)", type: "number", min: 250, max: 30000, step: 250, value: m?.conn.connectTimeoutMs || 3000, showIf: (v) => v.advanced && v.type === "network" },
   { key: "responseTimeoutMs", label: "GRBL command response timeout (ms)", type: "number", min: 1000, max: 120000, step: 1000, value: m?.conn.responseTimeoutMs || 30000, showIf: (v) => v.advanced && v.type === "network" },
   { key: "flipX", label: "Flip X axis", type: "checkbox", value: m?.adv?.flipX || false, showIf: (v) => v.advanced },
@@ -1037,13 +1047,17 @@ const machineFrom = (v, id) => ({
     ? { type: "network", host: v.host.trim(), port: Math.round(v.netport), connectTimeoutMs: v.connectTimeoutMs || 3000, responseTimeoutMs: v.responseTimeoutMs || 30000 }
     : { type: "usb", serial: v.serial?.trim() || "", baud: v.baud },
   bedW: toMm(v.bedW), bedH: toMm(v.bedH), maxFeed: Math.max(1, v.maxFeed || 12000),
-  zAxis: { enabled: !!v.zEnabled, min: Number(v.zMin), max: Number(v.zMax), feed: Math.max(1, Number(v.zFeed) || 300) },
+  zAxis: { enabled: !!v.zEnabled, min: Number(v.zMin), max: Number(v.zMax), feed: Math.max(1, Number(v.zFeed) || 300), globalOffset: v.zEnabled ? Number(v.zGlobal) || 0 : 0 },
   adv: { flipX: v.flipX, flipY: v.flipY, home: v.home },
 });
 function validZAxisForm(values) {
   if (!values.zEnabled) return true;
   if (!Number.isFinite(values.zMin) || !Number.isFinite(values.zMax) || values.zMin >= values.zMax || values.zMin > 0 || values.zMax < 0) {
     toast("Z range must have a minimum below the maximum and include Z=0.", "err");
+    return false;
+  }
+  if (!Number.isFinite(values.zGlobal) || values.zGlobal < values.zMin || values.zGlobal > values.zMax) {
+    toast("The machine's global Z offset must be inside the configured Z range.", "err");
     return false;
   }
   return true;
@@ -1057,8 +1071,18 @@ async function addMachine() {
 async function editMachine(m) {
   const v = await openModal({ title: "Edit machine", submitLabel: "Save", fields: machineFields(m) });
   if (!v || !v.name || !validZAxisForm(v)) return;
+  const reconnectRequired = machineStatus.connected && machineStatus.connectedMachineId === m.id;
+  if (reconnectRequired) {
+    if (machineStatus.running) return toast("Stop the active job before changing the connected machine profile.", "err");
+    try {
+      machineStatus = await window.modcut.call("disconnect");
+      renderMachineStatus();
+    } catch (error) {
+      return toast("Could not disconnect before changing the machine profile: " + error.message, "err");
+    }
+  }
   Object.assign(m, machineFrom(v, m.id)); saveMachines(); refreshMachines(m.id);
-  toast("Machine saved: " + m.name, "ok");
+  toast("Machine saved: " + m.name + (reconnectRequired ? ". Reconnect to use the updated Z/focus calibration." : ""), "ok");
 }
 async function connect() {
   const selected = machine();
@@ -1141,11 +1165,11 @@ async function stopJob() {
 const matFields = (m) => [
   { key: "name", label: "Name", value: m?.name, placeholder: "e.g. Plywood 3 mm" },
   { key: "cutP", label: "Cut power %", type: "number", value: m ? m.ops.Cut.power : 80 }, { key: "cutS", label: "Cut speed %", type: "number", min: 1, max: 100, value: m ? clampSpeedPct(m.ops.Cut.speed) : 20 },
-  { key: "cutZ", label: "Cut Z offset (mm)", type: "number", step: 0.1, value: m?.ops.Cut.zOffset || 0 },
+  { key: "cutZ", label: "Cut focus offset (mm)", type: "number", step: 0.1, value: m?.ops.Cut.zOffset || 0 },
   { key: "engP", label: "Engrave power %", type: "number", value: m ? m.ops.Engrave.power : 40 }, { key: "engS", label: "Engrave speed %", type: "number", min: 1, max: 100, value: m ? clampSpeedPct(m.ops.Engrave.speed) : 65 },
-  { key: "engZ", label: "Engrave Z offset (mm)", type: "number", step: 0.1, value: m?.ops.Engrave.zOffset || 0 },
+  { key: "engZ", label: "Engrave focus offset (mm)", type: "number", step: 0.1, value: m?.ops.Engrave.zOffset || 0 },
   { key: "scoP", label: "Score power %", type: "number", value: m ? m.ops.Score.power : 25 }, { key: "scoS", label: "Score speed %", type: "number", min: 1, max: 100, value: m ? clampSpeedPct(m.ops.Score.speed) : 35 },
-  { key: "scoZ", label: "Score Z offset (mm)", type: "number", step: 0.1, value: m?.ops.Score.zOffset || 0 },
+  { key: "scoZ", label: "Score focus offset (mm)", type: "number", step: 0.1, value: m?.ops.Score.zOffset || 0 },
   { key: "freq", label: "Frequency Hz", type: "number", value: m ? m.ops.Cut.freq : F },
 ];
 const opsFrom = (v) => ({
@@ -1178,7 +1202,7 @@ const processProfileFields = (profile = {}) => [
   { key: "power", label: "Power %", type: "number", min: 0, max: 100, value: profile.power ?? 50 },
   { key: "speed", label: "Speed %", type: "number", min: 1, max: 100, value: profile.speed ?? 50 },
   { key: "freq", label: "Frequency Hz", type: "number", min: 0, value: profile.freq ?? F },
-  { key: "zOffset", label: "Z offset (mm from focused Z=0)", type: "number", step: 0.1, value: profile.zOffset ?? 0 },
+  { key: "zOffset", label: "Layer focus offset (mm)", type: "number", step: 0.1, value: profile.zOffset ?? 0 },
   { key: "dpi", label: "Engrave DPI", type: "number", min: 1, max: 1000, value: profile.dpi ?? 300, showIf: (v) => v.op === "Engrave" },
   { key: "dither", label: "Raster mode", type: "select", options: DITHERS, value: profile.dither || "Grayscale", showIf: (v) => v.op === "Engrave" },
   { key: "bottomUp", label: "Engrave bottom → top", type: "checkbox", value: profile.bottomUp !== false, showIf: (v) => v.op === "Engrave" },
@@ -1250,7 +1274,7 @@ const openMaterialLibrary = () => openLibrary({
 });
 const openProcessProfileLibrary = () => openLibrary({
   title: "Process profiles", addLabel: "Add process profile", list: () => processProfiles,
-  subtitle: (profile) => `${profile.op} · ${profile.power}% power · ${profile.speed}% speed · Z ${profile.zOffset || 0} mm${profile.op === "Engrave" ? ` · ${profile.dpi} DPI` : ""}`,
+  subtitle: (profile) => `${profile.op} · ${profile.power}% power · ${profile.speed}% speed · focus ${profile.zOffset || 0} mm${profile.op === "Engrave" ? ` · ${profile.dpi} DPI` : ""}`,
   onAdd: addProcessProfile, onEdit: editProcessProfile,
   onDelete: (id) => {
     processProfiles = processProfiles.filter((profile) => profile.id !== id);
@@ -1260,7 +1284,7 @@ const openProcessProfileLibrary = () => openLibrary({
 });
 const openMachineLibrary = () => openLibrary({
   title: "Machines", addLabel: "Add machine", list: () => machines,
-  subtitle: (m) => `${m.driver} · ${m.conn.type === "network" ? (m.conn.host || "net") + ":" + (m.conn.port || "") : "USB " + (m.conn.serial || "")} · ${Math.round(m.bedW)}×${Math.round(m.bedH)}mm · F${m.maxFeed || 12000}${m.zAxis?.enabled ? ` · Z ${m.zAxis.min}…${m.zAxis.max} @ ${m.zAxis.feed}` : ""}`,
+  subtitle: (m) => `${m.driver} · ${m.conn.type === "network" ? (m.conn.host || "net") + ":" + (m.conn.port || "") : "USB " + (m.conn.serial || "")} · ${Math.round(m.bedW)}×${Math.round(m.bedH)}mm · F${m.maxFeed || 12000}${m.zAxis?.enabled ? ` · Z ${m.zAxis.min}…${m.zAxis.max} @ ${m.zAxis.feed} · focus ${m.zAxis.globalOffset || 0}` : ""}`,
   onAdd: addMachine, onEdit: editMachine,
   onDelete: (id) => { if (machines.length > 1) { machines = machines.filter((m) => m.id !== id); if (state.machineId === id) state.machineId = machines[0].id; saveMachines(); refreshMachines(state.machineId); } },
 });

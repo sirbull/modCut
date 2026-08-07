@@ -31,9 +31,10 @@ The first complete, hardware-testable path is available:
 - move one or many selected elements between color layers from the properties
   panel or context menu, and retain reference geometry with Ignore;
 - save reusable named Cut, Engrave and Score process profiles with power, speed,
-  frequency, Z offset and operation-specific raster settings;
-- apply a per-layer Z offset only on machine profiles that explicitly enable a
-  bounded Z axis; both the renderer and Java sidecar reject unsafe Z motion;
+  frequency, layer focus offset and operation-specific raster settings;
+- combine a machine-wide focus calibration with each layer's focus offset only
+  on profiles that explicitly enable a bounded Z axis; both the renderer and
+  Java sidecar reject unsafe Z motion;
 - group selected objects with Cmd/Ctrl+G, isolate a group by double-clicking it,
   and return to the main canvas by double-clicking outside;
 - generate and simulate GRBL G-code;
@@ -101,8 +102,8 @@ matrix are documented in [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md).
 2. Click **Connect**.
 3. Import or draw a small design inside the bed.
 4. Assign a material and verify every active layer.
-5. If the machine uses Z focusing, verify its configured Z range and every
-   layer's Z offset before continuing.
+5. If the machine uses Z focusing, verify its global machine focus offset, Z
+   range and every layer's Focus offset before continuing.
 6. Click **Frame**, then **Run dry-run**.
 7. Verify that the job finishes and that Stop can cancel a longer job.
 

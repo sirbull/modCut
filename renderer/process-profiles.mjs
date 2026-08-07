@@ -4,6 +4,10 @@ export const RASTER_MODES = ["Grayscale", "Jarvis", "Floyd-Steinberg", "Stucki",
 const finite = (value, fallback) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 const clamp = (value, min, max, fallback) => Math.max(min, Math.min(max, finite(value, fallback)));
 
+export function combinedFocusOffset(machineOffset, layerOffset) {
+  return finite(machineOffset, 0) + finite(layerOffset, 0);
+}
+
 export function normalizeProcessProfile(profile = {}) {
   const op = PROCESS_OPERATIONS.includes(profile.op) ? profile.op : "Cut";
   return {

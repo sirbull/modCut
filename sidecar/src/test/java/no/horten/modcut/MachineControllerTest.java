@@ -76,10 +76,11 @@ class MachineControllerTest {
     try (var controller = new MachineController(json)) {
       var connect = json.readTree("""
           {"dryRun":true,"machine":{"id":"laser-z","name":"Laser Z","driver":"Grbl","bedW":100,"bedH":100,"maxFeed":5000,
-           "zAxis":{"enabled":true,"min":-3,"max":2,"feed":250},"conn":{"type":"usb","serial":"test","baud":115200}}}
+           "zAxis":{"enabled":true,"min":-3,"max":2,"feed":250,"globalOffset":0.25},"conn":{"type":"usb","serial":"test","baud":115200}}}
           """);
       var status = controller.handle("connect", connect);
       assertTrue(status.path("connectedZEnabled").asBoolean());
+      assertEquals(0.25, status.path("connectedZGlobalOffset").asDouble());
 
       var safe = json.readTree("""
           {"machineId":"laser-z","filename":"z.gcode","confirmed":false,
@@ -94,6 +95,23 @@ class MachineControllerTest {
            "gcodeLines":["G21","G90","M5","G1 Z-4 F200","G0 X1 Y1"]}
           """);
       assertThrows(IllegalArgumentException.class, () -> controller.handle("startJob", unsafe));
+    }
+  }
+
+  @Test
+  void rejectsInvalidMachineWideFocusCalibration() throws Exception {
+    try (var controller = new MachineController(json)) {
+      var outsideRange = json.readTree("""
+          {"dryRun":true,"machine":{"id":"bad-z","name":"Bad Z","driver":"Grbl","bedW":100,"bedH":100,"maxFeed":5000,
+           "zAxis":{"enabled":true,"min":-2,"max":2,"feed":250,"globalOffset":3},"conn":{"type":"usb","serial":"test","baud":115200}}}
+          """);
+      assertThrows(IllegalArgumentException.class, () -> controller.handle("connect", outsideRange));
+
+      var disabled = json.readTree("""
+          {"dryRun":true,"machine":{"id":"disabled-z","name":"Disabled Z","driver":"Grbl","bedW":100,"bedH":100,"maxFeed":5000,
+           "zAxis":{"enabled":false,"globalOffset":0.5},"conn":{"type":"usb","serial":"test","baud":115200}}}
+          """);
+      assertThrows(IllegalArgumentException.class, () -> controller.handle("connect", disabled));
     }
   }
 }
