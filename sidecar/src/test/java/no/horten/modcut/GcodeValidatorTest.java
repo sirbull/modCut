@@ -49,4 +49,34 @@ class GcodeValidatorTest {
     assertThrows(IllegalArgumentException.class, () ->
         GcodeValidator.validate(List.of("G21", "G90", "G0 X1 Y1", "M4 S500", "G1 X2 Y2"), 600, 400, 12_000));
   }
+
+  @Test
+  void acceptsSeparateLaserOffZOffsetsWithinTheMachineProfile() {
+    var report = GcodeValidator.validate(List.of(
+        "G21", "G90", "M5", "G1 Z-1.5 F200", "G0 X1 Y1", "M4 S250",
+        "G1 X2 Y2 F1200", "M5", "G1 Z0 F200", "G0 X0 Y0"),
+        600, 400, 12_000, true, -5, 3, 300);
+    assertEquals(5, report.motionCount());
+  }
+
+  @Test
+  void rejectsZWhenDisabledOutsideRangeOrWhileLaserIsOn() {
+    var zJob = List.of("G21", "G90", "M5", "G1 Z-1 F200", "G1 Z0 F200", "G0 X0 Y0");
+    assertThrows(IllegalArgumentException.class, () -> GcodeValidator.validate(zJob, 600, 400, 12_000));
+    assertThrows(IllegalArgumentException.class, () -> GcodeValidator.validate(
+        List.of("G21", "G90", "M5", "G1 Z-6 F200", "G0 X0 Y0"), 600, 400, 12_000, true, -5, 3, 300));
+    assertThrows(IllegalArgumentException.class, () -> GcodeValidator.validate(
+        List.of("G21", "G90", "M5", "G0 X1 Y1", "M4 S100", "G1 Z-1 F200", "M5", "G1 Z0 F200"),
+        600, 400, 12_000, true, -5, 3, 300));
+    assertThrows(IllegalArgumentException.class, () -> GcodeValidator.validate(
+        List.of("G21", "G90", "M5", "G0 Z-1 F200", "G1 Z0 F200", "G0 X0 Y0"),
+        600, 400, 12_000, true, -5, 3, 300));
+  }
+
+  @Test
+  void requiresZToReturnToFocusedZero() {
+    assertThrows(IllegalArgumentException.class, () -> GcodeValidator.validate(
+        List.of("G21", "G90", "M5", "G1 Z1 F200", "G0 X0 Y0"),
+        600, 400, 12_000, true, -5, 3, 300));
+  }
 }

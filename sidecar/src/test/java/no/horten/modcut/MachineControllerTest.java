@@ -70,4 +70,30 @@ class MachineControllerTest {
       assertFalse(result.path("drivers").toString().contains("Ruida"));
     }
   }
+
+  @Test
+  void validatesZAgainstTheConnectedMachineSnapshot() throws Exception {
+    try (var controller = new MachineController(json)) {
+      var connect = json.readTree("""
+          {"dryRun":true,"machine":{"id":"laser-z","name":"Laser Z","driver":"Grbl","bedW":100,"bedH":100,"maxFeed":5000,
+           "zAxis":{"enabled":true,"min":-3,"max":2,"feed":250},"conn":{"type":"usb","serial":"test","baud":115200}}}
+          """);
+      var status = controller.handle("connect", connect);
+      assertTrue(status.path("connectedZEnabled").asBoolean());
+
+      var safe = json.readTree("""
+          {"machineId":"laser-z","filename":"z.gcode","confirmed":false,
+           "gcodeLines":["G21","G90","M5","G1 Z-1 F200","G0 X1 Y1","M4 S100","G1 X2 Y2 F1000","M5","G1 Z0 F200"]}
+          """);
+      assertTrue(controller.handle("startJob", safe).path("started").asBoolean());
+
+      long deadline = System.currentTimeMillis() + 2_000;
+      while (controller.status().path("running").asBoolean() && System.currentTimeMillis() < deadline) Thread.sleep(5);
+      var unsafe = json.readTree("""
+          {"machineId":"laser-z","filename":"bad-z.gcode","confirmed":false,
+           "gcodeLines":["G21","G90","M5","G1 Z-4 F200","G0 X1 Y1"]}
+          """);
+      assertThrows(IllegalArgumentException.class, () -> controller.handle("startJob", unsafe));
+    }
+  }
 }

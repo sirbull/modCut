@@ -2,12 +2,14 @@ import { createBed } from "./bed.js";
 import { prepareSVG } from "./svgimport.js";
 import { dxfToSvg } from "./dxfimport.js";
 import { OPERATIONS, canAssignRasterToOperation, distinctVectorColor, isOutputLayer, operationsForLayer } from "./layer-model.mjs";
+import { RASTER_MODES, applyProcessProfile, normalizeProcessProfile, profilesForOperation } from "./process-profiles.mjs";
 import { openModal } from "./ui.js";
 
 const $ = (id) => document.getElementById(id);
 const OPS = OPERATIONS;
-const DITHERS = ["Grayscale", "Jarvis", "Floyd-Steinberg", "Stucki", "Bayer"];
+const DITHERS = RASTER_MODES;
 const clampSpeedPct = (v) => Math.max(1, Math.min(100, Number(v) || 1));
+const safeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
 
 // --- persisted stores (seeded from presets on first run, then fully editable) --
 const F = 20000; // default beam frequency (Hz)
@@ -24,13 +26,35 @@ function loadStore(key, presets) {
 }
 let materials = loadStore("modcut_materials", MATERIAL_PRESETS);
 let machines = loadStore("modcut_machines", MACHINE_PRESETS);
+function loadProcessProfiles() {
+  try {
+    const saved = JSON.parse(localStorage.getItem("modcut_process_profiles"));
+    return Array.isArray(saved) ? saved.map(normalizeProcessProfile).filter((profile) => profile.id) : [];
+  } catch { return []; }
+}
+let processProfiles = loadProcessProfiles();
 function normalizeMaterialSpeeds() {
-  for (const m of materials) for (const op of OPS) if (m.ops?.[op]) m.ops[op].speed = clampSpeedPct(m.ops[op].speed);
+  for (const m of materials) for (const op of OPS) if (m.ops?.[op]) {
+    m.ops[op].speed = clampSpeedPct(m.ops[op].speed);
+    m.ops[op].zOffset = Number.isFinite(Number(m.ops[op].zOffset)) ? Number(m.ops[op].zOffset) : 0;
+  }
 }
 normalizeMaterialSpeeds();
-for (const m of machines) if (!m.maxFeed) m.maxFeed = 12000;
+function normalizeMachines() {
+  for (const m of machines) {
+    if (!m.maxFeed) m.maxFeed = 12000;
+    m.zAxis = {
+      enabled: !!m.zAxis?.enabled,
+      min: Number.isFinite(Number(m.zAxis?.min)) ? Number(m.zAxis.min) : -10,
+      max: Number.isFinite(Number(m.zAxis?.max)) ? Number(m.zAxis.max) : 10,
+      feed: Math.max(1, Number(m.zAxis?.feed) || 300),
+    };
+  }
+}
+normalizeMachines();
 const saveMaterials = () => localStorage.setItem("modcut_materials", JSON.stringify(materials));
 const saveMachines = () => localStorage.setItem("modcut_machines", JSON.stringify(machines));
+const saveProcessProfiles = () => localStorage.setItem("modcut_process_profiles", JSON.stringify(processProfiles));
 
 const state = {
   machineId: machines[0].id, materialId: materials[0].id,
@@ -142,7 +166,7 @@ function initTooltips() {
 const material = () => materials.find((m) => m.id === state.materialId) || materials[0];
 const machine = () => machines.find((m) => m.id === state.machineId) || machines[0];
 const defaultsFor = (op) => {
-  const d = { power: 50, speed: 50, freq: F, ...material().ops[op] };
+  const d = { power: 50, speed: 50, freq: F, zOffset: 0, ...material().ops[op] };
   d.speed = clampSpeedPct(d.speed);
   return d;
 };
@@ -694,6 +718,7 @@ const newLayer = (color, op, raster = false, key = null) => ({
   key, color, raster, op: raster ? "Engrave" : op, output: true,
   dpi: 300, dither: raster ? "Grayscale" : "Jarvis", bottomUp: true,
   ...defaultsFor(raster ? "Engrave" : op),
+  profileId: "material",
 });
 // Re-read colors from the bed (import + drawn shapes) and reconcile the layer list,
 // preserving settings for colors that still exist.
@@ -731,7 +756,13 @@ function syncLayers() {
   syncRasterModes();
   renderLayers();
 }
-function applyMaterialToLayers() { for (const l of state.layers) Object.assign(l, defaultsFor(l.op)); renderLayers(); }
+function applyMaterialToLayers() {
+  for (const layer of state.layers) {
+    Object.assign(layer, defaultsFor(layer.op));
+    layer.profileId = "material";
+  }
+  renderLayers();
+}
 function renderLayers() {
   const host = $("layers");
   host.innerHTML = "";
@@ -775,6 +806,7 @@ function scheduleQualityRefresh() {
 }
 function layerRow(l) {
   l.speed = clampSpeedPct(l.speed);
+  l.zOffset = Number.isFinite(Number(l.zOffset)) ? Number(l.zOffset) : 0;
   const row = document.createElement("div");
   row.className = `clayer${l.raster ? " clayer--raster" : ""}`;
   const byColor = state.mappingMode === "color";
@@ -782,6 +814,15 @@ function layerRow(l) {
   const engrave = l.op === "Engrave";
   const ignored = l.op === "Ignore";
   const layerOps = operationsForLayer(l.raster);
+  const profiles = profilesForOperation(processProfiles, l.op);
+  const selectedProfile = profiles.some((profile) => profile.id === l.profileId)
+    ? l.profileId : l.profileId === "material" ? "material" : "custom";
+  const profileOptions = [
+    `<option value="material" ${selectedProfile === "material" ? "selected" : ""}>Material default — ${safeHtml(material().name)}</option>`,
+    ...profiles.map((profile) => `<option value="${safeHtml(profile.id)}" ${selectedProfile === profile.id ? "selected" : ""}>${safeHtml(profile.name)}</option>`),
+    `<option value="custom" ${selectedProfile === "custom" ? "selected" : ""}>Custom settings</option>`,
+  ].join("");
+  const zEnabled = !!machine().zAxis?.enabled;
   row.innerHTML = `
     <div class="clayer__top">
       <span class="clayer__sw" style="background:${l.color || "linear-gradient(135deg,#888,#ccc)"}"></span>
@@ -791,10 +832,18 @@ function layerRow(l) {
       ${ignored ? `<span class="clayer__ignored">Ignored</span>` : `<button class="toggle" aria-checked="${l.output}" title="Output"></button>`}
     </div>
     ${ignored ? `<p class="clayer__note">This layer is kept in the design but is not sent to the laser.</p>` : `
+    <div class="clayer__profile">
+      <label><span>Process profile</span><select class="select" data-profile>${profileOptions}</select></label>
+      <button class="btn btn--ghost btn--sm" data-save-profile title="Save these settings as a reusable ${safeHtml(l.op)} profile">Save profile…</button>
+    </div>
     <div class="clayer__grid">
       <div><label>Power %</label><input class="input" type="number" min="0" max="100" value="${l.power}" data-k="power"></div>
       <div><label>Speed %</label><input class="input" type="number" min="1" max="100" value="${l.speed}" data-k="speed"></div>
       <div><label>Freq Hz</label><input class="input" type="number" min="0" value="${l.freq}" data-k="freq"></div>
+    </div>
+    <div class="clayer__grid two">
+      <div><label title="Relative to the focused Z=0 work coordinate. The machine profile must explicitly enable a Z axis.">Z offset (mm)</label><input class="input" type="number" step="0.1" value="${l.zOffset}" data-k="zOffset" ${zEnabled ? "" : "disabled"}></div>
+      <p class="clayer__z-hint">${zEnabled ? `Allowed ${machine().zAxis.min}…${machine().zAxis.max} mm` : "Enable Z axis in the machine profile to use offsets."}</p>
     </div>
     ${engrave ? `
     <div class="clayer__grid two">
@@ -809,9 +858,21 @@ function layerRow(l) {
   const op = row.querySelector("select.clayer__op");
   if (op) op.addEventListener("change", () => {
     l.op = op.value;
-    if (l.op !== "Ignore") Object.assign(l, defaultsFor(l.op));
+    if (l.op !== "Ignore") { Object.assign(l, defaultsFor(l.op)); l.profileId = "material"; }
     renderLayers(); markDirty();
   });
+  row.querySelector("[data-profile]")?.addEventListener("change", (event) => {
+    if (event.target.value === "material") {
+      Object.assign(l, defaultsFor(l.op));
+      l.profileId = "material";
+    } else if (event.target.value === "custom") l.profileId = null;
+    else {
+      const profile = processProfiles.find((item) => item.id === event.target.value);
+      if (profile) applyProcessProfile(l, profile);
+    }
+    renderLayers(); markDirty();
+  });
+  row.querySelector("[data-save-profile]")?.addEventListener("click", () => saveLayerAsProcessProfile(l));
   row.querySelector(".toggle")?.addEventListener("click", (e) => { l.output = !l.output; e.currentTarget.setAttribute("aria-checked", l.output); markDirty(); });
   row.querySelectorAll("[data-k]").forEach((el) => {
     const k = el.dataset.k;
@@ -821,14 +882,20 @@ function layerRow(l) {
       if (k === "dither") { syncRasterModes(); refreshBitmapControls(); }
       markDirty();
     });
-    else el.addEventListener("input", () => { l[k] = k === "speed" ? clampSpeedPct(el.value) : Number(el.value); updateLayerQuality(row, l); markDirty(); });
+    else el.addEventListener("input", () => {
+      l[k] = k === "speed" ? clampSpeedPct(el.value) : Number(el.value);
+      l.profileId = null;
+      const profileSelect = row.querySelector("[data-profile]");
+      if (profileSelect) profileSelect.value = "custom";
+      updateLayerQuality(row, l); markDirty();
+    });
   });
   return row;
 }
 
 // --- run + estimate ---------------------------------------------------------
 const activeLayers = () => state.layers.filter(isOutputLayer);
-const jobOps = () => activeLayers().map((l) => ({ op: l.op, color: l.color, power: l.power, speed: clampSpeedPct(l.speed), freq: l.freq, ...(l.op === "Engrave" ? { dpi: l.dpi, dither: l.dither, bottomUp: l.bottomUp } : {}) }));
+const jobOps = () => activeLayers().map((l) => ({ op: l.op, color: l.color, power: l.power, speed: clampSpeedPct(l.speed), freq: l.freq, zOffset: Number(l.zOffset) || 0, ...(l.op === "Engrave" ? { dpi: l.dpi, dither: l.dither, bottomUp: l.bottomUp } : {}) }));
 const machineLimits = () => ({ bedWidth: machine().bedW || 600, bedHeight: machine().bedH || 400, maxFeed: machine().maxFeed || 12000 });
 const connectionMatchesMachine = () => !machineStatus.connected || machineStatus.connectedMachineId === state.machineId;
 async function runJob(label) {
@@ -842,9 +909,11 @@ async function runJob(label) {
   const base = ($("filename").value.trim() || "job").replace(/\.[^.]+$/, "");
   const filename = base + driverExt(machine().driver);
   try {
-    const job = await bed.buildGcodeJob(ops, { maxFeed: machine().maxFeed || 12000 });
+    const job = await bed.buildGcodeJob(ops, { maxFeed: machine().maxFeed || 12000, zAxis: machine().zAxis });
+    const offsets = [...new Set(ops.map((op) => Number(op.zOffset) || 0))].filter((offset) => offset !== 0);
     const confirmed = machineStatus.dryRun || window.confirm(
       `Start REAL laser job on ${machine().name}?\n\n` +
+      (offsets.length ? `Z offsets: ${offsets.join(", ")} mm relative to focused Z=0.\n\n` : "") +
       "Confirm material, focus, ventilation, clear work area and that the lid/interlocks are ready."
     );
     if (!confirmed) return;
@@ -891,7 +960,7 @@ function estimate() {
 
 // --- simulate ---------------------------------------------------------------
 let simCtl = null;
-const simSpecs = () => activeLayers().map((l) => ({ color: state.mappingMode === "color" ? l.color : null, op: l.op, speed: l.speed, power: l.power, dpi: l.dpi, dither: l.dither, bottomUp: l.bottomUp }));
+const simSpecs = () => activeLayers().map((l) => ({ color: state.mappingMode === "color" ? l.color : null, op: l.op, speed: l.speed, power: l.power, zOffset: Number(l.zOffset) || 0, dpi: l.dpi, dither: l.dither, bottomUp: l.bottomUp }));
 function startSimulate() {
   if (!bed.getDesign()) return toast("Import a design first.", "info");
   const specs = simSpecs();
@@ -938,6 +1007,7 @@ function selectMachine(id) {
   const m = machine();
   bed.setBedSize(m.bedW || 600, m.bedH || 400);
   $("fnExt").textContent = driverExt(m.driver); // shown next to the name field
+  renderLayers();
 }
 const machineFields = (m) => [
   { key: "name", label: "Name", value: m?.name, placeholder: "e.g. Workshop laser", required: true },
@@ -951,6 +1021,10 @@ const machineFields = (m) => [
   { key: "bedH", label: `Bed height (${state.units})`, type: "number", min: 1, required: true, value: toDisp(m?.bedH || 400) },
   { key: "advanced", label: "Show advanced settings", type: "checkbox", value: false },
   { key: "maxFeed", label: "Max feed (mm/min)", type: "number", value: m?.maxFeed || 12000, showIf: (v) => v.advanced },
+  { key: "zEnabled", label: "Enable controlled Z-axis offsets", type: "checkbox", value: !!m?.zAxis?.enabled, showIf: (v) => v.advanced },
+  { key: "zMin", label: "Minimum Z offset (mm, must include 0)", type: "number", step: 0.1, value: m?.zAxis?.min ?? -10, showIf: (v) => v.advanced && v.zEnabled },
+  { key: "zMax", label: "Maximum Z offset (mm, must include 0)", type: "number", step: 0.1, value: m?.zAxis?.max ?? 10, showIf: (v) => v.advanced && v.zEnabled },
+  { key: "zFeed", label: "Maximum Z feed (mm/min)", type: "number", min: 1, step: 1, value: m?.zAxis?.feed || 300, showIf: (v) => v.advanced && v.zEnabled },
   { key: "connectTimeoutMs", label: "Network connect / handshake timeout (ms)", type: "number", min: 250, max: 30000, step: 250, value: m?.conn.connectTimeoutMs || 3000, showIf: (v) => v.advanced && v.type === "network" },
   { key: "responseTimeoutMs", label: "GRBL command response timeout (ms)", type: "number", min: 1000, max: 120000, step: 1000, value: m?.conn.responseTimeoutMs || 30000, showIf: (v) => v.advanced && v.type === "network" },
   { key: "flipX", label: "Flip X axis", type: "checkbox", value: m?.adv?.flipX || false, showIf: (v) => v.advanced },
@@ -962,17 +1036,27 @@ const machineFrom = (v, id) => ({
   conn: v.type === "network"
     ? { type: "network", host: v.host.trim(), port: Math.round(v.netport), connectTimeoutMs: v.connectTimeoutMs || 3000, responseTimeoutMs: v.responseTimeoutMs || 30000 }
     : { type: "usb", serial: v.serial?.trim() || "", baud: v.baud },
-  bedW: toMm(v.bedW), bedH: toMm(v.bedH), maxFeed: Math.max(1, v.maxFeed || 12000), adv: { flipX: v.flipX, flipY: v.flipY, home: v.home },
+  bedW: toMm(v.bedW), bedH: toMm(v.bedH), maxFeed: Math.max(1, v.maxFeed || 12000),
+  zAxis: { enabled: !!v.zEnabled, min: Number(v.zMin), max: Number(v.zMax), feed: Math.max(1, Number(v.zFeed) || 300) },
+  adv: { flipX: v.flipX, flipY: v.flipY, home: v.home },
 });
+function validZAxisForm(values) {
+  if (!values.zEnabled) return true;
+  if (!Number.isFinite(values.zMin) || !Number.isFinite(values.zMax) || values.zMin >= values.zMax || values.zMin > 0 || values.zMax < 0) {
+    toast("Z range must have a minimum below the maximum and include Z=0.", "err");
+    return false;
+  }
+  return true;
+}
 async function addMachine() {
   const v = await openModal({ title: "Add machine", submitLabel: "Add", fields: machineFields(null) });
-  if (!v || !v.name) return;
+  if (!v || !v.name || !validZAxisForm(v)) return;
   machines.push(machineFrom(v, "u" + Date.now())); saveMachines(); refreshMachines(machines[machines.length - 1].id);
   toast("Machine added: " + v.name, "ok");
 }
 async function editMachine(m) {
   const v = await openModal({ title: "Edit machine", submitLabel: "Save", fields: machineFields(m) });
-  if (!v || !v.name) return;
+  if (!v || !v.name || !validZAxisForm(v)) return;
   Object.assign(m, machineFrom(v, m.id)); saveMachines(); refreshMachines(m.id);
   toast("Machine saved: " + m.name, "ok");
 }
@@ -1057,11 +1141,18 @@ async function stopJob() {
 const matFields = (m) => [
   { key: "name", label: "Name", value: m?.name, placeholder: "e.g. Plywood 3 mm" },
   { key: "cutP", label: "Cut power %", type: "number", value: m ? m.ops.Cut.power : 80 }, { key: "cutS", label: "Cut speed %", type: "number", min: 1, max: 100, value: m ? clampSpeedPct(m.ops.Cut.speed) : 20 },
+  { key: "cutZ", label: "Cut Z offset (mm)", type: "number", step: 0.1, value: m?.ops.Cut.zOffset || 0 },
   { key: "engP", label: "Engrave power %", type: "number", value: m ? m.ops.Engrave.power : 40 }, { key: "engS", label: "Engrave speed %", type: "number", min: 1, max: 100, value: m ? clampSpeedPct(m.ops.Engrave.speed) : 65 },
+  { key: "engZ", label: "Engrave Z offset (mm)", type: "number", step: 0.1, value: m?.ops.Engrave.zOffset || 0 },
   { key: "scoP", label: "Score power %", type: "number", value: m ? m.ops.Score.power : 25 }, { key: "scoS", label: "Score speed %", type: "number", min: 1, max: 100, value: m ? clampSpeedPct(m.ops.Score.speed) : 35 },
+  { key: "scoZ", label: "Score Z offset (mm)", type: "number", step: 0.1, value: m?.ops.Score.zOffset || 0 },
   { key: "freq", label: "Frequency Hz", type: "number", value: m ? m.ops.Cut.freq : F },
 ];
-const opsFrom = (v) => ({ Cut: { power: v.cutP, speed: clampSpeedPct(v.cutS), freq: v.freq }, Engrave: { power: v.engP, speed: clampSpeedPct(v.engS), freq: v.freq }, Score: { power: v.scoP, speed: clampSpeedPct(v.scoS), freq: v.freq } });
+const opsFrom = (v) => ({
+  Cut: { power: v.cutP, speed: clampSpeedPct(v.cutS), freq: v.freq, zOffset: v.cutZ || 0 },
+  Engrave: { power: v.engP, speed: clampSpeedPct(v.engS), freq: v.freq, zOffset: v.engZ || 0 },
+  Score: { power: v.scoP, speed: clampSpeedPct(v.scoS), freq: v.freq, zOffset: v.scoZ || 0 },
+});
 function refreshMaterialSelect() {
   $("material").innerHTML = materials.map((m) => `<option value="${m.id}">${m.name}</option>`).join("");
   $("material").value = state.materialId;
@@ -1081,6 +1172,49 @@ async function editMaterial(m) {
   toast("Material saved: " + m.name, "ok");
 }
 
+const processProfileFields = (profile = {}) => [
+  { key: "name", label: "Profile name", value: profile.name, placeholder: "e.g. Photo engraving — birch", required: true },
+  { key: "op", label: "Operation", type: "select", options: ["Cut", "Engrave", "Score"], value: profile.op || "Cut" },
+  { key: "power", label: "Power %", type: "number", min: 0, max: 100, value: profile.power ?? 50 },
+  { key: "speed", label: "Speed %", type: "number", min: 1, max: 100, value: profile.speed ?? 50 },
+  { key: "freq", label: "Frequency Hz", type: "number", min: 0, value: profile.freq ?? F },
+  { key: "zOffset", label: "Z offset (mm from focused Z=0)", type: "number", step: 0.1, value: profile.zOffset ?? 0 },
+  { key: "dpi", label: "Engrave DPI", type: "number", min: 1, max: 1000, value: profile.dpi ?? 300, showIf: (v) => v.op === "Engrave" },
+  { key: "dither", label: "Raster mode", type: "select", options: DITHERS, value: profile.dither || "Grayscale", showIf: (v) => v.op === "Engrave" },
+  { key: "bottomUp", label: "Engrave bottom → top", type: "checkbox", value: profile.bottomUp !== false, showIf: (v) => v.op === "Engrave" },
+];
+const processProfileFrom = (values, id) => normalizeProcessProfile({ id, ...values });
+async function addProcessProfile(seed = {}) {
+  const values = await openModal({ title: "New process profile", submitLabel: "Add profile", fields: processProfileFields(seed) });
+  if (!values?.name) return null;
+  const profile = processProfileFrom(values, "p" + Date.now());
+  processProfiles.push(profile);
+  saveProcessProfiles();
+  toast("Process profile added: " + profile.name, "ok");
+  return profile;
+}
+async function saveLayerAsProcessProfile(layer) {
+  const profile = await addProcessProfile({ ...layer, name: `${material().name} — ${layer.op}` });
+  if (!profile) return;
+  applyProcessProfile(layer, profile);
+  renderLayers();
+  markDirty();
+}
+async function editProcessProfile(profile) {
+  if (!profile) return;
+  const values = await openModal({ title: "Edit process profile", submitLabel: "Save", fields: processProfileFields(profile) });
+  if (!values?.name) return;
+  Object.assign(profile, processProfileFrom(values, profile.id));
+  for (const layer of state.layers.filter((item) => item.profileId === profile.id)) {
+    if (layer.raster && profile.op !== "Engrave") layer.profileId = null;
+    else applyProcessProfile(layer, profile);
+  }
+  saveProcessProfiles();
+  renderLayers();
+  markDirty();
+  toast("Process profile saved: " + profile.name, "ok");
+}
+
 // --- generic library modal (materials / machines) --------------------------
 function openLibrary({ title, addLabel, list, subtitle, onAdd, onEdit, onDelete }) {
   const overlay = document.createElement("div");
@@ -1088,13 +1222,13 @@ function openLibrary({ title, addLabel, list, subtitle, onAdd, onEdit, onDelete 
   const panel = document.createElement("div");
   panel.className = "modal panel";
   const render = () => {
-    panel.innerHTML = `<div class="panel__header">${title}</div><div class="panel__body">
+    panel.innerHTML = `<div class="panel__header">${safeHtml(title)}</div><div class="panel__body">
       <div class="mat-list">${list().map((m) => `
-        <div class="mat-row"><div><div class="mat-name">${m.name}</div><div class="mat-sub">${subtitle(m)}</div></div>
+        <div class="mat-row"><div><div class="mat-name">${safeHtml(m.name)}</div><div class="mat-sub">${safeHtml(subtitle(m))}</div></div>
           <span class="grow"></span>
-          <button class="btn btn--ghost btn--sm" data-edit="${m.id}">Edit</button>
-          <button class="btn btn--ghost btn--sm" data-del="${m.id}">Delete</button></div>`).join("")}</div>
-      <div class="modal-actions"><button class="btn btn--secondary btn--sm" data-add>+ ${addLabel}</button>
+          <button class="btn btn--ghost btn--sm" data-edit="${safeHtml(m.id)}">Edit</button>
+          <button class="btn btn--ghost btn--sm" data-del="${safeHtml(m.id)}">Delete</button></div>`).join("")}</div>
+      <div class="modal-actions"><button class="btn btn--secondary btn--sm" data-add>+ ${safeHtml(addLabel)}</button>
         <button class="btn btn--primary btn--sm" data-close>Done</button></div></div>`;
   };
   panel.addEventListener("click", async (e) => {
@@ -1114,9 +1248,19 @@ const openMaterialLibrary = () => openLibrary({
   onAdd: addMaterial, onEdit: editMaterial,
   onDelete: (id) => { if (materials.length > 1) { materials = materials.filter((m) => m.id !== id); if (state.materialId === id) state.materialId = materials[0].id; saveMaterials(); refreshMaterialSelect(); } },
 });
+const openProcessProfileLibrary = () => openLibrary({
+  title: "Process profiles", addLabel: "Add process profile", list: () => processProfiles,
+  subtitle: (profile) => `${profile.op} · ${profile.power}% power · ${profile.speed}% speed · Z ${profile.zOffset || 0} mm${profile.op === "Engrave" ? ` · ${profile.dpi} DPI` : ""}`,
+  onAdd: addProcessProfile, onEdit: editProcessProfile,
+  onDelete: (id) => {
+    processProfiles = processProfiles.filter((profile) => profile.id !== id);
+    for (const layer of state.layers.filter((item) => item.profileId === id)) layer.profileId = null;
+    saveProcessProfiles(); renderLayers(); markDirty();
+  },
+});
 const openMachineLibrary = () => openLibrary({
   title: "Machines", addLabel: "Add machine", list: () => machines,
-  subtitle: (m) => `${m.driver} · ${m.conn.type === "network" ? (m.conn.host || "net") + ":" + (m.conn.port || "") : "USB " + (m.conn.serial || "")} · ${Math.round(m.bedW)}×${Math.round(m.bedH)}mm · F${m.maxFeed || 12000}`,
+  subtitle: (m) => `${m.driver} · ${m.conn.type === "network" ? (m.conn.host || "net") + ":" + (m.conn.port || "") : "USB " + (m.conn.serial || "")} · ${Math.round(m.bedW)}×${Math.round(m.bedH)}mm · F${m.maxFeed || 12000}${m.zAxis?.enabled ? ` · Z ${m.zAxis.min}…${m.zAxis.max} @ ${m.zAxis.feed}` : ""}`,
   onAdd: addMachine, onEdit: editMachine,
   onDelete: (id) => { if (machines.length > 1) { machines = machines.filter((m) => m.id !== id); if (state.machineId === id) state.machineId = machines[0].id; saveMachines(); refreshMachines(state.machineId); } },
 });
@@ -1128,14 +1272,16 @@ async function exportSettings() {
     fields: [
       { key: "machines", label: "Machines", type: "checkbox", value: true },
       { key: "materials", label: "Materials", type: "checkbox", value: true },
+      { key: "profiles", label: "Process profiles", type: "checkbox", value: true },
       { key: "prefs", label: "Preferences (units)", type: "checkbox", value: true },
     ],
   });
   if (!v) return;
-  if (!v.machines && !v.materials && !v.prefs) return toast("Nothing selected to export.", "info");
+  if (!v.machines && !v.materials && !v.profiles && !v.prefs) return toast("Nothing selected to export.", "info");
   const payload = { app: "modCut", version: 1, exported: new Date().toISOString() };
   if (v.machines) payload.machines = machines;
   if (v.materials) payload.materials = materials;
+  if (v.profiles) payload.processProfiles = processProfiles;
   if (v.prefs) payload.prefs = { units: state.units };
   try {
     const path = await window.modcut.exportSettings(JSON.stringify(payload, null, 2), "modcut-settings.json");
@@ -1148,8 +1294,9 @@ async function importSettings() {
     if (!text) return;
     const p = JSON.parse(text);
     let n = 0;
-    if (Array.isArray(p.machines) && p.machines.length) { machines = p.machines; state.machineId = machines[0].id; saveMachines(); refreshMachines(state.machineId); n++; }
-    if (Array.isArray(p.materials) && p.materials.length) { materials = p.materials; state.materialId = materials[0].id; saveMaterials(); refreshMaterialSelect(); applyMaterialToLayers(); n++; }
+    if (Array.isArray(p.machines) && p.machines.length) { machines = p.machines; normalizeMachines(); state.machineId = machines[0].id; saveMachines(); refreshMachines(state.machineId); n++; }
+    if (Array.isArray(p.materials) && p.materials.length) { materials = p.materials; normalizeMaterialSpeeds(); state.materialId = materials[0].id; saveMaterials(); refreshMaterialSelect(); applyMaterialToLayers(); n++; }
+    if (Array.isArray(p.processProfiles)) { processProfiles = p.processProfiles.map(normalizeProcessProfile).filter((profile) => profile.id); saveProcessProfiles(); renderLayers(); n++; }
     if (p.prefs && p.prefs.units) { setUnits(p.prefs.units); n++; }
     toast(n ? "Settings imported." : "No recognizable settings in that file.", n ? "ok" : "info");
   } catch (e) { toast("Import failed: " + e.message, "err"); }
@@ -1457,6 +1604,7 @@ $("simulate").addEventListener("click", startSimulate);
 $("sendBtn").addEventListener("click", () => runJob("Send"));
 $("stopBtn").addEventListener("click", stopJob);
 $("addMaterial").addEventListener("click", addMaterial);
+$("processProfiles").addEventListener("click", openProcessProfileLibrary);
 $("device").addEventListener("change", (e) => selectMachine(e.target.value));
 $("dryRun").addEventListener("change", renderMachineStatus);
 
@@ -1510,6 +1658,7 @@ window.modcut.onMenu((cmd) => ({
   "move-to-top": () => editAction("move-to-top"), "move-to-bottom": () => editAction("move-to-bottom"),
   "add-machine": addMachine, "manage-machines": openMachineLibrary,
   "add-material": addMaterial, materials: openMaterialLibrary,
+  "add-process-profile": addProcessProfile, "process-profiles": openProcessProfileLibrary,
   "save-document": () => saveDocument(false), "save-document-as": () => saveDocument(true),
   save: () => runJob("Save"), export: () => runJob("Export"), preferences: openSettings,
   "export-settings": exportSettings, "import-settings": importSettings,

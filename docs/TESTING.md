@@ -32,6 +32,30 @@ Run `npm start` and keep **Dry run** checked.
 Boundary test: move part of the design outside the bed and run again. The Java
 sidecar must reject the job with an out-of-bounds error.
 
+### Process profile and Z-offset acceptance test
+
+1. Open the process-profile library from the gear beside Material. Create one
+   profile for each of Cut, Engrave and Score with distinct power, speed and
+   frequency values. Give the Engrave profile a distinct DPI and raster mode.
+2. Select each profile from a matching layer. Its values must update together.
+   Change one value manually: the layer must switch to **Custom** without
+   changing the saved profile. Save the layer as a new profile and verify that
+   it appears only for the matching operation.
+3. With Z disabled in the selected machine, the layer's Z offset must be
+   disabled. A previously saved non-zero offset must be blocked from running,
+   not silently omitted.
+4. Edit a Dummy/GRBL machine, enable Z in Advanced, set a small range that
+   includes zero (for example -2 to 2 mm) and a conservative Z feed. Set a layer
+   to -1 mm, connect in Dry run and start the job. It must pass validation.
+5. Inspect the generated/dry-run flow: Z motion must happen with `M5`, use a
+   feed-controlled `G1` separate from XY, and restore `Z0` before final home.
+6. Try an offset outside the configured range. The renderer must block it. If a
+   crafted job bypasses the renderer, the Java sidecar must independently reject
+   it using the connected machine's captured Z limits.
+
+Do not repeat this test with a powered laser until the machine's Z direction,
+units, travel limits and clearance have been verified physically.
+
 ### Raster photo acceptance test
 
 1. Import a small color PNG or JPG. Its layer operation must default to

@@ -11,11 +11,21 @@ const png = {
   dataUrl: `data:image/png;base64,${readFileSync(new URL("../../assets/modcut_logo.png", import.meta.url)).toString("base64")}`,
 };
 const near = (a, b, epsilon = 0.03) => Math.abs(a - b) <= epsilon;
+const zMachine = [{
+  id: "dummy-z", name: "Dummy Z", driver: "Dummy", bedW: 600, bedH: 400, maxFeed: 12000,
+  conn: { type: "usb", serial: "", baud: 115200 },
+  zAxis: { enabled: true, min: -5, max: 3, feed: 250 },
+  adv: { flipX: false, flipY: true, home: "front-left" },
+}];
+const processProfiles = [{
+  id: "cut-z-test", name: "Cut with focus offset", op: "Cut",
+  power: 37, speed: 24, freq: 18000, zOffset: -1,
+}];
 
 export async function runWorkflows(client) {
   const { evaluate } = client;
   const { click, drag, key, mouse } = inputHelpers(client);
-  await evaluate("localStorage.clear(); location.reload()");
+  await evaluate(`localStorage.clear(); localStorage.setItem("modcut_machines", ${JSON.stringify(JSON.stringify(zMachine))}); localStorage.setItem("modcut_process_profiles", ${JSON.stringify(JSON.stringify(processProfiles))}); location.reload()`);
   const readyDeadline = Date.now() + 10_000;
   let canvas = null;
   while (!canvas && Date.now() < readyDeadline) {
@@ -76,6 +86,29 @@ export async function runWorkflows(client) {
   await evaluate("window.dispatchEvent(new KeyboardEvent('keyup',{key:'Alt',bubbles:true}))");
   const alt = await transformState();
   assert.ok(near(alt.cx, beforeAlt.cx) && near(alt.cy, beforeAlt.cy), "Alt must scale around the center");
+
+  assert.equal(await evaluate("document.querySelector('[data-k=zOffset]').disabled"), false, "Z offset must be available for a Z-enabled machine profile");
+  await evaluate("(() => { const select=document.querySelector('[data-profile]'); select.value='cut-z-test'; select.dispatchEvent(new Event('change',{bubbles:true})); })()");
+  assert.deepEqual(await evaluate("(() => ({power:+document.querySelector('[data-k=power]').value,speed:+document.querySelector('[data-k=speed]').value,z:+document.querySelector('[data-k=zOffset]').value,profile:document.querySelector('[data-profile]').value}))()"), { power: 37, speed: 24, z: -1, profile: "cut-z-test" }, "a named process profile must apply all output settings together");
+  await evaluate("(() => { const input=document.querySelector('[data-k=power]'); input.value=38; input.dispatchEvent(new Event('input',{bubbles:true})); })()");
+  assert.equal(await evaluate("document.querySelector('[data-profile]').value"), "custom", "manual changes must detach the layer from its named profile");
+  await evaluate("(() => { const select=document.querySelector('[data-profile]'); select.value='cut-z-test'; select.dispatchEvent(new Event('change',{bubbles:true})); })()");
+  await evaluate("document.querySelector('#connect').click()");
+  const connectionDeadline = Date.now() + 5_000;
+  let connected = false;
+  while (!connected && Date.now() < connectionDeadline) {
+    connected = await evaluate("document.querySelector('#connText').textContent.includes('dry run')");
+    if (!connected) await wait(100);
+  }
+  assert.equal(connected, true);
+  await evaluate("document.querySelector('#sendBtn').click()");
+  const jobDeadline = Date.now() + 5_000;
+  let started = false;
+  while (!started && Date.now() < jobDeadline) {
+    started = await evaluate("[...document.querySelectorAll('.toast')].some(toast=>toast.textContent.includes('started'))");
+    if (!started) await wait(100);
+  }
+  assert.equal(started, true, "a Z-offset job must pass renderer and sidecar validation");
 
   const artworkBeforeImport = await evaluate("paper.project.layers[1].exportJSON({asString:true})");
   await evaluate(`window.modcut.setE2EImportResult(${JSON.stringify(svg("replacement", "#ff0000"))})`);

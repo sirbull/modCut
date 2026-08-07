@@ -19,7 +19,10 @@ protocol and cannot be used as the raw command port.
    `192.168.1.50` or `fluidnc.local`.
 6. Enter its raw GRBL/Telnet port. Start with `23` unless the controller is
    configured differently.
-7. Enter the physical bed size and save the profile.
+7. Enter the physical bed size. If the controller has a tested Z axis, open
+   Advanced, enable Z and enter its relative minimum/maximum travel and a safe
+   Z feed. Leave it disabled for machines without controlled Z focusing.
+8. Save the profile.
 
 Keep **Dry run** enabled for the first editor and toolpath test. To verify the
 real network connection, make the laser safe, disable **Dry run**, and click

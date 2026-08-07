@@ -27,6 +27,10 @@ final class MachineController implements AutoCloseable {
   private volatile double connectedBedWidth = 600;
   private volatile double connectedBedHeight = 400;
   private volatile double connectedMaxFeed = 12_000;
+  private volatile boolean connectedZEnabled;
+  private volatile double connectedZMin;
+  private volatile double connectedZMax;
+  private volatile double connectedZFeed = 300;
   private volatile boolean dryRun = true;
   private volatile boolean running;
   private volatile int linesSent;
@@ -92,6 +96,16 @@ final class MachineController implements AutoCloseable {
     double machineBedWidth = positiveMachineLimit(machine, "bedW", 600);
     double machineBedHeight = positiveMachineLimit(machine, "bedH", 400);
     double machineMaxFeed = positiveMachineLimit(machine, "maxFeed", 12_000);
+    JsonNode zAxis = machine.path("zAxis");
+    boolean machineZEnabled = zAxis.path("enabled").asBoolean(false);
+    double machineZMin = zAxis.path("min").asDouble(-10);
+    double machineZMax = zAxis.path("max").asDouble(10);
+    double machineZFeed = zAxis.path("feed").asDouble(300);
+    if (machineZEnabled && (!Double.isFinite(machineZMin) || !Double.isFinite(machineZMax)
+        || machineZMin > 0 || machineZMax < 0 || machineZMin >= machineZMax
+        || !Double.isFinite(machineZFeed) || machineZFeed <= 0)) {
+      throw new IllegalArgumentException("Maskinprofilen har ugyldige Z-aksegrenser.");
+    }
     String driver = machine.path("driver").asText("Dummy");
     dryRun = params.path("dryRun").asBoolean(true) || driver.equalsIgnoreCase("Dummy");
     JsonNode conn = machine.path("conn");
@@ -116,6 +130,10 @@ final class MachineController implements AutoCloseable {
     connectedBedWidth = machineBedWidth;
     connectedBedHeight = machineBedHeight;
     connectedMaxFeed = machineMaxFeed;
+    connectedZEnabled = machineZEnabled;
+    connectedZMin = machineZMin;
+    connectedZMax = machineZMax;
+    connectedZFeed = machineZFeed;
     lastError = "";
     lastResult = "connected";
     return status();
@@ -163,7 +181,8 @@ final class MachineController implements AutoCloseable {
       throw new IllegalArgumentException("Ekte kjøring krever eksplisitt sikkerhetsbekreftelse.");
     }
     List<String> lines = lines(params);
-    GcodeValidator.Report report = GcodeValidator.validate(lines, connectedBedWidth, connectedBedHeight, connectedMaxFeed);
+    GcodeValidator.Report report = GcodeValidator.validate(lines, connectedBedWidth, connectedBedHeight, connectedMaxFeed,
+        connectedZEnabled, connectedZMin, connectedZMax, connectedZFeed);
     startAsync(params.path("filename").asText("job.gcode"), lines);
     ObjectNode out = reportNode(report);
     out.put("started", true);
@@ -229,6 +248,7 @@ final class MachineController implements AutoCloseable {
     out.put("deviceIdentity", transport == null ? "" : transport.identity());
     out.put("connectedMachineId", transport == null ? "" : connectedMachineId);
     out.put("connectedMachineName", transport == null ? "" : connectedMachineName);
+    out.put("connectedZEnabled", transport != null && connectedZEnabled);
     return out;
   }
 
@@ -306,6 +326,10 @@ final class MachineController implements AutoCloseable {
     connectedBedWidth = 600;
     connectedBedHeight = 400;
     connectedMaxFeed = 12_000;
+    connectedZEnabled = false;
+    connectedZMin = 0;
+    connectedZMax = 0;
+    connectedZFeed = 300;
   }
 
   public void close() {

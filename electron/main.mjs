@@ -157,6 +157,9 @@ function buildMenu() {
       submenu: [
         { label: "Add material…", click: () => send("add-material") },
         { label: "Material library…", click: () => send("materials") },
+        { type: "separator" },
+        { label: "Add process profile…", click: () => send("add-process-profile") },
+        { label: "Process profile library…", click: () => send("process-profiles") },
       ],
     },
     { role: "windowMenu", label: "Window" },

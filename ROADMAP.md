@@ -45,6 +45,10 @@ the same commit that completes an item.
 
 ## Recently completed
 
+- [x] Named Cut, Engrave and Score process profiles with per-operation power,
+  speed, frequency, Z offset and engraving raster controls.
+- [x] Guarded per-layer Z offsets with explicit machine capability/range/feed
+  configuration, laser-off moves and independent Java-side validation.
 - [x] Independent project tabs with per-tab design, layers, settings and history.
 - [x] Illustrator-style Pen preview, handles, close/continue cursors and endpoint continuation.
 - [x] Pen add-anchor cursor and shape-preserving insertion on existing paths.

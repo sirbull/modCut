@@ -167,7 +167,7 @@
         <li><strong>Effekt (power)</strong> — hvor sterk strålen er, i prosent.</li>
         <li><strong>Fart (speed)</strong> — hvor fort hodet beveger seg.</li>
         <li><strong>Frekvens</strong> — pulsfrekvens (viktig på CO2 for rene kanter i tynne materialer).</li>
-        <li><strong>Offset</strong> — fokus-/høydejustering for laget.</li>
+        <li><strong>Z offset</strong> — relativ fokus-/høydejustering for laget, i millimeter. Feltet er bare aktivt når valgt maskin har en konfigurert Z-akse.</li>
       </ul>
       <h3>Flytte elementer mellom lag</h3>
       <p>Marker ett eller flere elementer, høyreklikk og velg et fargelag under <strong>Move selection to layer</strong>.
@@ -197,6 +197,20 @@
         <li><strong>Tilordne</strong> kopierer innstillingene inn i laget (en engangskopi).</li>
         <li><strong>Koble</strong> binder laget til biblioteket — endrer du biblioteket, oppdateres alle koblede lag. Nyttig for et delt verksted.</li>
       </ul>
+      <h3>Prosessprofiler</h3>
+      <p>Prosessprofiler er navngitte oppskrifter som kan brukes uavhengig av materiale og tykkelse, for eksempel
+         «Foto – bjørk, 300 DPI» eller «Score – papir». Åpne profilbiblioteket med tannhjulet ved materialvalget,
+         eller lagre innstillingene fra en lagrad direkte med <strong>Save profile…</strong>.</p>
+      <ul>
+        <li>Alle profiler lagrer operasjon, effekt, fart, frekvens og Z offset.</li>
+        <li>Engrave-profiler lagrer også DPI, rastermodus og graveringsretning.</li>
+        <li>Velg <strong>Material default</strong> for materialets standard, en navngitt profil for gjenbruk, eller <strong>Custom</strong> for frie lagverdier.</li>
+      </ul>
+      <div class="callout callout--warn">
+        <strong>Z-sikkerhet:</strong> Aktiver Z-aksen under maskinens avanserte innstillinger og angi tillatt minimum,
+        maksimum og matehastighet. modCut flytter Z med laseren av, separat fra XY, og returnerer til Z&nbsp;=&nbsp;0 før jobben avsluttes.
+        Kjør alltid Dry run og bekreft fortegn og grenser uten laserstrøm første gang.
+      </div>
       <div class="callout">
         <strong>Material-test:</strong> usikker på verdiene? Kjør en test-rute — et rutenett av små felt med
         ulik effekt og fart — og se hvilken kombinasjon som gir best resultat på nettopp ditt materiale.

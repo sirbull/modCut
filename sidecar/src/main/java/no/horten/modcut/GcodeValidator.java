@@ -20,9 +20,17 @@ final class GcodeValidator {
   private GcodeValidator() {}
 
   static Report validate(List<String> lines, double bedWidth, double bedHeight, double maxFeed) {
+    return validate(lines, bedWidth, bedHeight, maxFeed, false, 0, 0, 0);
+  }
+
+  static Report validate(List<String> lines, double bedWidth, double bedHeight, double maxFeed,
+                         boolean zEnabled, double zMin, double zMax, double zMaxFeed) {
     if (lines == null || lines.isEmpty()) throw new IllegalArgumentException("Jobben inneholder ingen G-code-linjer.");
     if (!finitePositive(bedWidth) || !finitePositive(bedHeight)) throw new IllegalArgumentException("Ugyldig arbeidsområde.");
     if (!finitePositive(maxFeed)) throw new IllegalArgumentException("Ugyldig maksimal matehastighet.");
+    if (zEnabled && (!Double.isFinite(zMin) || !Double.isFinite(zMax) || zMin > 0 || zMax < 0 || zMin >= zMax || !finitePositive(zMaxFeed))) {
+      throw new IllegalArgumentException("Maskinprofilen har ugyldige Z-aksegrenser.");
+    }
     if (lines.size() > 500_000) throw new IllegalArgumentException("Jobben er for stor (maks 500 000 linjer).");
 
     boolean millimetres = false;
@@ -30,7 +38,7 @@ final class GcodeValidator {
     boolean laserOn = false;
     int bytes = 0;
     int motions = 0;
-    double x = 0, y = 0, minX = 0, minY = 0, maxX = 0, maxY = 0, maxFeedSeen = 0;
+    double x = 0, y = 0, z = 0, minX = 0, minY = 0, maxX = 0, maxY = 0, maxFeedSeen = 0;
     List<String> preview = new ArrayList<>();
 
     for (int index = 0; index < lines.size(); index++) {
@@ -45,7 +53,7 @@ final class GcodeValidator {
       Matcher matcher = TOKEN.matcher(code);
       int cursor = 0;
       String command = null;
-      Double nextX = null, nextY = null, feed = null, power = null;
+      Double nextX = null, nextY = null, nextZ = null, feed = null, power = null;
       while (matcher.find()) {
         if (!code.substring(cursor, matcher.start()).isBlank()) throw invalid(index, "ukjent syntaks");
         cursor = matcher.end();
@@ -57,6 +65,7 @@ final class GcodeValidator {
           command = word;
         } else if (letter == 'X') nextX = value;
         else if (letter == 'Y') nextY = value;
+        else if (letter == 'Z') nextZ = value;
         else if (letter == 'F') feed = value;
         else if (letter == 'S') power = value;
         else throw invalid(index, "parameter " + letter + " er ikke tillatt");
@@ -75,25 +84,36 @@ final class GcodeValidator {
       boolean motion = command.equals("G0") || command.equals("G00") || command.equals("G1") || command.equals("G01");
       if (motion) {
         if (!millimetres || !absolute) throw invalid(index, "G21 og G90 må stå før første bevegelse");
-        if (nextX == null && nextY == null) throw invalid(index, "bevegelsen mangler X/Y");
-        if (nextX != null) x = nextX;
-        if (nextY != null) y = nextY;
-        if (x < -EPSILON || y < -EPSILON || x > bedWidth + EPSILON || y > bedHeight + EPSILON) {
-          throw invalid(index, String.format(Locale.ROOT, "posisjon %.3f,%.3f er utenfor %.1f×%.1f mm", x, y, bedWidth, bedHeight));
+        if (nextX == null && nextY == null && nextZ == null) throw invalid(index, "bevegelsen mangler X/Y/Z");
+        if (nextZ != null) {
+          if (!zEnabled) throw invalid(index, "Z-bevegelse er ikke aktivert i den tilkoblede maskinprofilen");
+          if (nextX != null || nextY != null) throw invalid(index, "Z må flyttes separat fra X/Y");
+          if (laserOn) throw invalid(index, "Z kan bare flyttes når laseren er av");
+          if (!command.equals("G1") && !command.equals("G01")) throw invalid(index, "Z må bruke G1 slik at konfigurert Z-feed håndheves");
+          if (nextZ < zMin - EPSILON || nextZ > zMax + EPSILON) throw invalid(index, "Z er utenfor maskinprofilens tillatte område");
+          if (feed == null || feed <= 0 || feed > zMaxFeed + EPSILON) throw invalid(index, "Z-feed F må være >0 og ≤ " + zMaxFeed);
+          z = nextZ;
+        } else {
+          if (nextX != null) x = nextX;
+          if (nextY != null) y = nextY;
+          if (x < -EPSILON || y < -EPSILON || x > bedWidth + EPSILON || y > bedHeight + EPSILON) {
+            throw invalid(index, String.format(Locale.ROOT, "posisjon %.3f,%.3f er utenfor %.1f×%.1f mm", x, y, bedWidth, bedHeight));
+          }
+          if (feed != null) {
+            if (feed <= 0 || feed > maxFeed + EPSILON) throw invalid(index, "feed F må være >0 og ≤ " + maxFeed);
+            maxFeedSeen = Math.max(maxFeedSeen, feed);
+          }
+          minX = Math.min(minX, x); minY = Math.min(minY, y);
+          maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
         }
-        if (feed != null) {
-          if (feed <= 0 || feed > maxFeed + EPSILON) throw invalid(index, "feed F må være >0 og ≤ " + maxFeed);
-          maxFeedSeen = Math.max(maxFeedSeen, feed);
-        }
-        minX = Math.min(minX, x); minY = Math.min(minY, y);
-        maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
         motions++;
-      } else if (nextX != null || nextY != null || feed != null) {
-        throw invalid(index, "X/Y/F krever en G0/G1-bevegelse");
+      } else if (nextX != null || nextY != null || nextZ != null || feed != null) {
+        throw invalid(index, "X/Y/Z/F krever en G0/G1-bevegelse");
       }
     }
     if (motions == 0) throw new IllegalArgumentException("Jobben inneholder ingen bevegelser.");
     if (laserOn) throw new IllegalArgumentException("Jobben avslutter uten M5 (laser av).");
+    if (Math.abs(z) > EPSILON) throw new IllegalArgumentException("Jobben må gjenopprette Z0 før den avsluttes.");
     return new Report(lines.size(), bytes, List.copyOf(preview), minX, minY, maxX, maxY, maxFeedSeen, motions);
   }
 
