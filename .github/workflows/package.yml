@@ -55,7 +55,14 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y xvfb
       - run: npm ci
       - run: npm test
-      - run: npm run dist -- ${{ matrix.target }}
+      - name: Build unsigned installers
+        if: github.ref_type != 'tag'
+        run: npm run dist -- ${{ matrix.target }} --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+      - name: Build signed release installers
+        if: github.ref_type == 'tag'
+        run: npm run dist -- ${{ matrix.target }} --publish never
         env:
           CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}

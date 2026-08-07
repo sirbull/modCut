@@ -57,11 +57,15 @@ win:
     - portable
 
 nsis:
+  artifactName: ${productName}-${version}-${os}-${arch}-setup.${ext}
   oneClick: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: modCut
+
+portable:
+  artifactName: ${productName}-${version}-${os}-${arch}-portable.${ext}
 
 linux:
   icon: modcut_logo.png

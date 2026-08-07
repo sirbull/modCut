@@ -16,8 +16,16 @@ export async function runWorkflows(client) {
   const { evaluate } = client;
   const { click, drag, key, mouse } = inputHelpers(client);
   await evaluate("localStorage.clear(); location.reload()");
-  await wait(800);
-  const canvas = await evaluate("(() => { const r=document.querySelector('.bed-canvas').getBoundingClientRect(); return {left:r.left,top:r.top}; })()");
+  const readyDeadline = Date.now() + 10_000;
+  let canvas = null;
+  while (!canvas && Date.now() < readyDeadline) {
+    try {
+      canvas = await evaluate("(() => { const el=document.querySelector('.bed-canvas'); if (document.readyState !== 'complete' || !el || !window.paper?.project || paper.project.layers.length < 2 || !document.querySelector('.doc-tab.is-active')) return null; const r=el.getBoundingClientRect(); return r.width > 0 && r.height > 0 ? {left:r.left,top:r.top} : null; })()");
+    } catch {}
+    if (!canvas) await wait(100);
+  }
+  assert.ok(canvas, "modCut canvas must be ready after reload");
+  await wait(300);
   const p1 = { x: canvas.left + 220, y: canvas.top + 175 };
   const p2 = { x: canvas.left + 330, y: canvas.top + 235 };
   const p3 = { x: canvas.left + 440, y: canvas.top + 175 };

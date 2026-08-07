@@ -20,7 +20,10 @@ function launch() {
   const args = useXvfb ? ["-a", electronPath, ...electronArgs] : electronArgs;
   const env = { ...process.env, MODCUT_E2E: "1" };
   delete env.ELECTRON_RUN_AS_NODE;
-  child = spawn(command, args, { cwd: process.cwd(), env, stdio: ["ignore", "pipe", "pipe"] });
+  child = spawn(command, args, {
+    cwd: process.cwd(), env, stdio: ["ignore", "pipe", "pipe"],
+    detached: process.platform !== "win32",
+  });
   child.stdout.on("data", (chunk) => { output += chunk; });
   child.stderr.on("data", (chunk) => { output += chunk; });
   return child;
@@ -28,10 +31,18 @@ function launch() {
 
 async function stop(signal = "SIGTERM") {
   if (!child || child.exitCode != null) return;
-  child.kill(signal);
+  const terminate = (nextSignal) => {
+    try {
+      if (process.platform !== "win32") process.kill(-child.pid, nextSignal);
+      else child.kill(nextSignal);
+    } catch {
+      child.kill(nextSignal);
+    }
+  };
+  terminate(signal);
   await Promise.race([
     new Promise((resolve) => child.once("exit", resolve)),
-    wait(3000).then(() => { if (child?.exitCode == null) child.kill("SIGKILL"); }),
+    wait(3000).then(() => { if (child?.exitCode == null) terminate("SIGKILL"); }),
   ]);
 }
 
