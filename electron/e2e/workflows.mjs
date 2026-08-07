@@ -69,6 +69,7 @@ export async function runWorkflows(client) {
   const alt = await transformState();
   assert.ok(near(alt.cx, beforeAlt.cx) && near(alt.cy, beforeAlt.cy), "Alt must scale around the center");
 
+  const artworkBeforeImport = await evaluate("paper.project.layers[1].exportJSON({asString:true})");
   await evaluate(`window.modcut.setE2EImportResult(${JSON.stringify(svg("replacement", "#ff0000"))})`);
   await evaluate("document.querySelector('#import').click()");
   await wait();
@@ -76,7 +77,7 @@ export async function runWorkflows(client) {
   assert.deepEqual(prompt.map((item) => item.text), ["Don't Save", "Cancel", "Save"]);
   assert.equal(prompt[2].primary, true);
   await evaluate("document.querySelector('[data-x=cancel]').click()");
-  assert.ok(await evaluate("paper.project.layers[1].children.length >= 2"), "Cancel must preserve current artwork");
+  assert.equal(await evaluate("paper.project.layers[1].exportJSON({asString:true})"), artworkBeforeImport, "Cancel must preserve current artwork exactly");
   await evaluate("document.querySelector('#import').click()");
   await wait();
   await evaluate("document.querySelector('[data-x=discard]').click()");

@@ -14,6 +14,7 @@ let output = "";
 
 function launch() {
   const electronArgs = [".", `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`];
+  if (process.platform === "linux") electronArgs.push("--no-sandbox");
   const useXvfb = process.platform === "linux" && !process.env.DISPLAY;
   const command = useXvfb ? "xvfb-run" : electronPath;
   const args = useXvfb ? ["-a", electronPath, ...electronArgs] : electronArgs;
