@@ -1,11 +1,8 @@
 # modCut
 
-Modern, cross-platform laser control for **Horten Folkeverksted** — a modernized
+Modern, cross-platform laser control for **CO2 Laser cutters and engravers** — a modernized
 [VisiCut](https://github.com/t-oster/VisiCut). Electron UI + a Java sidecar that
-reuses VisiCut's proven driver engine ([LibLaserCut](https://github.com/t-oster/LibLaserCut))
-to drive Epilog, Ruida/Chinese CO2, GRBL and more over USB or network.
-
-Full design + roadmap: `../.claude/plans/jeg-nsker-bygge-reactive-popcorn.md`.
+reuses VisiCut's proven driver engine to drive Epilog, Ruida/Chinese CO2, GRBL and more over USB or network.
 
 ## Status — M0 (skeleton)
 
