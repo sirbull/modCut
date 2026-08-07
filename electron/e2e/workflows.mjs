@@ -40,14 +40,21 @@ export async function runWorkflows(client) {
   const p2 = { x: canvas.left + 330, y: canvas.top + 235 };
   const p3 = { x: canvas.left + 440, y: canvas.top + 175 };
 
-  await evaluate("document.querySelector('[data-tool=pen]').click()");
-  await click(p1);
-  await mouse("mouseMoved", p2);
-  const previewDeadline = Date.now() + 2_000;
   let penPreviewCount = 0;
-  while (!penPreviewCount && Date.now() < previewDeadline) {
-    penPreviewCount = await evaluate("paper.project.getItems({name:'pen-preview'}).length");
-    if (!penPreviewCount) await wait(50);
+  for (let attempt = 1; attempt <= 3 && !penPreviewCount; attempt++) {
+    await evaluate("window.focus(); document.querySelector('[data-tool=pen]').click()");
+    await click(p1);
+    await mouse("mouseMoved", { x: p1.x + 12, y: p1.y + 8 });
+    await mouse("mouseMoved", p2);
+    const previewDeadline = Date.now() + 1_000;
+    while (!penPreviewCount && Date.now() < previewDeadline) {
+      penPreviewCount = await evaluate("paper.project.getItems({name:'pen-preview'}).length");
+      if (!penPreviewCount) await wait(50);
+    }
+    if (!penPreviewCount) {
+      await key("Escape");
+      await wait(150);
+    }
   }
   assert.equal(penPreviewCount, 1, "Pen must show a live preview");
   await click(p2); await click(p3); await key("Enter");

@@ -46,6 +46,13 @@ function createWindow() {
     nextWindow.webContents.send("app-close-request", { reason: quitRequested ? "quit" : "window" });
   });
   nextWindow.on("closed", () => { if (win === nextWindow) win = null; });
+  if (isE2E) {
+    nextWindow.webContents.once("did-finish-load", () => {
+      nextWindow.show();
+      if (isMac) app.focus({ steal: true });
+      nextWindow.focus();
+    });
+  }
   void nextWindow.loadFile(join(root, "renderer", "index.html"));
   return nextWindow;
 }
