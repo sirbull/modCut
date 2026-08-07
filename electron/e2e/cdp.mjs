@@ -26,12 +26,26 @@ export async function connectToApp(port, timeoutMs = 20_000) {
     if (!message.id || !pending.has(message.id)) return;
     const promise = pending.get(message.id);
     pending.delete(message.id);
+    clearTimeout(promise.timer);
     message.error ? promise.reject(new Error(message.error.message)) : promise.resolve(message.result);
+  });
+  socket.addEventListener("close", () => {
+    for (const [id, promise] of pending) {
+      clearTimeout(promise.timer);
+      promise.reject(new Error(`DevTools connection closed while command ${id} was pending`));
+    }
+    pending.clear();
   });
   const command = (method, params = {}) => {
     const id = nextId++;
     socket.send(JSON.stringify({ id, method, params }));
-    return new Promise((resolve, reject) => pending.set(id, { resolve, reject }));
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        pending.delete(id);
+        reject(new Error(`DevTools command timed out after 10 seconds: ${method}`));
+      }, 10_000);
+      pending.set(id, { resolve, reject, timer });
+    });
   };
   const evaluate = async (expression) => {
     const result = await command("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true });

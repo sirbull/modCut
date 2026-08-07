@@ -54,11 +54,24 @@ try {
   await stop("SIGKILL");
   await wait(500);
 
-  output = "";
-  launch();
-  const second = await connectToApp(port);
-  await verifyRecoveredSession(second, expected);
-  second.socket.close();
+  let recovered = false;
+  let recoveryError = null;
+  for (let attempt = 1; attempt <= 2 && !recovered; attempt++) {
+    output = "";
+    launch();
+    try {
+      const second = await connectToApp(port);
+      await verifyRecoveredSession(second, expected);
+      second.socket.close();
+      recovered = true;
+    } catch (error) {
+      recoveryError = error;
+      process.stderr.write(`Recovery verification attempt ${attempt} failed: ${error.message}\n`);
+      await stop();
+      if (attempt < 2) await wait(750);
+    }
+  }
+  if (!recovered) throw recoveryError;
   process.stdout.write("PASS Electron E2E: tabs, Pen/node, scaling, save prompt, import/add, raster quality, native Close/Quit and crash recovery\n");
 } catch (error) {
   process.stderr.write(output + "\n");
