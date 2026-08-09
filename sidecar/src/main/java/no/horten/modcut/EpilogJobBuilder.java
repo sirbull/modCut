@@ -5,6 +5,8 @@ import de.thomas_oster.liblasercut.LaserJob;
 import de.thomas_oster.liblasercut.VectorPart;
 import de.thomas_oster.liblasercut.platform.Util;
 import de.thomas_oster.liblasercut.properties.PowerSpeedFocusFrequencyProperty;
+import java.util.ArrayList;
+import java.util.List;
 
 /** Converts modCut's device-neutral vector segments to a LibLaserCut Epilog job. */
 final class EpilogJobBuilder {
@@ -14,6 +16,8 @@ final class EpilogJobBuilder {
   private static final double EPSILON = 0.01;
   private static final int MAX_SEGMENTS = 100_000;
   private static final int MAX_POINTS = 500_000;
+
+  private record DevicePoint(double xMm, double yMm, int xDevice, int yDevice) {}
 
   record Built(LaserJob job, int segmentCount, int pointCount, boolean frequencyClamped) {}
 
@@ -45,8 +49,7 @@ final class EpilogJobBuilder {
       if (!points.isArray() || points.size() < 2) {
         throw invalidSegment(segmentIndex, "må ha minst to punkter");
       }
-      pointCount += points.size();
-      if (pointCount > MAX_POINTS) {
+      if (pointCount + points.size() > MAX_POINTS) {
         throw new IllegalArgumentException("Epilog-jobben er for stor (maks " + MAX_POINTS + " punkter).");
       }
 
@@ -58,11 +61,36 @@ final class EpilogJobBuilder {
       frequencyClamped |= frequency != requestedFrequency;
       vectors.setProperty(property(power, speed, frequency, focus));
 
-      JsonNode first = points.get(0);
-      vectors.moveto(px(coordinate(first, "x", bedWidth, segmentIndex)), px(coordinate(first, "y", bedHeight, segmentIndex)));
-      for (int pointIndex = 1; pointIndex < points.size(); pointIndex++) {
-        JsonNode point = points.get(pointIndex);
-        vectors.lineto(px(coordinate(point, "x", bedWidth, segmentIndex)), px(coordinate(point, "y", bedHeight, segmentIndex)));
+      List<DevicePoint> devicePoints = new ArrayList<>();
+      for (int pointIndex = 0; pointIndex < points.size(); pointIndex++) {
+        DevicePoint point = devicePoint(points.get(pointIndex), bedWidth, bedHeight, segmentIndex);
+        if (devicePoints.isEmpty() || !sameDevicePoint(devicePoints.get(devicePoints.size() - 1), point)) {
+          devicePoints.add(point);
+        }
+      }
+      if (devicePoints.size() < 2) throw invalidSegment(segmentIndex, "blir kortere enn ett Epilog-enhetstrinn");
+
+      if (segment.path("closed").asBoolean(false)) {
+        DevicePoint first = devicePoints.get(0);
+        DevicePoint last = devicePoints.get(devicePoints.size() - 1);
+        if (!sameDevicePoint(first, last)) devicePoints.add(first);
+
+        if (segment.path("operation").asText("").equalsIgnoreCase("Cut")) {
+          JsonNode overlapNode = segment.path("overlapPoint");
+          DevicePoint overlap = overlapNode.isObject()
+              ? devicePoint(overlapNode, bedWidth, bedHeight, segmentIndex)
+              : overlapPoint(first, devicePoints.get(1));
+          if (!sameDevicePoint(devicePoints.get(devicePoints.size() - 1), overlap)) devicePoints.add(overlap);
+        }
+      }
+
+      pointCount += devicePoints.size();
+      if (pointCount > MAX_POINTS) throw new IllegalArgumentException("Epilog-jobben er for stor (maks " + MAX_POINTS + " punkter).");
+      DevicePoint first = devicePoints.get(0);
+      vectors.moveto(first.xDevice(), first.yDevice());
+      for (int pointIndex = 1; pointIndex < devicePoints.size(); pointIndex++) {
+        DevicePoint point = devicePoints.get(pointIndex);
+        vectors.lineto(point.xDevice(), point.yDevice());
       }
     }
 
@@ -104,6 +132,28 @@ final class EpilogJobBuilder {
     double value = finite(point, key, segmentIndex);
     validateCoordinate(value, maximum, key.toUpperCase());
     return value;
+  }
+
+  private static DevicePoint devicePoint(JsonNode point, double bedWidth, double bedHeight, int segmentIndex) {
+    double x = coordinate(point, "x", bedWidth, segmentIndex);
+    double y = coordinate(point, "y", bedHeight, segmentIndex);
+    return new DevicePoint(x, y, (int) px(x), (int) px(y));
+  }
+
+  private static DevicePoint overlapPoint(DevicePoint first, DevicePoint next) {
+    double dx = next.xMm() - first.xMm();
+    double dy = next.yMm() - first.yMm();
+    double distance = Math.hypot(dx, dy);
+    if (distance <= 0) return first;
+    double overlap = Math.min(0.1, distance);
+    double ratio = overlap / distance;
+    double x = first.xMm() + dx * ratio;
+    double y = first.yMm() + dy * ratio;
+    return new DevicePoint(x, y, (int) px(x), (int) px(y));
+  }
+
+  private static boolean sameDevicePoint(DevicePoint a, DevicePoint b) {
+    return a.xDevice() == b.xDevice() && a.yDevice() == b.yDevice();
   }
 
   private static void validateCoordinate(double value, double maximum, String axis) {

@@ -3,6 +3,8 @@ import { prepareSVG } from "./svgimport.js";
 import { dxfToSvg } from "./dxfimport.js";
 import { OPERATIONS, canAssignRasterToOperation, distinctVectorColor, isOutputLayer, operationsForLayer } from "./layer-model.mjs";
 import { RASTER_MODES, applyProcessProfile, combinedFocusOffset, normalizeProcessProfile, profilesForOperation } from "./process-profiles.mjs";
+import { groupJobOperations, jobFilename } from "./job-split.mjs";
+import { defaultMotionTiming, motionTimingForMachine } from "./motion-timing.mjs";
 import { openModal } from "./ui.js";
 
 const $ = (id) => document.getElementById(id);
@@ -15,6 +17,10 @@ const defaultNetworkPort = (driver) => isEpilogDriver(driver) ? 515 : 23;
 
 // --- persisted stores (seeded from presets on first run, then fully editable) --
 const F = 20000; // default beam frequency (Hz)
+const OPERATION_DEFAULTS = Object.freeze({
+  Cut: Object.freeze({ power: 100, speed: 50, freq: 500, zOffset: -1.5 }),
+  Score: Object.freeze({ power: 15, speed: 100, freq: 500, zOffset: 3 }),
+});
 const MATERIAL_PRESETS = [
   { id: "ply3", name: "Plywood 3 mm", ops: { Cut: { power: 80, speed: 20, freq: F }, Engrave: { power: 40, speed: 65, freq: F }, Score: { power: 25, speed: 35, freq: F } } },
   { id: "acr3", name: "Acrylic 3 mm", ops: { Cut: { power: 90, speed: 15, freq: 5000 }, Engrave: { power: 35, speed: 60, freq: 5000 }, Score: { power: 20, speed: 35, freq: 5000 } } },
@@ -72,6 +78,7 @@ const saveProcessProfiles = () => localStorage.setItem("modcut_process_profiles"
 const state = {
   machineId: machines[0].id, materialId: materials[0].id,
   mappingMode: "color", units: localStorage.getItem("modcut_units") || "cm",
+  splitByOperation: localStorage.getItem("modcut_split_by_operation") === "true",
   refKey: "tl", colors: [], layers: [],
   gridXmm: +(localStorage.getItem("modcut_gridX") || 10),
   gridYmm: +(localStorage.getItem("modcut_gridY") || 10),
@@ -81,6 +88,7 @@ let drivers = ["Dummy"];
 let machineStatus = { connected: false, running: false, dryRun: true, lastResult: "idle", progress: 0 };
 let statusPollBusy = false;
 let reportedResult = "idle";
+let activeJobSequence = null;
 
 // --- units + toast ----------------------------------------------------------
 const UNIT = { mm: 1, cm: 10, in: 25.4 };
@@ -178,11 +186,13 @@ function initTooltips() {
 
 const material = () => materials.find((m) => m.id === state.materialId) || materials[0];
 const machine = () => machines.find((m) => m.id === state.machineId) || machines[0];
-const defaultsFor = (op) => {
+const materialDefaultsFor = (op) => {
   const d = { power: 50, speed: 50, freq: F, zOffset: 0, ...material().ops[op] };
   d.speed = clampSpeedPct(d.speed);
   return d;
 };
+const defaultsFor = (op) => ({ ...(OPERATION_DEFAULTS[op] || materialDefaultsFor(op)) });
+const defaultUsesMaterial = (op) => !OPERATION_DEFAULTS[op];
 const driverExt = (d) => (isEpilogDriver(d) ? ".prn" : /ruida/i.test(d) ? ".rd" : ".gcode");
 
 // --- collapsible side panel sections ---------------------------------------
@@ -604,7 +614,7 @@ function prepareArtwork(f) {
 
 async function placeArtwork(prepared) {
   if (prepared.kind === "vector") {
-    bed.loadSVG(prepared.node, prepared.widthMm, prepared.heightMm);
+    bed.loadSVG(prepared.node, prepared.widthMm, prepared.heightMm, prepared.viewBox);
     return;
   }
   await bed.loadImage(prepared.dataUrl, null);
@@ -731,7 +741,7 @@ const newLayer = (color, op, raster = false, key = null) => ({
   key, color, raster, op: raster ? "Engrave" : op, output: true,
   dpi: 300, dither: raster ? "Grayscale" : "Jarvis", bottomUp: true,
   ...defaultsFor(raster ? "Engrave" : op),
-  profileId: "material",
+  profileId: defaultUsesMaterial(raster ? "Engrave" : op) ? "material" : null,
 });
 // Re-read colors from the bed (import + drawn shapes) and reconcile the layer list,
 // preserving settings for colors that still exist.
@@ -752,7 +762,12 @@ function syncRasterModes() {
 function syncLayers() {
   if (state.mappingMode === "color") {
     const prev = new Map(state.layers.filter((l) => l.key).map((l) => [l.key, l]));
-    state.layers = state.colors.map((c) => {
+    const colorsByKey = new Map(state.colors.map((color) => [color.key, color]));
+    const orderedColors = [
+      ...state.layers.map((layer) => colorsByKey.get(layer.key)).filter(Boolean),
+      ...state.colors.filter((color) => !prev.has(color.key)),
+    ];
+    state.layers = orderedColors.map((c) => {
       const candidates = state.layers.filter((layer) => layer.color?.toLowerCase() === c.color.toLowerCase());
       const existing = prev.get(c.key) || candidates.find((layer) => c.raster && layer.raster) || candidates[0];
       if (!existing) return newLayer(c.color, c.raster ? "Engrave" : "Cut", c.raster, c.key);
@@ -771,7 +786,7 @@ function syncLayers() {
 }
 function applyMaterialToLayers() {
   for (const layer of state.layers) {
-    Object.assign(layer, defaultsFor(layer.op));
+    Object.assign(layer, materialDefaultsFor(layer.op));
     layer.profileId = "material";
   }
   renderLayers();
@@ -780,7 +795,19 @@ function renderLayers() {
   const host = $("layers");
   host.innerHTML = "";
   $("layersHint").style.display = state.layers.length ? "none" : "";
-  state.layers.forEach((l) => host.append(layerRow(l)));
+  state.layers.forEach((layer, index) => host.append(layerRow(layer, index)));
+  bed.setLayerVisibility(state.layers.map((layer) => ({
+    color: state.mappingMode === "color" ? layer.color : null,
+    visible: isOutputLayer(layer),
+  })));
+}
+function moveLayer(index, offset) {
+  const target = index + offset;
+  if (index < 0 || index >= state.layers.length || target < 0 || target >= state.layers.length) return;
+  const [layer] = state.layers.splice(index, 1);
+  state.layers.splice(target, 0, layer);
+  renderLayers();
+  markDirty();
 }
 let qualityRefreshTimer = null;
 function qualityForLayer(layer) {
@@ -827,12 +854,13 @@ function layerFocusSummary(layer) {
   const layerOffset = Number(layer.zOffset) || 0;
   return `Machine ${machineOffset} mm + layer ${layerOffset} mm = Z ${combinedFocusOffset(machineOffset, layerOffset)} mm · allowed ${machine().zAxis.min}…${machine().zAxis.max}`;
 }
-function layerRow(l) {
+function layerRow(l, layerIndex) {
   l.speed = clampSpeedPct(l.speed);
-  if (isEpilogDriver(machine().driver)) l.freq = Math.max(100, Math.min(5000, Number(l.freq) || 5000));
+  if (l.freq == null) l.freq = isEpilogDriver(machine().driver) ? 5000 : F;
   l.zOffset = Number.isFinite(Number(l.zOffset)) ? Number(l.zOffset) : 0;
   const row = document.createElement("div");
-  row.className = `clayer${l.raster ? " clayer--raster" : ""}`;
+  row.className = `clayer${l.raster ? " clayer--raster" : ""}${isOutputLayer(l) ? "" : " clayer--hidden"}`;
+  row.dataset.layerKey = l.key || "all";
   const byColor = state.mappingMode === "color";
   if (l.raster && !canAssignRasterToOperation(l.op)) l.op = "Engrave";
   const engrave = l.op === "Engrave";
@@ -849,11 +877,16 @@ function layerRow(l) {
   const zEnabled = !!machine().zAxis?.enabled || isEpilogDriver(machine().driver);
   row.innerHTML = `
     <div class="clayer__top">
+      <span class="clayer__number" title="Job order">${layerIndex + 1}</span>
       <span class="clayer__sw" style="background:${l.color || "linear-gradient(135deg,#888,#ccc)"}"></span>
       ${byColor
         ? `<select class="select clayer__op">${layerOps.map((o) => `<option ${o === l.op ? "selected" : ""}>${o}</option>`).join("")}</select>`
         : `<strong class="clayer__op">All shapes → ${l.op}</strong>`}
-      ${ignored ? `<span class="clayer__ignored">Ignored</span>` : `<button class="toggle" aria-checked="${l.output}" title="Output"></button>`}
+      <span class="clayer__order" aria-label="Change layer order">
+        <button type="button" data-move-layer="up" title="Move layer up — run earlier" ${layerIndex === 0 ? "disabled" : ""}>↑</button>
+        <button type="button" data-move-layer="down" title="Move layer down — run later" ${layerIndex === state.layers.length - 1 ? "disabled" : ""}>↓</button>
+      </span>
+      ${ignored ? `<span class="clayer__ignored">Ignored</span>` : `<button class="toggle" aria-checked="${l.output}" title="Show and include this layer"></button>`}
     </div>
     ${ignored ? `<p class="clayer__note">This layer is kept in the design but is not sent to the laser.</p>` : `
     <div class="clayer__profile">
@@ -863,7 +896,7 @@ function layerRow(l) {
     <div class="clayer__grid">
       <div><label>Power %</label><input class="input" type="number" min="0" max="100" value="${l.power}" data-k="power"></div>
       <div><label>Speed %</label><input class="input" type="number" min="1" max="100" value="${l.speed}" data-k="speed"></div>
-      <div><label>${isEpilogDriver(machine().driver) ? "Frequency (100–5000)" : "Freq Hz"}</label><input class="input" type="number" min="${isEpilogDriver(machine().driver) ? 100 : 0}" ${isEpilogDriver(machine().driver) ? "max=\"5000\"" : ""} value="${l.freq}" data-k="freq"></div>
+      <div><label>${isEpilogDriver(machine().driver) ? "Frequency (100–5000)" : "Freq Hz"}</label><input class="input" type="number" step="1" min="${isEpilogDriver(machine().driver) ? 100 : 0}" ${isEpilogDriver(machine().driver) ? "max=\"5000\"" : ""} value="${l.freq}" data-k="freq"></div>
     </div>
     <div class="clayer__grid two">
       <div><label title="Layer-specific focus adjustment, added to the machine's global Z offset.">Focus offset (mm)</label><input class="input" type="number" step="0.1" value="${l.zOffset}" data-k="zOffset" ${zEnabled ? "" : "disabled"}></div>
@@ -879,15 +912,21 @@ function layerRow(l) {
 
   updateLayerQuality(row, l);
 
+  row.querySelector('[data-move-layer="up"]')?.addEventListener("click", () => moveLayer(layerIndex, -1));
+  row.querySelector('[data-move-layer="down"]')?.addEventListener("click", () => moveLayer(layerIndex, 1));
+
   const op = row.querySelector("select.clayer__op");
   if (op) op.addEventListener("change", () => {
     l.op = op.value;
-    if (l.op !== "Ignore") { Object.assign(l, defaultsFor(l.op)); l.profileId = "material"; }
+    if (l.op !== "Ignore") {
+      Object.assign(l, defaultsFor(l.op));
+      l.profileId = defaultUsesMaterial(l.op) ? "material" : null;
+    }
     renderLayers(); markDirty();
   });
   row.querySelector("[data-profile]")?.addEventListener("change", (event) => {
     if (event.target.value === "material") {
-      Object.assign(l, defaultsFor(l.op));
+      Object.assign(l, materialDefaultsFor(l.op));
       l.profileId = "material";
     } else if (event.target.value === "custom") l.profileId = null;
     else {
@@ -897,7 +936,11 @@ function layerRow(l) {
     renderLayers(); markDirty();
   });
   row.querySelector("[data-save-profile]")?.addEventListener("click", () => saveLayerAsProcessProfile(l));
-  row.querySelector(".toggle")?.addEventListener("click", (e) => { l.output = !l.output; e.currentTarget.setAttribute("aria-checked", l.output); markDirty(); });
+  row.querySelector(".toggle")?.addEventListener("click", () => {
+    l.output = !l.output;
+    renderLayers();
+    markDirty();
+  });
   row.querySelectorAll("[data-k]").forEach((el) => {
     const k = el.dataset.k;
     if (el.type === "checkbox") el.addEventListener("change", () => { l[k] = el.checked; markDirty(); });
@@ -907,11 +950,9 @@ function layerRow(l) {
       markDirty();
     });
     else el.addEventListener("input", () => {
-      l[k] = k === "speed" ? clampSpeedPct(el.value) : Number(el.value);
-      if (k === "freq" && isEpilogDriver(machine().driver)) {
-        l[k] = Math.max(100, Math.min(5000, l[k] || 5000));
-        el.value = l[k];
-      }
+      l[k] = k === "speed"
+        ? clampSpeedPct(el.value)
+        : k === "freq" && el.value === "" ? "" : Number(el.value);
       l.profileId = null;
       const profileSelect = row.querySelector("[data-profile]");
       if (profileSelect) profileSelect.value = "custom";
@@ -927,41 +968,104 @@ const activeLayers = () => state.layers.filter(isOutputLayer);
 const jobOps = () => activeLayers().map((l) => ({ op: l.op, color: l.color, power: l.power, speed: clampSpeedPct(l.speed), freq: l.freq, zOffset: Number(l.zOffset) || 0, ...(l.op === "Engrave" ? { dpi: l.dpi, dither: l.dither, bottomUp: l.bottomUp } : {}) }));
 const machineLimits = () => ({ bedWidth: machine().bedW || 600, bedHeight: machine().bedH || 400, maxFeed: machine().maxFeed || 12000 });
 const connectionMatchesMachine = () => !machineStatus.connected || machineStatus.connectedMachineId === state.machineId;
+function invalidFrequencyMessage(ops) {
+  for (const op of ops) {
+    const value = op.freq;
+    const frequency = Number(value);
+    const layerName = op.color ? `${op.color.toUpperCase()} ${op.op}` : op.op;
+    if (value === "" || value == null || !Number.isFinite(frequency)) return `Frequency is required for ${layerName}.`;
+    if (!Number.isInteger(frequency)) return `Frequency must be a whole number for ${layerName}.`;
+    if (isEpilogDriver(machine().driver) && (frequency < 100 || frequency > 5000)) return `Frequency for ${layerName} must be between 100 and 5000.`;
+    if (!isEpilogDriver(machine().driver) && frequency < 0) return `Frequency for ${layerName} cannot be negative.`;
+  }
+  return null;
+}
+const jobWait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+async function waitForCurrentJob() {
+  while (true) {
+    await jobWait(150);
+    machineStatus = await window.modcut.call("status");
+    reportedResult = machineStatus.lastResult;
+    renderMachineStatus();
+    if (machineStatus.running) continue;
+    if (machineStatus.lastResult === "completed") return machineStatus;
+    if (machineStatus.lastResult === "cancelled" || machineStatus.lastResult === "cancelling") {
+      throw new Error("The job sequence was cancelled.");
+    }
+    throw new Error(machineStatus.lastError || "The laser did not complete the job.");
+  }
+}
 async function runJob(label) {
   if (!bed.getDesign()) return toast("Nothing imported yet.", "info");
   if (!machineStatus.connected) return toast("Connect to the machine or dry-run first.", "info");
   if (!connectionMatchesMachine()) return toast(`This project targets ${machine().name}, but the app is connected to ${machineStatus.connectedMachineName || "another machine"}. Disconnect and reconnect before running.`, "err");
   const ops = jobOps();
   if (!ops.length) return toast("No active layers to run.", "info");
-  const quality = bed.outputQuality(ops);
-  if (quality.blocked) return toast("Job blocked: " + quality.problems.join(" "), "err");
+  const frequencyError = invalidFrequencyMessage(ops);
+  if (frequencyError) return toast(`Job blocked: ${frequencyError}`, "err");
   const base = ($("filename").value.trim() || "job").replace(/\.[^.]+$/, "");
-  const filename = base + driverExt(machine().driver);
+  const extension = driverExt(machine().driver);
   try {
     const epilog = isEpilogDriver(machine().driver);
-    const job = await bed.buildGcodeJob(ops, {
-      maxFeed: machine().maxFeed || 12000,
-      zAxis: machine().zAxis,
-      softwareFocus: epilog,
-    });
+    const groups = groupJobOperations(ops, state.splitByOperation);
+    const jobs = [];
+    for (let index = 0; index < groups.length; index++) {
+      const group = groups[index];
+      const quality = bed.outputQuality(group.ops);
+      if (quality.blocked) return toast("Job blocked: " + quality.problems.join(" "), "err");
+      const built = await bed.buildGcodeJob(group.ops, {
+        maxFeed: machine().maxFeed || 12000,
+        zAxis: machine().zAxis,
+        softwareFocus: epilog,
+      });
+      jobs.push({
+        ...group,
+        built,
+        filename: jobFilename(base, extension, group.operation, index, groups.length),
+      });
+    }
     const layerOffsets = [...new Set(ops.map((op) => Number(op.zOffset) || 0))];
     const focusPositions = [...new Set(layerOffsets.map((offset) => combinedFocusOffset(machine().zAxis?.globalOffset, offset)))];
+    const fileSummary = jobs.length > 1 ? `Separate files, in queue order:\n${jobs.map((job) => `• ${job.filename}`).join("\n")}\n\n` : "";
     const confirmed = machineStatus.dryRun || window.confirm(
-      `Start REAL laser job on ${machine().name}?\n\n` +
+      `Start ${jobs.length > 1 ? `${jobs.length} REAL laser jobs` : "REAL laser job"} on ${machine().name}?\n\n` +
+      fileSummary +
       (epilog ? `Epilog software focus offsets: ${layerOffsets.join(", ")} mm.\n\n` :
         machine().zAxis?.enabled ? `Machine global Z offset: ${machine().zAxis.globalOffset || 0} mm. Layer focus offsets: ${layerOffsets.join(", ")} mm. Resulting Z positions: ${focusPositions.join(", ")} mm.\n\n` : "") +
       "Confirm material, focus, ventilation, clear work area and that the lid/interlocks are ready."
     );
     if (!confirmed) return;
-    const r = await window.modcut.call("startJob", {
-      machineId: state.machineId, machine: machine().name, driver: machine().driver, material: state.materialId,
-      mappingMode: state.mappingMode, filename, ops, gcodeLines: job.lines, laserSegments: job.laserSegments,
-      confirmed, ...machineLimits(),
-    });
-    reportedResult = "running";
-    toast(`${label} started: ${r.motionCount} moves, ${r.lineCount} G-code lines → ${filename}${r.dryRun ? " (dry run)" : ""}.`, "ok");
-    await pollMachineStatus();
-  } catch (e) { toast(`${label} failed: ${e.message}`, "err"); }
+    activeJobSequence = { index: 0, total: jobs.length };
+    renderMachineStatus();
+    let totalMoves = 0;
+    for (let index = 0; index < jobs.length; index++) {
+      const job = jobs[index];
+      activeJobSequence.index = index + 1;
+      const r = await window.modcut.call("startJob", {
+        machineId: state.machineId, machine: machine().name, driver: machine().driver, material: state.materialId,
+        mappingMode: state.mappingMode, filename: job.filename, ops: job.ops,
+        gcodeLines: job.built.lines, laserSegments: job.built.laserSegments,
+        confirmed, ...machineLimits(),
+      });
+      totalMoves += r.motionCount;
+      reportedResult = "running";
+      machineStatus = { ...machineStatus, running: true, progress: 0, lastResult: "running", jobName: job.filename };
+      renderMachineStatus();
+      toast(`${label} started ${jobs.length > 1 ? `${index + 1}/${jobs.length}: ` : ""}${job.filename}${r.dryRun ? " (dry run)" : ""}.`, "ok");
+      await waitForCurrentJob();
+    }
+    const delivery = machineStatus.delivery;
+    reportedResult = "completed";
+    activeJobSequence = null;
+    renderMachineStatus();
+    toast(jobs.length > 1
+      ? `${jobs.length} separate files ${delivery === "epilog-lpd" ? "uploaded to the Epilog queue" : "completed"} in order (${totalMoves} moves).`
+      : delivery === "epilog-lpd" ? `${jobs[0].filename} uploaded to the Epilog queue.` : `${jobs[0].filename} completed successfully.`, "ok");
+  } catch (e) {
+    activeJobSequence = null;
+    renderMachineStatus();
+    toast(`${label} failed: ${e.message}`, "err");
+  }
 }
 async function frame() {
   const d = bed.getDesign();
@@ -980,18 +1084,10 @@ async function frame() {
 }
 function estimate() {
   if (!bed.getDesign()) return ($("estimateOut").textContent = "");
-  const stats = bed.geometryStats();
-  const byColor = state.mappingMode === "color";
-  const total = { length: 0, area: 0 };
-  for (const v of stats.values()) { total.length += v.length; total.area += v.area; }
-  let sec = 3;
-  for (const l of activeLayers()) {
-    const s = byColor ? (stats.get(l.color) || { length: 0, area: 0 }) : total;
-    const speed = Math.max(1, l.speed);
-    sec += l.op === "Engrave" ? (s.area / (25.4 / Math.max(1, l.dpi))) / speed : s.length / speed;
-  }
+  const sec = bed.estimateTime(simSpecs(), motionTimingForMachine(machine()));
+  const h = Math.floor(sec / 3600);
   const m = Math.floor(sec / 60);
-  $("estimateOut").textContent = "~ " + (m ? `${m}m ${Math.round(sec % 60)}s` : `${Math.round(sec)}s`);
+  $("estimateOut").textContent = "~ " + (h ? `${h}h ${m % 60}m` : m ? `${m}m ${Math.round(sec % 60)}s` : `${Math.round(sec)}s`);
 }
 
 // --- simulate ---------------------------------------------------------------
@@ -1001,7 +1097,7 @@ function startSimulate() {
   if (!bed.getDesign()) return toast("Import a design first.", "info");
   const specs = simSpecs();
   if (!specs.length) return toast("No active layers to simulate.", "info");
-  simCtl = bed.startSim(specs);
+  simCtl = bed.startSim(specs, motionTimingForMachine(machine()));
   if (!simCtl) return toast("No cuttable geometry found.", "err");
   simCtl.onProgress((p) => { $("simProg").textContent = Math.round(p * 100) + "%"; if (p >= 1) $("simPlay").textContent = "↺"; });
   $("simbar").classList.remove("hidden");
@@ -1045,7 +1141,15 @@ function selectMachine(id) {
   $("fnExt").textContent = driverExt(m.driver); // shown next to the name field
   renderLayers();
 }
-const machineFields = (m) => [
+const motionFieldSync = (key, displayScale = 1) => (values, previous, current) => {
+  if (!previous || (previous.driver === values.driver && previous.maxFeed === values.maxFeed)) return undefined;
+  const oldValue = defaultMotionTiming(previous.driver, previous.maxFeed)[key] * displayScale;
+  if (current && Math.abs(Number(current) - oldValue) > 0.0001) return undefined;
+  return +(defaultMotionTiming(values.driver, values.maxFeed)[key] * displayScale).toFixed(3);
+};
+const machineFields = (m) => {
+  const timing = motionTimingForMachine(m || { driver: drivers[0], maxFeed: 12000 });
+  return [
   { key: "name", label: "Name", value: m?.name, placeholder: "e.g. Workshop laser", required: true },
   { key: "driver", label: "Driver", type: "select", options: drivers, value: m?.driver },
   { key: "type", label: "Connection", type: "select", options: [{ value: "network", label: "Network (Ethernet / Wi-Fi)" }, { value: "usb", label: "USB / Serial" }], value: m?.conn.type },
@@ -1063,10 +1167,15 @@ const machineFields = (m) => [
   },
   { key: "serial", label: "Serial port", placeholder: "/dev/tty… or COM3", value: m?.conn.type === "usb" ? m.conn.serial : "", showIf: (v) => v.type === "usb" },
   { key: "baud", label: "Baud rate", type: "number", min: 1, step: 1, value: m?.conn.baud || 115200, showIf: (v) => v.type === "usb" },
-  { key: "bedW", label: `Bed width (${state.units})`, type: "number", min: 1, required: true, value: toDisp(m?.bedW || 600) },
-  { key: "bedH", label: `Bed height (${state.units})`, type: "number", min: 1, required: true, value: toDisp(m?.bedH || 400) },
+  { key: "bedW", label: `Bed width (${state.units})`, type: "number", min: 1, step: 0.01, required: true, value: toDisp(m?.bedW || 600) },
+  { key: "bedH", label: `Bed height (${state.units})`, type: "number", min: 1, step: 0.01, required: true, value: toDisp(m?.bedH || 400) },
   { key: "advanced", label: "Show advanced settings", type: "checkbox", value: false },
   { key: "maxFeed", label: "Max feed (mm/min)", type: "number", value: m?.maxFeed || 12000, showIf: (v) => v.advanced },
+  { key: "vectorSpeedMmS", label: "Timing: vector speed at 100% (mm/s)", type: "number", min: 0.1, step: 0.1, value: timing.vectorSpeedMmS, showIf: (v) => v.advanced, sync: motionFieldSync("vectorSpeedMmS") },
+  { key: "travelSpeedMmS", label: "Timing: laser-off travel speed (mm/s)", type: "number", min: 0.1, step: 0.1, value: timing.travelSpeedMmS, showIf: (v) => v.advanced, sync: motionFieldSync("travelSpeedMmS") },
+  { key: "vectorAccelerationMmS2", label: "Timing: vector acceleration (mm/s²)", type: "number", min: 0.1, step: 1, value: timing.vectorAccelerationMmS2, showIf: (v) => v.advanced, sync: motionFieldSync("vectorAccelerationMmS2") },
+  { key: "rasterSpeedMmS", label: "Timing: raster speed at 100% (mm/s)", type: "number", min: 0.1, step: 1, value: timing.rasterSpeedMmS, showIf: (v) => v.advanced, sync: motionFieldSync("rasterSpeedMmS") },
+  { key: "rasterLineDelayMs", label: "Timing: raster turnaround per line (ms)", type: "number", min: 0, step: 1, value: +(timing.rasterLineDelayS * 1000).toFixed(1), showIf: (v) => v.advanced, sync: motionFieldSync("rasterLineDelayS", 1000) },
   { key: "zEnabled", label: "Enable controlled Z-axis offsets", type: "checkbox", value: !!m?.zAxis?.enabled, showIf: (v) => v.advanced && !isEpilogDriver(v.driver) },
   { key: "zMin", label: "Minimum Z offset (mm, must include 0)", type: "number", step: 0.1, value: m?.zAxis?.min ?? -10, showIf: (v) => v.advanced && v.zEnabled && !isEpilogDriver(v.driver) },
   { key: "zMax", label: "Maximum Z offset (mm, must include 0)", type: "number", step: 0.1, value: m?.zAxis?.max ?? 10, showIf: (v) => v.advanced && v.zEnabled && !isEpilogDriver(v.driver) },
@@ -1077,16 +1186,28 @@ const machineFields = (m) => [
   { key: "flipX", label: "Flip X axis", type: "checkbox", value: m?.adv?.flipX || false, showIf: (v) => v.advanced },
   { key: "flipY", label: "Flip Y axis", type: "checkbox", value: m?.adv?.flipY ?? true, showIf: (v) => v.advanced },
   { key: "home", label: "Home / origin", type: "select", value: m?.adv?.home || "front-left", options: [{ value: "front-left", label: "Front-left" }, { value: "rear-left", label: "Rear-left" }, { value: "front-right", label: "Front-right" }], showIf: (v) => v.advanced },
-];
-const machineFrom = (v, id) => ({
-  id, name: v.name.trim(), driver: v.driver,
-  conn: v.type === "network"
-    ? { type: "network", host: v.host.trim(), port: Math.round(v.netport), connectTimeoutMs: v.connectTimeoutMs || 3000, responseTimeoutMs: v.responseTimeoutMs || 30000 }
-    : { type: "usb", serial: v.serial?.trim() || "", baud: v.baud },
-  bedW: toMm(v.bedW), bedH: toMm(v.bedH), maxFeed: Math.max(1, v.maxFeed || 12000),
-  zAxis: { enabled: !isEpilogDriver(v.driver) && !!v.zEnabled, min: Number(v.zMin), max: Number(v.zMax), feed: Math.max(1, Number(v.zFeed) || 300), globalOffset: !isEpilogDriver(v.driver) && v.zEnabled ? Number(v.zGlobal) || 0 : 0 },
-  adv: { flipX: v.flipX, flipY: v.flipY, home: v.home },
-});
+  ];
+};
+const machineFrom = (v, id) => {
+  const defaults = defaultMotionTiming(v.driver, v.maxFeed);
+  return {
+    id, name: v.name.trim(), driver: v.driver,
+    conn: v.type === "network"
+      ? { type: "network", host: v.host.trim(), port: Math.round(v.netport), connectTimeoutMs: v.connectTimeoutMs || 3000, responseTimeoutMs: v.responseTimeoutMs || 30000 }
+      : { type: "usb", serial: v.serial?.trim() || "", baud: v.baud },
+    bedW: toMm(v.bedW), bedH: toMm(v.bedH), maxFeed: Math.max(1, v.maxFeed || 12000),
+    motionTiming: {
+      ...defaults,
+      vectorSpeedMmS: Math.max(0.1, Number(v.vectorSpeedMmS) || defaults.vectorSpeedMmS),
+      travelSpeedMmS: Math.max(0.1, Number(v.travelSpeedMmS) || defaults.travelSpeedMmS),
+      vectorAccelerationMmS2: Math.max(0.1, Number(v.vectorAccelerationMmS2) || defaults.vectorAccelerationMmS2),
+      rasterSpeedMmS: Math.max(0.1, Number(v.rasterSpeedMmS) || defaults.rasterSpeedMmS),
+      rasterLineDelayS: Math.max(0, Number(v.rasterLineDelayMs) / 1000 || 0),
+    },
+    zAxis: { enabled: !isEpilogDriver(v.driver) && !!v.zEnabled, min: Number(v.zMin), max: Number(v.zMax), feed: Math.max(1, Number(v.zFeed) || 300), globalOffset: !isEpilogDriver(v.driver) && v.zEnabled ? Number(v.zGlobal) || 0 : 0 },
+    adv: { flipX: v.flipX, flipY: v.flipY, home: v.home },
+  };
+};
 function validZAxisForm(values) {
   if (!values.zEnabled) return true;
   if (!Number.isFinite(values.zMin) || !Number.isFinite(values.zMax) || values.zMin >= values.zMax || values.zMin > 0 || values.zMax < 0) {
@@ -1168,11 +1289,13 @@ function renderMachineStatus() {
   $("connect").disabled = !!machineStatus.connecting;
   $("dryRun").disabled = machineStatus.connected;
   $("device").disabled = machineStatus.connected;
-  $("sendBtn").disabled = !machineStatus.connected || machineStatus.running || !connectionMatchesMachine();
+  $("sendBtn").disabled = !machineStatus.connected || machineStatus.running || !!activeJobSequence || !connectionMatchesMachine();
   $("sendBtn").textContent = (machineStatus.connected ? machineStatus.dryRun : $("dryRun").checked) ? "Run dry-run" : "Start job";
-  $("frame").disabled = !machineStatus.connected || machineStatus.running || !connectionMatchesMachine();
+  $("frame").disabled = !machineStatus.connected || machineStatus.running || !!activeJobSequence || !connectionMatchesMachine();
   $("stopBtn").classList.toggle("hidden", !machineStatus.running || machineStatus.canEmergencyStop === false);
-  $("jobState").textContent = machineStatus.running ? `${Math.round((machineStatus.progress || 0) * 100)}%` : "";
+  $("jobState").textContent = machineStatus.running
+    ? `${activeJobSequence ? `${activeJobSequence.index}/${activeJobSequence.total} · ` : ""}${Math.round((machineStatus.progress || 0) * 100)}%`
+    : activeJobSequence ? `${activeJobSequence.index}/${activeJobSequence.total}` : "";
 }
 async function pollMachineStatus() {
   if (statusPollBusy) return;
@@ -1182,9 +1305,11 @@ async function pollMachineStatus() {
     renderMachineStatus();
     if (!machineStatus.running && machineStatus.lastResult !== reportedResult) {
       reportedResult = machineStatus.lastResult;
-      if (machineStatus.lastResult === "completed") toast(machineStatus.delivery === "epilog-lpd" ? "Job uploaded to the Epilog queue. Start it from the laser control panel." : "Job completed successfully.", "ok");
-      else if (machineStatus.lastResult === "cancelled") toast("Job cancelled.", "info");
-      else if (machineStatus.lastResult === "failed") toast("Job failed: " + machineStatus.lastError, "err");
+      if (!activeJobSequence) {
+        if (machineStatus.lastResult === "completed") toast(machineStatus.delivery === "epilog-lpd" ? "Job uploaded to the Epilog queue. Start it from the laser control panel." : "Job completed successfully.", "ok");
+        else if (machineStatus.lastResult === "cancelled") toast("Job cancelled.", "info");
+        else if (machineStatus.lastResult === "failed") toast("Job failed: " + machineStatus.lastError, "err");
+      }
     }
   } catch (e) {
     machineStatus = { ...machineStatus, connected: false, running: false, lastError: e.message };
@@ -1435,8 +1560,8 @@ bed.onDrawSize((wMm, hMm, x, y) => {
 });
 bed.onDrawClick(async (type) => {
   const v = await openModal({ title: `New ${type}`, submitLabel: "Add", fields: [
-    { key: "w", label: `Width (${state.units})`, type: "number", value: toDisp(50) },
-    { key: "h", label: `Height (${state.units})`, type: "number", value: toDisp(50) },
+    { key: "w", label: `Width (${state.units})`, type: "number", min: 0.01, step: 0.01, required: true, value: toDisp(50) },
+    { key: "h", label: `Height (${state.units})`, type: "number", min: 0.01, step: 0.01, required: true, value: toDisp(50) },
   ] });
   if (!v) return;
   bed.addShape(type, toMm(v.w), toMm(v.h));
@@ -1614,6 +1739,9 @@ function openContextMenu(info) {
   const layerChoices = [...new Map(state.layers.filter((layer) => layer.color).map((layer) => [layer.color.toLowerCase(), layer])).values()];
   const layerColors = new Set(layerChoices.map((layer) => layer.color.toLowerCase()));
   const paletteChoices = ["#ff0000", "#00aa00", "#0000ff", "#000000"].filter((color) => !layerColors.has(color));
+  const deleteLabel = info.selectionKind === "group"
+    ? "Delete group"
+    : info.selectionCount === 1 ? "Delete object" : "Delete objects";
   const colorButton = (color, label, op = "New layer") => {
     const safeColor = /^#[0-9a-f]{6}$/i.test(color) ? color.toLowerCase() : "#000000";
     const blocked = info.hasRaster && op !== "New layer" && !canAssignRasterToOperation(op);
@@ -1636,7 +1764,9 @@ function openContextMenu(info) {
     <button data-act="move-up">Move up <kbd>⌘U</kbd></button>
     <button data-act="move-down">Move down <kbd>⌥⌘N</kbd></button>
     <button data-act="move-to-top">Move to top <kbd>⇧⌘U</kbd></button>
-    <button data-act="move-to-bottom">Move to bottom <kbd>⌥⇧⌘N</kbd></button>`;
+    <button data-act="move-to-bottom">Move to bottom <kbd>⌥⇧⌘N</kbd></button>
+    <div class="ctx-menu__sep"></div>
+    <button data-act="delete" class="ctx-menu__danger">${deleteLabel} <kbd>⌫</kbd></button>`;
   ctxMenu.style.left = Math.min(info.x, window.innerWidth - 252) + "px";
   ctxMenu.style.top = Math.max(8, Math.min(info.y, window.innerHeight - 420)) + "px";
   ctxMenu.addEventListener("click", (e) => {
@@ -1669,6 +1799,14 @@ $("addMaterial").addEventListener("click", addMaterial);
 $("processProfiles").addEventListener("click", openProcessProfileLibrary);
 $("device").addEventListener("change", (e) => selectMachine(e.target.value));
 $("dryRun").addEventListener("change", renderMachineStatus);
+$("splitJobs").checked = state.splitByOperation;
+$("splitJobs").addEventListener("change", (event) => {
+  state.splitByOperation = event.target.checked;
+  localStorage.setItem("modcut_split_by_operation", String(state.splitByOperation));
+  toast(state.splitByOperation
+    ? "Jobs will be sent as one file per operation type."
+    : "Cut, Score and Engrave will be sent together in one file.", "info");
+});
 
 // simulate controls
 $("simPlay").addEventListener("click", () => {

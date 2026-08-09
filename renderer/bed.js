@@ -10,6 +10,7 @@ import {
 import { itemLayerColor, setItemLayerColor } from "./layer-model.mjs";
 import { VECTOR_SAMPLE_STEP_MM, assessOutputQuality, rasterGrid } from "./output-quality.mjs";
 import { combinedFocusOffset } from "./process-profiles.mjs";
+import { defaultMotionTiming, targetMotionSpeed, trapezoidPlan } from "./motion-timing.mjs";
 
 // The bed, on Paper.js. Project coordinates are millimetres (1 unit = 1 mm).
 // - Space (or middle mouse) + drag = pan (hand cursor), tracked in absolute pixels
@@ -64,7 +65,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   let coordsCb = null, selectionCb = null, contextCb = null, spaceDown = false, altDown = false, shiftDown = false, changeCb = null, designAngle = 0;
   let gridX = 10, gridY = 10;                 // grid spacing in mm
   let currentTool = "select";                 // select | node | pen | rect | ellipse | line
-  let pathOrder = "optimize";                 // "optimize" | "nearby" | "layer"
+  let pathOrder = "optimize";                 // ordering inside each layer only
   let drawSizeCb = null, drawClickCb = null, toolResetCb = null;
   let drawColor = "#000000", drawWidth = 0.5; // style for new shapes
   let penPath = null, penHoverPoint = null, penEndpointHover = null, penInsertHover = null, penCloseHover = false;
@@ -149,16 +150,23 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     if ("clipped" in item) item.clipped = false;
     if (item.children) for (const child of item.children.slice()) releaseClipping(child);
   }
-  function loadSVG(node, wMm) {
+  function loadSVG(node, wMm, hMm, viewBox) {
     resetGroupFocus();
     pushHistory();
     designLayer.activate();
     const before = new Set(designLayer.children);
     const g = paper.project.importSVG(node, { expandShapes: true, insert: true });
     releaseClipping(g);
-    const sf = wMm && g.bounds.width ? wMm / g.bounds.width : MM_PER_PX;
-    g.scale(sf, g.bounds.topLeft);
-    g.position = P(bedWmm / 2, bedHmm / 2);
+    const hasViewport = Array.isArray(viewBox) && viewBox.length === 4 && wMm > 0 && hMm > 0;
+    if (hasViewport) {
+      // prepareSVG normalized the root viewport to millimetres. Center the
+      // document/artboard on the bed, preserving every item's page position.
+      g.translate(P((bedWmm - wMm) / 2, (bedHmm - hMm) / 2));
+    } else {
+      const sf = wMm && g.bounds.width ? wMm / g.bounds.width : MM_PER_PX;
+      g.scale(sf, g.bounds.topLeft);
+      g.position = P(bedWmm / 2, bedHmm / 2);
+    }
     if (g.className === "Group") { flattenInto(g, designLayer); g.remove(); } // single-shape SVGs import as a Path
     clearSel();
     for (const it of designLayer.children) if (!before.has(it) && isSelectableItem(it)) addSel(it);
@@ -230,8 +238,12 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   function addShape(type, wMm, hMm) {
     pushHistory();
     const w = Math.max(0.5, wMm), h = Math.max(0.5, hMm), cx = bedWmm / 2, cy = bedHmm / 2;
-    if (type === "line") makeShape("line", P(cx - w / 2, cy), P(cx + w / 2, cy));
-    else makeShape(type, P(cx - w / 2, cy - h / 2), P(cx + w / 2, cy + h / 2));
+    const item = type === "line"
+      ? makeShape("line", P(cx - w / 2, cy), P(cx + w / 2, cy))
+      : makeShape(type, P(cx - w / 2, cy - h / 2), P(cx + w / 2, cy + h / 2));
+    clearSel();
+    addSel(item);
+    emitSel();
     view.update(); notifyChange();
   }
   // --- style (color + stroke width) for new shapes and the selection --------
@@ -557,6 +569,17 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       raster.data.rasterMode = mode;
       applyRasterSettings(raster);
     }
+  }
+  function setLayerVisibility(entries = []) {
+    const byColor = new Map(entries.filter((entry) => entry.color).map((entry) => [String(entry.color).toLowerCase(), entry.visible !== false]));
+    const fallback = entries.find((entry) => !entry.color);
+    for (const item of laserItems()) {
+      item.visible = byColor.has(logicalColor(item))
+        ? byColor.get(logicalColor(item))
+        : fallback ? fallback.visible !== false : true;
+    }
+    drawOverlay();
+    view.update();
   }
   function updateRasterSettings(partial) {
     const raster = selectedRaster();
@@ -1166,6 +1189,9 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     if (currentTool !== "select" && drawStart) {
       if (drawMoved && drawPreview && (drawPreview.bounds.width > 0.5 || drawPreview.bounds.height > 0.5)) {
         undoStack.push(preDraw); if (undoStack.length > 60) undoStack.shift(); redoStack.length = 0; // commit the drawn shape
+        clearSel();
+        addSel(drawPreview);
+        emitSel();
       } else {
         drawPreview && drawPreview.remove();           // a click (no drag) -> ask app for exact size
         drawClickCb && drawClickCb(currentTool);
@@ -1221,7 +1247,17 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       addSel(it);
       emitSel();
     }
-    contextCb && contextCb({ x: e.clientX, y: e.clientY, hasSelection: selected.size > 0, hasRaster: selectionHasRaster(), canGroup: selectedItems().length > 1, canUngroup: canUngroup() });
+    const roots = selectedItems();
+    contextCb && contextCb({
+      x: e.clientX,
+      y: e.clientY,
+      hasSelection: roots.length > 0,
+      hasRaster: selectionHasRaster(),
+      canGroup: roots.length > 1,
+      canUngroup: canUngroup(),
+      selectionCount: roots.length,
+      selectionKind: roots.length === 1 && isUserGroup(roots[0]) ? "group" : "object",
+    });
   });
 
   // --- geometry stats for time estimation ---------------------------------
@@ -1419,7 +1455,11 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     for (let d = 0; d < len; d += step) pts.push(it.getPointAt(d));
     pts.push(it.getPointAt(Math.max(0, len - 1e-3)));
     if (it.closed && it.firstSegment) pts.push(it.firstSegment.point);
-    if (pts.length) out.push({ pts, speed: sp.speed, power: sp.power, freq: sp.freq, op: sp.op });
+    if (pts.length) out.push({
+      pts, speed: sp.speed, power: sp.power, freq: sp.freq, op: sp.op,
+      closed: !!it.closed,
+      overlapPoint: it.closed ? it.getPointAt(Math.min(0.1, len / 4)) : null,
+    });
   }
   function rasterImageScan(it, sp, out, preview = false) {
     const b = it.bounds;
@@ -1493,23 +1533,29 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   }
   // Collect segments grouped per source shape (keeps a shape's paths together).
   function collectSegs(specs) {
-    const groups = [];
-    for (const sp of specs) for (const it of itemsForColor(sp.color)) {
-      const g = [];
-      sp.op === "Engrave" ? engraveSeg(it, sp, g, true) : vectorSeg(it, sp, g, true);
-      for (const segment of g) segment.zOffset = Number(sp.zOffset) || 0;
-      if (g.length) groups.push(g);
-      if (groups.length > 5000) break;
+    const batches = [];
+    for (const sp of specs) {
+      const groups = [];
+      for (const it of itemsForColor(sp.color)) {
+        const g = [];
+        sp.op === "Engrave" ? engraveSeg(it, sp, g, true) : vectorSeg(it, sp, g, true);
+        for (const segment of g) {
+          segment.zOffset = Number(sp.zOffset) || 0;
+          segment.color = sp.color;
+        }
+        if (g.length) groups.push(g);
+      }
+      batches.push(groups);
     }
-    return groups;
+    return batches;
   }
   const segStart = (s) => s.pts[0];
   const segEnd = (s) => s.pts[s.pts.length - 1];
   const dist = (a, b) => a.getDistance(b);
-  function orderNearest(segs, allowReverse) {
+  function orderNearest(segs, allowReverse, start = P(0, 0)) {
     if (segs.length > 4000) return segs; // too many to optimize cheaply — leave as-is
     const rest = segs.slice(), out = [];
-    let cur = P(0, 0);
+    let cur = start;
     while (rest.length) {
       let bi = 0, brev = false, bd = Infinity;
       for (let i = 0; i < rest.length; i++) {
@@ -1523,38 +1569,79 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     }
     return out;
   }
-  function orderSegs(specs) {
-    const groups = collectSegs(specs);
-    // Raster rows are already emitted bottom-to-top (or top-to-bottom when the
-    // layer setting requests it). Nearest-path optimization must never shuffle
-    // those rows, otherwise Engrave behaves like unrelated score lines.
-    if (containsRasterScan(groups)) return groups.flat();
-    if (pathOrder === "color") return groups.flat();
-    if (pathOrder === "nearby") { // keep each shape whole; order shapes by proximity
-      const rest = groups.slice(), out = [];
-      let cur = P(0, 0);
-      while (rest.length) {
-        let bi = 0, bd = Infinity;
-        for (let i = 0; i < rest.length; i++) { const d = dist(cur, segStart(rest[i][0])); if (d < bd) { bd = d; bi = i; } }
-        const g = rest.splice(bi, 1)[0];
-        out.push(...g); cur = segEnd(g[g.length - 1]);
-      }
-      return out;
+  function orderLayerBatches(batches) {
+    const ordered = [];
+    let current = P(0, 0);
+    for (const groups of batches) {
+      if (!groups.length) continue;
+      let layerSegments;
+      // Raster scan rows already have a deliberate direction. The legacy
+      // "color" value now means original path order within this layer.
+      if (containsRasterScan(groups) || pathOrder === "color") layerSegments = groups.flat();
+      else if (pathOrder === "nearby") {
+        const rest = groups.slice();
+        layerSegments = [];
+        while (rest.length) {
+          let bi = 0, bd = Infinity;
+          for (let i = 0; i < rest.length; i++) {
+            const d = dist(current, segStart(rest[i][0]));
+            if (d < bd) { bd = d; bi = i; }
+          }
+          const group = rest.splice(bi, 1)[0];
+          layerSegments.push(...group);
+          current = segEnd(group[group.length - 1]);
+        }
+      } else layerSegments = orderNearest(groups.flat(), true, current);
+      ordered.push(...layerSegments);
+      if (layerSegments.length) current = segEnd(layerSegments[layerSegments.length - 1]);
     }
-    return orderNearest(groups.flat(), true); // "optimize": fewest head moves
+    return ordered;
   }
-  function buildMoves(segs) {
+  function orderSegs(specs) {
+    return orderLayerBatches(collectSegs(specs));
+  }
+  function buildMoves(segs, inputTiming) {
+    const timing = inputTiming || defaultMotionTiming("Dummy", 12000);
     const moves = [];
     let prev = null;
+    let sourceId = 0;
     for (const s of segs) {
       if (!s.pts.length) continue;
-      if (prev) moves.push({ a: prev, b: s.pts[0], speed: 300, burn: false }); // travel
+      if (prev) {
+        const travelDistance = prev.getDistance(s.pts[0]);
+        if (travelDistance > 0.0001) {
+          const travel = trapezoidPlan(travelDistance, timing.travelSpeedMmS, timing.travelAccelerationMmS2);
+          moves.push({ a: prev, b: s.pts[0], duration: travel.duration, burn: false });
+        }
+      }
+      const lengths = [];
+      let pathLength = 0;
       for (let i = 1; i < s.pts.length; i++) {
-        moves.push({ a: s.pts[i - 1], b: s.pts[i], speed: s.speed, burn: true, op: s.op, power: s.power, raster: s.raster });
+        const length = s.pts[i - 1].getDistance(s.pts[i]);
+        lengths.push(length);
+        pathLength += length;
+      }
+      const maximumSpeed = s.raster ? timing.rasterSpeedMmS : timing.vectorSpeedMmS;
+      const acceleration = s.raster ? timing.rasterAccelerationMmS2 : timing.vectorAccelerationMmS2;
+      const pathPlan = trapezoidPlan(pathLength, targetMotionSpeed(s.speed, maximumSpeed), acceleration);
+      const pathDelay = s.raster ? timing.rasterLineDelayS : timing.vectorPathDelayS;
+      if (pathDelay > 0) moves.push({ a: s.pts[0], b: s.pts[0], duration: pathDelay, burn: false, dwell: true });
+      let distanceAlongPath = 0;
+      for (let i = 1; i < s.pts.length; i++) {
+        const startTime = pathPlan.timeAtDistance(distanceAlongPath);
+        distanceAlongPath += lengths[i - 1];
+        const duration = Math.max(0.000001, pathPlan.timeAtDistance(distanceAlongPath) - startTime);
+        moves.push({ a: s.pts[i - 1], b: s.pts[i], duration, burn: true, op: s.op, power: s.power, raster: s.raster, color: s.color, sourceId });
       }
       prev = s.pts[s.pts.length - 1];
+      sourceId++;
     }
     return moves;
+  }
+
+  function estimateTime(specs, timing) {
+    const moves = buildMoves(orderSegs(specs), timing);
+    return (Number(timing?.jobOverheadS) || 0) + moves.reduce((sum, move) => sum + move.duration, 0);
   }
 
   function loadRasterImageData(raster) {
@@ -1650,34 +1737,23 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     }
   }
   async function collectJobSegs(specs) {
-    const groups = [];
-    for (const sp of specs) for (const it of itemsForColor(sp.color)) {
-      const g = [];
-      if (sp.op === "Engrave" && it.className === "Raster" && String(sp.dither).toLowerCase() === "grayscale") await rasterGrayscaleScan(it, sp, g);
-      else if (sp.op === "Engrave" && it.className === "Raster") await rasterDitherScan(it, sp, g);
-      else sp.op === "Engrave" ? engraveSeg(it, sp, g, false) : vectorSeg(it, sp, g, false);
-      for (const segment of g) segment.zOffset = Number(sp.zOffset) || 0;
-      if (g.length) groups.push(g);
-      if (groups.length > 10000) break;
+    const batches = [];
+    for (const sp of specs) {
+      const groups = [];
+      for (const it of itemsForColor(sp.color)) {
+        const g = [];
+        if (sp.op === "Engrave" && it.className === "Raster" && String(sp.dither).toLowerCase() === "grayscale") await rasterGrayscaleScan(it, sp, g);
+        else if (sp.op === "Engrave" && it.className === "Raster") await rasterDitherScan(it, sp, g);
+        else sp.op === "Engrave" ? engraveSeg(it, sp, g, false) : vectorSeg(it, sp, g, false);
+        for (const segment of g) segment.zOffset = Number(sp.zOffset) || 0;
+        if (g.length) groups.push(g);
+      }
+      batches.push(groups);
     }
-    return groups;
+    return batches;
   }
   async function orderJobSegs(specs) {
-    const groups = await collectJobSegs(specs);
-    if (containsRasterScan(groups)) return groups.flat();
-    if (pathOrder === "color") return groups.flat();
-    if (pathOrder === "nearby") {
-      const rest = groups.slice(), out = [];
-      let cur = P(0, 0);
-      while (rest.length) {
-        let bi = 0, bd = Infinity;
-        for (let i = 0; i < rest.length; i++) { const d = dist(cur, segStart(rest[i][0])); if (d < bd) { bd = d; bi = i; } }
-        const g = rest.splice(bi, 1)[0];
-        out.push(...g); cur = segEnd(g[g.length - 1]);
-      }
-      return out;
-    }
-    return orderNearest(groups.flat(), true);
+    return orderLayerBatches(await collectJobSegs(specs));
   }
   const fmt = (n) => (Math.round(n * 1000) / 1000).toFixed(3).replace(/\.?0+$/, "");
   const feedFromPct = (pct, maxFeed = 12000) => Math.round((Math.max(1, Math.min(100, pct || 1)) / 100) * maxFeed);
@@ -1741,26 +1817,42 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
         focus: combinedFocusOffset(machineFocusOffset, segment.zOffset),
         operation: segment.op,
         raster: !!segment.raster,
+        closed: !!segment.closed,
+        ...(segment.closed && segment.op === "Cut" && segment.overlapPoint ? {
+          overlapPoint: { x: segment.overlapPoint.x, y: segment.overlapPoint.y },
+        } : {}),
       }));
     return { lines, laserSegments, opCount: specs.length, segmentCount: segs.length, burnMoves, quality };
   }
   let sim = null;
-  function startSim(specs) {
+  function startSim(specs, timing) {
     stopSim();
     clearSel(); emitSel();
     const segs = orderSegs(specs);
-    const moves = buildMoves(segs);
+    const moves = buildMoves(segs, timing);
     if (!moves.length) return null;
-    // ghost: the whole toolpath as thin grey lines; the real design is hidden
+    const jobOverhead = Number(timing?.jobOverheadS) || 0;
+    if (jobOverhead > 0) moves.unshift({ a: moves[0].a, b: moves[0].a, duration: jobOverhead, burn: false, dwell: true });
+    // Ghost and completed trail retain each layer's source hue. Completed
+    // strokes are contrast-adjusted so very bright SVG colors (notably CSS
+    // `lime`) remain clearly visible against the white bed.
     simLayer.activate();
     const ghost = new paper.Group();
-    for (const s of segs) { const p = new paper.Path(s.pts); p.strokeColor = "#c7ccc8"; p.strokeWidth = 0.35; p.guide = true; ghost.addChild(p); }
+    for (const s of segs) {
+      const p = new paper.Path(s.pts);
+      p.strokeColor = s.color || "#8a918e";
+      p.opacity = 0.2;
+      p.strokeWidth = 0.4;
+      p.guide = true;
+      ghost.addChild(p);
+    }
     const trail = new paper.Group();
     const dot = new paper.Path.Circle(moves[0].a, 2.2);
     dot.fillColor = new paper.Color("#e11"); dot.strokeColor = "white"; dot.strokeWidth = 0.35; dot.guide = true;
     designLayer.visible = false;
     designLayer.activate();
-    sim = { moves, i: 0, t: 0, mult: 1, dot, ghost, trail, playing: true, cb: null, trailN: 0, activeTrail: null };
+    const totalDuration = moves.reduce((sum, move) => sum + move.duration, 0);
+    sim = { moves, i: 0, t: 0, elapsed: 0, totalDuration, mult: 1, dot, ghost, trail, playing: true, cb: null, activeTrail: null };
     view.onFrame = (ev) => { if (sim && sim.playing) simStep(ev.delta); };
     return {
       setMult: (m) => { if (sim) sim.mult = m; },
@@ -1769,30 +1861,48 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       onProgress: (cb) => { if (sim) sim.cb = cb; },
     };
   }
+  function completedSimulationColor(value, fallback) {
+    const color = new paper.Color(value || fallback);
+    const luminance = 0.2126 * color.red + 0.7152 * color.green + 0.0722 * color.blue;
+    if (luminance > 0.42) {
+      const scale = 0.42 / luminance;
+      color.red *= scale;
+      color.green *= scale;
+      color.blue *= scale;
+    }
+    return color;
+  }
   function trailFor(mv) {
-    if (sim.activeTrail?.move === mv) return sim.activeTrail.path;
-    if (sim.trailN >= 8000) return null;
-    const l = new paper.Path.Line(mv.a, mv.b);
-    l.strokeColor = mv.op === "Engrave" ? "#555" : "#111"; // engrave fills in; a cut leaves a black line
-    l.strokeWidth = mv.op === "Engrave" ? 0.4 : 0.6;
+    if (sim.activeTrail?.sourceId === mv.sourceId) {
+      if (sim.activeTrail.move !== mv) {
+        // Keep one Paper.js path per imported source path. Previously every
+        // 0.2 mm preview step became its own object, so detailed jobs could
+        // silently stop drawing partway through.
+        sim.activeTrail.path.add(mv.a);
+        sim.activeTrail.move = mv;
+      }
+      return sim.activeTrail.path;
+    }
+    const l = new paper.Path([mv.a, mv.a]);
+    l.strokeColor = completedSimulationColor(mv.color, mv.op === "Engrave" ? "#555" : "#111");
+    l.strokeWidth = mv.op === "Engrave" ? 0.55 : 0.9;
     l.strokeCap = "round"; l.guide = true;
-    sim.trail.addChild(l); sim.trailN++;
-    sim.activeTrail = { move: mv, path: l };
+    sim.trail.addChild(l);
+    sim.activeTrail = { sourceId: mv.sourceId, move: mv, path: l };
     return l;
   }
   function simStep(dt) {
     let budget = dt * sim.mult; // seconds of machine time this frame
     while (budget > 0 && sim.i < sim.moves.length) {
-      const mv = sim.moves[sim.i], len = mv.a.getDistance(mv.b) || 1e-4, dur = len / Math.max(1, mv.speed), remain = dur * (1 - sim.t);
+      const mv = sim.moves[sim.i], dur = Math.max(0.000001, mv.duration), remain = dur * (1 - sim.t);
       if (budget >= remain) {
-        budget -= remain; sim.i++; sim.t = 0; sim.dot.position = mv.b;
+        budget -= remain; sim.elapsed += remain; sim.i++; sim.t = 0; sim.dot.position = mv.b;
         if (mv.burn) {
           const trail = trailFor(mv);
           if (trail) trail.lastSegment.point = mv.b;
-          sim.activeTrail = null;
         }
       } else {
-        sim.t += budget / dur; budget = 0;
+        sim.t += budget / dur; sim.elapsed += budget; budget = 0;
         sim.dot.position = mv.a.add(mv.b.subtract(mv.a).multiply(sim.t));
         if (mv.burn) {
           const trail = trailFor(mv);
@@ -1800,7 +1910,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
         }
       }
     }
-    if (sim.cb) sim.cb(Math.min(1, sim.i / sim.moves.length));
+    if (sim.cb) sim.cb(Math.min(1, sim.totalDuration ? sim.elapsed / sim.totalDuration : 1));
     if (sim.i >= sim.moves.length) sim.playing = false;
     view.update();
   }
@@ -1821,12 +1931,12 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     onCoords: (cb) => (coordsCb = cb),
     onSelection: (cb) => (selectionCb = cb),
     onChange: (cb) => (changeCb = cb),
-    getDesign, geometryStats, getRect, getRef, applyRect, applyAngle, startSim, stopSim, buildGcodeJob, outputQuality,
+    getDesign, geometryStats, getRect, getRef, applyRect, applyAngle, startSim, stopSim, estimateTime, buildGcodeJob, outputQuality,
     setSelectionMode, undo, redo, resetHistory, exportDesign, importDesign, exportSession, importSession,
     groupSelected, ungroupSelected, arrangeSelected, copySelection, pasteSelection, duplicateSelection,
     canUngroup, selectAll, deleteSelection,
     setGrid, setTool, setPathOrder, getColors, addShape, finishDrawing,
-    setDrawStyle, applyStyle, getStyle,
+    setDrawStyle, applyStyle, getStyle, setLayerVisibility,
     getSelectionInfo: () => ({ hasRaster: selectionHasRaster(), count: selected.size }),
     getRasterSettings, getRasterMode, setRasterModes, beginRasterEdit, updateRasterSettings, endRasterEdit, resetRasterSettings,
     onDrawSize: (cb) => (drawSizeCb = cb),

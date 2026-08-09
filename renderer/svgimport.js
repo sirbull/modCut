@@ -6,7 +6,7 @@
 const MM_PER_PX = 25.4 / 96; // CSS reference: 96px = 1 inch
 
 /** Convert an SVG width/height attribute to millimetres. Pure — unit-tested. */
-export function lengthToMm(value, viewBoxDim) {
+export function lengthToMm(value, viewBoxDim, unitlessUnitsPerInch = 96) {
   const s = (value || "").trim();
   const m = s.match(/^([0-9]*\.?[0-9]+)\s*(mm|cm|in|pt|pc|px|%)?$/);
   if (m && m[2] !== "%") {
@@ -17,11 +17,12 @@ export function lengthToMm(value, viewBoxDim) {
       case "in": return n * 25.4;
       case "pt": return n * (25.4 / 72);
       case "pc": return n * (25.4 / 6);
-      default:   return n * MM_PER_PX; // "px" or unitless user units == px
+      case "px": return n * MM_PER_PX;
+      default:   return n * (25.4 / unitlessUnitsPerInch);
     }
   }
-  // "%", missing, or unparseable -> fall back to the viewBox extent (user px).
-  if (viewBoxDim != null) return viewBoxDim * MM_PER_PX;
+  // "%", missing, or unparseable -> fall back to the viewBox extent.
+  if (viewBoxDim != null) return viewBoxDim * (25.4 / unitlessUnitsPerInch);
   return null;
 }
 
@@ -35,8 +36,11 @@ export function parseSVG(text) {
   const vb = (src.getAttribute("viewBox") || "").trim().split(/[\s,]+/).map(Number);
   const viewBox = vb.length === 4 && vb.every((n) => !Number.isNaN(n)) ? vb : null;
 
-  const widthMm = lengthToMm(src.getAttribute("width"), viewBox ? viewBox[2] : null);
-  const heightMm = lengthToMm(src.getAttribute("height"), viewBox ? viewBox[3] : null);
+  // Illustrator stores a width-less artboard viewBox in PostScript points
+  // (72 units/in), while ordinary SVG/CSS unitless coordinates use 96 px/in.
+  const unitlessUnitsPerInch = /Adobe Illustrator/i.test(text) ? 72 : 96;
+  const widthMm = lengthToMm(src.getAttribute("width"), viewBox ? viewBox[2] : null, unitlessUnitsPerInch);
+  const heightMm = lengthToMm(src.getAttribute("height"), viewBox ? viewBox[3] : null, unitlessUnitsPerInch);
 
   const svg = document.importNode(src, true);
   return { svg, widthMm, heightMm, viewBox };
@@ -64,7 +68,14 @@ export function extractColors(svgEl) {
  * CSS-class colors faithfully) -> detach. Returns a node ready for importSVG.
  */
 export function prepareSVG(text) {
-  const { svg, widthMm, heightMm } = parseSVG(text);
+  const { svg, widthMm, heightMm, viewBox } = parseSVG(text);
+  // Paper.js parses the numeric part of physical SVG lengths but ignores their
+  // unit. Give it a unitless millimetre viewport so viewBox coordinates become
+  // project millimetres without scaling the artwork bounds to the whole page.
+  if (viewBox && widthMm > 0 && heightMm > 0) {
+    svg.setAttribute("width", String(widthMm));
+    svg.setAttribute("height", String(heightMm));
+  }
   const holder = document.createElement("div");
   holder.style.cssText = "position:absolute;left:-99999px;top:0;width:0;height:0;overflow:hidden";
   holder.appendChild(svg);
@@ -73,7 +84,7 @@ export function prepareSVG(text) {
   inlineColors(svg);
   stripClipping(svg);
   holder.remove(); // detached node is still valid for paper.project.importSVG
-  return { node: svg, widthMm, heightMm, colors };
+  return { node: svg, widthMm, heightMm, viewBox, colors };
 }
 
 function inlineColors(svgEl) {

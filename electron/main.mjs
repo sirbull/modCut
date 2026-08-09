@@ -24,10 +24,17 @@ const rendererGone = new WeakSet();
 const isE2E = process.env.MODCUT_E2E === "1";
 const e2eImportResults = [];
 
+// Keep local development and an installed build from sharing Chromium state,
+// recovery files, and machine settings. E2E supplies its own user-data-dir.
+if (!app.isPackaged && !isE2E) {
+  app.setPath("userData", join(app.getPath("appData"), "modcut-development"));
+}
+
 function createWindow() {
   const nextWindow = new BrowserWindow({
     width: 1360,
     height: 880,
+    show: false,
     icon: appIconPath,
     backgroundColor: "#FFFFFF",
     webPreferences: {
@@ -46,13 +53,13 @@ function createWindow() {
     nextWindow.webContents.send("app-close-request", { reason: quitRequested ? "quit" : "window" });
   });
   nextWindow.on("closed", () => { if (win === nextWindow) win = null; });
-  if (isE2E) {
-    nextWindow.webContents.once("did-finish-load", () => {
-      nextWindow.show();
-      if (isMac) app.focus({ steal: true });
-      nextWindow.focus();
-    });
-  }
+  const showAndFocus = () => {
+    nextWindow.show();
+    if (isMac) app.focus({ steal: true });
+    nextWindow.focus();
+  };
+  if (isE2E) nextWindow.webContents.once("did-finish-load", showAndFocus);
+  else nextWindow.once("ready-to-show", showAndFocus);
   void nextWindow.loadFile(join(root, "renderer", "index.html"));
   return nextWindow;
 }

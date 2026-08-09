@@ -158,16 +158,17 @@
       </div>
 
       <div class="sec">
-        <h3 title="The order the laser processes paths. Optimize = least head travel (usually fastest). Nearby elements keeps shapes/words together. Color order runs them top-to-bottom as listed below.">Path order</h3>
+        <h3 title="Layers always run completely, from top to bottom in the layer list. This setting only orders paths inside each individual layer.">Path order inside layer</h3>
         <select class="select" id="pathOrder">
-          <option value="optimize">Optimize (fastest)</option>
+          <option value="optimize">Optimize paths (fastest)</option>
           <option value="nearby">Nearby elements (keep together)</option>
-          <option value="color">Color order (as listed)</option>
+          <option value="color">Original path order</option>
         </select>
+        <p class="hint">Layers always run one at a time, top → bottom.</p>
       </div>
 
       <div class="sec sec--grow">
-        <h3 title="One row per colour. Choose the operation (Cut / Engrave / Score) and set power %, speed, frequency — plus DPI, dithering and direction for engraving. Toggle Output to include/exclude a layer.">Cuts / Layers</h3>
+        <h3 title="One row per colour. Reorder rows to set the fixed job order. A layer always finishes before the next starts. Toggle a layer to show/hide it and include/exclude it from output.">Cuts / Layers</h3>
         <div id="layers"></div>
         <p class="hint" id="layersHint">Import a file to see its color layers here.</p>
       </div>
@@ -183,9 +184,15 @@
     <button class="btn btn--ghost btn--sm" id="estimate" title="Rough run-time estimate from path lengths and each layer's speed. Recompute after changing speeds or the design.">Estimate time</button>
     <span class="est" id="estimateOut"></span>
     <div class="spacer"></div>
+    <label class="action-toggle" title="Off: send one combined file. On: send one separate file for each active operation type, in the order first listed in Layers.">
+      <input type="checkbox" id="splitJobs">
+      <span class="action-toggle__switch" aria-hidden="true"></span>
+      <span>Split by operation</span>
+    </label>
+    <span class="tb-sep"></span>
     <span class="fn-label">File name</span>
     <div class="fn-wrap"><input class="input filename" id="filename" value="job" spellcheck="false"><span class="fn-ext" id="fnExt">.gcode</span></div>
-    <button class="btn btn--secondary btn--sm" id="simulate" title="Preview the toolpath: a red dot runs the path in order — cuts leave a black line, engraving fills in. Adjust speed 1×–50×.">Simulate</button>
+    <button class="btn btn--secondary btn--sm" id="simulate" title="Preview the toolpath in job order. Waiting paths are faint; completed paths become darker in their layer color. Adjust speed 1×–50×.">Simulate</button>
     <button class="btn btn--secondary btn--sm" id="frame" title="Trace the job's outline with the beam OFF, so you can check placement on the material before running. It does not cut.">Frame</button>
     <span class="job-state" id="jobState"></span>
     <button class="btn btn--danger btn--sm hidden" id="stopBtn" title="Immediately stop the active job. On GRBL this sends feed-hold followed by soft reset.">Stop</button>
