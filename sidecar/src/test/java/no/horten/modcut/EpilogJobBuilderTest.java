@@ -7,6 +7,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import de.thomas_oster.liblasercut.VectorCommand;
 import de.thomas_oster.liblasercut.VectorPart;
+import de.thomas_oster.liblasercut.RasterPart;
+import de.thomas_oster.liblasercut.drivers.EpilogEngraveProperty;
+import de.thomas_oster.liblasercut.drivers.EpilogZing;
 import de.thomas_oster.liblasercut.platform.Util;
 import de.thomas_oster.liblasercut.properties.PowerSpeedFocusFrequencyProperty;
 import org.junit.jupiter.api.Test;
@@ -96,5 +99,86 @@ class EpilogJobBuilderTest {
     assertEquals(3, moves.size());
     assertEquals(moves.get(0).getX(), moves.get(2).getX());
     assertEquals(moves.get(0).getY(), moves.get(2).getY());
+  }
+
+  @Test
+  void combinesRasterRunsFromOneLayerIntoNativeEpilogRaster() throws Exception {
+    var params = json.readTree("""
+        {"filename":"native-raster.prn","laserSegments":[
+          {"layerIndex":0,"operation":"Engrave","raster":true,"engraveMode":"auto",
+           "dpi":100,"dither":"Jarvis","bottomUp":true,"maxPower":40,
+           "power":40,"speed":70,"frequency":500,"focus":-0.5,
+           "points":[{"x":10,"y":20},{"x":12.54,"y":20}]},
+          {"layerIndex":0,"operation":"Engrave","raster":true,"engraveMode":"auto",
+           "dpi":100,"dither":"Jarvis","bottomUp":true,"maxPower":40,
+           "power":40,"speed":70,"frequency":500,"focus":-0.5,
+           "points":[{"x":10,"y":22.54},{"x":12.54,"y":22.54}]}
+        ]}
+        """);
+
+    var built = EpilogJobBuilder.build(params, 100, 100);
+    assertEquals(1, built.job().getParts().size());
+    var raster = (RasterPart) built.job().getParts().get(0);
+    assertEquals(11, raster.getRasterWidth());
+    assertEquals(11, raster.getRasterHeight());
+    assertTrue(raster.isBlack(0, 0));
+    assertTrue(raster.isBlack(10, 10));
+    var property = (EpilogEngraveProperty) raster.getLaserProperty();
+    assertEquals(40, property.getPower());
+    assertEquals(70, property.getSpeed());
+    assertEquals(-0.5, property.getFocus());
+    assertTrue(property.isEngraveBottomUp());
+  }
+
+  @Test
+  void vectorScanModeKeepsRasterRunsAsVectors() throws Exception {
+    var params = json.readTree("""
+        {"laserSegments":[
+          {"layerIndex":0,"operation":"Engrave","raster":true,"engraveMode":"vector",
+           "dpi":500,"dither":"Jarvis","bottomUp":true,"maxPower":30,
+           "power":30,"speed":50,"frequency":500,"focus":0,
+           "points":[{"x":1,"y":1},{"x":2,"y":1}]}
+        ]}
+        """);
+    var built = EpilogJobBuilder.build(params, 100, 100);
+    assertEquals(1, built.job().getParts().size());
+    assertTrue(built.job().getParts().get(0) instanceof VectorPart);
+  }
+
+  @Test
+  void keepsLayerPartsTogetherAroundNativeRaster() throws Exception {
+    var params = json.readTree("""
+        {"laserSegments":[
+          {"layerIndex":0,"operation":"Score","power":10,"speed":50,"frequency":500,"focus":0,
+           "points":[{"x":1,"y":1},{"x":2,"y":1}]},
+          {"layerIndex":1,"operation":"Engrave","raster":true,"engraveMode":"native",
+           "dpi":500,"dither":"Jarvis","bottomUp":false,"maxPower":30,
+           "power":30,"speed":50,"frequency":500,"focus":0,
+           "points":[{"x":1,"y":2},{"x":2,"y":2}]},
+          {"layerIndex":2,"operation":"Cut","power":100,"speed":20,"frequency":500,"focus":0,
+           "points":[{"x":1,"y":3},{"x":2,"y":3}]}
+        ]}
+        """);
+    var built = EpilogJobBuilder.build(params, 100, 100);
+    assertEquals(3, built.job().getParts().size());
+    assertTrue(built.job().getParts().get(0) instanceof VectorPart);
+    assertTrue(built.job().getParts().get(1) instanceof RasterPart);
+    assertTrue(built.job().getParts().get(2) instanceof VectorPart);
+  }
+
+  @Test
+  void nativeRasterSerializesThroughTheRealEpilogDriver() throws Exception {
+    var params = json.readTree("""
+        {"filename":"native-output.prn","laserSegments":[
+          {"layerIndex":0,"operation":"Engrave","raster":true,"engraveMode":"native",
+           "dpi":500,"dither":"Jarvis","bottomUp":true,"maxPower":25,
+           "power":25,"speed":80,"frequency":500,"focus":0,
+           "points":[{"x":5,"y":5},{"x":8,"y":5}]}
+        ]}
+        """);
+    var built = EpilogJobBuilder.build(params, 100, 100);
+    var bytes = new java.io.ByteArrayOutputStream();
+    new EpilogZing().saveJob(bytes, built.job());
+    assertTrue(bytes.size() > 100);
   }
 }

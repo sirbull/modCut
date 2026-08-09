@@ -16,8 +16,13 @@ test("process profiles normalize unsafe and missing values", () => {
 
 test("applying an engrave profile updates output and raster controls", () => {
   const layer = { op: "Cut", dpi: 100, dither: "Bayer", bottomUp: false };
-  applyProcessProfile(layer, { id: "photo", name: "Photo", op: "Engrave", power: 32, speed: 70, freq: 5000, zOffset: 0.8, dpi: 254, dither: "Grayscale", bottomUp: true });
-  assert.deepEqual(layer, { op: "Engrave", power: 32, speed: 70, freq: 5000, zOffset: 0.8, dpi: 254, dither: "Grayscale", bottomUp: true, profileId: "photo" });
+  applyProcessProfile(layer, { id: "photo", name: "Photo", op: "Engrave", power: 32, speed: 70, freq: 5000, zOffset: 0.8, dpi: 254, dither: "Grayscale", bottomUp: true, engraveMode: "native" });
+  assert.deepEqual(layer, { op: "Engrave", power: 32, speed: 70, freq: 5000, zOffset: 0.8, dpi: 254, dither: "Grayscale", bottomUp: true, engraveMode: "native", profileId: "photo" });
+});
+
+test("engrave profiles default to automatic motion and reject unknown modes", () => {
+  assert.equal(normalizeProcessProfile({ op: "Engrave" }).engraveMode, "auto");
+  assert.equal(normalizeProcessProfile({ op: "Engrave", engraveMode: "unknown" }).engraveMode, "auto");
 });
 
 test("profile choices are filtered by operation", () => {

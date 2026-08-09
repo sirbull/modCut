@@ -739,7 +739,8 @@ function initializeDocumentTabs() {
 // --- layers -----------------------------------------------------------------
 const newLayer = (color, op, raster = false, key = null) => ({
   key, color, raster, op: raster ? "Engrave" : op, output: true,
-  dpi: 300, dither: raster ? "Grayscale" : "Jarvis", bottomUp: true,
+  dpi: isEpilogDriver(machine().driver) ? 500 : 300,
+  dither: raster ? "Grayscale" : "Jarvis", bottomUp: true, engraveMode: "auto",
   ...defaultsFor(raster ? "Engrave" : op),
   profileId: defaultUsesMaterial(raster ? "Engrave" : op) ? "material" : null,
 });
@@ -864,6 +865,11 @@ function layerRow(l, layerIndex) {
   const byColor = state.mappingMode === "color";
   if (l.raster && !canAssignRasterToOperation(l.op)) l.op = "Engrave";
   const engrave = l.op === "Engrave";
+  if (!l.engraveMode || !["auto", "native", "vector"].includes(l.engraveMode)) l.engraveMode = "auto";
+  const epilogRasterDpis = [100, 200, 250, 400, 500, 1000];
+  if (engrave && isEpilogDriver(machine().driver) && !epilogRasterDpis.includes(Number(l.dpi))) {
+    l.dpi = epilogRasterDpis.reduce((best, dpi) => Math.abs(dpi - Number(l.dpi || 500)) < Math.abs(best - Number(l.dpi || 500)) ? dpi : best, 500);
+  }
   const ignored = l.op === "Ignore";
   const layerOps = operationsForLayer(l.raster);
   const profiles = profilesForOperation(processProfiles, l.op);
@@ -904,7 +910,19 @@ function layerRow(l, layerIndex) {
     </div>
     ${engrave ? `
     <div class="clayer__grid two">
-      <div><label>DPI (1–1000)</label><input class="input" type="number" min="1" max="1000" value="${l.dpi}" data-k="dpi"></div>
+      <div><label>Engraving motion</label><select class="select" data-k="engraveMode">
+        <option value="auto" ${l.engraveMode === "auto" ? "selected" : ""}>Auto (recommended)</option>
+        <option value="native" ${l.engraveMode === "native" ? "selected" : ""} ${isEpilogDriver(machine().driver) ? "" : "disabled"}>Native raster — whole layer</option>
+        <option value="vector" ${l.engraveMode === "vector" ? "selected" : ""}>Vector scan — separate paths</option>
+      </select></div>
+      <p class="clayer__z-hint">${isEpilogDriver(machine().driver)
+        ? "Native raster lets Epilog accelerate outside the artwork and scan the complete layer efficiently. Auto uses it where possible."
+        : "Auto uses vector scanning on this machine. Native raster is available for Epilog output."}</p>
+    </div>
+    <div class="clayer__grid two">
+      <div><label>DPI${isEpilogDriver(machine().driver) ? " (Epilog-supported)" : " (1–1000)"}</label>${isEpilogDriver(machine().driver)
+        ? `<select class="select" data-k="dpi">${epilogRasterDpis.map((dpi) => `<option value="${dpi}" ${dpi === Number(l.dpi) ? "selected" : ""}>${dpi}</option>`).join("")}</select>`
+        : `<input class="input" type="number" min="1" max="1000" value="${l.dpi}" data-k="dpi">`}</div>
       <div><label>Raster mode</label><select class="select" data-k="dither">${DITHERS.map((d) => `<option ${d === l.dither ? "selected" : ""}>${d}</option>`).join("")}</select></div>
     </div>
     <label class="clayer__chk"><input type="checkbox" ${l.bottomUp ? "checked" : ""} data-k="bottomUp"> Engrave bottom → top (less soot)</label>` : ""}
@@ -945,7 +963,7 @@ function layerRow(l, layerIndex) {
     const k = el.dataset.k;
     if (el.type === "checkbox") el.addEventListener("change", () => { l[k] = el.checked; markDirty(); });
     else if (el.tagName === "SELECT") el.addEventListener("change", () => {
-      l[k] = el.value;
+      l[k] = k === "dpi" ? Number(el.value) : el.value;
       if (k === "dither") { syncRasterModes(); refreshBitmapControls(); }
       markDirty();
     });
@@ -965,7 +983,8 @@ function layerRow(l, layerIndex) {
 
 // --- run + estimate ---------------------------------------------------------
 const activeLayers = () => state.layers.filter(isOutputLayer);
-const jobOps = () => activeLayers().map((l) => ({ op: l.op, color: l.color, power: l.power, speed: clampSpeedPct(l.speed), freq: l.freq, zOffset: Number(l.zOffset) || 0, ...(l.op === "Engrave" ? { dpi: l.dpi, dither: l.dither, bottomUp: l.bottomUp } : {}) }));
+const effectiveEngraveMode = (layer) => isEpilogDriver(machine().driver) ? (layer.engraveMode || "auto") : "vector";
+const jobOps = () => activeLayers().map((l) => ({ op: l.op, color: l.color, power: l.power, speed: clampSpeedPct(l.speed), freq: l.freq, zOffset: Number(l.zOffset) || 0, ...(l.op === "Engrave" ? { dpi: l.dpi, dither: l.dither, bottomUp: l.bottomUp, engraveMode: effectiveEngraveMode(l) } : {}) }));
 const machineLimits = () => ({ bedWidth: machine().bedW || 600, bedHeight: machine().bedH || 400, maxFeed: machine().maxFeed || 12000 });
 const connectionMatchesMachine = () => !machineStatus.connected || machineStatus.connectedMachineId === state.machineId;
 function invalidFrequencyMessage(ops) {
@@ -1092,7 +1111,7 @@ function estimate() {
 
 // --- simulate ---------------------------------------------------------------
 let simCtl = null;
-const simSpecs = () => activeLayers().map((l) => ({ color: state.mappingMode === "color" ? l.color : null, op: l.op, speed: l.speed, power: l.power, zOffset: Number(l.zOffset) || 0, dpi: l.dpi, dither: l.dither, bottomUp: l.bottomUp }));
+const simSpecs = () => activeLayers().map((l) => ({ color: state.mappingMode === "color" ? l.color : null, op: l.op, speed: l.speed, power: l.power, zOffset: Number(l.zOffset) || 0, dpi: l.dpi, dither: l.dither, bottomUp: l.bottomUp, engraveMode: effectiveEngraveMode(l) }));
 function startSimulate() {
   if (!bed.getDesign()) return toast("Import a design first.", "info");
   const specs = simSpecs();
@@ -1369,6 +1388,11 @@ const processProfileFields = (profile = {}) => [
   { key: "dpi", label: "Engrave DPI", type: "number", min: 1, max: 1000, value: profile.dpi ?? 300, showIf: (v) => v.op === "Engrave" },
   { key: "dither", label: "Raster mode", type: "select", options: DITHERS, value: profile.dither || "Grayscale", showIf: (v) => v.op === "Engrave" },
   { key: "bottomUp", label: "Engrave bottom → top", type: "checkbox", value: profile.bottomUp !== false, showIf: (v) => v.op === "Engrave" },
+  { key: "engraveMode", label: "Engraving motion", type: "select", options: [
+    { value: "auto", label: "Auto (recommended)" },
+    { value: "native", label: "Native raster — whole layer" },
+    { value: "vector", label: "Vector scan — separate paths" },
+  ], value: profile.engraveMode || "auto", showIf: (v) => v.op === "Engrave" },
 ];
 const processProfileFrom = (values, id) => normalizeProcessProfile({ id, ...values });
 async function addProcessProfile(seed = {}) {

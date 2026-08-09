@@ -1472,6 +1472,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     let interval = grid.intervalMm;
     let columns = grid.columns;
     if (preview && grid.rows > 500) interval = b.height / 500;
+    const sampleWeight = Math.max(1, interval / grid.intervalMm);
     if (preview) columns = Math.min(columns, 2000);
     const rows = [];
     for (let y = b.bottom; y >= b.top; y -= interval) rows.push(y);
@@ -1497,7 +1498,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
         let a = P(b.left + (aPx / columns) * b.width, y);
         let c = P(b.left + (cPx / columns) * b.width, y);
         if (flip) { const t = a; a = c; c = t; }
-        out.push({ pts: [a, c], speed: sp.speed, power: sp.power, freq: sp.freq, dpi: sp.dpi, dither: sp.dither, op: "Engrave", raster: true });
+        out.push({ pts: [a, c], speed: sp.speed, power: sp.power, freq: sp.freq, dpi: sp.dpi, dither: sp.dither, op: "Engrave", raster: true, sampleWeight });
       }
       flip = !flip;
     }
@@ -1508,6 +1509,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     const grid = rasterGrid(b.width, b.height, sp.dpi || 300);
     let interval = grid.intervalMm;
     if (preview && grid.rows > 200) interval = b.height / 200;
+    const sampleWeight = Math.max(1, interval / grid.intervalMm);
     const ys = [];
     for (let y = b.bottom; y >= b.top; y -= interval) ys.push(y);
     if (!sp.bottomUp) ys.reverse();
@@ -1522,7 +1524,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       for (const [left, right] of ordered) {
         let a = P(left, y), c = P(right, y);
         if (flip) { const t = a; a = c; c = t; }
-        out.push({ pts: [a, c], speed: sp.speed, power: sp.power, freq: sp.freq, dpi: sp.dpi, dither: sp.dither, op: "Engrave", raster: true });
+        out.push({ pts: [a, c], speed: sp.speed, power: sp.power, freq: sp.freq, dpi: sp.dpi, dither: sp.dither, op: "Engrave", raster: true, sampleWeight });
       }
       flip = !flip;
     }
@@ -1534,7 +1536,8 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   // Collect segments grouped per source shape (keeps a shape's paths together).
   function collectSegs(specs) {
     const batches = [];
-    for (const sp of specs) {
+    for (let layerIndex = 0; layerIndex < specs.length; layerIndex++) {
+      const sp = specs[layerIndex];
       const groups = [];
       for (const it of itemsForColor(sp.color)) {
         const g = [];
@@ -1542,6 +1545,10 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
         for (const segment of g) {
           segment.zOffset = Number(sp.zOffset) || 0;
           segment.color = sp.color;
+          segment.layerIndex = layerIndex;
+          segment.engraveMode = sp.engraveMode || "vector";
+          segment.bottomUp = sp.bottomUp !== false;
+          segment.dpi = Number(sp.dpi) || 300;
         }
         if (g.length) groups.push(g);
       }
@@ -1598,7 +1605,46 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     return ordered;
   }
   function orderSegs(specs) {
-    return orderLayerBatches(collectSegs(specs));
+    return consolidateNativeRasterRows(orderLayerBatches(collectSegs(specs)));
+  }
+  function consolidateNativeRasterRows(segs) {
+    const out = [];
+    for (let at = 0; at < segs.length;) {
+      const layerIndex = segs[at].layerIndex;
+      let end = at + 1;
+      while (end < segs.length && segs[end].layerIndex === layerIndex) end++;
+      const layer = segs.slice(at, end);
+      const raster = layer.filter((segment) => segment.raster && segment.engraveMode !== "vector");
+      if (!raster.length) out.push(...layer);
+      else {
+        const rows = new Map();
+        for (const segment of raster) {
+          const y = (segStart(segment).y + segEnd(segment).y) / 2;
+          const key = Math.round(y * (Number(segment.dpi) || 300) / 25.4);
+          if (!rows.has(key)) rows.set(key, []);
+          rows.get(key).push(segment);
+        }
+        const orderedRows = [...rows.entries()].sort((a, b) => raster[0].bottomUp === false ? a[0] - b[0] : b[0] - a[0]);
+        for (const [, runs] of orderedRows) {
+          const y = (segStart(runs[0]).y + segEnd(runs[0]).y) / 2;
+          const leftToRight = segEnd(runs[0]).x >= segStart(runs[0]).x;
+          const intervals = runs.map((segment) => ({
+            left: Math.min(segStart(segment).x, segEnd(segment).x),
+            right: Math.max(segStart(segment).x, segEnd(segment).x),
+            power: segment.power, color: segment.color, op: segment.op,
+          })).sort((a, b) => leftToRight ? a.left - b.left : b.right - a.right);
+          out.push({
+            ...runs[0], nativeRaster: true, y, leftToRight, runs: intervals,
+            sampleWeight: Math.max(...runs.map((run) => Number(run.sampleWeight) || 1)),
+            pts: [P(leftToRight ? intervals[0].left : intervals[0].right, y),
+                  P(leftToRight ? intervals[intervals.length - 1].right : intervals[intervals.length - 1].left, y)],
+          });
+        }
+        out.push(...layer.filter((segment) => !raster.includes(segment)));
+      }
+      at = end;
+    }
+    return out;
   }
   function buildMoves(segs, inputTiming) {
     const timing = inputTiming || defaultMotionTiming("Dummy", 12000);
@@ -1607,6 +1653,48 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     let sourceId = 0;
     for (const s of segs) {
       if (!s.pts.length) continue;
+      if (s.nativeRaster) {
+        const speed = targetMotionSpeed(s.speed, timing.rasterSpeedMmS);
+        const overscan = speed * speed / (2 * timing.rasterAccelerationMmS2);
+        const firstBurn = s.leftToRight ? s.runs[0].left : s.runs[0].right;
+        const lastRun = s.runs[s.runs.length - 1];
+        const lastBurn = s.leftToRight ? lastRun.right : lastRun.left;
+        const rowStartX = s.leftToRight ? Math.max(0, firstBurn - overscan) : Math.min(bedWmm, firstBurn + overscan);
+        const rowEndX = s.leftToRight ? Math.min(bedWmm, lastBurn + overscan) : Math.max(0, lastBurn - overscan);
+        const rowStart = P(rowStartX, s.y), rowEnd = P(rowEndX, s.y);
+        if (prev) {
+          const travelDistance = prev.getDistance(rowStart);
+          if (travelDistance > 0.0001) {
+            const travel = trapezoidPlan(travelDistance, timing.travelSpeedMmS, timing.travelAccelerationMmS2);
+            moves.push({ a: prev, b: rowStart, duration: travel.duration, burn: false });
+          }
+        }
+        const sampleWeight = Math.max(1, Number(s.sampleWeight) || 1);
+        if (timing.rasterLineDelayS > 0) moves.push({ a: rowStart, b: rowStart, duration: timing.rasterLineDelayS * sampleWeight, burn: false, dwell: true });
+        const rowDistance = Math.abs(rowEndX - rowStartX);
+        const plan = trapezoidPlan(rowDistance, speed, timing.rasterAccelerationMmS2);
+        let cursor = rowStart;
+        let distanceAlong = 0;
+        const addRowMove = (targetX, burn, run = null) => {
+          const target = P(targetX, s.y);
+          const length = cursor.getDistance(target);
+          if (length <= 0.000001) return;
+          const startTime = plan.timeAtDistance(distanceAlong);
+          distanceAlong += length;
+          const duration = Math.max(0.000001, (plan.timeAtDistance(distanceAlong) - startTime) * sampleWeight);
+          moves.push({ a: cursor, b: target, duration, burn, op: run?.op, power: run?.power, raster: true, color: run?.color, sourceId: sourceId++ });
+          cursor = target;
+        };
+        for (const run of s.runs) {
+          const burnStart = s.leftToRight ? run.left : run.right;
+          const burnEnd = s.leftToRight ? run.right : run.left;
+          addRowMove(burnStart, false);
+          addRowMove(burnEnd, true, run);
+        }
+        addRowMove(rowEndX, false);
+        prev = rowEnd;
+        continue;
+      }
       if (prev) {
         const travelDistance = prev.getDistance(s.pts[0]);
         if (travelDistance > 0.0001) {
@@ -1624,13 +1712,14 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       const maximumSpeed = s.raster ? timing.rasterSpeedMmS : timing.vectorSpeedMmS;
       const acceleration = s.raster ? timing.rasterAccelerationMmS2 : timing.vectorAccelerationMmS2;
       const pathPlan = trapezoidPlan(pathLength, targetMotionSpeed(s.speed, maximumSpeed), acceleration);
-      const pathDelay = s.raster ? timing.rasterLineDelayS : timing.vectorPathDelayS;
+      const sampleWeight = s.raster ? Math.max(1, Number(s.sampleWeight) || 1) : 1;
+      const pathDelay = (s.raster ? timing.rasterLineDelayS : timing.vectorPathDelayS) * sampleWeight;
       if (pathDelay > 0) moves.push({ a: s.pts[0], b: s.pts[0], duration: pathDelay, burn: false, dwell: true });
       let distanceAlongPath = 0;
       for (let i = 1; i < s.pts.length; i++) {
         const startTime = pathPlan.timeAtDistance(distanceAlongPath);
         distanceAlongPath += lengths[i - 1];
-        const duration = Math.max(0.000001, pathPlan.timeAtDistance(distanceAlongPath) - startTime);
+        const duration = Math.max(0.000001, (pathPlan.timeAtDistance(distanceAlongPath) - startTime) * sampleWeight);
         moves.push({ a: s.pts[i - 1], b: s.pts[i], duration, burn: true, op: s.op, power: s.power, raster: s.raster, color: s.color, sourceId });
       }
       prev = s.pts[s.pts.length - 1];
@@ -1738,14 +1827,23 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   }
   async function collectJobSegs(specs) {
     const batches = [];
-    for (const sp of specs) {
+    for (let layerIndex = 0; layerIndex < specs.length; layerIndex++) {
+      const sp = specs[layerIndex];
       const groups = [];
       for (const it of itemsForColor(sp.color)) {
         const g = [];
         if (sp.op === "Engrave" && it.className === "Raster" && String(sp.dither).toLowerCase() === "grayscale") await rasterGrayscaleScan(it, sp, g);
         else if (sp.op === "Engrave" && it.className === "Raster") await rasterDitherScan(it, sp, g);
         else sp.op === "Engrave" ? engraveSeg(it, sp, g, false) : vectorSeg(it, sp, g, false);
-        for (const segment of g) segment.zOffset = Number(sp.zOffset) || 0;
+        for (const segment of g) {
+          segment.zOffset = Number(sp.zOffset) || 0;
+          segment.layerIndex = layerIndex;
+          segment.layerPower = Number(sp.power) || 0;
+          segment.dpi = Number(sp.dpi) || 300;
+          segment.dither = sp.dither || "Grayscale";
+          segment.bottomUp = sp.bottomUp !== false;
+          segment.engraveMode = sp.engraveMode || "auto";
+        }
         if (g.length) groups.push(g);
       }
       batches.push(groups);
@@ -1818,6 +1916,12 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
         operation: segment.op,
         raster: !!segment.raster,
         closed: !!segment.closed,
+        layerIndex: Number(segment.layerIndex) || 0,
+        dpi: Number(segment.dpi) || 300,
+        dither: segment.dither || "Grayscale",
+        bottomUp: segment.bottomUp !== false,
+        engraveMode: segment.engraveMode || "auto",
+        maxPower: Number(segment.layerPower) || Number(segment.power) || 0,
         ...(segment.closed && segment.op === "Cut" && segment.overlapPoint ? {
           overlapPoint: { x: segment.overlapPoint.x, y: segment.overlapPoint.y },
         } : {}),
@@ -1839,12 +1943,17 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     simLayer.activate();
     const ghost = new paper.Group();
     for (const s of segs) {
-      const p = new paper.Path(s.pts);
-      p.strokeColor = s.color || "#8a918e";
-      p.opacity = 0.2;
-      p.strokeWidth = 0.4;
-      p.guide = true;
-      ghost.addChild(p);
+      const paths = s.nativeRaster
+        ? s.runs.map((run) => ({ pts: [P(run.left, s.y), P(run.right, s.y)], color: run.color }))
+        : [{ pts: s.pts, color: s.color }];
+      for (const item of paths) {
+        const p = new paper.Path(item.pts);
+        p.strokeColor = item.color || "#8a918e";
+        p.opacity = 0.2;
+        p.strokeWidth = 0.4;
+        p.guide = true;
+        ghost.addChild(p);
+      }
     }
     const trail = new paper.Group();
     const dot = new paper.Path.Circle(moves[0].a, 2.2);
