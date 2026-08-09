@@ -1118,9 +1118,10 @@ function startSimulate() {
   if (!specs.length) return toast("No active layers to simulate.", "info");
   simCtl = bed.startSim(specs, motionTimingForMachine(machine()));
   if (!simCtl) return toast("No cuttable geometry found.", "err");
-  simCtl.onProgress((p) => { $("simProg").textContent = Math.round(p * 100) + "%"; if (p >= 1) $("simPlay").textContent = "↺"; });
+  simCtl.onProgress((p) => { $("simProg").textContent = Math.round(p * 100) + "%"; if (p >= 1) $("simPlay").textContent = "▶"; });
   $("simbar").classList.remove("hidden");
   $("simPlay").textContent = "⏸";
+  $("simProg").textContent = "0%";
   setSimSpeed(1);
   toast("Simulating toolpath — red dot follows the beam.", "info");
 }
@@ -1835,8 +1836,13 @@ $("splitJobs").addEventListener("change", (event) => {
 // simulate controls
 $("simPlay").addEventListener("click", () => {
   if (!simCtl) return startSimulate();
-  if ($("simPlay").textContent === "↺") return startSimulate();
   $("simPlay").textContent = simCtl.toggle() ? "⏸" : "▶";
+});
+$("simRestart").addEventListener("click", () => {
+  if (!simCtl) return startSimulate();
+  simCtl.restart();
+  $("simPlay").textContent = "⏸";
+  $("simProg").textContent = "0%";
 });
 $("simSpeeds").addEventListener("click", (e) => { const b = e.target.closest("button[data-x]"); if (b) setSimSpeed(+b.dataset.x); });
 $("simClose").addEventListener("click", stopSimulate);

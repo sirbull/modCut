@@ -1963,9 +1963,24 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     const totalDuration = moves.reduce((sum, move) => sum + move.duration, 0);
     sim = { moves, i: 0, t: 0, elapsed: 0, totalDuration, mult: 1, dot, ghost, trail, playing: true, cb: null, activeTrail: null };
     view.onFrame = (ev) => { if (sim && sim.playing) simStep(ev.delta); };
+    const restart = () => {
+      if (!sim) return false;
+      sim.i = 0; sim.t = 0; sim.elapsed = 0; sim.playing = true; sim.activeTrail = null;
+      sim.trail.removeChildren();
+      sim.dot.position = sim.moves[0].a;
+      if (sim.cb) sim.cb(0);
+      view.update();
+      return true;
+    };
     return {
       setMult: (m) => { if (sim) sim.mult = m; },
-      toggle: () => { if (!sim) return false; sim.playing = !sim.playing; return sim.playing; },
+      toggle: () => {
+        if (!sim) return false;
+        if (sim.i >= sim.moves.length) return restart();
+        sim.playing = !sim.playing;
+        return sim.playing;
+      },
+      restart,
       stop: stopSim,
       onProgress: (cb) => { if (sim) sim.cb = cb; },
     };
