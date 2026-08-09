@@ -75,6 +75,38 @@ class NetworkConnectionTest {
     }
   }
 
+  @Test
+  void uploadsAnEpilogVectorJobThroughLpd() throws Exception {
+    try (var laser = new FakeEpilogLpdServer(); var controller = new MachineController(json)) {
+      var connect = json.readTree("""
+          {"dryRun":false,"machine":{"id":"zing","name":"Epilog Zing","driver":"Epilog Zing","bedW":600,"bedH":300,
+           "maxFeed":12000,"zAxis":{"enabled":false},"conn":{"type":"network","host":"127.0.0.1","port":%d,
+           "connectTimeoutMs":1000,"responseTimeoutMs":2000}}}
+          """.formatted(laser.port()));
+      var connected = controller.handle("connect", connect);
+      assertTrue(connected.path("connected").asBoolean());
+      assertEquals("network-lpd", connected.path("connectionType").asText());
+      assertEquals("Epilog Zing LPD", connected.path("deviceIdentity").asText());
+
+      var job = json.readTree("""
+          {"machineId":"zing","filename":"network-test.prn","confirmed":true,
+           "gcodeLines":["G21","G90","M5","G0 X1 Y1","M4 S420","G1 X20 Y20 F1200","M5"],
+           "laserSegments":[{"power":42,"speed":17,"frequency":2500,"focus":-1,
+            "points":[{"x":1,"y":1},{"x":20,"y":20}]}]}
+          """);
+      assertTrue(controller.handle("startJob", job).path("started").asBoolean());
+      // LibLaserCut's Epilog LPD implementation polls acknowledgements in one-second intervals.
+      long deadline = System.currentTimeMillis() + 15_000;
+      while (controller.status().path("running").asBoolean() && System.currentTimeMillis() < deadline) Thread.sleep(5);
+      assertEquals("completed", controller.status().path("lastResult").asText(), controller.status().path("lastError").asText());
+      String payload = new String(laser.payload(), StandardCharsets.ISO_8859_1);
+      assertTrue(payload.contains("@PJL JOB NAME=network-test.prn"));
+      assertTrue(payload.contains("YP042;"));
+      assertTrue(payload.contains("ZS017;"));
+      assertTrue(payload.contains("XR2500;"));
+    }
+  }
+
   private static final class FakeGrblServer implements AutoCloseable {
     private final ServerSocket server = new ServerSocket(0, 1, InetAddress.getLoopbackAddress());
     private final List<String> received = Collections.synchronizedList(new ArrayList<>());
@@ -118,6 +150,66 @@ class NetworkConnectionTest {
     @Override
     public void close() throws Exception {
       if (client != null) client.close();
+      server.close();
+      thread.join(1_000);
+    }
+  }
+
+  private static final class FakeEpilogLpdServer implements AutoCloseable {
+    private final ServerSocket server = new ServerSocket(0, 2, InetAddress.getLoopbackAddress());
+    private final Thread thread;
+    private volatile byte[] payload = new byte[0];
+
+    FakeEpilogLpdServer() throws IOException {
+      thread = new Thread(this::serve, "fake-epilog-lpd");
+      thread.setDaemon(true);
+      thread.start();
+    }
+
+    int port() { return server.getLocalPort(); }
+    byte[] payload() { return payload.clone(); }
+
+    private void serve() {
+      try {
+        try (Socket probe = server.accept()) { /* connect-time reachability probe */ }
+        try (Socket client = server.accept()) {
+          var input = client.getInputStream();
+          var output = client.getOutputStream();
+          readCommand(input, 2);
+          acknowledge(output);
+          int controlLength = commandLength(readCommand(input, 2));
+          acknowledge(output);
+          input.readNBytes(controlLength + 1);
+          acknowledge(output);
+          int dataLength = commandLength(readCommand(input, 3));
+          acknowledge(output);
+          payload = input.readNBytes(dataLength);
+          acknowledge(output);
+        }
+      } catch (IOException ignored) {}
+    }
+
+    private static byte[] readCommand(java.io.InputStream input, int expectedCommand) throws IOException {
+      var bytes = new ByteArrayOutputStream();
+      int first = input.read();
+      if (first != expectedCommand) throw new IOException("Unexpected LPD command " + first);
+      bytes.write(first);
+      int value;
+      while ((value = input.read()) >= 0 && value != '\n') bytes.write(value);
+      return bytes.toByteArray();
+    }
+
+    private static int commandLength(byte[] command) {
+      String line = new String(command, 1, command.length - 1, StandardCharsets.US_ASCII);
+      return Integer.parseInt(line.substring(0, line.indexOf(' ')));
+    }
+
+    private static void acknowledge(java.io.OutputStream output) throws IOException {
+      output.write(0);
+      output.flush();
+    }
+
+    @Override public void close() throws Exception {
       server.close();
       thread.join(1_000);
     }

@@ -24,10 +24,19 @@ const MM_PER_PX = 25.4 / 96;
 
 export function engraveStrategy(item) {
   if (item?.className === "Raster") return "raster";
-  const alpha = item?.fillColor == null ? 0 : Number(item.fillColor.alpha ?? 1);
-  const hasVisibleFill = Number.isFinite(alpha) && alpha > 0.001;
-  if (item?.className === "CompoundPath") return hasVisibleFill ? "raster" : "trace";
-  return item?.closed && hasVisibleFill ? "raster" : "trace";
+  // Engrave means area engraving for every closed vector. Stroke-only closed
+  // shapes must not silently degrade to Score; Score is the explicit outline
+  // operation. Open paths have no enclosed area, so tracing is their only
+  // meaningful fallback.
+  if (item?.className === "CompoundPath") {
+    const children = Array.from(item.children || []);
+    return !children.length || children.some((child) => child.closed) ? "raster" : "trace";
+  }
+  return item?.closed ? "raster" : "trace";
+}
+
+export function containsRasterScan(groups) {
+  return groups.some((group) => group.some((segment) => segment.raster));
 }
 
 export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
@@ -1443,11 +1452,12 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
           start = null;
         }
       }
-      for (const [aPx, cPx] of runs) {
+      const ordered = flip ? runs.slice().reverse() : runs;
+      for (const [aPx, cPx] of ordered) {
         let a = P(b.left + (aPx / columns) * b.width, y);
         let c = P(b.left + (cPx / columns) * b.width, y);
         if (flip) { const t = a; a = c; c = t; }
-        out.push({ pts: [a, c], speed: sp.speed, power: sp.power, freq: sp.freq, dpi: sp.dpi, dither: sp.dither, op: "Engrave" });
+        out.push({ pts: [a, c], speed: sp.speed, power: sp.power, freq: sp.freq, dpi: sp.dpi, dither: sp.dither, op: "Engrave", raster: true });
       }
       flip = !flip;
     }
@@ -1466,10 +1476,13 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       const line = new paper.Path.Line(P(b.left - 1, y), P(b.right + 1, y));
       const xs = (it.getIntersections(line) || []).map((i) => i.point.x).sort((a, c) => a - c);
       line.remove();
-      for (let k = 0; k + 1 < xs.length; k += 2) {
-        let a = P(xs[k], y), c = P(xs[k + 1], y);
+      const runs = [];
+      for (let k = 0; k + 1 < xs.length; k += 2) runs.push([xs[k], xs[k + 1]]);
+      const ordered = flip ? runs.slice().reverse() : runs;
+      for (const [left, right] of ordered) {
+        let a = P(left, y), c = P(right, y);
         if (flip) { const t = a; a = c; c = t; }
-        out.push({ pts: [a, c], speed: sp.speed, power: sp.power, freq: sp.freq, dpi: sp.dpi, dither: sp.dither, op: "Engrave" });
+        out.push({ pts: [a, c], speed: sp.speed, power: sp.power, freq: sp.freq, dpi: sp.dpi, dither: sp.dither, op: "Engrave", raster: true });
       }
       flip = !flip;
     }
@@ -1512,6 +1525,10 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   }
   function orderSegs(specs) {
     const groups = collectSegs(specs);
+    // Raster rows are already emitted bottom-to-top (or top-to-bottom when the
+    // layer setting requests it). Nearest-path optimization must never shuffle
+    // those rows, otherwise Engrave behaves like unrelated score lines.
+    if (containsRasterScan(groups)) return groups.flat();
     if (pathOrder === "color") return groups.flat();
     if (pathOrder === "nearby") { // keep each shape whole; order shapes by proximity
       const rest = groups.slice(), out = [];
@@ -1532,7 +1549,9 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     for (const s of segs) {
       if (!s.pts.length) continue;
       if (prev) moves.push({ a: prev, b: s.pts[0], speed: 300, burn: false }); // travel
-      for (let i = 1; i < s.pts.length; i++) moves.push({ a: s.pts[i - 1], b: s.pts[i], speed: s.speed, burn: true, op: s.op });
+      for (let i = 1; i < s.pts.length; i++) {
+        moves.push({ a: s.pts[i - 1], b: s.pts[i], speed: s.speed, burn: true, op: s.op, power: s.power, raster: s.raster });
+      }
       prev = s.pts[s.pts.length - 1];
     }
     return moves;
@@ -1645,7 +1664,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   }
   async function orderJobSegs(specs) {
     const groups = await collectJobSegs(specs);
-    if (groups.some((group) => group.some((segment) => segment.raster))) return groups.flat();
+    if (containsRasterScan(groups)) return groups.flat();
     if (pathOrder === "color") return groups.flat();
     if (pathOrder === "nearby") {
       const rest = groups.slice(), out = [];
@@ -1663,13 +1682,17 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   const fmt = (n) => (Math.round(n * 1000) / 1000).toFixed(3).replace(/\.?0+$/, "");
   const feedFromPct = (pct, maxFeed = 12000) => Math.round((Math.max(1, Math.min(100, pct || 1)) / 100) * maxFeed);
   const powerToS = (power) => Math.round(Math.max(0, Math.min(100, power || 0)) * 10);
-  async function buildGcodeJob(specs, { maxFeed = 12000, zAxis = null } = {}) {
+  async function buildGcodeJob(specs, { maxFeed = 12000, zAxis = null, softwareFocus = false } = {}) {
     const quality = outputQuality(specs);
     if (quality.blocked) throw new Error("Output quality limit: " + quality.problems.join(" "));
     const machineFocusOffset = zAxis?.enabled ? Number(zAxis.globalOffset) || 0 : 0;
     const requestedZ = specs.map((spec) => combinedFocusOffset(machineFocusOffset, spec.zOffset));
-    if (requestedZ.some((offset) => offset !== 0) && !zAxis?.enabled) {
+    if (requestedZ.some((offset) => offset !== 0) && !zAxis?.enabled && !softwareFocus) {
       throw new Error("One or more layers use a focus offset, but the selected machine profile has no controlled Z axis enabled.");
+    }
+    if (softwareFocus) {
+      const outside = requestedZ.find((offset) => offset < -12.6 || offset > 12.6);
+      if (outside != null) throw new Error(`Epilog software focus ${outside} mm is outside the supported range -12.6…12.6 mm.`);
     }
     if (zAxis?.enabled) {
       const minZ = Number(zAxis.min), maxZ = Number(zAxis.max);
@@ -1690,7 +1713,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     for (const seg of segs) {
       if (!seg.pts || seg.pts.length < 2) continue;
       const nextZ = combinedFocusOffset(machineFocusOffset, seg.zOffset);
-      if (nextZ !== currentZ) {
+      if (!softwareFocus && nextZ !== currentZ) {
         lines.push("M5");
         lines.push(`G1 Z${fmt(nextZ)} F${Math.round(zFeed)} ; set combined focus position with laser off`);
         currentZ = nextZ;
@@ -1706,9 +1729,20 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       }
       lines.push("M5");
     }
-    if (currentZ !== 0) lines.push(`G1 Z0 F${Math.round(zFeed)} ; restore focused Z=0`);
+    if (!softwareFocus && currentZ !== 0) lines.push(`G1 Z0 F${Math.round(zFeed)} ; restore focused Z=0`);
     lines.push("G0 X0 Y0");
-    return { lines, opCount: specs.length, segmentCount: segs.length, burnMoves, quality };
+    const laserSegments = segs
+      .filter((segment) => segment.pts?.length >= 2)
+      .map((segment) => ({
+        points: segment.pts.map((point) => ({ x: point.x, y: point.y })),
+        power: Number(segment.power) || 0,
+        speed: Number(segment.speed) || 1,
+        frequency: Number(segment.freq) || 5000,
+        focus: combinedFocusOffset(machineFocusOffset, segment.zOffset),
+        operation: segment.op,
+        raster: !!segment.raster,
+      }));
+    return { lines, laserSegments, opCount: specs.length, segmentCount: segs.length, burnMoves, quality };
   }
   let sim = null;
   function startSim(specs) {
@@ -1726,7 +1760,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     dot.fillColor = new paper.Color("#e11"); dot.strokeColor = "white"; dot.strokeWidth = 0.35; dot.guide = true;
     designLayer.visible = false;
     designLayer.activate();
-    sim = { moves, i: 0, t: 0, mult: 1, dot, ghost, trail, playing: true, cb: null, trailN: 0 };
+    sim = { moves, i: 0, t: 0, mult: 1, dot, ghost, trail, playing: true, cb: null, trailN: 0, activeTrail: null };
     view.onFrame = (ev) => { if (sim && sim.playing) simStep(ev.delta); };
     return {
       setMult: (m) => { if (sim) sim.mult = m; },
@@ -1735,20 +1769,36 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       onProgress: (cb) => { if (sim) sim.cb = cb; },
     };
   }
-  function addTrail(mv) {
-    if (sim.trailN > 8000) return;
+  function trailFor(mv) {
+    if (sim.activeTrail?.move === mv) return sim.activeTrail.path;
+    if (sim.trailN >= 8000) return null;
     const l = new paper.Path.Line(mv.a, mv.b);
     l.strokeColor = mv.op === "Engrave" ? "#555" : "#111"; // engrave fills in; a cut leaves a black line
     l.strokeWidth = mv.op === "Engrave" ? 0.4 : 0.6;
     l.strokeCap = "round"; l.guide = true;
     sim.trail.addChild(l); sim.trailN++;
+    sim.activeTrail = { move: mv, path: l };
+    return l;
   }
   function simStep(dt) {
     let budget = dt * sim.mult; // seconds of machine time this frame
     while (budget > 0 && sim.i < sim.moves.length) {
       const mv = sim.moves[sim.i], len = mv.a.getDistance(mv.b) || 1e-4, dur = len / Math.max(1, mv.speed), remain = dur * (1 - sim.t);
-      if (budget >= remain) { budget -= remain; sim.i++; sim.t = 0; sim.dot.position = mv.b; if (mv.burn) addTrail(mv); }
-      else { sim.t += budget / dur; budget = 0; sim.dot.position = mv.a.add(mv.b.subtract(mv.a).multiply(sim.t)); }
+      if (budget >= remain) {
+        budget -= remain; sim.i++; sim.t = 0; sim.dot.position = mv.b;
+        if (mv.burn) {
+          const trail = trailFor(mv);
+          if (trail) trail.lastSegment.point = mv.b;
+          sim.activeTrail = null;
+        }
+      } else {
+        sim.t += budget / dur; budget = 0;
+        sim.dot.position = mv.a.add(mv.b.subtract(mv.a).multiply(sim.t));
+        if (mv.burn) {
+          const trail = trailFor(mv);
+          if (trail) trail.lastSegment.point = sim.dot.position;
+        }
+      }
     }
     if (sim.cb) sim.cb(Math.min(1, sim.i / sim.moves.length));
     if (sim.i >= sim.moves.length) sim.playing = false;

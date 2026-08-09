@@ -224,9 +224,9 @@ units, travel limits and clearance have been verified physically.
 
 1. Draw an open three-anchor Pen path with no fill and assign it to Engrave.
    Dry-run must generate and complete a traced line-engraving job.
-2. Repeat with a closed stroke-only path; it must trace its outline.
-3. Give a closed path a visible fill. Engrave must use scan/hatch lines across
-   the filled region instead of treating it as a stroke-only path.
+2. Repeat with a closed stroke-only path. Engrave must use ordered scan/hatch
+   lines across the enclosed region, starting at the configured edge.
+3. Assign the closed path to Score; it must now trace only the outline.
 
 ### macOS window lifecycle acceptance test
 
@@ -256,6 +256,18 @@ For a laser on the local network, follow [`NETWORK.md`](NETWORK.md). A successfu
 connection now means the TCP endpoint returned a valid GRBL status response;
 an open port by itself is not accepted.
 
+### Epilog Zing preparation
+
+Select **Epilog Zing**, **Network**, enter only the IP address in Host / IP and
+use port **515**. Focus offset is encoded as Epilog software focus and is
+limited to -12.6…12.6 mm; do not enable GRBL Z-axis motion for this profile.
+Connection verifies that the LPD service is reachable without uploading a job.
+
+An Epilog run uploads a native HPGL/PCL job to the machine queue. Completion in
+modCut means the upload finished, not that the laser has fired. Inspect the job
+at the Zing and start it from the physical control panel. modCut cannot cancel
+an LPD job after hand-off, so keep the physical stop control within reach.
+
 ## 4. Hardware acceptance stages
 
 Perform these stages in order:
@@ -275,7 +287,9 @@ emergency stop; it does not replace it.
 
 ## Current M1 limits
 
-- Real execution is GRBL-only.
+- Real execution supports GRBL and Epilog Zing. Epilog raster-style paths are
+  currently emitted as ordered HPGL vectors; native Epilog raster packing is a
+  separate optimization still to be completed.
 - The first physical run must validate controller-specific homing and axis
   orientation; modCut does not automatically issue `$H`.
 - Job streaming waits for GRBL `ok` after every line for conservative flow

@@ -1,13 +1,17 @@
 # Connect a GRBL laser on the local network
 
-modCut supports a raw GRBL command stream over TCP. This is the same basic
-pattern used by VisiCut/LibLaserCut for IP-based G-code devices: configure a
-hostname, open a TCP connection and verify that the expected controller answers
-before sending a job.
+modCut supports both raw GRBL command streams over TCP and native Epilog Zing
+jobs through LibLaserCut and LPR/LPD. Choose the driver that matches the
+controller; the two protocols are not interchangeable.
 
-The default port is **23**, which is commonly the Telnet/raw G-code port. The
+The GRBL default port is **23**, which is commonly the Telnet/raw G-code port. The
 laser controller's browser interface, often on port 80 or 443, is not the same
 protocol and cannot be used as the raw command port.
+
+For an **Epilog Zing**, select the Epilog Zing driver, enter only the IP address
+in Host / IP, and use port **515**. modCut then builds native Epilog HPGL/PCL and
+uploads it to the LPD queue. A successful upload places the job on the laser;
+start it from the machine's control panel after the normal physical checks.
 
 ## Configure the machine
 
@@ -61,5 +65,5 @@ local network, and retain a reachable physical emergency stop during testing.
 
 Network execution currently supports GRBL-compatible raw TCP streams, including
 controllers or bridges that return standard GRBL status and `ok` responses.
-Epilog, Ruida, LAOS/TFTP, HTTP upload and WebSocket protocols require separate
-drivers and are not treated as interchangeable with GRBL/TCP.
+Ruida, LAOS/TFTP, HTTP upload and WebSocket protocols require separate drivers
+and are not treated as interchangeable with GRBL/TCP or Epilog LPD.

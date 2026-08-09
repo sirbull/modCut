@@ -32,27 +32,28 @@ The first complete, hardware-testable path is available:
   panel or context menu, and retain reference geometry with Ignore;
 - save reusable named Cut, Engrave and Score process profiles with power, speed,
   frequency, layer focus offset and operation-specific raster settings;
-- combine a machine-wide focus calibration with each layer's focus offset only
-  on profiles that explicitly enable a bounded Z axis; both the renderer and
-  Java sidecar reject unsafe Z motion;
+- combine a machine-wide focus calibration with each layer's focus offset on
+  profiles that explicitly enable a bounded GRBL Z axis, or encode the layer
+  offset as bounded Epilog software focus; unsafe values are rejected;
 - group selected objects with Cmd/Ctrl+G, isolate a group by double-clicking it,
   and return to the main canvas by double-clicking outside;
 - generate and simulate GRBL G-code;
 - honor requested raster DPI and a fixed 0.2 mm vector tolerance, with visible
   effective-quality details and blocking warnings instead of silent reduction;
-- connect to GRBL over serial or TCP;
+- connect to GRBL over serial/TCP or an Epilog Zing through its LPD print queue;
 - bind a live connection to its machine profile so another project's machine
   limits can never be used for the connected laser;
-- verify that a configured TCP endpoint is a responsive GRBL controller before
-  reporting it connected;
+- verify that a configured TCP endpoint is a responsive GRBL controller or an
+  accessible Epilog LPD service before reporting it connected;
 - validate every job against an allow-list, bed dimensions, maximum feed and
   laser power before transmission;
 - frame the design with the laser forced off;
 - run a job asynchronously and stop it with GRBL feed-hold + soft reset;
 - exercise the complete flow without hardware using the default dry-run mode.
 
-Ruida and Epilog are not enabled for real execution yet. The UI only offers
-drivers that the M1 sidecar can safely execute: Dummy and GRBL.
+The real-execution drivers are Dummy, GRBL and Epilog Zing. Epilog output uses
+LibLaserCut's native HPGL/PCL job generation and LPR/LPD delivery on port 515;
+it is not sent as GRBL G-code. Ruida is not enabled for real execution yet.
 
 ## Install modCut
 

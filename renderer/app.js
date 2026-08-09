@@ -10,6 +10,8 @@ const OPS = OPERATIONS;
 const DITHERS = RASTER_MODES;
 const clampSpeedPct = (v) => Math.max(1, Math.min(100, Number(v) || 1));
 const safeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
+const isEpilogDriver = (driver) => /^epilog\s+zing$/i.test(String(driver || ""));
+const defaultNetworkPort = (driver) => isEpilogDriver(driver) ? 515 : 23;
 
 // --- persisted stores (seeded from presets on first run, then fully editable) --
 const F = 20000; // default beam frequency (Hz)
@@ -42,6 +44,16 @@ function normalizeMaterialSpeeds() {
 normalizeMaterialSpeeds();
 function normalizeMachines() {
   for (const m of machines) {
+    if (m.conn?.type === "network") {
+      const hostWithPort = String(m.conn.host || "").trim().match(/^([^:]+):(\d+)$/);
+      if (hostWithPort) {
+        m.conn.host = hostWithPort[1];
+        if (!m.conn.port || Number(m.conn.port) === 23) m.conn.port = Number(hostWithPort[2]);
+      }
+      if (/epilog.*zing|zing/i.test(m.name || "") && String(m.driver).toLowerCase() === "grbl" && Number(m.conn.port) === 515) {
+        m.driver = "Epilog Zing";
+      }
+    }
     if (!m.maxFeed) m.maxFeed = 12000;
     m.zAxis = {
       enabled: !!m.zAxis?.enabled,
@@ -171,7 +183,7 @@ const defaultsFor = (op) => {
   d.speed = clampSpeedPct(d.speed);
   return d;
 };
-const driverExt = (d) => (/ruida/i.test(d) ? ".rd" : ".gcode");
+const driverExt = (d) => (isEpilogDriver(d) ? ".prn" : /ruida/i.test(d) ? ".rd" : ".gcode");
 
 // --- collapsible side panel sections ---------------------------------------
 const COLLAPSED_SECTIONS_KEY = "modcut_collapsed_sections";
@@ -806,6 +818,10 @@ function scheduleQualityRefresh() {
   qualityRefreshTimer = setTimeout(() => { qualityRefreshTimer = null; refreshLayerQuality(); }, 120);
 }
 function layerFocusSummary(layer) {
+  if (isEpilogDriver(machine().driver)) {
+    const layerOffset = Number(layer.zOffset) || 0;
+    return `Epilog software focus ${layerOffset} mm · allowed -12.6…12.6`;
+  }
   if (!machine().zAxis?.enabled) return "Enable Z axis in the machine profile to adjust focus.";
   const machineOffset = Number(machine().zAxis.globalOffset) || 0;
   const layerOffset = Number(layer.zOffset) || 0;
@@ -813,6 +829,7 @@ function layerFocusSummary(layer) {
 }
 function layerRow(l) {
   l.speed = clampSpeedPct(l.speed);
+  if (isEpilogDriver(machine().driver)) l.freq = Math.max(100, Math.min(5000, Number(l.freq) || 5000));
   l.zOffset = Number.isFinite(Number(l.zOffset)) ? Number(l.zOffset) : 0;
   const row = document.createElement("div");
   row.className = `clayer${l.raster ? " clayer--raster" : ""}`;
@@ -825,11 +842,11 @@ function layerRow(l) {
   const selectedProfile = profiles.some((profile) => profile.id === l.profileId)
     ? l.profileId : l.profileId === "material" ? "material" : "custom";
   const profileOptions = [
-    `<option value="material" ${selectedProfile === "material" ? "selected" : ""}>Material default — ${safeHtml(material().name)}</option>`,
+    `<option value="material" ${selectedProfile === "material" ? "selected" : ""}>${safeHtml(material().name)}</option>`,
     ...profiles.map((profile) => `<option value="${safeHtml(profile.id)}" ${selectedProfile === profile.id ? "selected" : ""}>${safeHtml(profile.name)}</option>`),
     `<option value="custom" ${selectedProfile === "custom" ? "selected" : ""}>Custom settings</option>`,
   ].join("");
-  const zEnabled = !!machine().zAxis?.enabled;
+  const zEnabled = !!machine().zAxis?.enabled || isEpilogDriver(machine().driver);
   row.innerHTML = `
     <div class="clayer__top">
       <span class="clayer__sw" style="background:${l.color || "linear-gradient(135deg,#888,#ccc)"}"></span>
@@ -846,7 +863,7 @@ function layerRow(l) {
     <div class="clayer__grid">
       <div><label>Power %</label><input class="input" type="number" min="0" max="100" value="${l.power}" data-k="power"></div>
       <div><label>Speed %</label><input class="input" type="number" min="1" max="100" value="${l.speed}" data-k="speed"></div>
-      <div><label>Freq Hz</label><input class="input" type="number" min="0" value="${l.freq}" data-k="freq"></div>
+      <div><label>${isEpilogDriver(machine().driver) ? "Frequency (100–5000)" : "Freq Hz"}</label><input class="input" type="number" min="${isEpilogDriver(machine().driver) ? 100 : 0}" ${isEpilogDriver(machine().driver) ? "max=\"5000\"" : ""} value="${l.freq}" data-k="freq"></div>
     </div>
     <div class="clayer__grid two">
       <div><label title="Layer-specific focus adjustment, added to the machine's global Z offset.">Focus offset (mm)</label><input class="input" type="number" step="0.1" value="${l.zOffset}" data-k="zOffset" ${zEnabled ? "" : "disabled"}></div>
@@ -891,6 +908,10 @@ function layerRow(l) {
     });
     else el.addEventListener("input", () => {
       l[k] = k === "speed" ? clampSpeedPct(el.value) : Number(el.value);
+      if (k === "freq" && isEpilogDriver(machine().driver)) {
+        l[k] = Math.max(100, Math.min(5000, l[k] || 5000));
+        el.value = l[k];
+      }
       l.profileId = null;
       const profileSelect = row.querySelector("[data-profile]");
       if (profileSelect) profileSelect.value = "custom";
@@ -917,18 +938,24 @@ async function runJob(label) {
   const base = ($("filename").value.trim() || "job").replace(/\.[^.]+$/, "");
   const filename = base + driverExt(machine().driver);
   try {
-    const job = await bed.buildGcodeJob(ops, { maxFeed: machine().maxFeed || 12000, zAxis: machine().zAxis });
+    const epilog = isEpilogDriver(machine().driver);
+    const job = await bed.buildGcodeJob(ops, {
+      maxFeed: machine().maxFeed || 12000,
+      zAxis: machine().zAxis,
+      softwareFocus: epilog,
+    });
     const layerOffsets = [...new Set(ops.map((op) => Number(op.zOffset) || 0))];
     const focusPositions = [...new Set(layerOffsets.map((offset) => combinedFocusOffset(machine().zAxis?.globalOffset, offset)))];
     const confirmed = machineStatus.dryRun || window.confirm(
       `Start REAL laser job on ${machine().name}?\n\n` +
-      (machine().zAxis?.enabled ? `Machine global Z offset: ${machine().zAxis.globalOffset || 0} mm. Layer focus offsets: ${layerOffsets.join(", ")} mm. Resulting Z positions: ${focusPositions.join(", ")} mm.\n\n` : "") +
+      (epilog ? `Epilog software focus offsets: ${layerOffsets.join(", ")} mm.\n\n` :
+        machine().zAxis?.enabled ? `Machine global Z offset: ${machine().zAxis.globalOffset || 0} mm. Layer focus offsets: ${layerOffsets.join(", ")} mm. Resulting Z positions: ${focusPositions.join(", ")} mm.\n\n` : "") +
       "Confirm material, focus, ventilation, clear work area and that the lid/interlocks are ready."
     );
     if (!confirmed) return;
     const r = await window.modcut.call("startJob", {
       machineId: state.machineId, machine: machine().name, driver: machine().driver, material: state.materialId,
-      mappingMode: state.mappingMode, filename, ops, gcodeLines: job.lines,
+      mappingMode: state.mappingMode, filename, ops, gcodeLines: job.lines, laserSegments: job.laserSegments,
       confirmed, ...machineLimits(),
     });
     reportedResult = "running";
@@ -1023,18 +1050,28 @@ const machineFields = (m) => [
   { key: "driver", label: "Driver", type: "select", options: drivers, value: m?.driver },
   { key: "type", label: "Connection", type: "select", options: [{ value: "network", label: "Network (Ethernet / Wi-Fi)" }, { value: "usb", label: "USB / Serial" }], value: m?.conn.type },
   { key: "host", label: "Host / IP", placeholder: "192.168.1.50 or laser.local", value: m?.conn.host, required: true, showIf: (v) => v.type === "network" },
-  { key: "netport", label: "Raw GRBL / Telnet port", type: "number", min: 1, max: 65535, step: 1, required: true, value: m?.conn.type === "network" ? m.conn.port : 23, showIf: (v) => v.type === "network" },
+  {
+    key: "netport", label: "Port (Epilog: 515 · GRBL: usually 23)", type: "number",
+    min: 1, max: 65535, step: 1, required: true,
+    value: m?.conn.type === "network" ? (m.conn.port || defaultNetworkPort(m.driver)) : defaultNetworkPort(m?.driver),
+    showIf: (v) => v.type === "network",
+    sync: (values, previous, current) => {
+      if (!previous || previous.driver === values.driver) return undefined;
+      const oldDefault = defaultNetworkPort(previous.driver);
+      return !current || Number(current) === oldDefault ? defaultNetworkPort(values.driver) : undefined;
+    },
+  },
   { key: "serial", label: "Serial port", placeholder: "/dev/tty… or COM3", value: m?.conn.type === "usb" ? m.conn.serial : "", showIf: (v) => v.type === "usb" },
   { key: "baud", label: "Baud rate", type: "number", min: 1, step: 1, value: m?.conn.baud || 115200, showIf: (v) => v.type === "usb" },
   { key: "bedW", label: `Bed width (${state.units})`, type: "number", min: 1, required: true, value: toDisp(m?.bedW || 600) },
   { key: "bedH", label: `Bed height (${state.units})`, type: "number", min: 1, required: true, value: toDisp(m?.bedH || 400) },
   { key: "advanced", label: "Show advanced settings", type: "checkbox", value: false },
   { key: "maxFeed", label: "Max feed (mm/min)", type: "number", value: m?.maxFeed || 12000, showIf: (v) => v.advanced },
-  { key: "zEnabled", label: "Enable controlled Z-axis offsets", type: "checkbox", value: !!m?.zAxis?.enabled, showIf: (v) => v.advanced },
-  { key: "zMin", label: "Minimum Z offset (mm, must include 0)", type: "number", step: 0.1, value: m?.zAxis?.min ?? -10, showIf: (v) => v.advanced && v.zEnabled },
-  { key: "zMax", label: "Maximum Z offset (mm, must include 0)", type: "number", step: 0.1, value: m?.zAxis?.max ?? 10, showIf: (v) => v.advanced && v.zEnabled },
-  { key: "zFeed", label: "Maximum Z feed (mm/min)", type: "number", min: 1, step: 1, value: m?.zAxis?.feed || 300, showIf: (v) => v.advanced && v.zEnabled },
-  { key: "zGlobal", label: "Global Z offset / focus calibration (mm)", type: "number", step: 0.1, value: m?.zAxis?.globalOffset ?? 0, showIf: (v) => v.advanced && v.zEnabled },
+  { key: "zEnabled", label: "Enable controlled Z-axis offsets", type: "checkbox", value: !!m?.zAxis?.enabled, showIf: (v) => v.advanced && !isEpilogDriver(v.driver) },
+  { key: "zMin", label: "Minimum Z offset (mm, must include 0)", type: "number", step: 0.1, value: m?.zAxis?.min ?? -10, showIf: (v) => v.advanced && v.zEnabled && !isEpilogDriver(v.driver) },
+  { key: "zMax", label: "Maximum Z offset (mm, must include 0)", type: "number", step: 0.1, value: m?.zAxis?.max ?? 10, showIf: (v) => v.advanced && v.zEnabled && !isEpilogDriver(v.driver) },
+  { key: "zFeed", label: "Maximum Z feed (mm/min)", type: "number", min: 1, step: 1, value: m?.zAxis?.feed || 300, showIf: (v) => v.advanced && v.zEnabled && !isEpilogDriver(v.driver) },
+  { key: "zGlobal", label: "Global Z offset / focus calibration (mm)", type: "number", step: 0.1, value: m?.zAxis?.globalOffset ?? 0, showIf: (v) => v.advanced && v.zEnabled && !isEpilogDriver(v.driver) },
   { key: "connectTimeoutMs", label: "Network connect / handshake timeout (ms)", type: "number", min: 250, max: 30000, step: 250, value: m?.conn.connectTimeoutMs || 3000, showIf: (v) => v.advanced && v.type === "network" },
   { key: "responseTimeoutMs", label: "GRBL command response timeout (ms)", type: "number", min: 1000, max: 120000, step: 1000, value: m?.conn.responseTimeoutMs || 30000, showIf: (v) => v.advanced && v.type === "network" },
   { key: "flipX", label: "Flip X axis", type: "checkbox", value: m?.adv?.flipX || false, showIf: (v) => v.advanced },
@@ -1047,7 +1084,7 @@ const machineFrom = (v, id) => ({
     ? { type: "network", host: v.host.trim(), port: Math.round(v.netport), connectTimeoutMs: v.connectTimeoutMs || 3000, responseTimeoutMs: v.responseTimeoutMs || 30000 }
     : { type: "usb", serial: v.serial?.trim() || "", baud: v.baud },
   bedW: toMm(v.bedW), bedH: toMm(v.bedH), maxFeed: Math.max(1, v.maxFeed || 12000),
-  zAxis: { enabled: !!v.zEnabled, min: Number(v.zMin), max: Number(v.zMax), feed: Math.max(1, Number(v.zFeed) || 300), globalOffset: v.zEnabled ? Number(v.zGlobal) || 0 : 0 },
+  zAxis: { enabled: !isEpilogDriver(v.driver) && !!v.zEnabled, min: Number(v.zMin), max: Number(v.zMax), feed: Math.max(1, Number(v.zFeed) || 300), globalOffset: !isEpilogDriver(v.driver) && v.zEnabled ? Number(v.zGlobal) || 0 : 0 },
   adv: { flipX: v.flipX, flipY: v.flipY, home: v.home },
 });
 function validZAxisForm(values) {
@@ -1105,7 +1142,8 @@ async function connect() {
     reportedResult = machineStatus.lastResult;
     renderMachineStatus();
     const identity = machineStatus.deviceIdentity ? ` (${machineStatus.deviceIdentity})` : "";
-    toast(machineStatus.dryRun ? "Dry-run connection ready — no hardware commands will be sent." : `Verified GRBL at ${machineStatus.target}${identity}.`, "ok");
+    toast(machineStatus.dryRun ? "Dry-run connection ready — no hardware commands will be sent." :
+      isEpilogDriver(selected.driver) ? `Verified Epilog LPD service at ${machineStatus.target}.` : `Verified GRBL at ${machineStatus.target}${identity}.`, "ok");
   } catch (e) {
     machineStatus = { ...machineStatus, connected: false, connecting: false, running: false, lastError: e.message };
     renderMachineStatus();
@@ -1133,7 +1171,7 @@ function renderMachineStatus() {
   $("sendBtn").disabled = !machineStatus.connected || machineStatus.running || !connectionMatchesMachine();
   $("sendBtn").textContent = (machineStatus.connected ? machineStatus.dryRun : $("dryRun").checked) ? "Run dry-run" : "Start job";
   $("frame").disabled = !machineStatus.connected || machineStatus.running || !connectionMatchesMachine();
-  $("stopBtn").classList.toggle("hidden", !machineStatus.running);
+  $("stopBtn").classList.toggle("hidden", !machineStatus.running || machineStatus.canEmergencyStop === false);
   $("jobState").textContent = machineStatus.running ? `${Math.round((machineStatus.progress || 0) * 100)}%` : "";
 }
 async function pollMachineStatus() {
@@ -1144,7 +1182,7 @@ async function pollMachineStatus() {
     renderMachineStatus();
     if (!machineStatus.running && machineStatus.lastResult !== reportedResult) {
       reportedResult = machineStatus.lastResult;
-      if (machineStatus.lastResult === "completed") toast("Job completed successfully.", "ok");
+      if (machineStatus.lastResult === "completed") toast(machineStatus.delivery === "epilog-lpd" ? "Job uploaded to the Epilog queue. Start it from the laser control panel." : "Job completed successfully.", "ok");
       else if (machineStatus.lastResult === "cancelled") toast("Job cancelled.", "info");
       else if (machineStatus.lastResult === "failed") toast("Job failed: " + machineStatus.lastError, "err");
     }

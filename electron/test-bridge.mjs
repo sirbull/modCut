@@ -16,7 +16,7 @@ try {
   console.log("PASS ping ->", JSON.stringify(pong));
 
   const drivers = await sidecar.call("listDrivers");
-  assert.deepEqual(drivers.drivers, ["Dummy", "Grbl"]);
+  assert.deepEqual(drivers.drivers, ["Dummy", "Grbl", "Epilog Zing"]);
   assert.equal(drivers.library, "LibLaserCut");
   console.log("PASS listDrivers ->", drivers.drivers.join(", "));
 

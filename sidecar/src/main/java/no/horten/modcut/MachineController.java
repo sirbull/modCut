@@ -5,9 +5,18 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fazecast.jSerialComm.SerialPort;
+import de.thomas_oster.liblasercut.LaserJob;
+import de.thomas_oster.liblasercut.ProgressListener;
+import de.thomas_oster.liblasercut.drivers.EpilogZing;
 import de.thomas_oster.liblasercut.drivers.Grbl;
 import java.io.IOException;
+import java.net.ConnectException;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.net.SocketTimeoutException;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -16,12 +25,16 @@ import java.util.concurrent.atomic.AtomicBoolean;
 final class MachineController implements AutoCloseable {
   private final ObjectMapper json;
   private final ExecutorService jobs = Executors.newSingleThreadExecutor(r -> {
-    Thread thread = new Thread(r, "modcut-grbl-job");
+    Thread thread = new Thread(r, "modcut-laser-job");
     thread.setDaemon(true);
     return thread;
   });
   private final AtomicBoolean cancelRequested = new AtomicBoolean();
   private volatile GrblTransport transport;
+  private volatile EpilogZing epilog;
+  private volatile String connectedDriver = "";
+  private volatile String connectionTarget = "";
+  private volatile String connectionIdentity = "";
   private volatile String connectedMachineId = "";
   private volatile String connectedMachineName = "";
   private volatile double connectedBedWidth = 600;
@@ -72,7 +85,10 @@ final class MachineController implements AutoCloseable {
     ArrayNode drivers = out.putArray("drivers");
     drivers.add("Dummy");
     drivers.add("Grbl");
+    EpilogZing epilogDriver = new EpilogZing();
+    drivers.add("Epilog Zing");
     out.put("grblModel", libLaserCutDriver.getModelName());
+    out.put("epilogModel", epilogDriver.getModelName());
     out.put("library", "LibLaserCut");
     return out;
   }
@@ -114,24 +130,51 @@ final class MachineController implements AutoCloseable {
       throw new IllegalArgumentException("Globalt fokusavvik krever aktivert Z-akse.");
     }
     String driver = machine.path("driver").asText("Dummy");
+    boolean epilogDriver = driver.equalsIgnoreCase("Epilog Zing");
+    if (epilogDriver && machineZEnabled) {
+      throw new IllegalArgumentException("Epilog Zing bruker programvarefokus i jobben, ikke GRBL Z-aksekommandoer.");
+    }
     dryRun = params.path("dryRun").asBoolean(true) || driver.equalsIgnoreCase("Dummy");
     JsonNode conn = machine.path("conn");
     String type = conn.path("type").asText("usb");
+    int defaultPort = epilogDriver ? 515 : 23;
     String target = type.equals("network")
-        ? conn.path("host").asText("?") + ":" + conn.path("port").asInt(23)
+        ? conn.path("host").asText("?") + ":" + conn.path("port").asInt(defaultPort)
         : conn.path("serial").asText("USB");
     if (dryRun) {
       transport = GrblTransport.dryRun(machine.path("name").asText("maskin") + " · " + target);
+      connectionTarget = transport.description();
     } else {
-      if (!driver.equalsIgnoreCase("Grbl")) throw new IllegalArgumentException("M1 kan bare kjøre ekte jobber mot GRBL.");
-      transport = type.equals("network")
-          ? GrblTransport.network(
-              conn.path("host").asText(),
-              conn.path("port").asInt(23),
-              boundedInt(conn, "connectTimeoutMs", 3_000, 250, 30_000),
-              boundedInt(conn, "responseTimeoutMs", 30_000, 1_000, 120_000))
-          : GrblTransport.serial(conn.path("serial").asText(), conn.path("baud").asInt(115200));
+      if (driver.equalsIgnoreCase("Grbl")) {
+        transport = type.equals("network")
+            ? GrblTransport.network(
+                conn.path("host").asText(),
+                conn.path("port").asInt(23),
+                boundedInt(conn, "connectTimeoutMs", 3_000, 250, 30_000),
+                boundedInt(conn, "responseTimeoutMs", 30_000, 1_000, 120_000))
+            : GrblTransport.serial(conn.path("serial").asText(), conn.path("baud").asInt(115200));
+        connectionTarget = transport.description();
+        connectionIdentity = transport.identity();
+      } else if (epilogDriver) {
+        if (!type.equals("network")) throw new IllegalArgumentException("Epilog Zing krever Network (Ethernet / Wi-Fi).");
+        String host = normalizeNetworkHost(conn.path("host").asText());
+        int port = conn.path("port").asInt(515);
+        int timeout = boundedInt(conn, "connectTimeoutMs", 3_000, 250, 30_000);
+        probeTcpService(host, port, timeout);
+        EpilogZing zing = new EpilogZing(host);
+        zing.setPort(port);
+        zing.setBedWidth(machineBedWidth);
+        zing.setBedHeight(machineBedHeight);
+        zing.setAutoFocus(false);
+        zing.setHideSoftwareFocus(false);
+        epilog = zing;
+        connectionTarget = "lpd " + host + ":" + port;
+        connectionIdentity = "Epilog Zing LPD";
+      } else {
+        throw new IllegalArgumentException("Driveren støttes ikke for ekte kjøring: " + driver + ".");
+      }
     }
+    connectedDriver = driver;
     connectedMachineId = machineId;
     connectedMachineName = machine.path("name").asText("maskin");
     connectedBedWidth = machineBedWidth;
@@ -176,7 +219,12 @@ final class MachineController implements AutoCloseable {
         point("G0", minX, minY), point("G1", maxX, minY) + " F" + Math.round(frameFeed), point("G1", maxX, maxY),
         point("G1", minX, maxY), point("G1", minX, minY), "M5", "G0 X0 Y0");
     GcodeValidator.Report report = GcodeValidator.validate(frame, connectedBedWidth, connectedBedHeight, connectedMaxFeed);
-    startAsync("frame", frame);
+    if (connectedDriver.equalsIgnoreCase("Epilog Zing")) {
+      var built = EpilogJobBuilder.frame("modcut-frame.prn", minX, minY, maxX, maxY, connectedBedWidth, connectedBedHeight);
+      startEpilogAsync("modcut-frame.prn", built);
+    } else {
+      startGrblAsync("frame", frame);
+    }
     ObjectNode out = reportNode(report);
     out.put("started", true);
     out.put("dryRun", dryRun);
@@ -191,14 +239,19 @@ final class MachineController implements AutoCloseable {
     List<String> lines = lines(params);
     GcodeValidator.Report report = GcodeValidator.validate(lines, connectedBedWidth, connectedBedHeight, connectedMaxFeed,
         connectedZEnabled, connectedZMin, connectedZMax, connectedZFeed);
-    startAsync(params.path("filename").asText("job.gcode"), lines);
+    if (connectedDriver.equalsIgnoreCase("Epilog Zing")) {
+      var built = EpilogJobBuilder.build(params, connectedBedWidth, connectedBedHeight);
+      startEpilogAsync(params.path("filename").asText("job.prn"), built);
+    } else {
+      startGrblAsync(params.path("filename").asText("job.gcode"), lines);
+    }
     ObjectNode out = reportNode(report);
     out.put("started", true);
     out.put("dryRun", dryRun);
     return out;
   }
 
-  private synchronized void startAsync(String name, List<String> lines) {
+  private synchronized void startGrblAsync(String name, List<String> lines) {
     if (running) throw new IllegalStateException("En jobb kjører allerede.");
     running = true;
     cancelRequested.set(false);
@@ -231,8 +284,50 @@ final class MachineController implements AutoCloseable {
     });
   }
 
+  private synchronized void startEpilogAsync(String name, EpilogJobBuilder.Built built) {
+    if (running) throw new IllegalStateException("En jobb kjører allerede.");
+    running = true;
+    cancelRequested.set(false);
+    linesSent = 0;
+    totalLines = 100;
+    jobName = name;
+    lastError = "";
+    lastResult = "running";
+    EpilogZing activeEpilog = epilog;
+    boolean simulate = dryRun;
+    jobs.submit(() -> {
+      try {
+        if (simulate) {
+          linesSent = 100;
+        } else {
+          if (activeEpilog == null) throw new IllegalStateException("Epilog-tilkoblingen er ikke klar.");
+          List<String> warnings = new LinkedList<>();
+          ProgressListener progress = new ProgressListener() {
+            @Override public void progressChanged(Object source, int percent) {
+              linesSent = Math.max(0, Math.min(100, percent));
+            }
+            @Override public void taskChanged(Object source, String taskName) {}
+          };
+          activeEpilog.sendJob(built.job(), progress, warnings);
+          linesSent = 100;
+          if (!warnings.isEmpty()) lastError = String.join(" ", warnings);
+        }
+        lastResult = "completed";
+      } catch (Exception error) {
+        lastError = error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage();
+        lastResult = "failed";
+        dropEpilog(activeEpilog);
+      } finally {
+        running = false;
+      }
+    });
+  }
+
   private ObjectNode cancelJob() throws IOException {
     if (!running) return status();
+    if (connectedDriver.equalsIgnoreCase("Epilog Zing")) {
+      throw new IllegalStateException("En Epilog LPD-opplasting kan ikke nødstoppes fra modCut. Bruk maskinens fysiske stoppknapp.");
+    }
     cancelRequested.set(true);
     transport.emergencyStop();
     lastResult = "cancelling";
@@ -240,8 +335,9 @@ final class MachineController implements AutoCloseable {
   }
 
   ObjectNode status() {
+    boolean connected = isConnected();
     ObjectNode out = json.createObjectNode();
-    out.put("connected", transport != null);
+    out.put("connected", connected);
     out.put("dryRun", dryRun);
     out.put("running", running);
     out.put("cancelRequested", cancelRequested.get());
@@ -251,13 +347,16 @@ final class MachineController implements AutoCloseable {
     out.put("lastError", lastError);
     out.put("lastResult", lastResult);
     out.put("jobName", jobName);
-    out.put("target", transport == null ? "" : transport.description());
-    out.put("connectionType", transport == null ? "" : transport.connectionType());
-    out.put("deviceIdentity", transport == null ? "" : transport.identity());
-    out.put("connectedMachineId", transport == null ? "" : connectedMachineId);
-    out.put("connectedMachineName", transport == null ? "" : connectedMachineName);
-    out.put("connectedZEnabled", transport != null && connectedZEnabled);
-    out.put("connectedZGlobalOffset", transport == null ? 0 : connectedZGlobalOffset);
+    out.put("target", connected ? connectionTarget : "");
+    out.put("connectionType", connected ? (dryRun ? "dry-run" : epilog != null ? "network-lpd" : transport.connectionType()) : "");
+    out.put("deviceIdentity", connected ? connectionIdentity : "");
+    out.put("connectedMachineId", connected ? connectedMachineId : "");
+    out.put("connectedMachineName", connected ? connectedMachineName : "");
+    out.put("connectedDriver", connected ? connectedDriver : "");
+    out.put("connectedZEnabled", connected && connectedZEnabled);
+    out.put("connectedZGlobalOffset", connected ? connectedZGlobalOffset : 0);
+    out.put("canEmergencyStop", connected && !connectedDriver.equalsIgnoreCase("Epilog Zing"));
+    out.put("delivery", connectedDriver.equalsIgnoreCase("Epilog Zing") ? "epilog-lpd" : "stream");
     return out;
   }
 
@@ -275,7 +374,7 @@ final class MachineController implements AutoCloseable {
   }
 
   private void requireConnected(JsonNode params) {
-    if (transport == null) throw new IllegalStateException("Koble til maskinen (eller dry-run) først.");
+    if (!isConnected()) throw new IllegalStateException("Koble til maskinen (eller dry-run) først.");
     String requestedMachineId = params.path("machineId").asText().trim();
     if (!connectedMachineId.equals(requestedMachineId)) {
       throw new IllegalStateException("Aktivt prosjekt bruker en annen maskin enn tilkoblingen. Koble fra og koble til riktig maskinprofil.");
@@ -305,6 +404,33 @@ final class MachineController implements AutoCloseable {
     return value;
   }
 
+  private static String normalizeNetworkHost(String value) {
+    String host = value == null ? "" : value.trim();
+    if (host.regionMatches(true, 0, "tcp://", 0, 6)) host = host.substring(6);
+    if (host.isBlank()) throw new IllegalArgumentException("Oppgi vertsnavn eller IP-adresse før tilkobling.");
+    if (host.contains(":") || host.contains("/") || host.contains("?") || host.contains("#")) {
+      throw new IllegalArgumentException("Oppgi bare Epilog-maskinens IP/vertsnavn; porten skal stå i portfeltet.");
+    }
+    return host;
+  }
+
+  private static void probeTcpService(String host, int port, int timeoutMs) throws IOException {
+    if (port < 1 || port > 65_535) throw new IllegalArgumentException("Nettverksport må være mellom 1 og 65535.");
+    Socket socket = new Socket();
+    String target = host + ":" + port;
+    try {
+      socket.connect(new InetSocketAddress(host, port), timeoutMs);
+    } catch (UnknownHostException error) {
+      throw new IOException("Fant ikke '" + host + "' på lokalnettet. Kontroller vertsnavn/IP og nettverk.", error);
+    } catch (ConnectException error) {
+      throw new IOException("Ingen LPD-tjeneste svarer på " + target + ". Kontroller IP, port 515, strøm og nettverk.", error);
+    } catch (SocketTimeoutException error) {
+      throw new IOException("Tidsavbrudd mot Epilog på " + target + ". Kontroller IP, brannmur og lokalnett.", error);
+    } finally {
+      try { socket.close(); } catch (IOException ignored) {}
+    }
+  }
+
   private static double requiredFinite(JsonNode params, String key) {
     double value = params.path(key).asDouble(Double.NaN);
     if (!Double.isFinite(value)) throw new IllegalArgumentException("Mangler gyldig " + key + ".");
@@ -318,6 +444,7 @@ final class MachineController implements AutoCloseable {
   private synchronized void closeTransport() throws IOException {
     GrblTransport active = transport;
     transport = null;
+    epilog = null;
     clearConnectedMachine();
     if (active != null) active.close();
   }
@@ -329,9 +456,20 @@ final class MachineController implements AutoCloseable {
     try { failed.close(); } catch (Exception ignored) {}
   }
 
+  private synchronized void dropEpilog(EpilogZing failed) {
+    if (epilog != failed) return;
+    epilog = null;
+    clearConnectedMachine();
+  }
+
+  private boolean isConnected() { return transport != null || epilog != null; }
+
   private void clearConnectedMachine() {
     connectedMachineId = "";
     connectedMachineName = "";
+    connectedDriver = "";
+    connectionTarget = "";
+    connectionIdentity = "";
     connectedBedWidth = 600;
     connectedBedHeight = 400;
     connectedMaxFeed = 12_000;
@@ -344,7 +482,7 @@ final class MachineController implements AutoCloseable {
 
   public void close() {
     cancelRequested.set(true);
-    if (running && transport != null) {
+    if (running && transport != null && !connectedDriver.equalsIgnoreCase("Epilog Zing")) {
       try { transport.emergencyStop(); } catch (Exception ignored) {}
     }
     try { closeTransport(); } catch (Exception ignored) {}

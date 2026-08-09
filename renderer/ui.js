@@ -1,6 +1,7 @@
 // Minimal modal form. openModal({title, fields, submitLabel}) -> Promise<values|null>.
 // fields: [{ key, label, type?: "text"|"number"|"select", options?, value?, placeholder?,
-//           min?, max?, showIf?: (values) => boolean }]  // showIf hides a field live
+//           min?, max?, showIf?: (values) => boolean,
+//           sync?: (values, previousValues, currentValue) => nextValue|undefined }]
 export function openModal({ title, fields, submitLabel = "Save" }) {
   return new Promise((resolve) => {
     const overlay = document.createElement("div");
@@ -49,8 +50,18 @@ export function openModal({ title, fields, submitLabel = "Save" }) {
       for (const f of fields) { const el = form.elements[f.key]; if (el) v[f.key] = f.type === "checkbox" ? el.checked : el.value; }
       return v;
     };
+    let previousValues = null;
     const applyVisibility = () => {
       const v = currentValues();
+      for (const f of fields) {
+        if (!f.sync) continue;
+        const el = form.elements[f.key];
+        const next = f.sync(v, previousValues, el?.value);
+        if (el && next != null) {
+          el.value = next;
+          v[f.key] = String(next);
+        }
+      }
       for (const label of form.querySelectorAll("label.field")) {
         const f = label._field;
         if (f && f.showIf) {
@@ -59,6 +70,7 @@ export function openModal({ title, fields, submitLabel = "Save" }) {
           label.querySelector("input,select").required = visible && !!f.required;
         }
       }
+      previousValues = { ...v };
     };
     form.addEventListener("input", applyVisibility);
     applyVisibility();

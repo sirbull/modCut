@@ -67,7 +67,33 @@ class MachineControllerTest {
       var result = controller.handle("listDrivers", json.createObjectNode());
       assertEquals("LibLaserCut", result.path("library").asText());
       assertTrue(result.path("drivers").toString().contains("Grbl"));
+      assertTrue(result.path("drivers").toString().contains("Epilog Zing"));
       assertFalse(result.path("drivers").toString().contains("Ruida"));
+    }
+  }
+
+  @Test
+  void completesAnEpilogJobInDryRunUsingStructuredSegments() throws Exception {
+    try (var controller = new MachineController(json)) {
+      var connect = json.readTree("""
+          {"dryRun":true,"machine":{"id":"zing","name":"Epilog Zing","driver":"Epilog Zing","bedW":600,"bedH":300,
+           "maxFeed":12000,"zAxis":{"enabled":false},"conn":{"type":"network","host":"10.100.100.6","port":515}}}
+          """);
+      var status = controller.handle("connect", connect);
+      assertTrue(status.path("connected").asBoolean());
+      assertEquals("Epilog Zing", status.path("connectedDriver").asText());
+
+      var job = json.readTree("""
+          {"machineId":"zing","filename":"test.prn","confirmed":false,
+           "gcodeLines":["G21","G90","M5","G0 X1 Y1","M4 S100","G1 X2 Y2 F1000","M5"],
+           "laserSegments":[{"power":10,"speed":10,"frequency":5000,"focus":-1,
+            "points":[{"x":1,"y":1},{"x":2,"y":2}]}]}
+          """);
+      assertTrue(controller.handle("startJob", job).path("started").asBoolean());
+      long deadline = System.currentTimeMillis() + 2_000;
+      while (controller.status().path("running").asBoolean() && System.currentTimeMillis() < deadline) Thread.sleep(5);
+      assertEquals("completed", controller.status().path("lastResult").asText());
+      assertEquals("epilog-lpd", controller.status().path("delivery").asText());
     }
   }
 

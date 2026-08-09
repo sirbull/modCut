@@ -12,8 +12,9 @@ the same commit that completes an item.
   Block Frame and Start when the active project's machine differs from the
   connected machine, and enforce the same check in the Java sidecar. Completed
   with connected-profile limit snapshots and cross-tab UI blocking.
-- [x] Correct vector Engrave behavior. Open paths and stroke-only paths are
-  traced as line engraving; closed filled shapes use raster/hatch engraving.
+- [x] Correct vector Engrave behavior. Open paths are traced because they
+  enclose no area; all closed shapes use ordered raster/hatch engraving.
+  Score is the explicit operation for tracing a closed outline.
 - [x] Protect every dirty tab when the native window is closed or the app quits.
   Completed with a renderer/main-process close handshake, per-tab save prompts,
   atomic disk autosave and automatic recovery after a renderer/app crash.
