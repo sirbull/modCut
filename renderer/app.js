@@ -8,8 +8,9 @@ import { OPERATIONS, canAssignRasterToOperation, distinctVectorColor, isOutputLa
 import { RASTER_MODES, applyProcessProfile, combinedFocusOffset, normalizeProcessProfile, profilesForOperation } from "./process-profiles.mjs";
 import { groupJobOperations, jobFilename } from "./job-split.mjs";
 import { defaultMotionTiming, motionTimingForMachine } from "./motion-timing.mjs";
-import { openModal } from "./ui.js";
+import { openModal, showMessageModal } from "./ui.js";
 import { DRIVER_CATALOG, MACHINE_PRESETS as MACHINE_CATALOG_PRESETS, capabilitiesForMachine, driverById, normalizeMachineProfile } from "./driver-catalog.mjs";
+import { DOCUMENT_FORMATS, IMAGE_FORMATS, TEXT_FORMATS, TIFF_FORMATS } from "../electron/import-formats.mjs";
 
 const $ = (id) => document.getElementById(id);
 const OPS = OPERATIONS;
@@ -632,6 +633,66 @@ async function prepareArtwork(f) {
   return null;
 }
 
+function formatLabel(formats) {
+  return formats.map((format) => format.toUpperCase()).join(", ");
+}
+
+async function showImportIssue(f) {
+  if (f.reason === "ai-not-pdf-compatible") {
+    await showMessageModal({
+      title: "Illustrator file is not PDF-compatible",
+      paragraphs: [
+        `modCut cannot open “${f.name}” because the AI file does not contain PDF-compatible data.`,
+        "For editable laser paths, SVG is the recommended format.",
+      ],
+      sections: [
+        {
+          title: "Save a compatible AI file in Illustrator",
+          ordered: true,
+          items: [
+            "Open the file in Adobe Illustrator and choose File → Save As.",
+            "Choose Adobe Illustrator (AI), then enable Create PDF Compatible File in Illustrator Options.",
+            "Save the file and import the new copy in modCut.",
+          ],
+        },
+        {
+          title: "Better for cutting",
+          items: ["Choose File → Export → Export As → SVG. Convert text to outlines before exporting when fonts must travel with the design."],
+        },
+      ],
+    });
+    return;
+  }
+  if (f.reason === "document-not-addable") {
+    await showMessageModal({
+      title: "Open project files with Import",
+      paragraphs: ["A .modcut file is a complete project and cannot be added as artwork. Choose Import to open it in the active project tab."],
+    });
+    return;
+  }
+  const invalidPdf = f.reason === "invalid-pdf";
+  await showMessageModal({
+    title: invalidPdf ? "Invalid PDF file" : "Unsupported file format",
+    paragraphs: [invalidPdf
+      ? `“${f.name}” does not contain valid PDF data.`
+      : `modCut cannot import ${f.ext ? `.${f.ext}` : "this file type"} from “${f.name}”.`],
+    sections: [
+      {
+        title: "Supported vector files",
+        items: [formatLabel(TEXT_FORMATS)],
+      },
+      {
+        title: "Supported image files",
+        items: [formatLabel([...IMAGE_FORMATS, ...TIFF_FORMATS])],
+      },
+      {
+        title: "Documents",
+        items: [`PDF (page 1 as raster), AI (PDF-compatible, page 1 as raster), ${formatLabel(DOCUMENT_FORMATS)} projects`],
+      },
+    ],
+  });
+}
+
 async function placeArtwork(prepared) {
   if (prepared.kind === "vector") {
     bed.loadSVG(prepared.node, prepared.widthMm, prepared.heightMm, prepared.viewBox);
@@ -652,6 +713,10 @@ async function doImport() {
     return;
   }
   if (!f) return;
+  if (f.kind === "unsupported") {
+    await showImportIssue(f);
+    return;
+  }
   let documentData = null;
   let prepared = null;
   try {
@@ -697,6 +762,10 @@ async function addFiles() {
   const wasEmpty = !bed.getDesign();
   let added = 0;
   for (const f of files) {
+    if (f.kind === "unsupported") {
+      await showImportIssue(f);
+      continue;
+    }
     try {
       const prepared = await prepareArtwork(f);
       if (!prepared) throw new Error(`.${f.ext} files cannot be added yet.`);

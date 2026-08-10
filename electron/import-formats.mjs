@@ -16,3 +16,11 @@ export function isPdfCompatible(bytes) {
   const prefix = Buffer.from(bytes).subarray(0, 1024).toString("latin1");
   return prefix.includes("%PDF-");
 }
+
+export function importIssueFor(ext, bytes = null) {
+  const normalized = String(ext || "").toLowerCase();
+  if (!SUPPORTED_IMPORT_FORMATS.includes(normalized)) return "unsupported-format";
+  if (normalized === "ai" && bytes && !isPdfCompatible(bytes)) return "ai-not-pdf-compatible";
+  if (normalized === "pdf" && bytes && !isPdfCompatible(bytes)) return "invalid-pdf";
+  return null;
+}

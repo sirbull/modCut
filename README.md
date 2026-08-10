@@ -76,6 +76,11 @@ EPS/PostScript, CDR, PSD, G-code/NC and multi-page PDF/TIFF import are not
 currently supported. Existing machine output is deliberately not treated as an
 editable design source.
 
+The file picker includes **All files** so an attempted unsupported import can
+show a concise dialog with the complete supported-format list. A non-PDF-compatible
+AI file gets a dedicated explanation with Illustrator's **Create PDF Compatible
+File** steps and SVG export guidance instead of a generic import error.
+
 ## Portable `.modcut` projects
 
 **Save document** writes the active tab as one portable `.modcut` JSON file.

@@ -72,6 +72,16 @@ export async function runWorkflows(client) {
   assert.deepEqual({ pageCount: pdfPreview.pageCount, png: pdfPreview.png }, { pageCount: 1, png: true }, "PDF import must render page one to a PNG raster");
   const tiffPreview = await evaluate(`import('./tiffimport.js').then(module => { const result=module.tiffToPng(${JSON.stringify(tiffDataUrl)}); return {frameCount:result.frameCount,png:result.dataUrl.startsWith('data:image/png;base64,')}; })`);
   assert.deepEqual(tiffPreview, { frameCount: 1, png: true }, "TIFF import must decode its first frame to a PNG raster");
+  await evaluate(`window.modcut.setE2EImportResult(${JSON.stringify({ path: "/e2e/design.cdr", name: "design.cdr", ext: "cdr", kind: "unsupported", reason: "unsupported-format" })}); document.querySelector('#import').click()`);
+  await wait();
+  assert.equal(await evaluate("document.querySelector('.message-modal .panel__header').textContent"), "Unsupported file format");
+  assert.equal(await evaluate("document.querySelector('.message-modal').textContent.includes('SVG, SVGZ, DXF, PLT, HPGL') && document.querySelector('.message-modal').textContent.includes('MODCUT')"), true, "unsupported-format dialog must list supported vector, image and document formats");
+  await evaluate("document.querySelector('.message-modal .modal-actions button').click()");
+  await evaluate(`window.modcut.setE2EImportResult(${JSON.stringify({ path: "/e2e/legacy.ai", name: "legacy.ai", ext: "ai", kind: "unsupported", reason: "ai-not-pdf-compatible" })}); document.querySelector('#import').click()`);
+  await wait();
+  assert.equal(await evaluate("document.querySelector('.message-modal .panel__header').textContent"), "Illustrator file is not PDF-compatible");
+  assert.equal(await evaluate("document.querySelector('.message-modal').textContent.includes('Create PDF Compatible File') && document.querySelector('.message-modal').textContent.includes('Export As → SVG')"), true, "AI warning must explain both the compatible-AI and recommended SVG fixes");
+  await evaluate("document.querySelector('.message-modal .modal-actions button').click()");
   assert.equal(await evaluate("document.querySelector('#splitJobs').checked"), false, "split by operation must be off by default");
 
   let shapeSteps = null;
@@ -92,7 +102,7 @@ export async function runWorkflows(client) {
   for (let attempt = 1; attempt <= 3 && await evaluate("paper.project.layers[1].children.length > 0"); attempt++) {
     await evaluate("document.activeElement?.blur(); window.focus()");
     await wait(100);
-    await key("Backspace");
+    await evaluate("window.dispatchEvent(new KeyboardEvent('keydown',{key:'Backspace',bubbles:true,cancelable:true}))");
     await wait(100);
   }
   assert.equal(await evaluate("paper.project.layers[1].children.length"), 0, "Backspace must delete a newly created and automatically selected shape");
@@ -125,10 +135,14 @@ export async function runWorkflows(client) {
   assert.equal(penPreviewCount, 1, "Pen must show a live preview");
   const addPenPoint = async (point, expectedSegments) => {
     for (let attempt = 1; attempt <= 3; attempt++) {
+      await evaluate("window.focus()");
       await click(point);
-      const count = await evaluate("paper.project.layers[1].children[0]?.segments?.length || 0");
-      if (count >= expectedSegments) return;
-      await wait(100);
+      const deadline = Date.now() + 500;
+      while (Date.now() < deadline) {
+        const count = await evaluate("paper.project.layers[1].children[0]?.segments?.length || 0");
+        if (count >= expectedSegments) return;
+        await wait(50);
+      }
     }
   };
   await addPenPoint(p2, 2);

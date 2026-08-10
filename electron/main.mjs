@@ -7,7 +7,7 @@ import { promisify } from "node:util";
 import { createSidecar } from "./sidecar-bridge.mjs";
 import { createWindowCommandRouter } from "./window-lifecycle.mjs";
 import { createRecoveryStore } from "./recovery-store.mjs";
-import { IMAGE_FORMATS, PDF_FORMATS, TEXT_FORMATS, TIFF_FORMATS, isPdfCompatible } from "./import-formats.mjs";
+import { IMAGE_FORMATS, PDF_FORMATS, TEXT_FORMATS, TIFF_FORMATS, importIssueFor } from "./import-formats.mjs";
 
 app.name = "modCut"; // makes the macOS app menu read "modCut", not "Electron"
 
@@ -261,13 +261,21 @@ app.whenReady().then(() => {
         { name: "Vector", extensions: TEXT_FORMATS },
         { name: "PDF / Illustrator", extensions: PDF_FORMATS },
         { name: "Images", extensions: [...IMAGE_FORMATS, ...TIFF_FORMATS] },
+        { name: "All files", extensions: ["*"] },
       ],
     });
     if (canceled || !filePaths.length) return null;
     const files = await Promise.all(filePaths.map(async (path) => {
       const ext = extname(path).slice(1).toLowerCase();
       const out = { path, name: basename(path), ext };
-      if (ext === "modcut") {
+      const issue = importIssueFor(ext);
+      if (issue) {
+        out.kind = "unsupported";
+        out.reason = issue;
+      } else if (ext === "modcut" && !allowDocuments) {
+        out.kind = "unsupported";
+        out.reason = "document-not-addable";
+      } else if (ext === "modcut") {
         out.kind = "document";
         out.text = await readFile(path, "utf8");
       } else if (TEXT_FORMATS.includes(ext)) {
@@ -279,12 +287,13 @@ app.whenReady().then(() => {
         out.dataUrl = `data:image/${mime};base64,` + (await readFile(path)).toString("base64");
       } else if (PDF_FORMATS.includes(ext)) {
         const bytes = await readFile(path);
-        if (!isPdfCompatible(bytes)) {
-          throw new Error(ext === "ai"
-            ? "This Illustrator file is not PDF-compatible. In Illustrator, enable ‘Create PDF Compatible File’, or export as SVG/PDF."
-            : "The selected file is not a valid PDF.");
+        const pdfIssue = importIssueFor(ext, bytes);
+        if (pdfIssue) {
+          out.kind = "unsupported";
+          out.reason = pdfIssue;
+        } else {
+          out.dataUrl = `data:application/pdf;base64,${bytes.toString("base64")}`;
         }
-        out.dataUrl = `data:application/pdf;base64,${bytes.toString("base64")}`;
       }
       return out;
     }));
