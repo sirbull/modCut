@@ -15,13 +15,7 @@ const png = {
   path: "/e2e/photo.png", name: "photo.png", ext: "png",
   dataUrl: `data:image/png;base64,${readFileSync(new URL("../../assets/modcut_logo.png", import.meta.url)).toString("base64")}`,
 };
-function pdfDataUrl() {
-  const objects = [
-    "<< /Type /Catalog /Pages 2 0 R >>",
-    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 72 36] /Resources << >> /Contents 4 0 R >>",
-    "<< /Length 27 >>\nstream\n0 0 0 rg\n0 0 72 36 re f\nendstream",
-  ];
+function buildPdfDataUrl(objects) {
   let pdf = "%PDF-1.4\n";
   const offsets = [0];
   objects.forEach((object, index) => {
@@ -33,6 +27,25 @@ function pdfDataUrl() {
   pdf += offsets.slice(1).map((offset) => `${String(offset).padStart(10, "0")} 00000 n \n`).join("");
   pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
   return `data:application/pdf;base64,${Buffer.from(pdf).toString("base64")}`;
+}
+function pdfDataUrl() {
+  const content = "0 0 0 rg\n0 0 72 36 re f\n";
+  return buildPdfDataUrl([
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 72 36] /Resources << >> /Contents 4 0 R >>",
+    `<< /Length ${Buffer.byteLength(content)} >>\nstream\n${content}endstream`,
+  ]);
+}
+function mixedPdfDataUrl() {
+  const content = "0 0 1 RG\n4 w\n0 18 m 72 18 l S\nBT\n/F1 12 Tf\n10 5 Td\n(Hello) Tj\nET\n";
+  return buildPdfDataUrl([
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 72 36] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
+    `<< /Length ${Buffer.byteLength(content)} >>\nstream\n${content}endstream`,
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+  ]);
 }
 const tiffDataUrl = `data:image/tiff;base64,${Buffer.from(UTIF.encodeImage(new Uint8Array([
   0, 0, 0, 255, 255, 255, 255, 255,
@@ -67,21 +80,6 @@ export async function runWorkflows(client) {
   }
   assert.ok(canvas, "modCut canvas must be ready after reload");
   await wait(300);
-  const pdfPreview = await evaluate(`import('./pdfimport.js').then(module => module.pdfToRaster(${JSON.stringify(pdfDataUrl())}, {dpi:72,maxPixels:1000000}).then(result => ({widthMm:result.widthMm,heightMm:result.heightMm,pageCount:result.pageCount,png:result.dataUrl.startsWith('data:image/png;base64,')})))`);
-  assert.ok(near(pdfPreview.widthMm, 25.4) && near(pdfPreview.heightMm, 12.7), "PDF import must retain the page's physical dimensions");
-  assert.deepEqual({ pageCount: pdfPreview.pageCount, png: pdfPreview.png }, { pageCount: 1, png: true }, "PDF import must render page one to a PNG raster");
-  const tiffPreview = await evaluate(`import('./tiffimport.js').then(module => { const result=module.tiffToPng(${JSON.stringify(tiffDataUrl)}); return {frameCount:result.frameCount,png:result.dataUrl.startsWith('data:image/png;base64,')}; })`);
-  assert.deepEqual(tiffPreview, { frameCount: 1, png: true }, "TIFF import must decode its first frame to a PNG raster");
-  await evaluate(`window.modcut.setE2EImportResult(${JSON.stringify({ path: "/e2e/design.cdr", name: "design.cdr", ext: "cdr", kind: "unsupported", reason: "unsupported-format" })}); document.querySelector('#import').click()`);
-  await wait();
-  assert.equal(await evaluate("document.querySelector('.message-modal .panel__header').textContent"), "Unsupported file format");
-  assert.equal(await evaluate("document.querySelector('.message-modal').textContent.includes('SVG, SVGZ, DXF, PLT, HPGL') && document.querySelector('.message-modal').textContent.includes('MODCUT')"), true, "unsupported-format dialog must list supported vector, image and document formats");
-  await evaluate("document.querySelector('.message-modal .modal-actions button').click()");
-  await evaluate(`window.modcut.setE2EImportResult(${JSON.stringify({ path: "/e2e/legacy.ai", name: "legacy.ai", ext: "ai", kind: "unsupported", reason: "ai-not-pdf-compatible" })}); document.querySelector('#import').click()`);
-  await wait();
-  assert.equal(await evaluate("document.querySelector('.message-modal .panel__header').textContent"), "Illustrator file is not PDF-compatible");
-  assert.equal(await evaluate("document.querySelector('.message-modal').textContent.includes('Create PDF Compatible File') && document.querySelector('.message-modal').textContent.includes('Export As → SVG')"), true, "AI warning must explain both the compatible-AI and recommended SVG fixes");
-  await evaluate("document.querySelector('.message-modal .modal-actions button').click()");
   assert.equal(await evaluate("document.querySelector('#splitJobs').checked"), false, "split by operation must be off by default");
 
   let shapeSteps = null;
@@ -115,6 +113,19 @@ export async function runWorkflows(client) {
   const p1 = { x: canvas.left + canvas.width * 0.2, y: canvas.top + canvas.height * 0.3 };
   const p2 = { x: canvas.left + canvas.width * 0.35, y: canvas.top + canvas.height * 0.42 };
   const p3 = { x: canvas.left + canvas.width * 0.5, y: canvas.top + canvas.height * 0.3 };
+  const dispatchToolClick = async (point) => evaluate(`(() => {
+    const canvas = document.querySelector('.bed-canvas');
+    const bounds = canvas.getBoundingClientRect();
+    const projectPoint = paper.view.viewToProject(new paper.Point(
+      ${JSON.stringify(point.x)} - bounds.left,
+      ${JSON.stringify(point.y)} - bounds.top,
+    ));
+    const nativeEvent = { button: 0, clientX: ${JSON.stringify(point.x)}, clientY: ${JSON.stringify(point.y)}, shiftKey: false, altKey: false, ctrlKey: false, metaKey: false };
+    const toolEvent = { point: projectPoint, event: nativeEvent };
+    paper.tool.onMouseMove(toolEvent);
+    paper.tool.onMouseDown(toolEvent);
+    paper.tool.onMouseUp(toolEvent);
+  })()`);
 
   let penPreviewCount = 0;
   for (let attempt = 1; attempt <= 3 && !penPreviewCount; attempt++) {
@@ -134,16 +145,8 @@ export async function runWorkflows(client) {
   }
   assert.equal(penPreviewCount, 1, "Pen must show a live preview");
   const addPenPoint = async (point, expectedSegments) => {
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      await evaluate("window.focus()");
-      await click(point);
-      const deadline = Date.now() + 500;
-      while (Date.now() < deadline) {
-        const count = await evaluate("paper.project.layers[1].children[0]?.segments?.length || 0");
-        if (count >= expectedSegments) return;
-        await wait(50);
-      }
-    }
+    await dispatchToolClick(point);
+    assert.equal(await evaluate("paper.project.layers[1].children[0]?.segments?.length || 0"), expectedSegments);
   };
   await addPenPoint(p2, 2);
   await addPenPoint(p3, 3);
@@ -151,7 +154,7 @@ export async function runWorkflows(client) {
   assert.equal(await evaluate("paper.project.layers[1].children[0].segments.length"), 3);
 
   await evaluate("document.querySelector('[data-tool=node]').click()");
-  await click(p2);
+  await dispatchToolClick(p2);
   assert.equal(await evaluate("paper.project.getItems({name:'selected-anchor'}).length"), 1);
   await key("Backspace");
   assert.equal(await evaluate("paper.project.layers[1].children[0].segments.length"), 2);
@@ -294,6 +297,27 @@ export async function runWorkflows(client) {
   assert.equal(await evaluate("[...document.querySelectorAll('.clayer--raster [data-quality]')].some(note=>!note.classList.contains('is-warning') && note.textContent.includes('at 100 DPI'))"), true, "reducing DPI must show effective unblocked output quality");
   await evaluate("(() => { const input=document.querySelector('#bmpBrightnessNum'); input.value=15; input.dispatchEvent(new Event('input',{bubbles:true})); input.dispatchEvent(new Event('change',{bubbles:true})); })()");
   assert.equal(await evaluate("paper.project.layers[1].children.find(item=>item.className==='Raster').data.rasterSettings.brightness"), 15);
+
+  const pdfPreview = await evaluate(`import('./pdfimport.js').then(module => module.pdfToArtwork(${JSON.stringify(pdfDataUrl())}, {dpi:72,maxPixels:1000000}).then(result => ({widthMm:result.widthMm,heightMm:result.heightMm,pageCount:result.pageCount,vectorPathCount:result.vectorPathCount,raster:!!result.rasterDataUrl,svg:result.svgText?.includes('<path')})))`);
+  assert.ok(near(pdfPreview.widthMm, 25.4) && near(pdfPreview.heightMm, 12.7), "PDF import must retain the page's physical dimensions");
+  assert.deepEqual({ pageCount: pdfPreview.pageCount, vectorPathCount: pdfPreview.vectorPathCount, raster: pdfPreview.raster, svg: pdfPreview.svg }, { pageCount: 1, vectorPathCount: 1, raster: false, svg: true }, "a vector-only PDF must stay editable without a duplicate raster");
+  const mixedPdf = await evaluate(`import('./pdfimport.js').then(async module => { const result=await module.pdfToArtwork(${JSON.stringify(mixedPdfDataUrl())}, {dpi:72,maxPixels:1000000}); const image=await createImageBitmap(await (await fetch(result.rasterDataUrl)).blob()),canvas=document.createElement('canvas'),context=canvas.getContext('2d'); canvas.width=image.width; canvas.height=image.height; context.drawImage(image,0,0); const pixel=[...context.getImageData(36,18,1,1).data]; return {vectorPathCount:result.vectorPathCount,raster:!!result.rasterDataUrl,linePixel:pixel}; })`);
+  assert.equal(mixedPdf.vectorPathCount, 1, "a mixed PDF must expose its solid path as an editable vector");
+  assert.equal(mixedPdf.raster, true, "a mixed PDF must retain text and images in a raster fallback");
+  assert.equal(mixedPdf.linePixel.slice(0, 3).every(channel => channel > 245), true, "an extracted PDF vector must be omitted from the raster fallback to prevent double output");
+  const tiffPreview = await evaluate(`import('./tiffimport.js').then(module => { const result=module.tiffToPng(${JSON.stringify(tiffDataUrl)}); return {frameCount:result.frameCount,png:result.dataUrl.startsWith('data:image/png;base64,')}; })`);
+  assert.deepEqual(tiffPreview, { frameCount: 1, png: true }, "TIFF import must decode its first frame to a PNG raster");
+
+  await evaluate(`window.modcut.setE2EImportResult(${JSON.stringify([{ path: "/e2e/design.cdr", name: "design.cdr", ext: "cdr", kind: "unsupported", reason: "unsupported-format" }])}); document.querySelector('#add').click()`);
+  await wait();
+  assert.equal(await evaluate("document.querySelector('.message-modal .panel__header').textContent"), "Unsupported file format");
+  assert.equal(await evaluate("document.querySelector('.message-modal').textContent.includes('SVG, SVGZ, DXF, PLT, HPGL') && document.querySelector('.message-modal').textContent.includes('MODCUT')"), true, "unsupported-format dialog must list supported vector, image and document formats");
+  await evaluate("document.querySelector('.message-modal .modal-actions button').click()");
+  await evaluate(`window.modcut.setE2EImportResult(${JSON.stringify([{ path: "/e2e/legacy.ai", name: "legacy.ai", ext: "ai", kind: "unsupported", reason: "ai-not-pdf-compatible" }])}); document.querySelector('#add').click()`);
+  await wait();
+  assert.equal(await evaluate("document.querySelector('.message-modal .panel__header').textContent"), "Illustrator file is not PDF-compatible");
+  assert.equal(await evaluate("document.querySelector('.message-modal').textContent.includes('Create PDF Compatible File') && document.querySelector('.message-modal').textContent.includes('Export As → SVG')"), true, "AI warning must explain both the compatible-AI and recommended SVG fixes");
+  await evaluate("document.querySelector('.message-modal .modal-actions button').click()");
 
   await wait(700);
   const recovery = await evaluate("window.modcut.readRecovery().then(JSON.parse)");

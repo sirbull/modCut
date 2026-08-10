@@ -2,7 +2,7 @@ import { createBed } from "./bed.js";
 import { prepareSVG } from "./svgimport.js";
 import { dxfToSvg } from "./dxfimport.js";
 import { hpglToSvg } from "./hpglimport.js";
-import { pdfToRaster } from "./pdfimport.js";
+import { pdfToArtwork } from "./pdfimport.js";
 import { tiffToPng } from "./tiffimport.js";
 import { OPERATIONS, canAssignRasterToOperation, distinctVectorColor, isOutputLayer, operationsForLayer } from "./layer-model.mjs";
 import { RASTER_MODES, applyProcessProfile, combinedFocusOffset, normalizeProcessProfile, profilesForOperation } from "./process-profiles.mjs";
@@ -618,11 +618,24 @@ async function prepareArtwork(f) {
     return { kind: "vector", ...prepareSVG(svgText) };
   }
   if (["pdf", "ai"].includes(f.ext)) {
-    const rendered = await pdfToRaster(f.dataUrl);
+    const imported = await pdfToArtwork(f.dataUrl);
+    if (!imported.vectorPathCount && !imported.rasterDataUrl) throw new Error("The first PDF page contains no supported visible artwork.");
+    const source = f.ext === "ai" ? "Illustrator" : "PDF";
+    const pageSuffix = imported.pageCount > 1 ? ` Only page 1 of ${imported.pageCount} was imported.` : "";
+    let warning;
+    if (imported.vectorPathCount && imported.rasterDataUrl) {
+      warning = `${source}: imported ${imported.vectorPathCount} editable vector path${imported.vectorPathCount === 1 ? "" : "s"}; text, images and unsupported effects remain a ${imported.effectiveDpi} DPI raster engraving.${pageSuffix}`;
+    } else if (imported.vectorPathCount) {
+      warning = `${source}: imported ${imported.vectorPathCount} editable vector path${imported.vectorPathCount === 1 ? "" : "s"}.${pageSuffix}`;
+    } else {
+      warning = `${source} imported as a ${imported.effectiveDpi} DPI raster engraving.${pageSuffix} Convert Illustrator artwork or text to outlines for editable paths.`;
+    }
     return {
-      kind: "image",
-      ...rendered,
-      warning: `${f.ext === "ai" ? "Illustrator" : "PDF"} imported as a ${rendered.effectiveDpi} DPI raster engraving from page 1${rendered.pageCount > 1 ? ` of ${rendered.pageCount}` : ""}. Export SVG for editable cut paths.`,
+      kind: "pdf",
+      vector: imported.svgText ? prepareSVG(imported.svgText) : null,
+      rasterDataUrl: imported.rasterDataUrl,
+      widthMm: imported.widthMm,
+      warning,
     };
   }
   if (["tif", "tiff"].includes(f.ext)) {
@@ -687,7 +700,7 @@ async function showImportIssue(f) {
       },
       {
         title: "Documents",
-        items: [`PDF (page 1 as raster), AI (PDF-compatible, page 1 as raster), ${formatLabel(DOCUMENT_FORMATS)} projects`],
+        items: [`PDF (editable solid vectors plus raster fallback), AI (PDF-compatible), ${formatLabel(DOCUMENT_FORMATS)} projects`],
       },
     ],
   });
@@ -696,6 +709,15 @@ async function showImportIssue(f) {
 async function placeArtwork(prepared) {
   if (prepared.kind === "vector") {
     bed.loadSVG(prepared.node, prepared.widthMm, prepared.heightMm, prepared.viewBox);
+    return;
+  }
+  if (prepared.kind === "pdf") {
+    if (prepared.vector) {
+      bed.loadSVG(prepared.vector.node, prepared.vector.widthMm, prepared.vector.heightMm, prepared.vector.viewBox);
+    }
+    if (prepared.rasterDataUrl) await bed.loadImage(prepared.rasterDataUrl, prepared.widthMm || null);
+    state.mappingMode = "color";
+    [...$("mapmode").children].forEach((c) => c.classList.toggle("on", c.dataset.mode === "color"));
     return;
   }
   await bed.loadImage(prepared.dataUrl, prepared.widthMm || null);

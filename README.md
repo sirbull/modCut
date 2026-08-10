@@ -11,9 +11,9 @@ The first complete, hardware-testable path is available:
 - import SVG/SVGZ, DXF and HP-GL/PLT artwork as editable vector paths;
 - import PNG, JPG, BMP, GIF, WebP, AVIF and TIFF images automatically as
   engraving with non-destructive grayscale photo controls;
-- open PDF and PDF-compatible Adobe Illustrator files as a high-resolution
-  page-one raster engraving, with an explicit warning to use SVG when editable
-  cut paths are required;
+- split page-one PDF and PDF-compatible Adobe Illustrator artwork into editable
+  solid vector paths plus a high-resolution raster fallback for text, images,
+  clipping, patterns and unsupported effects;
 - open artwork in a new workspace with Import, or combine multiple selected
   artwork files non-destructively with Add;
 - keep multiple independent projects open as tabs, including separate designs,
@@ -68,8 +68,8 @@ it is not sent as GRBL G-code. Ruida is not enabled for real execution yet.
 | HPGL, PLT | Editable vector | Common absolute/relative pen paths, pen selection, arcs and circles. Plotter coordinates use the conventional 40 units/mm. |
 | PNG, JPG/JPEG, BMP, GIF, WebP, AVIF | Raster engraving | Animated images use the decoded still frame. |
 | TIFF/TIF | Raster engraving | The first image/page is imported. |
-| PDF | Raster engraving | Page 1 is rendered at up to 300 DPI and 36 megapixels. Export SVG instead for editable cut paths. |
-| AI | Raster engraving | Works only when Illustrator saved a PDF-compatible AI file. Page 1 is handled like PDF. Export SVG instead for editable cut paths. |
+| PDF | Hybrid vector/raster | Solid stroked and filled paths on page 1 become editable vectors. Text, images, clipping, patterns and unsupported effects remain a raster engraving at up to 300 DPI and 36 megapixels. Extracted paths are removed from the raster pass to avoid duplicate output. |
+| AI | Hybrid vector/raster | Works when Illustrator saved a PDF-compatible AI file. Outlined artwork is retained as editable paths; live text and unsupported effects use the raster fallback. |
 | MODCUT | Editable project | Portable project document described below. |
 
 EPS/PostScript, CDR, PSD, G-code/NC and multi-page PDF/TIFF import are not
