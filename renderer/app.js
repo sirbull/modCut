@@ -756,7 +756,7 @@ function syncColorsAndLayers() {
 }
 function syncRasterModes() {
   bed.setRasterModes(state.layers.filter((layer) => layer.raster).map((layer) => ({
-    color: layer.color,
+    key: layer.key, color: layer.color,
     mode: layer.dither || "Grayscale",
   })));
 }
@@ -798,6 +798,7 @@ function renderLayers() {
   $("layersHint").style.display = state.layers.length ? "none" : "";
   state.layers.forEach((layer, index) => host.append(layerRow(layer, index)));
   bed.setLayerVisibility(state.layers.map((layer) => ({
+    key: state.mappingMode === "color" ? layer.key : null,
     color: state.mappingMode === "color" ? layer.color : null,
     visible: isOutputLayer(layer),
   })));
@@ -813,6 +814,7 @@ function moveLayer(index, offset) {
 let qualityRefreshTimer = null;
 function qualityForLayer(layer) {
   return bed.outputQuality([{
+    key: state.mappingMode === "color" ? layer.key : null,
     color: state.mappingMode === "color" ? layer.color : null,
     op: layer.op, dpi: layer.dpi, dither: layer.dither, bottomUp: layer.bottomUp,
   }]);
@@ -984,7 +986,7 @@ function layerRow(l, layerIndex) {
 // --- run + estimate ---------------------------------------------------------
 const activeLayers = () => state.layers.filter(isOutputLayer);
 const effectiveEngraveMode = (layer) => isEpilogDriver(machine().driver) ? (layer.engraveMode || "auto") : "vector";
-const jobOps = () => activeLayers().map((l) => ({ op: l.op, color: l.color, power: l.power, speed: clampSpeedPct(l.speed), freq: l.freq, zOffset: Number(l.zOffset) || 0, ...(l.op === "Engrave" ? { dpi: l.dpi, dither: l.dither, bottomUp: l.bottomUp, engraveMode: effectiveEngraveMode(l) } : {}) }));
+const jobOps = () => activeLayers().map((l) => ({ key: state.mappingMode === "color" ? l.key : null, op: l.op, color: l.color, power: l.power, speed: clampSpeedPct(l.speed), freq: l.freq, zOffset: Number(l.zOffset) || 0, ...(l.op === "Engrave" ? { dpi: l.dpi, dither: l.dither, bottomUp: l.bottomUp, engraveMode: effectiveEngraveMode(l) } : {}) }));
 const machineLimits = () => ({ bedWidth: machine().bedW || 600, bedHeight: machine().bedH || 400, maxFeed: machine().maxFeed || 12000 });
 const connectionMatchesMachine = () => !machineStatus.connected || machineStatus.connectedMachineId === state.machineId;
 function invalidFrequencyMessage(ops) {
@@ -1111,7 +1113,7 @@ function estimate() {
 
 // --- simulate ---------------------------------------------------------------
 let simCtl = null;
-const simSpecs = () => activeLayers().map((l) => ({ color: state.mappingMode === "color" ? l.color : null, op: l.op, speed: l.speed, power: l.power, zOffset: Number(l.zOffset) || 0, dpi: l.dpi, dither: l.dither, bottomUp: l.bottomUp, engraveMode: effectiveEngraveMode(l) }));
+const simSpecs = () => activeLayers().map((l) => ({ key: state.mappingMode === "color" ? l.key : null, color: state.mappingMode === "color" ? l.color : null, op: l.op, speed: l.speed, power: l.power, zOffset: Number(l.zOffset) || 0, dpi: l.dpi, dither: l.dither, bottomUp: l.bottomUp, engraveMode: effectiveEngraveMode(l) }));
 function startSimulate() {
   if (!bed.getDesign()) return toast("Import a design first.", "info");
   const specs = simSpecs();

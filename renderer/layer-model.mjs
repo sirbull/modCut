@@ -26,6 +26,14 @@ export function itemLayerColor(item, colorToCss = (color) => String(color || "")
   return String(colorToCss(item?.strokeColor) || colorToCss(item?.fillColor) || "#000000").toLowerCase();
 }
 
+// Raster and vector artwork are separate process layers even when their
+// visible colors match. This is especially important for mixed PDFs: black
+// text can remain an engraving while a black vector stroke is Cut or Score.
+export function itemLayerKey(item, colorToCss = (color) => String(color || "")) {
+  const kind = item?.className === "Raster" ? "raster" : "vector";
+  return `${kind}:${itemLayerColor(item, colorToCss)}`;
+}
+
 export function setItemLayerColor(item, color) {
   if (!item) return false;
   if (!item.data) item.data = {};
