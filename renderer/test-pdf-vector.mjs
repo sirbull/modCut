@@ -28,6 +28,16 @@ test("solid PDF paths become physical-size SVG vectors", () => {
   assert.match(result.svgText, /matrix\(1 0 0 -1 0 36\)/);
 });
 
+test("PDF strokes stay vector paths regardless of line width", () => {
+  const result = extractPdfVectors({
+    fnArray: [OPS.setLineWidth, OPS.constructPath],
+    argsArray: [[12], [OPS.stroke, [new Float32Array([0, 0, 0, 1, 72, 0])], null]],
+  }, viewport, OPS);
+  assert.equal(result.vectorPathCount, 1);
+  assert.equal(result.hasRasterContent, false);
+  assert.match(result.svgText, /stroke-width="12"/);
+});
+
 test("text and images stay in the raster pass while solid paths are removed", () => {
   const result = extractPdfVectors({
     fnArray: [OPS.constructPath, OPS.showText, OPS.paintImageXObject],

@@ -88,6 +88,7 @@
 .clayer--hidden { background: var(--surface); border-style: dashed; }
 .clayer__number { width: 18px; flex: none; color: var(--text-muted); font: 700 var(--fs-xs) var(--font-mono); text-align: center; }
 .clayer__sw { width: 20px; height: 20px; border-radius: 6px; border: 1px solid rgba(0,0,0,.2); flex: none; }
+.clayer__kind { min-width: 42px; color: var(--text-muted); font: 700 var(--fs-xs) var(--font-sans); text-transform: uppercase; letter-spacing: .03em; }
 .clayer__op { flex: 1; }
 .clayer__order { display: inline-flex; flex: none; gap: 2px; }
 .clayer__order button { width: 24px; height: 28px; padding: 0; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--text); cursor: pointer; font: 700 14px var(--font-sans); }

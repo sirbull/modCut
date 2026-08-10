@@ -38,7 +38,7 @@ function pdfDataUrl() {
   ]);
 }
 function mixedPdfDataUrl() {
-  const content = "0 0 1 RG\n4 w\n0 18 m 72 18 l S\nBT\n/F1 12 Tf\n10 5 Td\n(Hello) Tj\nET\n";
+  const content = "0 0 0 RG\n4 w\n0 18 m 72 18 l S\nBT\n/F1 12 Tf\n10 5 Td\n(Hello) Tj\nET\n";
   return buildPdfDataUrl([
     "<< /Type /Catalog /Pages 2 0 R >>",
     "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
@@ -262,21 +262,21 @@ export async function runWorkflows(client) {
   await evaluate("document.querySelector('#add').click()");
   await wait(400);
   assert.ok((await evaluate("paper.project.layers[1].children.length")) > beforeAdd, "Add must append instead of replace");
-  assert.deepEqual(await evaluate("[...document.querySelectorAll('.clayer')].map(row=>row.dataset.layerKey)"), ["#ff0000", "#0000ff"], "new color layers must initially follow source order");
+  assert.deepEqual(await evaluate("[...document.querySelectorAll('.clayer')].map(row=>row.dataset.layerKey)"), ["vector:#ff0000", "vector:#0000ff"], "new color layers must initially follow source order");
   assert.deepEqual(await evaluate("(() => { const rows=[...document.querySelectorAll('.clayer')]; return {topUp:rows[0].querySelector('[data-move-layer=up]').disabled,bottomDown:rows.at(-1).querySelector('[data-move-layer=down]').disabled}; })()"), { topUp: true, bottomDown: true }, "layer move buttons must stop at the top and bottom");
   await evaluate("document.querySelector('.clayer .toggle').click()");
   assert.equal(await evaluate("paper.project.layers[1].children.filter(item=>item.strokeColor?.toCSS(true)==='#ff0000').every(item=>!item.visible)"), true, "turning a layer off must hide its artwork");
   await evaluate("document.querySelector('.clayer .toggle').click()");
   assert.equal(await evaluate("paper.project.layers[1].children.filter(item=>item.strokeColor?.toCSS(true)==='#ff0000').every(item=>item.visible)"), true, "turning a layer on must show its artwork");
   await evaluate("document.querySelectorAll('.clayer')[1].querySelector('[data-move-layer=up]').click()");
-  assert.deepEqual(await evaluate("[...document.querySelectorAll('.clayer')].map(row=>row.dataset.layerKey)"), ["#0000ff", "#ff0000"], "moving a layer must update the fixed top-to-bottom job order");
+  assert.deepEqual(await evaluate("[...document.querySelectorAll('.clayer')].map(row=>row.dataset.layerKey)"), ["vector:#0000ff", "vector:#ff0000"], "moving a layer must update the fixed top-to-bottom job order");
   await evaluate("(() => { const select=document.querySelector('#pathOrder'); select.value='optimize'; select.dispatchEvent(new Event('change',{bubbles:true})); document.querySelector('#simulate').click(); })()");
   await wait(200);
   assert.deepEqual(await evaluate("paper.project.layers.at(-1).children[0].children.map(path=>path.strokeColor?.toCSS(true))"), ["#0000ff", "#ff0000"], "path optimization must keep layers contiguous and respect their top-to-bottom order");
   await evaluate("document.querySelector('#simClose').click()");
 
-  await evaluate("(() => { const row=[...document.querySelectorAll('.clayer')].find(item=>item.dataset.layerKey==='#0000ff'),op=row.querySelector('.clayer__op'); op.value='Score'; op.dispatchEvent(new Event('change',{bubbles:true})); })()");
-  await evaluate("(() => { const row=[...document.querySelectorAll('.clayer')].find(item=>item.dataset.layerKey==='#0000ff'),z=row.querySelector('[data-k=zOffset]'); z.value='0'; z.dispatchEvent(new Event('input',{bubbles:true})); const split=document.querySelector('#splitJobs'); split.checked=true; split.dispatchEvent(new Event('change',{bubbles:true})); })()");
+  await evaluate("(() => { const row=[...document.querySelectorAll('.clayer')].find(item=>item.dataset.layerKey==='vector:#0000ff'),op=row.querySelector('.clayer__op'); op.value='Score'; op.dispatchEvent(new Event('change',{bubbles:true})); })()");
+  await evaluate("(() => { const row=[...document.querySelectorAll('.clayer')].find(item=>item.dataset.layerKey==='vector:#0000ff'),z=row.querySelector('[data-k=zOffset]'); z.value='0'; z.dispatchEvent(new Event('input',{bubbles:true})); const split=document.querySelector('#splitJobs'); split.checked=true; split.dispatchEvent(new Event('change',{bubbles:true})); })()");
   assert.equal(await evaluate("localStorage.getItem('modcut_split_by_operation')"), "true", "split by operation must persist as a user preference");
   await evaluate("document.querySelector('#sendBtn').click()");
   const splitDeadline = Date.now() + 5_000;
@@ -305,6 +305,13 @@ export async function runWorkflows(client) {
   assert.equal(mixedPdf.vectorPathCount, 1, "a mixed PDF must expose its solid path as an editable vector");
   assert.equal(mixedPdf.raster, true, "a mixed PDF must retain text and images in a raster fallback");
   assert.equal(mixedPdf.linePixel.slice(0, 3).every(channel => channel > 245), true, "an extracted PDF vector must be omitted from the raster fallback to prevent double output");
+  await evaluate(`window.modcut.setE2EImportResult(${JSON.stringify([{ path: "/e2e/mixed.pdf", name: "mixed.pdf", ext: "pdf", dataUrl: mixedPdfDataUrl() }])}); document.querySelector('#add').click()`);
+  await wait(400);
+  const mixedLayers = await evaluate("[...document.querySelectorAll('.clayer')].filter(row=>row.dataset.layerKey.endsWith(':#000000')).map(row=>({key:row.dataset.layerKey,kind:row.querySelector('.clayer__kind').textContent,op:row.querySelector('.clayer__op').value,choices:[...row.querySelector('.clayer__op').options].map(option=>option.value)}))");
+  assert.deepEqual(mixedLayers, [
+    { key: "raster:#000000", kind: "Raster", op: "Engrave", choices: ["Engrave", "Ignore"] },
+    { key: "vector:#000000", kind: "Vector", op: "Cut", choices: ["Cut", "Engrave", "Score", "Ignore"] },
+  ], "same-color PDF raster and thick vector strokes must remain independently assignable process layers");
   const tiffPreview = await evaluate(`import('./tiffimport.js').then(module => { const result=module.tiffToPng(${JSON.stringify(tiffDataUrl)}); return {frameCount:result.frameCount,png:result.dataUrl.startsWith('data:image/png;base64,')}; })`);
   assert.deepEqual(tiffPreview, { frameCount: 1, png: true }, "TIFF import must decode its first frame to a PNG raster");
 

@@ -882,7 +882,7 @@ function syncLayers() {
     ];
     state.layers = orderedColors.map((c) => {
       const candidates = state.layers.filter((layer) => layer.color?.toLowerCase() === c.color.toLowerCase());
-      const existing = prev.get(c.key) || candidates.find((layer) => c.raster && layer.raster) || candidates[0];
+      const existing = prev.get(c.key) || candidates.find((layer) => Boolean(layer.raster) === Boolean(c.raster));
       if (!existing) return newLayer(c.color, c.raster ? "Engrave" : "Cut", c.raster, c.key);
       const layer = { ...existing, key: c.key, color: c.color, raster: c.raster };
       if (c.raster && !canAssignRasterToOperation(layer.op)) layer.op = "Engrave";
@@ -999,6 +999,7 @@ function layerRow(l, layerIndex) {
     <div class="clayer__top">
       <span class="clayer__number" title="Job order">${layerIndex + 1}</span>
       <span class="clayer__sw" style="background:${l.color || "linear-gradient(135deg,#888,#ccc)"}"></span>
+      <span class="clayer__kind">${l.raster ? "Raster" : "Vector"}</span>
       ${byColor
         ? `<select class="select clayer__op">${layerOps.map((o) => `<option ${o === l.op ? "selected" : ""}>${o}</option>`).join("")}</select>`
         : `<strong class="clayer__op">All shapes → ${l.op}</strong>`}

@@ -68,7 +68,7 @@ it is not sent as GRBL G-code. Ruida is not enabled for real execution yet.
 | HPGL, PLT | Editable vector | Common absolute/relative pen paths, pen selection, arcs and circles. Plotter coordinates use the conventional 40 units/mm. |
 | PNG, JPG/JPEG, BMP, GIF, WebP, AVIF | Raster engraving | Animated images use the decoded still frame. |
 | TIFF/TIF | Raster engraving | The first image/page is imported. |
-| PDF | Hybrid vector/raster | Solid stroked and filled paths on page 1 become editable vectors. Text, images, clipping, patterns and unsupported effects remain a raster engraving at up to 300 DPI and 36 megapixels. Extracted paths are removed from the raster pass to avoid duplicate output. |
+| PDF | Hybrid vector/raster | Solid stroked and filled paths on page 1 become editable vectors. Every real vector stroke is retained regardless of line width; no 0.001 pt/hairline convention is required. Text, images, clipping, patterns and unsupported effects remain a raster engraving at up to 300 DPI and 36 megapixels. Raster and vector content remain separate process layers even when their colors match, and extracted paths are removed from the raster pass to avoid duplicate output. |
 | AI | Hybrid vector/raster | Works when Illustrator saved a PDF-compatible AI file. Outlined artwork is retained as editable paths; live text and unsupported effects use the raster fallback. |
 | MODCUT | Editable project | Portable project document described below. |
 

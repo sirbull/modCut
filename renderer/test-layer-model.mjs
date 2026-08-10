@@ -7,6 +7,7 @@ import {
   distinctVectorColor,
   isOutputLayer,
   itemLayerColor,
+  itemLayerKey,
   operationsForLayer,
   setItemLayerColor,
 } from "./layer-model.mjs";
@@ -51,4 +52,11 @@ test("changing a stroke layer does not add a fill, and raster stores its layer c
 test("new vector tools avoid the current raster layer color", () => {
   assert.equal(distinctVectorColor("#000000", [{ color: "#000000", raster: true }]), "#ff0000");
   assert.equal(distinctVectorColor("#0000ff", [{ color: "#000000", raster: true }]), "#0000ff");
+});
+
+test("raster and vector artwork use separate process keys even at the same color", () => {
+  const vector = { className: "Path", data: {}, strokeColor: "#000000", fillColor: null };
+  const raster = { className: "Raster", data: { modcutColor: "#000000" } };
+  assert.equal(itemLayerKey(vector), "vector:#000000");
+  assert.equal(itemLayerKey(raster), "raster:#000000");
 });
