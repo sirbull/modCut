@@ -2,10 +2,12 @@ import { app, BrowserWindow, ipcMain, dialog, Menu, nativeImage } from "electron
 import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join, extname, basename } from "node:path";
+import { gunzip } from "node:zlib";
+import { promisify } from "node:util";
 import { createSidecar } from "./sidecar-bridge.mjs";
 import { createWindowCommandRouter } from "./window-lifecycle.mjs";
 import { createRecoveryStore } from "./recovery-store.mjs";
-import { IMAGE_FORMATS, TEXT_FORMATS } from "./import-formats.mjs";
+import { IMAGE_FORMATS, PDF_FORMATS, TEXT_FORMATS, TIFF_FORMATS, isPdfCompatible } from "./import-formats.mjs";
 
 app.name = "modCut"; // makes the macOS app menu read "modCut", not "Electron"
 
@@ -23,6 +25,7 @@ const closePending = new WeakSet();
 const rendererGone = new WeakSet();
 const isE2E = process.env.MODCUT_E2E === "1";
 const e2eImportResults = [];
+const gunzipAsync = promisify(gunzip);
 
 // Keep local development and an installed build from sharing Chromium state,
 // recovery files, and machine settings. E2E supplies its own user-data-dir.
@@ -237,12 +240,18 @@ app.whenReady().then(() => {
 
   // Native file picker that also returns the file's contents so the renderer
   // (sandboxed, no fs) can parse it. SVG/DXF come back as text;
-  // images as a data URL.
+  // images/PDF-compatible Illustrator files as a data URL.
   ipcMain.handle("importFile", async (_event, options = {}) => {
     if (isE2E && e2eImportResults.length) return e2eImportResults.shift();
     const multiple = !!options.multiple;
     const allowDocuments = options.allowDocuments !== false;
-    const supported = [...TEXT_FORMATS, ...IMAGE_FORMATS, ...(allowDocuments ? ["modcut"] : [])];
+    const supported = [
+      ...TEXT_FORMATS,
+      ...IMAGE_FORMATS,
+      ...TIFF_FORMATS,
+      ...PDF_FORMATS,
+      ...(allowDocuments ? ["modcut"] : []),
+    ];
     const { canceled, filePaths } = await dialog.showOpenDialog(win, {
       title: multiple ? "Add files to project" : "Import file",
       properties: ["openFile", ...(multiple ? ["multiSelections"] : [])],
@@ -250,7 +259,8 @@ app.whenReady().then(() => {
         { name: "All supported files", extensions: supported },
         ...(allowDocuments ? [{ name: "modCut document", extensions: ["modcut"] }] : []),
         { name: "Vector", extensions: TEXT_FORMATS },
-        { name: "Images", extensions: IMAGE_FORMATS },
+        { name: "PDF / Illustrator", extensions: PDF_FORMATS },
+        { name: "Images", extensions: [...IMAGE_FORMATS, ...TIFF_FORMATS] },
       ],
     });
     if (canceled || !filePaths.length) return null;
@@ -261,10 +271,20 @@ app.whenReady().then(() => {
         out.kind = "document";
         out.text = await readFile(path, "utf8");
       } else if (TEXT_FORMATS.includes(ext)) {
-        out.text = await readFile(path, "utf8");
-      } else if (IMAGE_FORMATS.includes(ext)) {
-        const mime = ext === "jpg" ? "jpeg" : ext;
+        out.text = ext === "svgz"
+          ? (await gunzipAsync(await readFile(path))).toString("utf8")
+          : await readFile(path, "utf8");
+      } else if (IMAGE_FORMATS.includes(ext) || TIFF_FORMATS.includes(ext)) {
+        const mime = ext === "jpg" ? "jpeg" : ext === "tif" ? "tiff" : ext;
         out.dataUrl = `data:image/${mime};base64,` + (await readFile(path)).toString("base64");
+      } else if (PDF_FORMATS.includes(ext)) {
+        const bytes = await readFile(path);
+        if (!isPdfCompatible(bytes)) {
+          throw new Error(ext === "ai"
+            ? "This Illustrator file is not PDF-compatible. In Illustrator, enable ‘Create PDF Compatible File’, or export as SVG/PDF."
+            : "The selected file is not a valid PDF.");
+        }
+        out.dataUrl = `data:application/pdf;base64,${bytes.toString("base64")}`;
       }
       return out;
     }));

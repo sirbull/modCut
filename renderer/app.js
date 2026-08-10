@@ -1,6 +1,9 @@
 import { createBed } from "./bed.js";
 import { prepareSVG } from "./svgimport.js";
 import { dxfToSvg } from "./dxfimport.js";
+import { hpglToSvg } from "./hpglimport.js";
+import { pdfToRaster } from "./pdfimport.js";
+import { tiffToPng } from "./tiffimport.js";
 import { OPERATIONS, canAssignRasterToOperation, distinctVectorColor, isOutputLayer, operationsForLayer } from "./layer-model.mjs";
 import { RASTER_MODES, applyProcessProfile, combinedFocusOffset, normalizeProcessProfile, profilesForOperation } from "./process-profiles.mjs";
 import { groupJobOperations, jobFilename } from "./job-split.mjs";
@@ -606,10 +609,24 @@ function resetWorkspace({ filename = "job", label = "Untitled" } = {}) {
   refreshPos();
 }
 
-function prepareArtwork(f) {
-  if (f.ext === "svg" || f.ext === "dxf") {
-    const svgText = f.ext === "dxf" ? dxfToSvg(f.text) : f.text;
+async function prepareArtwork(f) {
+  if (["svg", "svgz", "dxf", "plt", "hpgl"].includes(f.ext)) {
+    const svgText = f.ext === "dxf" ? dxfToSvg(f.text)
+      : ["plt", "hpgl"].includes(f.ext) ? hpglToSvg(f.text)
+        : f.text;
     return { kind: "vector", ...prepareSVG(svgText) };
+  }
+  if (["pdf", "ai"].includes(f.ext)) {
+    const rendered = await pdfToRaster(f.dataUrl);
+    return {
+      kind: "image",
+      ...rendered,
+      warning: `${f.ext === "ai" ? "Illustrator" : "PDF"} imported as a ${rendered.effectiveDpi} DPI raster engraving from page 1${rendered.pageCount > 1 ? ` of ${rendered.pageCount}` : ""}. Export SVG for editable cut paths.`,
+    };
+  }
+  if (["tif", "tiff"].includes(f.ext)) {
+    const rendered = tiffToPng(f.dataUrl);
+    return { kind: "image", ...rendered, warning: rendered.frameCount > 1 ? `Imported the first of ${rendered.frameCount} TIFF pages.` : null };
   }
   if (f.dataUrl) return { kind: "image", dataUrl: f.dataUrl };
   return null;
@@ -620,7 +637,7 @@ async function placeArtwork(prepared) {
     bed.loadSVG(prepared.node, prepared.widthMm, prepared.heightMm, prepared.viewBox);
     return;
   }
-  await bed.loadImage(prepared.dataUrl, null);
+  await bed.loadImage(prepared.dataUrl, prepared.widthMm || null);
   state.mappingMode = "color";
   [...$("mapmode").children].forEach((c) => c.classList.toggle("on", c.dataset.mode === "color"));
 }
@@ -639,7 +656,7 @@ async function doImport() {
   let prepared = null;
   try {
     if (f.kind === "document") documentData = JSON.parse(f.text);
-    else prepared = prepareArtwork(f);
+    else prepared = await prepareArtwork(f);
   } catch (e) {
     toast("Import failed: " + e.message, "err");
     return;
@@ -659,9 +676,9 @@ async function doImport() {
     await placeArtwork(prepared);
     syncColorsAndLayers();
     markDirty();
-    toast(prepared.kind === "image"
+    toast(prepared.warning || (prepared.kind === "image"
       ? "Image imported as grayscale raster engraving."
-      : `Imported ${f.name} into a new workspace.`, "ok");
+      : `Imported ${f.name} into a new workspace.`), prepared.warning ? "info" : "ok");
   } catch (e) {
     toast("Import failed: " + e.message, "err");
   }
@@ -681,9 +698,10 @@ async function addFiles() {
   let added = 0;
   for (const f of files) {
     try {
-      const prepared = prepareArtwork(f);
+      const prepared = await prepareArtwork(f);
       if (!prepared) throw new Error(`.${f.ext} files cannot be added yet.`);
       await placeArtwork(prepared);
+      if (prepared.warning) toast(`${f.name}: ${prepared.warning}`, "info");
       added++;
     } catch (e) {
       toast(`Could not add ${f.name}: ${e.message}`, "err");

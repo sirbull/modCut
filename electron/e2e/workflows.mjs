@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import UTIF from "utif";
 import { inputHelpers, wait } from "./cdp.mjs";
 
 const svg = (name, color, x = 2) => ({
@@ -14,6 +15,28 @@ const png = {
   path: "/e2e/photo.png", name: "photo.png", ext: "png",
   dataUrl: `data:image/png;base64,${readFileSync(new URL("../../assets/modcut_logo.png", import.meta.url)).toString("base64")}`,
 };
+function pdfDataUrl() {
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 72 36] /Resources << >> /Contents 4 0 R >>",
+    "<< /Length 27 >>\nstream\n0 0 0 rg\n0 0 72 36 re f\nendstream",
+  ];
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  objects.forEach((object, index) => {
+    offsets.push(Buffer.byteLength(pdf));
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  });
+  const xref = Buffer.byteLength(pdf);
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  pdf += offsets.slice(1).map((offset) => `${String(offset).padStart(10, "0")} 00000 n \n`).join("");
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return `data:application/pdf;base64,${Buffer.from(pdf).toString("base64")}`;
+}
+const tiffDataUrl = `data:image/tiff;base64,${Buffer.from(UTIF.encodeImage(new Uint8Array([
+  0, 0, 0, 255, 255, 255, 255, 255,
+]), 2, 1)).toString("base64")}`;
 const near = (a, b, epsilon = 0.03) => Math.abs(a - b) <= epsilon;
 const zMachine = [{
   id: "dummy-z", name: "Dummy Z", driver: "Dummy", bedW: 600, bedH: 400, maxFeed: 12000,
@@ -44,6 +67,11 @@ export async function runWorkflows(client) {
   }
   assert.ok(canvas, "modCut canvas must be ready after reload");
   await wait(300);
+  const pdfPreview = await evaluate(`import('./pdfimport.js').then(module => module.pdfToRaster(${JSON.stringify(pdfDataUrl())}, {dpi:72,maxPixels:1000000}).then(result => ({widthMm:result.widthMm,heightMm:result.heightMm,pageCount:result.pageCount,png:result.dataUrl.startsWith('data:image/png;base64,')})))`);
+  assert.ok(near(pdfPreview.widthMm, 25.4) && near(pdfPreview.heightMm, 12.7), "PDF import must retain the page's physical dimensions");
+  assert.deepEqual({ pageCount: pdfPreview.pageCount, png: pdfPreview.png }, { pageCount: 1, png: true }, "PDF import must render page one to a PNG raster");
+  const tiffPreview = await evaluate(`import('./tiffimport.js').then(module => { const result=module.tiffToPng(${JSON.stringify(tiffDataUrl)}); return {frameCount:result.frameCount,png:result.dataUrl.startsWith('data:image/png;base64,')}; })`);
+  assert.deepEqual(tiffPreview, { frameCount: 1, png: true }, "TIFF import must decode its first frame to a PNG raster");
   assert.equal(await evaluate("document.querySelector('#splitJobs').checked"), false, "split by operation must be off by default");
 
   let shapeSteps = null;
@@ -62,8 +90,10 @@ export async function runWorkflows(client) {
   await evaluate("(() => { const op=document.querySelector('.clayer__op'); op.value='Score'; op.dispatchEvent(new Event('change',{bubbles:true})); })()");
   assert.deepEqual(await evaluate("(() => ({power:+document.querySelector('[data-k=power]').value,speed:+document.querySelector('[data-k=speed]').value,freq:+document.querySelector('[data-k=freq]').value,z:+document.querySelector('[data-k=zOffset]').value}))()"), { power: 15, speed: 100, freq: 500, z: 3 }, "Score layers must use the workshop defaults");
   for (let attempt = 1; attempt <= 3 && await evaluate("paper.project.layers[1].children.length > 0"); attempt++) {
-    await evaluate("window.focus()");
+    await evaluate("document.activeElement?.blur(); window.focus()");
+    await wait(100);
     await key("Backspace");
+    await wait(100);
   }
   assert.equal(await evaluate("paper.project.layers[1].children.length"), 0, "Backspace must delete a newly created and automatically selected shape");
   await key("z", 4);
