@@ -7,7 +7,7 @@ import {
   posterizeGray,
   tintGray,
 } from "./raster-processing.mjs";
-import { itemLayerColor, setItemLayerColor } from "./layer-model.mjs";
+import { itemLayerColor, itemLayerKey, setItemLayerColor } from "./layer-model.mjs";
 import { VECTOR_SAMPLE_STEP_MM, assessOutputQuality, rasterGrid } from "./output-quality.mjs";
 import { combinedFocusOffset } from "./process-profiles.mjs";
 import { defaultMotionTiming, targetMotionSpeed, trapezoidPlan } from "./motion-timing.mjs";
@@ -216,10 +216,10 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     for (const it of laserItems()) {
       const raster = it.className === "Raster";
       const hex = logicalColor(it);
-      const entry = map.get(hex) || { key: hex, color: hex, count: 0, raster: false };
+      const key = logicalLayerKey(it);
+      const entry = map.get(key) || { key, color: hex, count: 0, raster };
       entry.count++;
-      entry.raster ||= raster;
-      map.set(hex, entry);
+      map.set(key, entry);
     }
     return [...map.values()];
   }
@@ -561,21 +561,25 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     return raster?.data?.rasterMode || "Grayscale";
   }
   function setRasterModes(entries = []) {
-    const byColor = new Map(entries.filter((entry) => entry.color).map((entry) => [entry.color.toLowerCase(), entry.mode]));
+    const byKey = new Map(entries.filter((entry) => entry.key).map((entry) => [entry.key, entry.mode]));
+    const byColor = new Map(entries.filter((entry) => entry.color && !entry.key).map((entry) => [entry.color.toLowerCase(), entry.mode]));
     const fallback = entries.find((entry) => !entry.color)?.mode;
     for (const raster of laserItems().filter((it) => it.className === "Raster")) {
-      const mode = byColor.get(logicalColor(raster).toLowerCase()) || fallback || "Grayscale";
+      const mode = byKey.get(logicalLayerKey(raster)) || byColor.get(logicalColor(raster).toLowerCase()) || fallback || "Grayscale";
       if (raster.data.rasterMode === mode) continue;
       raster.data.rasterMode = mode;
       applyRasterSettings(raster);
     }
   }
   function setLayerVisibility(entries = []) {
-    const byColor = new Map(entries.filter((entry) => entry.color).map((entry) => [String(entry.color).toLowerCase(), entry.visible !== false]));
+    const byKey = new Map(entries.filter((entry) => entry.key).map((entry) => [entry.key, entry.visible !== false]));
+    const byColor = new Map(entries.filter((entry) => entry.color && !entry.key).map((entry) => [String(entry.color).toLowerCase(), entry.visible !== false]));
     const fallback = entries.find((entry) => !entry.color);
     for (const item of laserItems()) {
-      item.visible = byColor.has(logicalColor(item))
-        ? byColor.get(logicalColor(item))
+      item.visible = byKey.has(logicalLayerKey(item))
+        ? byKey.get(logicalLayerKey(item))
+        : byColor.has(logicalColor(item))
+          ? byColor.get(logicalColor(item))
         : fallback ? fallback.visible !== false : true;
     }
     drawOverlay();
@@ -1275,6 +1279,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   }
   const css = (c) => (c ? c.toCSS(true) : null);
   const logicalColor = (it) => itemLayerColor(it, css);
+  const logicalLayerKey = (it) => itemLayerKey(it, css);
 
   // --- position (whole design) --------------------------------------------
   const items = () => selectionRoot().children.slice();
@@ -1426,9 +1431,10 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   }
 
   // --- simulation (red dot tracing the real toolpath) ---------------------
-  function itemsForColor(color) {
+  function itemsForSpec(spec) {
     const all = laserItems();
-    return color ? all.filter((it) => logicalColor(it) === String(color).toLowerCase()) : all;
+    if (spec?.key) return all.filter((it) => logicalLayerKey(it) === spec.key);
+    return spec?.color ? all.filter((it) => logicalColor(it) === String(spec.color).toLowerCase()) : all;
   }
   function vectorPointCount(item) {
     if (item.className === "CompoundPath") return item.children.reduce((sum, child) => sum + vectorPointCount(child), 0);
@@ -1438,7 +1444,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     const rasters = [];
     const filledScans = [];
     let vectorPoints = 0;
-    for (const spec of specs) for (const item of itemsForColor(spec.color)) {
+    for (const spec of specs) for (const item of itemsForSpec(spec)) {
       if (spec.op === "Engrave" && engraveStrategy(item) === "raster") {
         const grid = rasterGrid(item.bounds.width, item.bounds.height, spec.dpi || 300);
         const entry = { ...grid, color: spec.color, kind: item.className === "Raster" ? "image" : "filled-vector" };
@@ -1539,7 +1545,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     for (let layerIndex = 0; layerIndex < specs.length; layerIndex++) {
       const sp = specs[layerIndex];
       const groups = [];
-      for (const it of itemsForColor(sp.color)) {
+      for (const it of itemsForSpec(sp)) {
         const g = [];
         sp.op === "Engrave" ? engraveSeg(it, sp, g, true) : vectorSeg(it, sp, g, true);
         for (const segment of g) {
@@ -1830,7 +1836,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     for (let layerIndex = 0; layerIndex < specs.length; layerIndex++) {
       const sp = specs[layerIndex];
       const groups = [];
-      for (const it of itemsForColor(sp.color)) {
+      for (const it of itemsForSpec(sp)) {
         const g = [];
         if (sp.op === "Engrave" && it.className === "Raster" && String(sp.dither).toLowerCase() === "grayscale") await rasterGrayscaleScan(it, sp, g);
         else if (sp.op === "Engrave" && it.className === "Raster") await rasterDitherScan(it, sp, g);
