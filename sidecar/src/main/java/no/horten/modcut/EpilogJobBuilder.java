@@ -42,7 +42,9 @@ final class EpilogJobBuilder {
 
   private EpilogJobBuilder() {}
 
-  static Built build(JsonNode params, double bedWidth, double bedHeight) {
+  static Built build(JsonNode params, double bedWidth, double bedHeight) { return build(params, bedWidth, bedHeight, DriverCatalog.ZING); }
+
+  static Built build(JsonNode params, double bedWidth, double bedHeight, DriverCatalog.Descriptor driver) {
     JsonNode segments = params.path("laserSegments");
     if (!segments.isArray() || segments.isEmpty()) {
       throw new IllegalArgumentException("Epilog-jobben inneholder ingen lasersegmenter.");
@@ -77,20 +79,20 @@ final class EpilogJobBuilder {
       List<IndexedSegment> vectors = layer.stream().filter(segment -> !usesNativeRaster(segment)).toList();
       if (!nativeRaster.isEmpty()) {
         if (!pendingVectors.isEmpty()) {
-          VectorBuild built = buildVectors(pendingVectors, bedWidth, bedHeight);
+          VectorBuild built = buildVectors(pendingVectors, bedWidth, bedHeight, driver);
           job.addPart(built.part());
           pointCount += built.pointCount();
           frequencyClamped |= built.frequencyClamped();
           pendingVectors.clear();
         }
-        JobPart raster = buildNativeRaster(nativeRaster, bedWidth, bedHeight);
+        JobPart raster = buildNativeRaster(nativeRaster, bedWidth, bedHeight, driver);
         job.addPart(raster);
         pointCount += nativeRaster.stream().mapToInt(segment -> segment.node().path("points").size()).sum();
       }
       pendingVectors.addAll(vectors);
     }
     if (!pendingVectors.isEmpty()) {
-      VectorBuild built = buildVectors(pendingVectors, bedWidth, bedHeight);
+      VectorBuild built = buildVectors(pendingVectors, bedWidth, bedHeight, driver);
       job.addPart(built.part());
       pointCount += built.pointCount();
       frequencyClamped |= built.frequencyClamped();
@@ -105,8 +107,8 @@ final class EpilogJobBuilder {
     return !segment.path("engraveMode").asText("auto").equalsIgnoreCase("vector");
   }
 
-  private static VectorBuild buildVectors(List<IndexedSegment> segments, double bedWidth, double bedHeight) {
-    VectorPart vectors = new VectorPart(property(0, 100, 5000, 0), DPI);
+  private static VectorBuild buildVectors(List<IndexedSegment> segments, double bedWidth, double bedHeight, DriverCatalog.Descriptor driver) {
+    VectorPart vectors = new VectorPart(property(0, 100, 5000, 0), driver.vectorDpi());
     int pointCount = 0;
     boolean frequencyClamped = false;
     for (IndexedSegment indexed : segments) {
@@ -123,7 +125,7 @@ final class EpilogJobBuilder {
       List<DevicePoint> devicePoints = new ArrayList<>();
       JsonNode points = segment.path("points");
       for (int pointIndex = 0; pointIndex < points.size(); pointIndex++) {
-        DevicePoint point = devicePoint(points.get(pointIndex), bedWidth, bedHeight, segmentIndex);
+        DevicePoint point = devicePoint(points.get(pointIndex), bedWidth, bedHeight, segmentIndex, driver.vectorDpi());
         if (devicePoints.isEmpty() || !sameDevicePoint(devicePoints.get(devicePoints.size() - 1), point)) devicePoints.add(point);
       }
       if (devicePoints.size() < 2) throw invalidSegment(segmentIndex, "blir kortere enn ett Epilog-enhetstrinn");
@@ -135,8 +137,8 @@ final class EpilogJobBuilder {
         if (segment.path("operation").asText("").equalsIgnoreCase("Cut")) {
           JsonNode overlapNode = segment.path("overlapPoint");
           DevicePoint overlap = overlapNode.isObject()
-              ? devicePoint(overlapNode, bedWidth, bedHeight, segmentIndex)
-              : overlapPoint(first, devicePoints.get(1));
+              ? devicePoint(overlapNode, bedWidth, bedHeight, segmentIndex, driver.vectorDpi())
+              : overlapPoint(first, devicePoints.get(1), driver.vectorDpi());
           if (!sameDevicePoint(devicePoints.get(devicePoints.size() - 1), overlap)) devicePoints.add(overlap);
         }
       }
@@ -150,11 +152,11 @@ final class EpilogJobBuilder {
     return new VectorBuild(vectors, pointCount, frequencyClamped);
   }
 
-  private static JobPart buildNativeRaster(List<IndexedSegment> segments, double bedWidth, double bedHeight) {
+  private static JobPart buildNativeRaster(List<IndexedSegment> segments, double bedWidth, double bedHeight, DriverCatalog.Descriptor driver) {
     JsonNode first = segments.get(0).node();
     int dpi = (int) Math.round(finite(first, "dpi", segments.get(0).index()));
-    if (!EPILOG_RASTER_DPIS.contains(dpi)) {
-      throw invalidSegment(segments.get(0).index(), "DPI " + dpi + " støttes ikke av Epilog Zing (velg 100, 200, 250, 400, 500 eller 1000)");
+    if (!driver.rasterDpis().contains(dpi)) {
+      throw invalidSegment(segments.get(0).index(), "DPI " + dpi + " støttes ikke av " + driver.displayName() + " (velg " + driver.rasterDpis() + ")");
     }
     boolean grayscale = first.path("dither").asText("").equalsIgnoreCase("Grayscale");
     double speed = bounded(first, "speed", 1, 100, segments.get(0).index());
@@ -234,7 +236,10 @@ final class EpilogJobBuilder {
   }
 
   static Built frame(String filename, double minX, double minY, double maxX, double maxY,
-                     double bedWidth, double bedHeight) {
+                     double bedWidth, double bedHeight) { return frame(filename, minX, minY, maxX, maxY, bedWidth, bedHeight, DriverCatalog.ZING); }
+
+  static Built frame(String filename, double minX, double minY, double maxX, double maxY,
+                     double bedWidth, double bedHeight, DriverCatalog.Descriptor driver) {
     validateCoordinate(minX, bedWidth, "X");
     validateCoordinate(maxX, bedWidth, "X");
     validateCoordinate(minY, bedHeight, "Y");
@@ -244,12 +249,12 @@ final class EpilogJobBuilder {
     String title = cleanTitle(filename);
     LaserJob job = new LaserJob(title, cleanQueueName(title), cleanQueueName(System.getProperty("user.name", "modcut")));
     job.setAutoFocusEnabled(false);
-    VectorPart vectors = new VectorPart(property(0, 50, 5000, 0), DPI);
-    vectors.moveto(px(minX), px(minY));
-    vectors.lineto(px(maxX), px(minY));
-    vectors.lineto(px(maxX), px(maxY));
-    vectors.lineto(px(minX), px(maxY));
-    vectors.lineto(px(minX), px(minY));
+    VectorPart vectors = new VectorPart(property(0, 50, 5000, 0), driver.vectorDpi());
+    vectors.moveto(px(minX, driver.vectorDpi()), px(minY, driver.vectorDpi()));
+    vectors.lineto(px(maxX, driver.vectorDpi()), px(minY, driver.vectorDpi()));
+    vectors.lineto(px(maxX, driver.vectorDpi()), px(maxY, driver.vectorDpi()));
+    vectors.lineto(px(minX, driver.vectorDpi()), px(maxY, driver.vectorDpi()));
+    vectors.lineto(px(minX, driver.vectorDpi()), px(minY, driver.vectorDpi()));
     job.addPart(vectors);
     return new Built(job, 1, 5, false);
   }
@@ -269,19 +274,19 @@ final class EpilogJobBuilder {
     return value;
   }
 
-  private static DevicePoint devicePoint(JsonNode point, double bedWidth, double bedHeight, int segmentIndex) {
+  private static DevicePoint devicePoint(JsonNode point, double bedWidth, double bedHeight, int segmentIndex, int dpi) {
     double x = coordinate(point, "x", bedWidth, segmentIndex);
     double y = coordinate(point, "y", bedHeight, segmentIndex);
-    return new DevicePoint(x, y, (int) px(x), (int) px(y));
+    return new DevicePoint(x, y, (int) px(x, dpi), (int) px(y, dpi));
   }
 
-  private static DevicePoint overlapPoint(DevicePoint first, DevicePoint next) {
+  private static DevicePoint overlapPoint(DevicePoint first, DevicePoint next, int dpi) {
     double dx = next.xMm() - first.xMm(), dy = next.yMm() - first.yMm();
     double distance = Math.hypot(dx, dy);
     if (distance <= 0) return first;
     double ratio = Math.min(0.1, distance) / distance;
     double x = first.xMm() + dx * ratio, y = first.yMm() + dy * ratio;
-    return new DevicePoint(x, y, (int) px(x), (int) px(y));
+    return new DevicePoint(x, y, (int) px(x, dpi), (int) px(y, dpi));
   }
 
   private static boolean sameDevicePoint(DevicePoint a, DevicePoint b) {
@@ -306,7 +311,7 @@ final class EpilogJobBuilder {
     return value;
   }
 
-  private static double px(double millimetres) { return Util.mm2px(millimetres, DPI); }
+  private static double px(double millimetres, int dpi) { return Util.mm2px(millimetres, dpi); }
 
   private static String cleanTitle(String value) {
     String clean = value == null ? "modcut-job" : value.replaceAll("[\\r\\n\\p{Cntrl}]", " ").trim();

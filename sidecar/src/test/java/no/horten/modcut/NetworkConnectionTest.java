@@ -77,23 +77,32 @@ class NetworkConnectionTest {
 
   @Test
   void uploadsAnEpilogVectorJobThroughLpd() throws Exception {
+    uploadEpilogVectorJob("Epilog Zing", "Epilog Zing LPD", "zing");
+  }
+
+  @Test
+  void uploadsAHelixVectorJobThroughFakeLpd() throws Exception {
+    uploadEpilogVectorJob("epilog-helix", "Epilog Helix LPD", "helix");
+  }
+
+  private void uploadEpilogVectorJob(String driver, String identity, String machineId) throws Exception {
     try (var laser = new FakeEpilogLpdServer(); var controller = new MachineController(json)) {
       var connect = json.readTree("""
-          {"dryRun":false,"machine":{"id":"zing","name":"Epilog Zing","driver":"Epilog Zing","bedW":600,"bedH":300,
+          {"dryRun":false,"machine":{"id":"%s","name":"Epilog test","driver":"%s","bedW":600,"bedH":300,
            "maxFeed":12000,"zAxis":{"enabled":false},"conn":{"type":"network","host":"127.0.0.1","port":%d,
            "connectTimeoutMs":1000,"responseTimeoutMs":2000}}}
-          """.formatted(laser.port()));
+          """.formatted(machineId, driver, laser.port()));
       var connected = controller.handle("connect", connect);
       assertTrue(connected.path("connected").asBoolean());
       assertEquals("network-lpd", connected.path("connectionType").asText());
-      assertEquals("Epilog Zing LPD", connected.path("deviceIdentity").asText());
+      assertEquals(identity, connected.path("deviceIdentity").asText());
 
       var job = json.readTree("""
-          {"machineId":"zing","filename":"network-test.prn","confirmed":true,
+          {"machineId":"%s","filename":"network-test.prn","confirmed":true,
            "gcodeLines":["G21","G90","M5","G0 X1 Y1","M4 S420","G1 X20 Y20 F1200","M5"],
            "laserSegments":[{"power":42,"speed":17,"frequency":2500,"focus":-1,
             "points":[{"x":1,"y":1},{"x":20,"y":20}]}]}
-          """);
+          """.formatted(machineId));
       assertTrue(controller.handle("startJob", job).path("started").asBoolean());
       // LibLaserCut's Epilog LPD implementation polls acknowledgements in one-second intervals.
       long deadline = System.currentTimeMillis() + 15_000;

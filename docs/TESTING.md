@@ -287,9 +287,9 @@ emergency stop; it does not replace it.
 
 ## Current M1 limits
 
-- Real execution supports GRBL and Epilog Zing. Epilog raster-style paths are
-  currently emitted as ordered HPGL vectors; native Epilog raster packing is a
-  separate optimization still to be completed.
+- Real execution supports GRBL, Epilog Zing and Epilog Helix. Epilog engraving
+  uses native binary or grayscale raster parts where selected; Helix remains
+  hardware-pending until the acceptance procedure below is completed.
 - The first physical run must validate controller-specific homing and axis
   orientation; modCut does not automatically issue `$H`.
 - Job streaming waits for GRBL `ok` after every line for conservative flow
@@ -300,3 +300,20 @@ emergency stop; it does not replace it.
 - Raster output above 8,000,000 samples, or vector output above approximately
   1,000,000 sampled points, is blocked with a visible quality warning instead
   of being silently reduced.
+
+## Epilog Helix physical acceptance (hardware pending)
+
+1. Confirm the exact bed width/height on the machine and enter them manually;
+   do not copy an assumed Helix size. Confirm network host and port 515.
+2. Keep Dry run enabled. Run a small score, closed vector cut, binary raster,
+   grayscale raster and laser-off frame at each intended DPI; verify bounds,
+   focus and generated job completion.
+3. Disconnect laser power where the machine procedure permits, disable Dry run,
+   upload the frame and confirm it appears in the Helix queue with correct size.
+4. With extraction and supervision active, use scrap and conservative settings.
+   Upload a 600-DPI vector score, then 75/150-DPI binary and grayscale rasters,
+   checking orientation, dimensions and focus offsets within -12.6…12.6 mm.
+5. Verify ModCut reports “uploaded to queue”; start each job at the panel. Test
+   the physical stop control—do not expect ModCut cancel after LPD handoff.
+6. Record model/firmware, measured output, all DPI results and any warnings
+   before marking Helix physically verified.

@@ -139,3 +139,11 @@ Local-network setup and troubleshooting are in [`docs/NETWORK.md`](docs/NETWORK.
 The sidecar is deliberately the final safety boundary. Renderer-generated G-code
 is treated as untrusted input and is revalidated in Java immediately before
 framing or execution.
+
+## Machine drivers
+
+Machine profiles now bind stable controller IDs to user-facing manufacturer and
+model presets. The implemented catalog is Generic/Dummy, Generic/GRBL,
+Epilog/Zing and Epilog/Helix. Zing is physically verified; Helix is implemented
+and automatically tested but awaits physical verification. See
+[`docs/DRIVERS.md`](docs/DRIVERS.md) for capabilities and extension guidance.

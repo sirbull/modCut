@@ -16,9 +16,10 @@ try {
   console.log("PASS ping ->", JSON.stringify(pong));
 
   const drivers = await sidecar.call("listDrivers");
-  assert.deepEqual(drivers.drivers, ["Dummy", "Grbl", "Epilog Zing"]);
+  assert.deepEqual(drivers.drivers.map((driver) => driver.id), ["dummy", "grbl", "epilog-zing", "epilog-helix"]);
+  assert.equal(drivers.drivers.find((driver) => driver.id === "epilog-helix").defaultPort, 515);
   assert.equal(drivers.library, "LibLaserCut");
-  console.log("PASS listDrivers ->", drivers.drivers.join(", "));
+  console.log("PASS listDrivers ->", drivers.drivers.map((driver) => driver.displayName).join(", "));
 
   const lines = ["G21", "G90", "M5", "G0 X1 Y1", "M4 S500", "G1 X2 Y2 F1200", "M5"];
   const gcode = await sidecar.call("buildJob", { ops: [{ op: "Cut" }], gcodeLines: lines, bedWidth: 600, bedHeight: 400, maxFeed: 12000 });

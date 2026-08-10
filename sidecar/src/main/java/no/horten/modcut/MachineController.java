@@ -6,8 +6,8 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fazecast.jSerialComm.SerialPort;
 import de.thomas_oster.liblasercut.LaserJob;
+import de.thomas_oster.liblasercut.LaserCutter;
 import de.thomas_oster.liblasercut.ProgressListener;
-import de.thomas_oster.liblasercut.drivers.EpilogZing;
 import de.thomas_oster.liblasercut.drivers.Grbl;
 import java.io.IOException;
 import java.net.ConnectException;
@@ -31,7 +31,8 @@ final class MachineController implements AutoCloseable {
   });
   private final AtomicBoolean cancelRequested = new AtomicBoolean();
   private volatile GrblTransport transport;
-  private volatile EpilogZing epilog;
+  private volatile LaserCutter epilog;
+  private volatile DriverCatalog.Descriptor connectedDescriptor = DriverCatalog.DUMMY;
   private volatile String connectedDriver = "";
   private volatile String connectionTarget = "";
   private volatile String connectionIdentity = "";
@@ -79,19 +80,7 @@ final class MachineController implements AutoCloseable {
     return out;
   }
 
-  private ObjectNode listDrivers() {
-    Grbl libLaserCutDriver = new Grbl();
-    ObjectNode out = json.createObjectNode();
-    ArrayNode drivers = out.putArray("drivers");
-    drivers.add("Dummy");
-    drivers.add("Grbl");
-    EpilogZing epilogDriver = new EpilogZing();
-    drivers.add("Epilog Zing");
-    out.put("grblModel", libLaserCutDriver.getModelName());
-    out.put("epilogModel", epilogDriver.getModelName());
-    out.put("library", "LibLaserCut");
-    return out;
-  }
+  private ObjectNode listDrivers() { return DriverCatalog.json(json); }
 
   private ObjectNode listSerialPorts() {
     ObjectNode out = json.createObjectNode();
@@ -129,15 +118,17 @@ final class MachineController implements AutoCloseable {
     if (!machineZEnabled && Math.abs(machineZGlobalOffset) > 0.0001) {
       throw new IllegalArgumentException("Globalt fokusavvik krever aktivert Z-akse.");
     }
-    String driver = machine.path("driver").asText("Dummy");
-    boolean epilogDriver = driver.equalsIgnoreCase("Epilog Zing");
+    String driver = machine.path("driverId").asText(machine.path("driver").asText("dummy"));
+    DriverCatalog.Descriptor descriptor = DriverCatalog.resolve(driver);
+    driver = descriptor.id();
+    boolean epilogDriver = descriptor.epilog();
     if (epilogDriver && machineZEnabled) {
-      throw new IllegalArgumentException("Epilog Zing bruker programvarefokus i jobben, ikke GRBL Z-aksekommandoer.");
+      throw new IllegalArgumentException("Epilog bruker programvarefokus i jobben, ikke GRBL Z-aksekommandoer.");
     }
-    dryRun = params.path("dryRun").asBoolean(true) || driver.equalsIgnoreCase("Dummy");
+    dryRun = params.path("dryRun").asBoolean(true) || driver.equals("dummy");
     JsonNode conn = machine.path("conn");
     String type = conn.path("type").asText("usb");
-    int defaultPort = epilogDriver ? 515 : 23;
+    int defaultPort = descriptor.defaultPort() == null ? 23 : descriptor.defaultPort();
     String target = type.equals("network")
         ? conn.path("host").asText("?") + ":" + conn.path("port").asInt(defaultPort)
         : conn.path("serial").asText("USB");
@@ -145,7 +136,7 @@ final class MachineController implements AutoCloseable {
       transport = GrblTransport.dryRun(machine.path("name").asText("maskin") + " · " + target);
       connectionTarget = transport.description();
     } else {
-      if (driver.equalsIgnoreCase("Grbl")) {
+      if (driver.equals("grbl")) {
         transport = type.equals("network")
             ? GrblTransport.network(
                 conn.path("host").asText(),
@@ -156,25 +147,20 @@ final class MachineController implements AutoCloseable {
         connectionTarget = transport.description();
         connectionIdentity = transport.identity();
       } else if (epilogDriver) {
-        if (!type.equals("network")) throw new IllegalArgumentException("Epilog Zing krever Network (Ethernet / Wi-Fi).");
+        if (!type.equals("network")) throw new IllegalArgumentException("Epilog-driveren krever Network (Ethernet / Wi-Fi).");
         String host = normalizeNetworkHost(conn.path("host").asText());
         int port = conn.path("port").asInt(515);
         int timeout = boundedInt(conn, "connectTimeoutMs", 3_000, 250, 30_000);
         probeTcpService(host, port, timeout);
-        EpilogZing zing = new EpilogZing(host);
-        zing.setPort(port);
-        zing.setBedWidth(machineBedWidth);
-        zing.setBedHeight(machineBedHeight);
-        zing.setAutoFocus(false);
-        zing.setHideSoftwareFocus(false);
-        epilog = zing;
+        epilog = descriptor.createEpilog(host, port, machineBedWidth, machineBedHeight);
         connectionTarget = "lpd " + host + ":" + port;
-        connectionIdentity = "Epilog Zing LPD";
+        connectionIdentity = descriptor.displayName() + " LPD";
       } else {
         throw new IllegalArgumentException("Driveren støttes ikke for ekte kjøring: " + driver + ".");
       }
     }
-    connectedDriver = driver;
+    connectedDriver = descriptor.displayName();
+    connectedDescriptor = descriptor;
     connectedMachineId = machineId;
     connectedMachineName = machine.path("name").asText("maskin");
     connectedBedWidth = machineBedWidth;
@@ -219,8 +205,8 @@ final class MachineController implements AutoCloseable {
         point("G0", minX, minY), point("G1", maxX, minY) + " F" + Math.round(frameFeed), point("G1", maxX, maxY),
         point("G1", minX, maxY), point("G1", minX, minY), "M5", "G0 X0 Y0");
     GcodeValidator.Report report = GcodeValidator.validate(frame, connectedBedWidth, connectedBedHeight, connectedMaxFeed);
-    if (connectedDriver.equalsIgnoreCase("Epilog Zing")) {
-      var built = EpilogJobBuilder.frame("modcut-frame.prn", minX, minY, maxX, maxY, connectedBedWidth, connectedBedHeight);
+    if (connectedDescriptor.epilog()) {
+      var built = EpilogJobBuilder.frame("modcut-frame.prn", minX, minY, maxX, maxY, connectedBedWidth, connectedBedHeight, connectedDescriptor);
       startEpilogAsync("modcut-frame.prn", built);
     } else {
       startGrblAsync("frame", frame);
@@ -239,8 +225,8 @@ final class MachineController implements AutoCloseable {
     List<String> lines = lines(params);
     GcodeValidator.Report report = GcodeValidator.validate(lines, connectedBedWidth, connectedBedHeight, connectedMaxFeed,
         connectedZEnabled, connectedZMin, connectedZMax, connectedZFeed);
-    if (connectedDriver.equalsIgnoreCase("Epilog Zing")) {
-      var built = EpilogJobBuilder.build(params, connectedBedWidth, connectedBedHeight);
+    if (connectedDescriptor.epilog()) {
+      var built = EpilogJobBuilder.build(params, connectedBedWidth, connectedBedHeight, connectedDescriptor);
       startEpilogAsync(params.path("filename").asText("job.prn"), built);
     } else {
       startGrblAsync(params.path("filename").asText("job.gcode"), lines);
@@ -293,7 +279,7 @@ final class MachineController implements AutoCloseable {
     jobName = name;
     lastError = "";
     lastResult = "running";
-    EpilogZing activeEpilog = epilog;
+    LaserCutter activeEpilog = epilog;
     boolean simulate = dryRun;
     jobs.submit(() -> {
       try {
@@ -325,7 +311,7 @@ final class MachineController implements AutoCloseable {
 
   private ObjectNode cancelJob() throws IOException {
     if (!running) return status();
-    if (connectedDriver.equalsIgnoreCase("Epilog Zing")) {
+    if (connectedDescriptor.epilog()) {
       throw new IllegalStateException("En Epilog LPD-opplasting kan ikke nødstoppes fra modCut. Bruk maskinens fysiske stoppknapp.");
     }
     cancelRequested.set(true);
@@ -355,8 +341,8 @@ final class MachineController implements AutoCloseable {
     out.put("connectedDriver", connected ? connectedDriver : "");
     out.put("connectedZEnabled", connected && connectedZEnabled);
     out.put("connectedZGlobalOffset", connected ? connectedZGlobalOffset : 0);
-    out.put("canEmergencyStop", connected && !connectedDriver.equalsIgnoreCase("Epilog Zing"));
-    out.put("delivery", connectedDriver.equalsIgnoreCase("Epilog Zing") ? "epilog-lpd" : "stream");
+    out.put("canEmergencyStop", connected && !connectedDescriptor.epilog());
+    out.put("delivery", connectedDescriptor.epilog() ? "epilog-lpd" : "stream");
     return out;
   }
 
@@ -456,7 +442,7 @@ final class MachineController implements AutoCloseable {
     try { failed.close(); } catch (Exception ignored) {}
   }
 
-  private synchronized void dropEpilog(EpilogZing failed) {
+  private synchronized void dropEpilog(LaserCutter failed) {
     if (epilog != failed) return;
     epilog = null;
     clearConnectedMachine();
@@ -468,6 +454,7 @@ final class MachineController implements AutoCloseable {
     connectedMachineId = "";
     connectedMachineName = "";
     connectedDriver = "";
+    connectedDescriptor = DriverCatalog.DUMMY;
     connectionTarget = "";
     connectionIdentity = "";
     connectedBedWidth = 600;
@@ -482,7 +469,7 @@ final class MachineController implements AutoCloseable {
 
   public void close() {
     cancelRequested.set(true);
-    if (running && transport != null && !connectedDriver.equalsIgnoreCase("Epilog Zing")) {
+    if (running && transport != null && !connectedDescriptor.epilog()) {
       try { transport.emergencyStop(); } catch (Exception ignored) {}
     }
     try { closeTransport(); } catch (Exception ignored) {}

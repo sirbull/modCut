@@ -6,14 +6,16 @@ import { RASTER_MODES, applyProcessProfile, combinedFocusOffset, normalizeProces
 import { groupJobOperations, jobFilename } from "./job-split.mjs";
 import { defaultMotionTiming, motionTimingForMachine } from "./motion-timing.mjs";
 import { openModal } from "./ui.js";
+import { DRIVER_CATALOG, MACHINE_PRESETS as MACHINE_CATALOG_PRESETS, capabilitiesForMachine, driverById, normalizeMachineProfile } from "./driver-catalog.mjs";
 
 const $ = (id) => document.getElementById(id);
 const OPS = OPERATIONS;
 const DITHERS = RASTER_MODES;
 const clampSpeedPct = (v) => Math.max(1, Math.min(100, Number(v) || 1));
 const safeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
-const isEpilogDriver = (driver) => /^epilog\s+zing$/i.test(String(driver || ""));
-const defaultNetworkPort = (driver) => isEpilogDriver(driver) ? 515 : 23;
+const capabilitiesForDriver = (driver) => driverById(normalizeMachineProfile({ driver, conn: {} }).driverId) || DRIVER_CATALOG[0];
+const isEpilogDriver = (driver) => capabilitiesForDriver(driver).protocol.startsWith("LPD");
+const defaultNetworkPort = (driver) => capabilitiesForDriver(driver).defaultPort || 23;
 
 // --- persisted stores (seeded from presets on first run, then fully editable) --
 const F = 20000; // default beam frequency (Hz)
@@ -27,7 +29,7 @@ const MATERIAL_PRESETS = [
   { id: "mdf4", name: "MDF 4 mm",     ops: { Cut: { power: 85, speed: 15, freq: F }, Engrave: { power: 45, speed: 60, freq: F }, Score: { power: 30, speed: 35, freq: F } } },
   { id: "card", name: "Cardboard",    ops: { Cut: { power: 45, speed: 45, freq: F }, Engrave: { power: 18, speed: 80, freq: F }, Score: { power: 12, speed: 50, freq: F } } },
 ];
-const MACHINE_PRESETS = [{ id: "dummy", name: "Dummy (offline)", driver: "Dummy", conn: { type: "usb", serial: "", baud: 115200 }, bedW: 600, bedH: 400, maxFeed: 12000, adv: { flipX: false, flipY: true, home: "front-left" } }];
+const MACHINE_PRESETS = [{ ...MACHINE_CATALOG_PRESETS[0], id: "dummy", driver: "dummy", conn: { type: "usb", serial: "", baud: 115200 }, maxFeed: 12000, adv: { flipX: false, flipY: true, home: "front-left" } }];
 function loadStore(key, presets) {
   try { const s = JSON.parse(localStorage.getItem(key)); return Array.isArray(s) && s.length ? s : structuredClone(presets); }
   catch { return structuredClone(presets); }
@@ -50,6 +52,7 @@ function normalizeMaterialSpeeds() {
 normalizeMaterialSpeeds();
 function normalizeMachines() {
   for (const m of machines) {
+    Object.assign(m, normalizeMachineProfile(m));
     if (m.conn?.type === "network") {
       const hostWithPort = String(m.conn.host || "").trim().match(/^([^:]+):(\d+)$/);
       if (hostWithPort) {
@@ -57,7 +60,7 @@ function normalizeMachines() {
         if (!m.conn.port || Number(m.conn.port) === 23) m.conn.port = Number(hostWithPort[2]);
       }
       if (/epilog.*zing|zing/i.test(m.name || "") && String(m.driver).toLowerCase() === "grbl" && Number(m.conn.port) === 515) {
-        m.driver = "Epilog Zing";
+        m.driverId = "epilog-zing"; m.driver = "epilog-zing";
       }
     }
     if (!m.maxFeed) m.maxFeed = 12000;
@@ -84,7 +87,7 @@ const state = {
   gridYmm: +(localStorage.getItem("modcut_gridY") || 10),
   gridUnit: localStorage.getItem("modcut_gridUnit") || "cm",
 };
-let drivers = ["Dummy"];
+let drivers = DRIVER_CATALOG;
 let machineStatus = { connected: false, running: false, dryRun: true, lastResult: "idle", progress: 0 };
 let statusPollBusy = false;
 let reportedResult = "idle";
@@ -193,7 +196,7 @@ const materialDefaultsFor = (op) => {
 };
 const defaultsFor = (op) => ({ ...(OPERATION_DEFAULTS[op] || materialDefaultsFor(op)) });
 const defaultUsesMaterial = (op) => !OPERATION_DEFAULTS[op];
-const driverExt = (d) => (isEpilogDriver(d) ? ".prn" : /ruida/i.test(d) ? ".rd" : ".gcode");
+const driverExt = (d) => capabilitiesForDriver(d).fileExtension;
 
 // --- collapsible side panel sections ---------------------------------------
 const COLLAPSED_SECTIONS_KEY = "modcut_collapsed_sections";
@@ -739,7 +742,7 @@ function initializeDocumentTabs() {
 // --- layers -----------------------------------------------------------------
 const newLayer = (color, op, raster = false, key = null) => ({
   key, color, raster, op: raster ? "Engrave" : op, output: true,
-  dpi: isEpilogDriver(machine().driver) ? 500 : 300,
+  dpi: capabilitiesForMachine(machine()).nativeRaster ? capabilitiesForMachine(machine()).vectorDpi : 300,
   dither: raster ? "Grayscale" : "Jarvis", bottomUp: true, engraveMode: "auto",
   ...defaultsFor(raster ? "Engrave" : op),
   profileId: defaultUsesMaterial(raster ? "Engrave" : op) ? "material" : null,
@@ -866,7 +869,7 @@ function layerRow(l, layerIndex) {
   if (l.raster && !canAssignRasterToOperation(l.op)) l.op = "Engrave";
   const engrave = l.op === "Engrave";
   if (!l.engraveMode || !["auto", "native", "vector"].includes(l.engraveMode)) l.engraveMode = "auto";
-  const epilogRasterDpis = [100, 200, 250, 400, 500, 1000];
+  const epilogRasterDpis = capabilitiesForMachine(machine()).rasterDpis;
   if (engrave && isEpilogDriver(machine().driver) && !epilogRasterDpis.includes(Number(l.dpi))) {
     l.dpi = epilogRasterDpis.reduce((best, dpi) => Math.abs(dpi - Number(l.dpi || 500)) < Math.abs(best - Number(l.dpi || 500)) ? dpi : best, 500);
   }
@@ -1171,8 +1174,10 @@ const machineFields = (m) => {
   const timing = motionTimingForMachine(m || { driver: drivers[0], maxFeed: 12000 });
   return [
   { key: "name", label: "Name", value: m?.name, placeholder: "e.g. Workshop laser", required: true },
-  { key: "driver", label: "Driver", type: "select", options: drivers, value: m?.driver },
-  { key: "type", label: "Connection", type: "select", options: [{ value: "network", label: "Network (Ethernet / Wi-Fi)" }, { value: "usb", label: "USB / Serial" }], value: m?.conn.type },
+  { key: "manufacturer", label: "Manufacturer", type: "select", options: [...new Set(MACHINE_CATALOG_PRESETS.map((p) => p.manufacturer))], value: m?.manufacturer || "Generic", sync: (values, previous) => { const preset=MACHINE_CATALOG_PRESETS.find((p)=>p.id===values.model); return !previous || previous.model !== values.model ? preset?.manufacturer : undefined; } },
+  { key: "model", label: "Model / preset", type: "select", options: MACHINE_CATALOG_PRESETS.map((p) => ({ value: p.id, label: `${p.manufacturer} / ${p.model}` })), value: MACHINE_CATALOG_PRESETS.find((p) => p.manufacturer === m?.manufacturer && p.model === m?.model)?.id || "generic-dummy" },
+  { key: "driver", label: "Controller / protocol driver", type: "select", options: drivers.map((d) => ({ value: d.id, label: `${d.displayName} — ${d.protocol}` })), value: m?.driverId || m?.driver || "dummy", sync: (values, previous) => { const preset=MACHINE_CATALOG_PRESETS.find((p)=>p.id===values.model); return !previous || previous.model !== values.model ? preset?.driverId : undefined; } },
+  { key: "type", label: "Connection", type: "select", options: [{ value: "network", label: "Network (Ethernet / Wi-Fi)" }, { value: "usb", label: "USB / Serial" }], value: m?.conn.type, sync: (values, previous) => !previous || previous.driver !== values.driver ? capabilitiesForDriver(values.driver).connectionTypes[0] : undefined },
   { key: "host", label: "Host / IP", placeholder: "192.168.1.50 or laser.local", value: m?.conn.host, required: true, showIf: (v) => v.type === "network" },
   {
     key: "netport", label: "Port (Epilog: 515 · GRBL: usually 23)", type: "number",
@@ -1211,7 +1216,7 @@ const machineFields = (m) => {
 const machineFrom = (v, id) => {
   const defaults = defaultMotionTiming(v.driver, v.maxFeed);
   return {
-    id, name: v.name.trim(), driver: v.driver,
+    id, name: v.name.trim(), manufacturer: MACHINE_CATALOG_PRESETS.find((p) => p.id === v.model)?.manufacturer || v.manufacturer, model: MACHINE_CATALOG_PRESETS.find((p) => p.id === v.model)?.model || v.model, driverId: v.driver, driver: v.driver,
     conn: v.type === "network"
       ? { type: "network", host: v.host.trim(), port: Math.round(v.netport), connectTimeoutMs: v.connectTimeoutMs || 3000, responseTimeoutMs: v.responseTimeoutMs || 30000 }
       : { type: "usb", serial: v.serial?.trim() || "", baud: v.baud },
