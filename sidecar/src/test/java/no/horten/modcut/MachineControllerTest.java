@@ -98,28 +98,6 @@ class MachineControllerTest {
   }
 
   @Test
-  void completesHelixVectorAndFrameJobsInDryRun() throws Exception {
-    try (var controller = new MachineController(json)) {
-      var connect = json.readTree("""
-          {"dryRun":true,"machine":{"id":"helix","name":"Epilog Helix","driverId":"epilog-helix","bedW":600,"bedH":300,
-           "maxFeed":12000,"zAxis":{"enabled":false},"conn":{"type":"network","host":"192.0.2.1","port":515}}}
-          """);
-      assertEquals("Epilog Helix", controller.handle("connect", connect).path("connectedDriver").asText());
-      var frame = json.readTree("{\"machineId\":\"helix\",\"minX\":1,\"minY\":1,\"maxX\":20,\"maxY\":20}");
-      assertTrue(controller.handle("frameJob", frame).path("started").asBoolean());
-      long deadline = System.currentTimeMillis() + 2000;
-      while (controller.status().path("running").asBoolean() && System.currentTimeMillis() < deadline) Thread.sleep(5);
-      var job = json.readTree("""
-          {"machineId":"helix","filename":"helix.prn","confirmed":false,
-           "gcodeLines":["G21","G90","M5","G0 X1 Y1","G1 X2 Y2 F1000"],
-           "laserSegments":[{"operation":"Cut","power":10,"speed":10,"frequency":500,"focus":0,
-            "points":[{"x":1,"y":1},{"x":2,"y":2}]}]}
-          """);
-      assertTrue(controller.handle("startJob", job).path("started").asBoolean());
-    }
-  }
-
-  @Test
   void validatesZAgainstTheConnectedMachineSnapshot() throws Exception {
     try (var controller = new MachineController(json)) {
       var connect = json.readTree("""

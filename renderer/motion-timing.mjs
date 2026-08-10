@@ -12,15 +12,9 @@ export const EPILOG_ZING_TIMING = Object.freeze({
   rasterLineDelayS: 0.08,
   jobOverheadS: 3,
 });
-export const EPILOG_HELIX_TIMING = Object.freeze({
-  vectorSpeedMmS: 21.3, travelSpeedMmS: 163, rasterSpeedMmS: 900,
-  vectorAccelerationMmS2: 250, travelAccelerationMmS2: 1200, rasterAccelerationMmS2: 4000,
-  vectorPathDelayS: 0.008, rasterLineDelayS: 0.08, jobOverheadS: 3,
-});
 
 export function defaultMotionTiming(driver, maxFeed = 12000) {
-  if (/^(epilog\s+zing|epilog-zing)$/i.test(String(driver || ""))) return { ...EPILOG_ZING_TIMING };
-  if (/^(epilog\s+helix|epilog-helix)$/i.test(String(driver || ""))) return { ...EPILOG_HELIX_TIMING };
+  if (/^epilog\s+zing$/i.test(String(driver || ""))) return { ...EPILOG_ZING_TIMING };
   const maximum = Math.max(1, Number(maxFeed) || 12000) / 60;
   return {
     vectorSpeedMmS: maximum,

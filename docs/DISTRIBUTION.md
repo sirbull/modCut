@@ -73,11 +73,3 @@ Secrets; never commit certificates or passwords.
 
 The current hardware acceptance scope is GRBL. Ruida and Epilog are visible as
 future targets but are not enabled for real execution.
-
-## Driver status in releases
-
-Release notes must distinguish integrated/automated support from physical
-verification. Epilog Zing is physically verified. Epilog Helix is included as
-implemented and hardware-pending; releases must not claim generic Epilog,
-Ruida, or Chinese-laser support. The pinned LibLaserCut dependency must not be
-updated without rerunning driver capability and fake-transport tests.

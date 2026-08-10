@@ -67,10 +67,3 @@ Network execution currently supports GRBL-compatible raw TCP streams, including
 controllers or bridges that return standard GRBL status and `ok` responses.
 Ruida, LAOS/TFTP, HTTP upload and WebSocket protocols require separate drivers
 and are not treated as interchangeable with GRBL/TCP or Epilog LPD.
-
-## Epilog LPD
-
-Both integrated Epilog presets use LPD on TCP port 515, but select distinct
-`epilog-zing` and `epilog-helix` drivers. A successful upload only places the
-job in the machine queue. It cannot be software-emergency-stopped by ModCut;
-use the physical machine control. Do not expose port 515 to the public Internet.

@@ -10,33 +10,12 @@ import de.thomas_oster.liblasercut.VectorPart;
 import de.thomas_oster.liblasercut.RasterPart;
 import de.thomas_oster.liblasercut.drivers.EpilogEngraveProperty;
 import de.thomas_oster.liblasercut.drivers.EpilogZing;
-import de.thomas_oster.liblasercut.drivers.EpilogHelix;
 import de.thomas_oster.liblasercut.platform.Util;
 import de.thomas_oster.liblasercut.properties.PowerSpeedFocusFrequencyProperty;
 import org.junit.jupiter.api.Test;
 
 class EpilogJobBuilderTest {
   private final ObjectMapper json = new ObjectMapper();
-
-  @Test
-  void usesTheHelixDriverAndItsOwnVectorAndRasterResolutions() throws Exception {
-    assertTrue(DriverCatalog.HELIX.createEpilog("localhost", 515, 100, 100) instanceof EpilogHelix);
-    assertTrue(DriverCatalog.ZING.createEpilog("localhost", 515, 100, 100) instanceof EpilogZing);
-    var vector = json.readTree("""
-        {"laserSegments":[{"operation":"Score","power":10,"speed":20,"frequency":500,"focus":0,
-        "points":[{"x":1,"y":1},{"x":2,"y":2}]}]}
-        """);
-    var built = EpilogJobBuilder.build(vector, 100, 100, DriverCatalog.HELIX);
-    assertEquals(600, built.job().getParts().get(0).getDPI());
-    assertTrue(EpilogJobBuilder.frame("frame.prn", 1, 1, 2, 2, 100, 100, DriverCatalog.HELIX).job().getParts().get(0) instanceof VectorPart);
-
-    var invalidRaster = json.readTree("""
-        {"laserSegments":[{"operation":"Engrave","raster":true,"engraveMode":"native","dpi":500,
-        "dither":"Jarvis","power":10,"maxPower":10,"speed":20,"frequency":500,"focus":0,
-        "points":[{"x":1,"y":1},{"x":2,"y":1}]}]}
-        """);
-    assertThrows(IllegalArgumentException.class, () -> EpilogJobBuilder.build(invalidRaster, 100, 100, DriverCatalog.HELIX));
-  }
 
   @Test
   void buildsBoundedLibLaserCutVectorJobWithSoftwareFocus() throws Exception {
