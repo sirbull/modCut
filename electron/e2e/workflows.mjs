@@ -312,6 +312,13 @@ export async function runWorkflows(client) {
     { key: "raster:#000000", kind: "Raster", op: "Engrave", choices: ["Engrave", "Ignore"] },
     { key: "vector:#000000", kind: "Vector", op: "Cut", choices: ["Cut", "Engrave", "Score", "Ignore"] },
   ], "same-color PDF raster and thick vector strokes must remain independently assignable process layers");
+  const thickVectorEngrave = await evaluate("(() => { let row=[...document.querySelectorAll('.clayer')].find(item=>item.dataset.layerKey==='vector:#000000'),op=row.querySelector('.clayer__op'); op.value='Engrave'; op.dispatchEvent(new Event('change',{bubbles:true})); row=[...document.querySelectorAll('.clayer')].find(item=>item.dataset.layerKey==='vector:#000000'); return row.querySelector('[data-quality]').textContent; })()");
+  const thickVectorRows = Number(thickVectorEngrave.match(/([0-9,]+) filled-vector scan lines/)?.[1].replaceAll(",", ""));
+  assert.ok(thickVectorRows > 5, "Engrave quality must include multiple scan lines across an open vector stroke's painted width");
+  await evaluate("(() => { const target='vector:#000000',keys=[...document.querySelectorAll('.clayer')].map(row=>row.dataset.layerKey).filter(key=>key!==target); for(const key of keys){const row=[...document.querySelectorAll('.clayer')].find(item=>item.dataset.layerKey===key),toggle=row?.querySelector('.toggle'); if(toggle?.getAttribute('aria-checked')==='true') toggle.click();} document.querySelector('#simulate').click(); })()");
+  await wait(200);
+  assert.ok(await evaluate("paper.project.layers.at(-1).children[0]?.children.length || 0") > 5, "simulation must contain multiple raster scan paths for the thick open vector stroke");
+  await evaluate("document.querySelector('#simClose').click()");
   const tiffPreview = await evaluate(`import('./tiffimport.js').then(module => { const result=module.tiffToPng(${JSON.stringify(tiffDataUrl)}); return {frameCount:result.frameCount,png:result.dataUrl.startsWith('data:image/png;base64,')}; })`);
   assert.deepEqual(tiffPreview, { frameCount: 1, png: true }, "TIFF import must decode its first frame to a PNG raster");
 

@@ -76,6 +76,10 @@ EPS/PostScript, CDR, PSD, G-code/NC and multi-page PDF/TIFF import are not
 currently supported. Existing machine output is deliberately not treated as an
 editable design source.
 
+Vector stroke width never determines whether artwork is recognized as vector.
+Cut and Score follow the center path once, while Engrave reproduces the painted
+area, including fill, stroke width, caps, joins and dash patterns.
+
 The file picker includes **All files** so an attempted unsupported import can
 show a concise dialog with the complete supported-format list. A non-PDF-compatible
 AI file gets a dedicated explanation with Illustrator's **Create PDF Compatible
