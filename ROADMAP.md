@@ -46,6 +46,9 @@ the same commit that completes an item.
 
 ## Recently completed
 
+- [x] Dedicated non-destructive engraving image editor with direct-manipulation
+  crop, tone/detail controls, reusable presets, five engraving style families,
+  physical-DPI warnings and shared preview/laser processing.
 - [x] Portable `.modcut` documents with embedded vector/raster design, layers,
   operations and document settings, separate from local machine connections and libraries.
 - [x] SVG/SVGZ, common 2D DXF and HP-GL/PLT vector import, plus PNG, JPEG, BMP, GIF,

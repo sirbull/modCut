@@ -8,6 +8,10 @@ import {
   posterizeGray,
   tintGray,
 } from "./raster-processing.mjs";
+import {
+  normalizeEngravingRecipe,
+  processEngravingImage,
+} from "./engraving-recipe.mjs";
 import { itemLayerColor, itemLayerKey, setItemLayerColor } from "./layer-model.mjs";
 import { VECTOR_SAMPLE_STEP_MM, assessOutputQuality, rasterGrid } from "./output-quality.mjs";
 import { combinedFocusOffset } from "./process-profiles.mjs";
@@ -175,7 +179,10 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     resetGroupFocus();
     pushHistory();
     designLayer.activate();
-    const raster = new paper.Raster({ source: dataUrl, position: P(bedWmm / 2, bedHmm / 2) });
+    // Register load/error handlers before assigning the source. A decoded or
+    // cached data URL can otherwise complete between construction and handler
+    // assignment, leaving the raster on the bed but never selected/finalized.
+    const raster = new paper.Raster({ position: P(bedWmm / 2, bedHmm / 2) });
     raster.data.modcutRaster = true;
     raster.data.modcutColor = "#000000";
     raster.data.originalDataUrl = dataUrl;
@@ -198,6 +205,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
         raster.remove();
         reject(new Error("The raster image could not be decoded."));
       };
+      raster.source = dataUrl;
     });
   }
   function getDesign() {
@@ -490,41 +498,56 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
 
   const clamp = (v, min, max) => Math.max(min, Math.min(max, Number(v)));
   function applyRasterSettings(raster) {
-    if (!raster || raster.className !== "Raster") return;
+    if (!raster || raster.className !== "Raster") return Promise.resolve(false);
     const original = raster.data.originalDataUrl || (typeof raster.toDataURL === "function" ? raster.toDataURL() : null);
-    if (!original) return;
+    if (!original) return Promise.resolve(false);
     const settings = normalizeRasterSettings(raster.data.rasterSettings);
     raster.data.rasterSettings = settings;
+    const recipe = normalizeEngravingRecipe(raster.data.engravingRecipe, settings, raster.data.rasterMode || "Grayscale");
     const token = (raster.data.renderToken || 0) + 1;
     raster.data.renderToken = token;
     const img = new Image();
+    let resolveRender;
+    const completed = new Promise((resolve) => { resolveRender = resolve; });
     img.onload = () => {
-      if (!raster.data || raster.data.renderToken !== token) return;
+      if (!raster.data || raster.data.renderToken !== token) { resolveRender(false); return; }
       const c = document.createElement("canvas");
       c.width = img.naturalWidth || img.width;
       c.height = img.naturalHeight || img.height;
       const ctx = c.getContext("2d", { willReadFrequently: true });
       ctx.drawImage(img, 0, 0);
-      const image = ctx.getImageData(0, 0, c.width, c.height);
+      const sourceImage = ctx.getImageData(0, 0, c.width, c.height);
+      const outputWidth = Math.max(1, Math.round(c.width * recipe.crop.width));
+      const outputHeight = Math.max(1, Math.round(c.height * recipe.crop.height));
+      const physicalWidth = Math.max(0.01, raster.bounds.width || outputWidth);
+      const result = processEngravingImage(sourceImage, {
+        width: outputWidth,
+        height: outputHeight,
+        dpi: outputWidth / (physicalWidth / 25.4),
+      }, recipe);
+      const image = ctx.createImageData(result.width, result.height);
       const data = image.data;
-      const { gray } = grayscaleImageData(image, settings);
-      const mode = raster.data.rasterMode || "Grayscale";
-      const grayscaleMode = String(mode).toLowerCase() === "grayscale";
-      const mask = grayscaleMode ? null : ditherMask(gray, image.width, image.height, settings, mode);
       const tinted = !isSelectedLaser(raster);
       const color = logicalColor(raster);
       for (let i = 0, pixel = 0; i < data.length; i += 4, pixel++) {
-        const v = grayscaleMode
-          ? Math.round(posterizeGray(gray[pixel], settings.grayLevels))
-          : (mask[pixel] ? 0 : 255);
+        const v = result.kind === "gray" ? Math.round(result.gray[pixel]) : (result.mask[pixel] ? 0 : 255);
         if (tinted) [data[i], data[i + 1], data[i + 2]] = tintGray(v, color);
         else data[i] = data[i + 1] = data[i + 2] = v;
+        data[i + 3] = 255;
       }
       raster.setImageData(image);
+      if (raster.data.pendingCropCenter) {
+        raster.position = P(raster.data.pendingCropCenter[0], raster.data.pendingCropCenter[1]);
+        delete raster.data.pendingCropCenter;
+      }
       raster.smoothing = false;
+      drawOverlay();
       view.update();
+      resolveRender(true);
     };
+    img.onerror = () => resolveRender(false);
     img.src = original;
+    return completed;
   }
   function reprocessRasters() {
     for (const raster of laserItems().filter((it) => it.className === "Raster" && it.data?.originalDataUrl)) {
@@ -538,6 +561,13 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     }
     return null;
   }
+  function selectedRasterTargets() {
+    return [...selected].flatMap((root) => laserTargets(root)).filter((item) => item.className === "Raster" && item.data?.modcutRaster);
+  }
+  function isSingleRasterSelection() {
+    const targets = [...selected].flatMap((root) => laserTargets(root));
+    return targets.length === 1 && targets[0].className === "Raster" && !!targets[0].data?.modcutRaster;
+  }
   function isSelectedLaser(item) {
     return [...selected].some((root) => firstLaserIn(root, (candidate) => candidate === item));
   }
@@ -549,7 +579,8 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   function endRasterEdit() { if (rasterEditOpen) { rasterEditOpen = false; notifyChange(); } }
   function getRasterSettings() {
     const raster = selectedRaster();
-    return raster ? normalizeRasterSettings(raster.data.rasterSettings) : null;
+    if (!raster) return null;
+    return normalizeEngravingRecipe(raster.data.engravingRecipe, raster.data.rasterSettings, raster.data.rasterMode).adjustments;
   }
   function getRasterMode() {
     const raster = selectedRaster();
@@ -585,6 +616,12 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     if (!raster) return null;
     if (!rasterEditOpen) beginRasterEdit();
     raster.data.rasterSettings = normalizeRasterSettings({ ...raster.data.rasterSettings, ...partial });
+    if (raster.data.engravingRecipe) {
+      raster.data.engravingRecipe = normalizeEngravingRecipe({
+        ...raster.data.engravingRecipe,
+        adjustments: { ...raster.data.engravingRecipe.adjustments, ...partial },
+      }, raster.data.rasterSettings, raster.data.rasterMode);
+    }
     applyRasterSettings(raster);
     notifyChange();
     return getRasterSettings();
@@ -594,9 +631,65 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     if (!raster) return null;
     beginRasterEdit();
     raster.data.rasterSettings = { ...DEFAULT_RASTER_SETTINGS };
+    if (raster.data.engravingRecipe) {
+      raster.data.engravingRecipe = normalizeEngravingRecipe({
+        ...raster.data.engravingRecipe,
+        adjustments: { ...DEFAULT_RASTER_SETTINGS, denoise: 0, enhanceRadius: 1, enhanceAmount: 0 },
+      });
+    }
     applyRasterSettings(raster);
     endRasterEdit();
     return getRasterSettings();
+  }
+
+  function rasterPhysicalFrame(raster, crop) {
+    const halfWidth = Math.max(0.5, raster.width / 2);
+    const halfHeight = Math.max(0.5, raster.height / 2);
+    const left = raster.localToGlobal(P(-halfWidth, 0));
+    const right = raster.localToGlobal(P(halfWidth, 0));
+    const top = raster.localToGlobal(P(0, -halfHeight));
+    const bottom = raster.localToGlobal(P(0, halfHeight));
+    return {
+      width: left.getDistance(right) / crop.width,
+      height: top.getDistance(bottom) / crop.height,
+    };
+  }
+  function getRasterEditorPayload() {
+    if (!isSingleRasterSelection()) return null;
+    const raster = selectedRasterTargets()[0];
+    const recipe = normalizeEngravingRecipe(raster.data.engravingRecipe, raster.data.rasterSettings, raster.data.rasterMode);
+    const frame = rasterPhysicalFrame(raster, recipe.crop);
+    return {
+      dataUrl: raster.data.originalDataUrl,
+      recipe,
+      settings: recipe.adjustments,
+      mode: raster.data.rasterMode || "Grayscale",
+      color: logicalColor(raster),
+      layerKey: logicalLayerKey(raster),
+      widthMm: frame.width * recipe.crop.width,
+      heightMm: frame.height * recipe.crop.height,
+      fullWidthMm: frame.width,
+      fullHeightMm: frame.height,
+    };
+  }
+  async function applyEngravingRecipe(recipeValue) {
+    if (!isSingleRasterSelection()) return false;
+    const raster = selectedRasterTargets()[0];
+    const previous = normalizeEngravingRecipe(raster.data.engravingRecipe, raster.data.rasterSettings, raster.data.rasterMode);
+    const next = normalizeEngravingRecipe(recipeValue, raster.data.rasterSettings, raster.data.rasterMode);
+    const previousCenter = { x: previous.crop.x + previous.crop.width / 2, y: previous.crop.y + previous.crop.height / 2 };
+    const nextCenter = { x: next.crop.x + next.crop.width / 2, y: next.crop.y + next.crop.height / 2 };
+    const localX = ((nextCenter.x - previousCenter.x) / previous.crop.width) * raster.width;
+    const localY = ((nextCenter.y - previousCenter.y) / previous.crop.height) * raster.height;
+    const target = raster.localToGlobal(P(localX, localY));
+    pushHistory();
+    raster.data.pendingCropCenter = [target.x, target.y];
+    raster.data.engravingRecipe = next;
+    raster.data.rasterSettings = normalizeRasterSettings(next.adjustments);
+    if (next.style === "Photo") raster.data.rasterMode = next.photo.mode;
+    const applied = await applyRasterSettings(raster);
+    notifyChange();
+    return applied;
   }
 
   function selectionBounds() {
@@ -1262,6 +1355,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       y: e.clientY,
       hasSelection: roots.length > 0,
       hasRaster: selectionHasRaster(),
+      singleRaster: isSingleRasterSelection(),
       canGroup: roots.length > 1,
       canUngroup: canUngroup(),
       selectionCount: roots.length,
@@ -1767,6 +1861,77 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   function encodeRasterSamples(samples) {
     return btoa(String.fromCharCode(...samples));
   }
+  async function rasterRecipeScan(it, sp, out, compactRows = false) {
+    const image = await loadRasterImageData(it);
+    if (!image) return rasterImageScan(it, sp, out, false);
+    const b = it.bounds;
+    if (!b.width || !b.height) return;
+    const grid = rasterGrid(b.width, b.height, sp.dpi || 300);
+    const recipe = normalizeEngravingRecipe(it.data?.engravingRecipe, it.data?.rasterSettings, sp.dither);
+    const result = processEngravingImage(image, { width: grid.columns, height: grid.rows, dpi: grid.effectiveDpi }, recipe);
+    const rows = Array.from({ length: grid.rows }, (_, index) => Math.max(b.top, b.bottom - index * grid.intervalMm));
+    if (!sp.bottomUp) rows.reverse();
+    let flip = false;
+    for (const y of rows) {
+      const rowIndex = Math.max(0, Math.min(result.height - 1, Math.round(((y - b.top) / b.height) * (result.height - 1))));
+      if (result.kind === "gray") {
+        const samples = result.gray.subarray(rowIndex * result.width, (rowIndex + 1) * result.width);
+        const runs = grayscaleRuns(samples, recipe.adjustments.grayLevels, sp.power);
+        if (compactRows && runs.length) {
+          const powers = new Uint8Array(result.width);
+          const maxPower = Math.max(0, Number(sp.power) || 0);
+          for (let column = 0; column < result.width; column++) {
+            const power = grayToPower(samples[column], recipe.adjustments.grayLevels, maxPower);
+            powers[column] = maxPower > 0 ? Math.round(255 * power / maxPower) : 0;
+          }
+          out.push({
+            pts: [P(flip ? b.right : b.left, y), P(flip ? b.left : b.right, y)], leftToRight: !flip,
+            rasterSamples: encodeRasterSamples(powers), nativeRaster: true, rasterRow: true,
+            speed: sp.speed, power: sp.power, freq: sp.freq, dpi: sp.dpi, dither: "Grayscale", op: "Engrave", raster: true,
+          });
+        } else {
+          const ordered = flip ? runs.slice().reverse() : runs;
+          for (const run of ordered) {
+            let a = P(b.left + (run.start / result.width) * b.width, y);
+            let c = P(b.left + (run.end / result.width) * b.width, y);
+            if (flip) { const swap = a; a = c; c = swap; }
+            out.push({ pts: [a, c], speed: sp.speed, power: run.power, freq: sp.freq, dpi: sp.dpi, dither: "Grayscale", op: "Engrave", raster: true });
+          }
+        }
+      } else {
+        const row = result.mask.subarray(rowIndex * result.width, (rowIndex + 1) * result.width);
+        const runs = [];
+        let start = null;
+        for (let column = 0; column < result.width; column++) {
+          const dark = row[column] === 1;
+          if (dark && start == null) start = column;
+          if ((!dark || column === result.width - 1) && start != null) {
+            runs.push([start, dark && column === result.width - 1 ? column + 1 : column]);
+            start = null;
+          }
+        }
+        const dither = recipe.style === "Photo" ? recipe.photo.mode : recipe.style;
+        if (compactRows && runs.length) {
+          const samples = new Uint8Array(result.width);
+          for (const [startColumn, endColumn] of runs) samples.fill(255, startColumn, endColumn);
+          out.push({
+            pts: [P(flip ? b.right : b.left, y), P(flip ? b.left : b.right, y)], leftToRight: !flip,
+            rasterSamples: encodeRasterSamples(samples), nativeRaster: true, rasterRow: true,
+            speed: sp.speed, power: sp.power, freq: sp.freq, dpi: sp.dpi, dither, op: "Engrave", raster: true,
+          });
+        } else {
+          const ordered = flip ? runs.slice().reverse() : runs;
+          for (const [startColumn, endColumn] of ordered) {
+            let a = P(b.left + (startColumn / result.width) * b.width, y);
+            let c = P(b.left + (endColumn / result.width) * b.width, y);
+            if (flip) { const swap = a; a = c; c = swap; }
+            out.push({ pts: [a, c], speed: sp.speed, power: sp.power, freq: sp.freq, dpi: sp.dpi, dither, op: "Engrave", raster: true });
+          }
+        }
+      }
+      flip = !flip;
+    }
+  }
   async function rasterDitherScan(it, sp, out, compactRows = false) {
     const image = await loadRasterImageData(it);
     if (!image) return rasterImageScan(it, sp, out, false);
@@ -1876,11 +2041,13 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       for (const it of itemsForSpec(sp)) {
         const g = [];
         const compactRows = sp.engraveMode !== "vector" || compactVectorRaster;
-        if (sp.op === "Engrave" && it.className === "Raster" && String(sp.dither).toLowerCase() === "grayscale") await rasterGrayscaleScan(it, sp, g, compactRows);
+        if (sp.op === "Engrave" && it.className === "Raster" && it.data?.engravingRecipe) await rasterRecipeScan(it, sp, g, compactRows);
+        else if (sp.op === "Engrave" && it.className === "Raster" && String(sp.dither).toLowerCase() === "grayscale") await rasterGrayscaleScan(it, sp, g, compactRows);
         else if (sp.op === "Engrave" && it.className === "Raster") await rasterDitherScan(it, sp, g, compactRows);
         else sp.op === "Engrave" ? engraveSeg(it, sp, g, false) : vectorSeg(it, sp, g, false);
         for (const segment of g) {
           segment.zOffset = Number(sp.zOffset) || 0;
+          segment.color = sp.color;
           segment.layerIndex = layerIndex;
           segment.layerPower = Number(sp.power) || 0;
           segment.dpi = Number(sp.dpi) || 300;
@@ -1950,7 +2117,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
         const leftToRight = seg.leftToRight !== false;
         const sampleAt = (index) => samples[leftToRight ? index : samples.length - 1 - index];
         lines.push(`G0 X${fmt(leftToRight ? left : right)} Y${fmt(y)}`);
-        lines.push("M4 S0 ; dynamic raster power");
+        lines.push(`M4 S0 ; dynamic raster power${seg.color ? ` color ${seg.color}` : ""}`);
         const feed = feedFromPct(seg.speed, maxFeed);
         let value = sampleAt(0);
         for (let sample = 1; sample <= samples.length; sample++) {
@@ -1968,7 +2135,10 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       }
       const start = seg.pts[0];
       lines.push(`G0 X${fmt(start.x)} Y${fmt(start.y)}`);
-      lines.push(`M4 S${powerToS(seg.power)} ; ${seg.op} ${Math.round(seg.power || 0)}% power`);
+      // Keep the display colour with the emitted instruction. GRBL ignores
+      // semicolon comments, while the simulator can use this metadata without
+      // deriving another path from the artwork.
+      lines.push(`M4 S${powerToS(seg.power)} ; ${seg.op} ${Math.round(seg.power || 0)}% power${seg.color ? ` color ${seg.color}` : ""}`);
       const feed = feedFromPct(seg.speed, maxFeed);
       for (let i = 1; i < seg.pts.length; i++) {
         const p = seg.pts[i];
@@ -1991,6 +2161,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
         frequency: Number(segment.freq) || 5000,
         focus: combinedFocusOffset(machineFocusOffset, segment.zOffset),
         operation: segment.op,
+        color: segment.color,
         raster: !!segment.raster,
         closed: !!segment.closed,
         layerIndex: Number(segment.layerIndex) || 0,
@@ -2012,31 +2183,147 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     return { lines, laserSegments, opCount: specs.length, segmentCount: segs.length, burnMoves, quality };
   }
   let sim = null;
-  function startSim(specs, timing) {
+  function gcodeWords(line) {
+    const words = {};
+    const source = String(line || "").replace(/\([^)]*\)/g, "").replace(/;.*/, "");
+    for (const match of source.matchAll(/([A-Za-z])\s*([+-]?(?:\d*\.)?\d+(?:[eE][+-]?\d+)?)/g)) {
+      words[match[1].toUpperCase()] = Number(match[2]);
+    }
+    return words;
+  }
+  function gcodeComment(line) {
+    const at = String(line || "").indexOf(";");
+    return at < 0 ? "" : String(line).slice(at + 1).trim();
+  }
+  function gcodeMoves(lines, inputTiming) {
+    const timing = inputTiming || defaultMotionTiming("Dummy", 12000);
+    const moves = [];
+    let point = P(0, 0);
+    let absolute = true;
+    let laserMode = 0;
+    let power = 0;
+    let feed = timing.vectorSpeedMmS * 60;
+    let raster = false;
+    let color = "#555";
+    let sourceId = 0;
+    for (const raw of lines || []) {
+      const comment = gcodeComment(raw);
+      const colorMatch = comment.match(/\bcolor\s+(#[0-9a-f]{3,8})\b/i);
+      if (colorMatch) color = colorMatch[1];
+      const words = gcodeWords(raw);
+      const command = words.G;
+      if (command === 90) { absolute = true; continue; }
+      if (command === 91) { absolute = false; continue; }
+      if (words.F != null && Number.isFinite(words.F)) feed = words.F;
+      if (command === 3 || command === 4 || words.M === 3 || words.M === 4) {
+        laserMode = words.M === 3 || words.M === 4 ? words.M : command;
+        if (words.S != null) power = words.S;
+        raster = /dynamic raster power/i.test(comment);
+        sourceId++;
+        continue;
+      }
+      if (command === 5 || words.M === 5) { laserMode = 0; power = 0; continue; }
+      if (words.S != null) power = words.S;
+      const isRapid = command === 0;
+      const isLinear = command === 1;
+      if (!isRapid && !isLinear) continue;
+      if (words.X == null && words.Y == null) continue; // Z-only moves have no bed position to draw.
+      const next = P(
+        words.X == null ? point.x : absolute ? words.X : point.x + words.X,
+        words.Y == null ? point.y : absolute ? words.Y : point.y + words.Y,
+      );
+      const length = point.getDistance(next);
+      if (length > 0.000001) {
+        const burn = isLinear && laserMode > 0 && power > 0;
+        const maximumSpeed = isRapid ? timing.travelSpeedMmS : raster ? timing.rasterSpeedMmS : timing.vectorSpeedMmS;
+        const acceleration = isRapid ? timing.travelAccelerationMmS2 : raster ? timing.rasterAccelerationMmS2 : timing.vectorAccelerationMmS2;
+        const speed = isRapid ? maximumSpeed : Math.max(0.001, Math.min(maximumSpeed, feed / 60));
+        const plan = trapezoidPlan(length, speed, acceleration);
+        moves.push({ a: point, b: next, duration: Math.max(0.000001, plan.duration), burn, raster, power: power / 10, color, sourceId });
+      }
+      point = next;
+    }
+    return moves;
+  }
+  function nativeProgramMoves(segments, inputTiming) {
+    // Native drivers receive these serialized segments rather than G-code.
+    // They are the exact renderer payload passed to the machine-side builder.
+    const decodeRasterRuns = (segment) => {
+      if (Array.isArray(segment.runs)) return segment.runs.map((run) => ({ ...run, color: segment.color, op: segment.operation }));
+      if (!segment.samples || !segment.points?.length) return [];
+      let samples;
+      try { samples = Uint8Array.from(atob(segment.samples), (value) => value.charCodeAt(0)); } catch { return []; }
+      const left = Math.min(segment.points[0].x, segment.points[segment.points.length - 1].x);
+      const right = Math.max(segment.points[0].x, segment.points[segment.points.length - 1].x);
+      const maximum = Number(segment.maxPower) || Number(segment.power) || 0;
+      const runs = [];
+      let start = 0, value = samples[0] || 0;
+      for (let index = 1; index <= samples.length; index++) {
+        const next = index < samples.length ? samples[index] : -1;
+        if (next === value) continue;
+        if (value > 0) runs.push({
+          left: left + (right - left) * start / samples.length,
+          right: left + (right - left) * index / samples.length,
+          power: maximum * value / 255, color: segment.color, op: segment.operation,
+        });
+        start = index;
+        value = next;
+      }
+      return runs;
+    };
+    const restored = (segments || []).map((segment) => ({
+      pts: (segment.points || []).map((point) => P(point.x, point.y)),
+      speed: segment.speed,
+      power: segment.power,
+      op: segment.operation,
+      color: segment.color,
+      raster: !!segment.raster,
+      nativeRaster: !!segment.rasterRow,
+      leftToRight: segment.points?.[1]?.x >= segment.points?.[0]?.x,
+      y: segment.points?.[0]?.y,
+      runs: decodeRasterRuns(segment),
+      sampleWeight: 1,
+    })).filter((segment) => segment.pts.length >= 2);
+    return buildMoves(restored, inputTiming);
+  }
+  function startSimProgram(programs, timing) {
     stopSim();
     clearSel(); emitSel();
-    const segs = orderSegs(specs);
-    const moves = buildMoves(segs, timing);
+    const sequence = Array.isArray(programs) ? programs : [programs];
+    const moves = [];
+    for (let programIndex = 0; programIndex < sequence.length; programIndex++) {
+      const program = sequence[programIndex];
+      const programMoves = program?.lines?.length
+        ? gcodeMoves(program.lines, timing)
+        : nativeProgramMoves(program?.laserSegments, timing);
+      for (const move of programMoves) move.sourceId = `${programIndex}:${move.sourceId ?? 0}`;
+      if (programMoves.length && Number(timing?.jobOverheadS) > 0) {
+        programMoves.unshift({ a: programMoves[0].a, b: programMoves[0].a, duration: Number(timing.jobOverheadS), burn: false, dwell: true });
+      }
+      moves.push(...programMoves);
+    }
+    return startSimMoves(moves);
+  }
+  function startSimMoves(moves) {
     if (!moves.length) return null;
-    const jobOverhead = Number(timing?.jobOverheadS) || 0;
-    if (jobOverhead > 0) moves.unshift({ a: moves[0].a, b: moves[0].a, duration: jobOverhead, burn: false, dwell: true });
-    // Ghost and completed trail retain each layer's source hue. Completed
-    // strokes are contrast-adjusted so very bright SVG colors (notably CSS
-    // `lime`) remain clearly visible against the white bed.
     simLayer.activate();
     const ghost = new paper.Group();
-    for (const s of segs) {
-      const paths = s.nativeRaster
-        ? s.runs.map((run) => ({ pts: [P(run.left, s.y), P(run.right, s.y)], color: run.color }))
-        : [{ pts: s.pts, color: s.color }];
-      for (const item of paths) {
-        const p = new paper.Path(item.pts);
-        p.strokeColor = item.color || "#8a918e";
-        p.opacity = 0.2;
-        p.strokeWidth = 0.4;
-        p.guide = true;
-        ghost.addChild(p);
+    // Both the ghost and dot are derived from the parsed program; the dot also
+    // traverses every rapid reposition while the ghost shows laser-on moves.
+    let ghostPath = null, ghostSource = null;
+    for (const move of moves) {
+      if (!move.burn) continue;
+      if (ghostPath && ghostSource === move.sourceId) {
+        ghostPath.add(move.b);
+        continue;
       }
+      ghostPath = new paper.Path([move.a, move.b]);
+      ghostSource = move.sourceId;
+      ghostPath.strokeColor = move.color || "#8a918e";
+      ghostPath.opacity = 0.2;
+      ghostPath.strokeWidth = 0.4;
+      ghostPath.guide = true;
+      ghost.addChild(ghostPath);
     }
     const trail = new paper.Group();
     const dot = new paper.Path.Circle(moves[0].a, 2.2);
@@ -2067,6 +2354,16 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       stop: stopSim,
       onProgress: (cb) => { if (sim) sim.cb = cb; },
     };
+  }
+  function startSim(specs, timing) {
+    stopSim();
+    clearSel(); emitSel();
+    const segs = orderSegs(specs);
+    const moves = buildMoves(segs, timing);
+    if (!moves.length) return null;
+    const jobOverhead = Number(timing?.jobOverheadS) || 0;
+    if (jobOverhead > 0) moves.unshift({ a: moves[0].a, b: moves[0].a, duration: jobOverhead, burn: false, dwell: true });
+    return startSimMoves(moves);
   }
   function completedSimulationColor(value, fallback) {
     const color = new paper.Color(value || fallback);
@@ -2138,14 +2435,15 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     onCoords: (cb) => (coordsCb = cb),
     onSelection: (cb) => (selectionCb = cb),
     onChange: (cb) => (changeCb = cb),
-    getDesign, geometryStats, getRect, getRef, applyRect, applyAngle, startSim, stopSim, estimateTime, buildGcodeJob, outputQuality,
+    getDesign, geometryStats, getRect, getRef, applyRect, applyAngle, startSim, startSimProgram, stopSim, estimateTime, buildGcodeJob, outputQuality,
     setSelectionMode, undo, redo, resetHistory, exportDesign, importDesign, exportSession, importSession,
     groupSelected, ungroupSelected, arrangeSelected, copySelection, pasteSelection, duplicateSelection,
     canUngroup, selectAll, deleteSelection,
     setGrid, setTool, setPathOrder, getColors, addShape, finishDrawing,
     setDrawStyle, applyStyle, getStyle, setLayerVisibility,
-    getSelectionInfo: () => ({ hasRaster: selectionHasRaster(), count: selected.size }),
+    getSelectionInfo: () => ({ hasRaster: selectionHasRaster(), singleRaster: isSingleRasterSelection(), rasterCount: selectedRasterTargets().length, count: selected.size }),
     getRasterSettings, getRasterMode, setRasterModes, beginRasterEdit, updateRasterSettings, endRasterEdit, resetRasterSettings,
+    getRasterEditorPayload, applyEngravingRecipe,
     onDrawSize: (cb) => (drawSizeCb = cb),
     onDrawClick: (cb) => (drawClickCb = cb),
     onToolReset: (cb) => (toolResetCb = cb),

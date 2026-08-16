@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Advanced Editing for Engraving · modCut</title>
+  <link rel="stylesheet" href="image-editor.css">
+</head>
+<body>
+  <header class="editor-header">
+    <div class="brand-block">
+      <img src="../assets/modcut_logo.png" alt="">
+      <div><strong>Advanced Editing for Engraving</strong><span id="imageName">Raster image</span></div>
+    </div>
+    <div class="compare" role="group" aria-label="Preview">
+      <button type="button" data-preview="before">Original</button>
+      <button type="button" class="is-active" data-preview="after">Processed</button>
+    </div>
+    <div class="header-actions">
+      <button type="button" class="button button--ghost" id="cancelButton">Cancel</button>
+      <button type="button" class="button button--primary" id="applyButton">Apply to image</button>
+    </div>
+  </header>
+
+  <main class="editor-main">
+    <nav class="tool-rail" aria-label="Image editing tools">
+      <button type="button" class="tool is-active" data-tool="crop" title="Crop image">
+        <span class="tool__icon">⌗</span><span>Crop</span>
+      </button>
+      <button type="button" class="tool" data-tool="adjust" title="Adjust tone and detail">
+        <span class="tool__icon">◐</span><span>Adjust</span>
+      </button>
+      <button type="button" class="tool" data-tool="style" title="Choose engraving style">
+        <span class="tool__icon">▦</span><span>Style</span>
+      </button>
+    </nav>
+
+    <section class="preview-panel" id="previewPanel">
+      <div class="preview-scroll" id="previewScroll">
+        <div class="preview-surface" id="previewSurface">
+          <canvas id="previewCanvas"></canvas>
+          <div class="crop-ui" id="cropUi" aria-label="Crop area">
+            <div class="crop-shade crop-shade--top"></div>
+            <div class="crop-shade crop-shade--right"></div>
+            <div class="crop-shade crop-shade--bottom"></div>
+            <div class="crop-shade crop-shade--left"></div>
+            <div class="crop-box" id="cropBox" data-handle="move">
+              <i class="crop-grid crop-grid--v1"></i><i class="crop-grid crop-grid--v2"></i>
+              <i class="crop-grid crop-grid--h1"></i><i class="crop-grid crop-grid--h2"></i>
+              <button data-handle="nw" aria-label="Crop top left"></button>
+              <button data-handle="n" aria-label="Crop top"></button>
+              <button data-handle="ne" aria-label="Crop top right"></button>
+              <button data-handle="e" aria-label="Crop right"></button>
+              <button data-handle="se" aria-label="Crop bottom right"></button>
+              <button data-handle="s" aria-label="Crop bottom"></button>
+              <button data-handle="sw" aria-label="Crop bottom left"></button>
+              <button data-handle="w" aria-label="Crop left"></button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="preview-footer">
+        <span id="previewStatus">Preparing preview…</span>
+        <span class="spacer"></span>
+        <button type="button" class="icon-button" id="zoomOut" aria-label="Zoom out">−</button>
+        <input id="zoomRange" type="range" min="25" max="200" value="100" aria-label="Preview zoom">
+        <button type="button" class="icon-button" id="zoomIn" aria-label="Zoom in">+</button>
+        <button type="button" class="fit-button" id="zoomFit">Fit</button>
+        <span id="zoomLabel">100%</span>
+      </div>
+    </section>
+
+    <aside class="inspector">
+      <section class="inspector-section inspector-section--preset">
+        <label for="presetSelect">Starting point</label>
+        <div class="preset-row"><select id="presetSelect"></select><button type="button" id="savePreset" title="Save current settings as a preset">Save</button></div>
+        <p id="presetDescription">Choose a preset, then fine-tune it.</p>
+      </section>
+
+      <section class="tool-panel" data-panel="crop">
+        <div class="section-heading"><div><h2>Crop</h2><p>Drag an edge or corner directly on the image.</p></div><button type="button" class="text-button" id="resetCrop">Reset</button></div>
+        <label class="select-field"><span>Aspect ratio</span><select id="aspectRatio">
+          <option value="free">Free</option><option value="original">Original</option><option value="1">Square · 1:1</option>
+          <option value="1.333333">4:3</option><option value="1.5">3:2</option><option value="1.777778">16:9</option>
+        </select></label>
+        <div class="crop-readout">
+          <div><span>Output size</span><strong id="physicalSize">—</strong></div>
+          <div><span>Crop</span><strong id="cropPercent">100 × 100%</strong></div>
+        </div>
+        <p class="tip">Tip: drag inside the crop frame to reposition it. The original image is always preserved.</p>
+      </section>
+
+      <section class="tool-panel is-hidden" data-panel="adjust">
+        <div class="section-heading"><div><h2>Tone & detail</h2><p>Corrections are applied before the engraving pattern.</p></div><button type="button" class="text-button" id="resetAdjustments">Reset</button></div>
+        <div id="adjustmentControls" class="controls"></div>
+        <label class="check-field"><input type="checkbox" id="invertControl"><span>Invert light and dark</span></label>
+      </section>
+
+      <section class="tool-panel is-hidden" data-panel="style">
+        <div class="section-heading"><div><h2>Engraving style</h2><p>Choose how tones become laser marks.</p></div></div>
+        <div class="style-grid" id="styleGrid"></div>
+        <div id="styleControls" class="controls style-controls"></div>
+      </section>
+
+      <section class="output-card">
+        <div><span>Laser output</span><strong id="outputInfo">—</strong></div>
+        <p id="qualityWarning" class="quality-warning is-hidden"></p>
+        <label class="check-field"><input type="checkbox" id="materialPreview"><span>Approximate wood preview</span></label>
+        <small>Visual guide only. The physical result also depends on focus, power, speed and material.</small>
+      </section>
+    </aside>
+  </main>
+
+  <script type="module" src="image-editor.js"></script>
+</body>
+</html>

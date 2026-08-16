@@ -251,7 +251,13 @@ const DRAW_TOOLS = new Set(["pen", "rect", "ellipse", "line"]);
 function refreshPropsVisibility() {
   $("propSec").classList.toggle("hidden", selectedCount === 0 && !DRAW_TOOLS.has(activeTool));
 }
-bed.onSelection((n) => { selectedCount = n; $("sel").textContent = `${n} selected`; refreshProps(); refreshPropsVisibility(); });
+bed.onSelection((n) => {
+  selectedCount = n;
+  $("sel").textContent = `${n} selected`;
+  refreshProps();
+  refreshPropsVisibility();
+  void window.modcut.setImageEditorAvailable?.(!!bed.getSelectionInfo().singleRaster);
+});
 bed.onChange(() => { refreshPos(); scheduleQualityRefresh(); if (!restoringTab) markDirty(); });
 
 let docPath = null;
@@ -467,7 +473,7 @@ function switchRelativeTab(offset) {
 function documentPayload() {
   return {
     app: "modCut",
-    version: 2,
+    version: 3,
     saved: new Date().toISOString(),
     design: bed.exportDesign(),
     filename: $("filename").value,
@@ -1354,21 +1360,48 @@ function estimate() {
 
 // --- simulate ---------------------------------------------------------------
 let simCtl = null;
+let simBuildPending = false;
+let simBuildVersion = 0;
 const simSpecs = () => activeLayers().map((l) => ({ key: state.mappingMode === "color" ? l.key : null, color: state.mappingMode === "color" ? l.color : null, op: l.op, speed: l.speed, power: l.power, zOffset: Number(l.zOffset) || 0, dpi: l.dpi, dither: l.dither, bottomUp: l.bottomUp, engraveMode: effectiveEngraveMode(l) }));
-function startSimulate() {
+async function startSimulate() {
+  if (simBuildPending) return;
   if (!bed.getDesign()) return toast("Import a design first.", "info");
   const specs = simSpecs();
   if (!specs.length) return toast("No active layers to simulate.", "info");
-  simCtl = bed.startSim(specs, motionTimingForMachine(machine()));
-  if (!simCtl) return toast("No cuttable geometry found.", "err");
-  simCtl.onProgress((p) => { $("simProg").textContent = Math.round(p * 100) + "%"; if (p >= 1) $("simPlay").textContent = "▶"; });
-  $("simbar").classList.remove("hidden");
-  $("simPlay").textContent = "⏸";
-  $("simProg").textContent = "0%";
-  setSimSpeed(1);
-  toast("Simulating toolpath — red dot follows the beam.", "info");
+  simBuildPending = true;
+  const buildVersion = ++simBuildVersion;
+  try {
+    const epilog = isEpilogDriver(machine().driver);
+    const groups = groupJobOperations(specs, state.splitByOperation);
+    const programs = [];
+    for (const group of groups) {
+      const built = await bed.buildGcodeJob(group.ops, {
+        maxFeed: machine().maxFeed || 12000,
+        zAxis: machine().zAxis,
+        softwareFocus: epilog,
+      });
+      if (buildVersion !== simBuildVersion) return;
+      // `lines` is precisely the GRBL program passed to startJob. Native
+      // drivers have no G-code; their serialized laserSegments are precisely
+      // the payload passed to the native machine-job builder.
+      programs.push(built);
+    }
+    if (buildVersion !== simBuildVersion) return;
+    simCtl = bed.startSimProgram(programs, motionTimingForMachine(machine()));
+    if (!simCtl) return toast("No cuttable machine movements found.", "err");
+    simCtl.onProgress((p) => { $("simProg").textContent = Math.round(p * 100) + "%"; if (p >= 1) $("simPlay").textContent = "▶"; });
+    $("simbar").classList.remove("hidden");
+    $("simPlay").textContent = "⏸";
+    $("simProg").textContent = "0%";
+    setSimSpeed(1);
+    toast("Simulating the generated machine program — red dot follows the beam.", "info");
+  } catch (error) {
+    toast("Simulation could not build the machine program: " + error.message, "err");
+  } finally {
+    simBuildPending = false;
+  }
 }
-function stopSimulate() { if (simCtl) { simCtl.stop(); simCtl = null; } $("simbar").classList.add("hidden"); }
+function stopSimulate() { simBuildVersion++; if (simCtl) { simCtl.stop(); simCtl = null; } $("simbar").classList.add("hidden"); }
 function setSimSpeed(x) { if (simCtl) simCtl.setMult(x); [...$("simSpeeds").children].forEach((b) => b.classList.toggle("on", +b.dataset.x === x)); }
 
 // --- position ---------------------------------------------------------------
@@ -2014,6 +2047,36 @@ $("bmpInvert").addEventListener("change", (e) => {
 });
 $("bmpReset").addEventListener("click", () => { bed.resetRasterSettings(); refreshBitmapControls(); });
 
+async function openAdvancedImageEditor() {
+  const editorPayload = bed.getRasterEditorPayload();
+  if (!editorPayload) {
+    toast("Select exactly one raster image to open the engraving editor.", "info");
+    return;
+  }
+  const layer = state.layers.find((entry) => entry.key === editorPayload.layerKey)
+    || state.layers.find((entry) => entry.color?.toLowerCase() === editorPayload.color?.toLowerCase() && entry.op === "Engrave");
+  try {
+    const result = await window.modcut.openImageEditor({
+      ...editorPayload,
+      name: $("file").textContent.replace(/\s\*$/, "") || "Raster image",
+      dpi: layer?.dpi || 300,
+    });
+    if (!result) return;
+    if (!(await bed.applyEngravingRecipe(result))) {
+      toast("The image selection changed before the edit could be applied.", "err");
+      return;
+    }
+    refreshBitmapControls();
+    refreshPos();
+    scheduleQualityRefresh();
+    markDirty();
+    toast("Advanced engraving edit applied. The original image is still preserved.", "ok");
+  } catch (error) {
+    toast(`Could not open the image editor: ${error.message}`, "err");
+  }
+}
+$("advancedImageEditor").addEventListener("click", openAdvancedImageEditor);
+
 let ctxMenu = null;
 function closeContextMenu() { if (ctxMenu) { ctxMenu.remove(); ctxMenu = null; } }
 function openContextMenu(info) {
@@ -2035,6 +2098,7 @@ function openContextMenu(info) {
   ctxMenu = document.createElement("div");
   ctxMenu.className = "ctx-menu";
   ctxMenu.innerHTML = `
+    ${info.singleRaster ? `<button data-act="advanced-image-editor"><span>Advanced editing…</span><kbd>⌥I</kbd></button><div class="ctx-menu__sep"></div>` : ""}
     <div class="ctx-menu__label">Move selection to layer</div>
     <div class="ctx-menu__colors">
       ${layerChoices.map((layer) => colorButton(layer.color, layer.color.toUpperCase(), layer.op)).join("")}
@@ -2066,7 +2130,8 @@ function openContextMenu(info) {
     }
     const b = e.target.closest("button[data-act]");
     if (!b || b.disabled) return;
-    editAction(b.dataset.act);
+    if (b.dataset.act === "advanced-image-editor") void openAdvancedImageEditor();
+    else editAction(b.dataset.act);
     closeContextMenu();
   });
   document.body.append(ctxMenu);
@@ -2142,6 +2207,7 @@ window.modcut.onMenu((cmd) => ({
   copy: () => editAction("copy"), paste: () => editAction("paste"), "paste-in-place": () => editAction("paste-in-place"),
   duplicate: () => editAction("duplicate"), delete: () => editAction("delete"), "select-all": () => editAction("select-all"),
   group: () => editAction("group"), ungroup: () => editAction("ungroup"),
+  "advanced-image-editor": openAdvancedImageEditor,
   "move-up": () => editAction("move-up"), "move-down": () => editAction("move-down"),
   "move-to-top": () => editAction("move-to-top"), "move-to-bottom": () => editAction("move-to-bottom"),
   "add-machine": addMachine, "manage-machines": openMachineLibrary,

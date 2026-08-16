@@ -16,4 +16,8 @@ contextBridge.exposeInMainWorld("modcut", {
   setE2EImportResult: (result) => ipcRenderer.invoke("e2eSetImportResult", result),
   requestE2EQuit: () => ipcRenderer.invoke("e2eRequestQuit"),
   onMenu: (cb) => ipcRenderer.on("menu", (_e, cmd) => cb(cmd)),
+  openImageEditor: (payload) => ipcRenderer.invoke("openImageEditor", payload),
+  finishImageEditor: (result) => ipcRenderer.invoke("finishImageEditor", result),
+  onImageEditorInit: (cb) => ipcRenderer.on("image-editor-init", (_event, payload) => cb(payload)),
+  setImageEditorAvailable: (available) => ipcRenderer.invoke("setImageEditorAvailable", !!available),
 });

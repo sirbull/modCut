@@ -49,7 +49,7 @@ async function stop(signal = "SIGTERM") {
 try {
   launch();
   const first = await connectToApp(port);
-  const expected = await runWorkflows(first);
+  const expected = await runWorkflows(first, port);
   first.socket.close();
   await stop("SIGKILL");
   await wait(500);

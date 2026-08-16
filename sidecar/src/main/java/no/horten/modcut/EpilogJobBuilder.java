@@ -212,8 +212,15 @@ final class EpilogJobBuilder {
           throw invalidSegment(segment.index(), "rasterraden har ugyldige samples");
         }
         if (samples.length == 0) throw invalidSegment(segment.index(), "rasterraden mangler samples");
-        double left = coordinate(a, "x", bedWidth, segment.index());
-        double right = coordinate(b, "x", bedWidth, segment.index());
+        // Raster samples are always serialized in artwork order (left →
+        // right). The renderer still alternates the two endpoint coordinates
+        // to describe the physical scan direction. Do not let that endpoint
+        // reversal mirror every other scanline while rebuilding the native
+        // Epilog bitmap.
+        double firstX = coordinate(a, "x", bedWidth, segment.index());
+        double lastX = coordinate(b, "x", bedWidth, segment.index());
+        double left = Math.min(firstX, lastX);
+        double right = Math.max(firstX, lastX);
         double maxPower = bounded(segment.node(), "maxPower", 0, 100, segment.index());
         int start = 0;
         int value = Byte.toUnsignedInt(samples[0]);

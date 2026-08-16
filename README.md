@@ -34,6 +34,10 @@ The first complete, hardware-testable path is available:
   Floyd-Steinberg, Stucki or Bayer dithering;
 - preview Photoshop-style gray-level posterization, midtone adjustment and
   dither threshold before generating the laser job;
+- open a dedicated Advanced Editing window for one raster image, crop by dragging
+  the image edges/corners, compare original and processed output, and apply
+  non-destructive Photo, Halftone Dots, Lines, Banknote Crosshatch or Technical
+  Sketch recipes using the same processor that generates the laser scanlines;
 - move one or many selected elements between color layers from the properties
   panel or context menu, and retain reference geometry with Ignore;
 - save reusable named Cut, Engrave and Score process profiles with power, speed,

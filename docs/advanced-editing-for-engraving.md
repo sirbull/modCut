@@ -1,5 +1,9 @@
 # Advanced Editing for Engraving
 
+> **Implemented in document format v3.** The editor is local and non-destructive,
+> opens in a dedicated Electron window, and stores its recipe on the selected
+> raster. Crop was added to the original plan and uses direct edge/corner dragging.
+
 ## Sammendrag
 
 Det er fullt mulig å bygge dette direkte i modCut uten Photoshop, eksterne tjenester eller en større omskriving. Appen har allerede den viktigste grunnmuren: ikke-destruktive rasterinnstillinger, Paper.js/canvas-preview, gråtone med variabel effekt, dithering, fysisk DPI, lagring/undo og både kontekstmeny og native toppmeny.
@@ -43,6 +47,16 @@ Resultatet lagres som en ikke-destruktiv oppskrift per bilde. Preview og laserjo
   - Valgfri **Approximate material preview**, tydelig merket som veiledende og ikke en garanti for fysisk resultat.
   - Presetvelger, **Save preset**, **Reset**, **Cancel** og **Apply**.
 
+- **Crop** er et eget førstetrinn i editoren:
+
+  - Brukeren drar i fire kanter eller fire hjørner direkte på bildet, slik som i
+    en mobil bildeeditor, og kan dra inne i utsnittet for å flytte det.
+  - Free, Original, 1:1, 4:3, 3:2 og 16:9 er tilgjengelige størrelsesforhold.
+  - Utsnittet lagres normalisert i oppskriften. Kildebildet endres aldri, og crop
+    kan derfor utvides, flyttes eller nullstilles etter at dokumentet er gjenåpnet.
+  - Fysisk størrelse, forventet laser-grid og advarsel ved utilstrekkelig
+    kildeoppløsning oppdateres mens utsnittet endres.
+
 - Endringer er midlertidige mens dialogen er åpen. `Apply` oppretter ett undo-steg; `Cancel` endrer ingenting.
 - De eksisterende kontrollene i sidepanelet beholdes som hurtigjusteringer og redigerer samme oppskrift.
 
@@ -53,6 +67,7 @@ Innfør en versjonert `EngravingRecipe` per Paper.js-raster:
 ```text
 EngravingRecipe {
   version
+  crop { x, y, width, height }
   adjustments {
     brightness, contrast, blackPoint, whitePoint, gamma, invert
     denoise, enhanceRadius, enhanceAmount

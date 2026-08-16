@@ -155,6 +155,27 @@ class EpilogJobBuilderTest {
   }
 
   @Test
+  void keepsCompactRasterSamplesInArtworkOrderWhenTheScanlineRunsRightToLeft() throws Exception {
+    var params = json.readTree("""
+        {"filename":"reversed-photo-row.prn","laserSegments":[
+          {"layerIndex":0,"operation":"Engrave","raster":true,"rasterRow":true,"engraveMode":"native",
+           "dpi":100,"dither":"Grayscale","bottomUp":true,"maxPower":40,
+           "power":40,"speed":70,"frequency":500,"focus":0,
+           "points":[{"x":12.54,"y":20},{"x":10,"y":20}],
+           "samples":"/wA="}
+        ]}
+        """);
+
+    var built = EpilogJobBuilder.build(params, 100, 100);
+    var raster = (Raster3dPart) built.job().getParts().get(0);
+    var row = new java.util.ArrayList<Byte>();
+    raster.getRasterLine(0, row);
+
+    assertEquals(0, Byte.toUnsignedInt(row.get(0)), "the first artwork sample belongs at the left edge");
+    assertEquals(255, Byte.toUnsignedInt(row.get(row.size() - 1)), "the trailing blank sample stays at the right edge");
+  }
+
+  @Test
   void vectorScanModeKeepsRasterRunsAsVectors() throws Exception {
     var params = json.readTree("""
         {"laserSegments":[

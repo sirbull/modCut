@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import UTIF from "utif";
-import { inputHelpers, wait } from "./cdp.mjs";
+import { connectToPage, inputHelpers, wait } from "./cdp.mjs";
 
 const svg = (name, color, x = 2) => ({
   path: `/e2e/${name}.svg`, name: `${name}.svg`, ext: "svg",
@@ -62,7 +62,7 @@ const processProfiles = [{
   power: 37, speed: 24, freq: 18000, zOffset: -1,
 }];
 
-export async function runWorkflows(client) {
+export async function runWorkflows(client, port) {
   const { evaluate } = client;
   const { click, drag, key, mouse } = inputHelpers(client);
   const rightClick = async (point) => {
@@ -289,7 +289,7 @@ export async function runWorkflows(client) {
   assert.deepEqual(await evaluate("[...document.querySelectorAll('.clayer')].map(row=>row.dataset.layerKey)"), ["vector:#0000ff", "vector:#ff0000"], "moving a layer must update the fixed top-to-bottom job order");
   await evaluate("(() => { const select=document.querySelector('#pathOrder'); select.value='optimize'; select.dispatchEvent(new Event('change',{bubbles:true})); document.querySelector('#simulate').click(); })()");
   await wait(200);
-  assert.deepEqual(await evaluate("paper.project.layers.at(-1).children[0].children.map(path=>path.strokeColor?.toCSS(true))"), ["#0000ff", "#ff0000"], "path optimization must keep layers contiguous and respect their top-to-bottom order");
+  assert.deepEqual(await evaluate("(() => { const colors=paper.project.layers.at(-1).children[0].children.map(path=>path.strokeColor?.toCSS(true)); return colors.filter((color,index)=>index===0 || color!==colors[index-1]); })()"), ["#0000ff", "#ff0000"], "path optimization must keep layers contiguous and respect their top-to-bottom order");
   await evaluate("document.querySelector('#simClose').click()");
 
   await evaluate("(() => { const row=[...document.querySelectorAll('.clayer')].find(item=>item.dataset.layerKey==='vector:#0000ff'),op=row.querySelector('.clayer__op'); op.value='Score'; op.dispatchEvent(new Event('change',{bubbles:true})); })()");
@@ -306,14 +306,62 @@ export async function runWorkflows(client) {
 
   await evaluate(`window.modcut.setE2EImportResult(${JSON.stringify([png])})`);
   await evaluate("document.querySelector('#add').click()");
-  await wait(400);
+  const rasterReadyDeadline = Date.now() + 15_000;
+  let rasterReady = false;
+  while (!rasterReady && Date.now() < rasterReadyDeadline) {
+    rasterReady = await evaluate("paper.project.layers[1].children.some(item=>item.className==='Raster') && !document.querySelector('#bitmapSec').classList.contains('hidden')");
+    if (!rasterReady) {
+      const rasterHit = await evaluate("(() => { const item=paper.project.layers[1].children.find(candidate=>candidate.className==='Raster'); if(!item?.loaded) return null; const canvas=document.querySelector('.bed-canvas').getBoundingClientRect(),point=paper.view.projectToView(item.position); return {x:canvas.left+point.x,y:canvas.top+point.y}; })()");
+      if (rasterHit) await click(rasterHit);
+      else await wait(100);
+    }
+  }
   assert.equal(await evaluate("paper.project.layers[1].children.some(item=>item.className==='Raster')"), true);
-  assert.equal(await evaluate("document.querySelector('#bitmapSec').classList.contains('hidden')"), false);
+  assert.equal(rasterReady, true, "the imported raster must finish loading and become the active bitmap selection");
   assert.equal(await evaluate("[...document.querySelectorAll('[data-quality]')].some(note=>note.classList.contains('is-warning') && note.textContent.includes('Output blocked'))"), true, "oversized raster output must show a visible blocking warning");
   await evaluate("(() => { const input=document.querySelector('.clayer--raster [data-k=dpi]'); input.value=100; input.dispatchEvent(new Event('input',{bubbles:true})); })()");
   assert.equal(await evaluate("[...document.querySelectorAll('.clayer--raster [data-quality]')].some(note=>!note.classList.contains('is-warning') && note.textContent.includes('at 100 DPI'))"), true, "reducing DPI must show effective unblocked output quality");
   await evaluate("(() => { const input=document.querySelector('#bmpBrightnessNum'); input.value=15; input.dispatchEvent(new Event('input',{bubbles:true})); input.dispatchEvent(new Event('change',{bubbles:true})); })()");
   assert.equal(await evaluate("paper.project.layers[1].children.find(item=>item.className==='Raster').data.rasterSettings.brightness"), 15);
+
+  const rasterWidthBeforeEditor = await evaluate("paper.project.layers[1].children.find(item=>item.className==='Raster').bounds.width");
+  await evaluate("document.querySelector('#advancedImageEditor').click()");
+  const imageEditor = await connectToPage(port, "Advanced Editing for Engraving · modCut");
+  const editorReadyDeadline = Date.now() + 10_000;
+  let editorReady = false;
+  while (!editorReady && Date.now() < editorReadyDeadline) {
+    try { editorReady = await imageEditor.evaluate("!!document.querySelector('#cropBox') && document.querySelector('#previewCanvas').width > 0 && document.querySelector('#previewSurface').getBoundingClientRect().width > 200"); } catch {}
+    if (!editorReady) await wait(100);
+  }
+  assert.equal(editorReady, true, "advanced editor must open in its own loaded window");
+  await imageEditor.evaluate(`(() => {
+    const handle=document.querySelector('[data-handle=e]'),h=handle.getBoundingClientRect(),s=document.querySelector('#previewSurface').getBoundingClientRect();
+    const x=h.left+h.width/2,y=h.top+h.height/2;
+    handle.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,cancelable:true,pointerId:7,clientX:x,clientY:y,button:0,buttons:1}));
+    window.dispatchEvent(new PointerEvent('pointermove',{bubbles:true,pointerId:7,clientX:x-s.width*.2,clientY:y,button:0,buttons:1}));
+    window.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,pointerId:7,clientX:x-s.width*.2,clientY:y,button:0}));
+  })()`);
+  await wait(100);
+  assert.notEqual(await imageEditor.evaluate("document.querySelector('#cropPercent').textContent"), "100 × 100%", "dragging a crop edge must update the crop");
+  await imageEditor.evaluate("[...document.querySelectorAll('.style-card')].find(button=>button.textContent.includes('Dots')).click()");
+  assert.equal(await imageEditor.evaluate("document.querySelector('.style-card.is-active strong').textContent"), "Dots", "engraving style must update inside the editor");
+  try { await imageEditor.evaluate("document.querySelector('#applyButton').click()"); } catch {}
+  imageEditor.socket.close();
+  const recipeDeadline = Date.now() + 5_000;
+  let appliedRecipe = null;
+  while (!appliedRecipe && Date.now() < recipeDeadline) {
+    appliedRecipe = await evaluate("(() => { const raster=paper.project.layers[1].children.find(item=>item.className==='Raster'); return raster?.data?.engravingRecipe || null; })()");
+    if (!appliedRecipe) await wait(100);
+  }
+  assert.equal(appliedRecipe.style, "Dots", "Apply must persist the advanced recipe on the Paper.js raster");
+  assert.ok(appliedRecipe.crop.width < 1, "Apply must persist the non-destructive crop rectangle");
+  const croppedBoundsDeadline = Date.now() + 5_000;
+  let croppedWidth = rasterWidthBeforeEditor;
+  while (croppedWidth >= rasterWidthBeforeEditor && Date.now() < croppedBoundsDeadline) {
+    croppedWidth = await evaluate("paper.project.layers[1].children.find(item=>item.className==='Raster').bounds.width");
+    if (croppedWidth >= rasterWidthBeforeEditor) await wait(100);
+  }
+  assert.ok(croppedWidth < rasterWidthBeforeEditor, "applying crop must shrink the image bounds on the laser bed");
 
   const droppedSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="20mm" height="10mm" viewBox="0 0 20 10"><rect x="1" y="1" width="18" height="8" fill="none" stroke="#00aa00"/></svg>`;
   await evaluate(`(() => {

@@ -92,7 +92,9 @@ export function ditherMask(gray, width, height, settings, dither = "Jarvis") {
     return mask;
   }
   const work = new Float32Array(gray);
-  const kernels = type.includes("floyd")
+  const kernels = type.includes("atkinson")
+    ? [[1, 0, 1 / 8], [2, 0, 1 / 8], [-1, 1, 1 / 8], [0, 1, 1 / 8], [1, 1, 1 / 8], [0, 2, 1 / 8]]
+    : type.includes("floyd")
     ? [[1, 0, 7 / 16], [-1, 1, 3 / 16], [0, 1, 5 / 16], [1, 1, 1 / 16]]
     : type.includes("stucki")
       ? [[1, 0, 8 / 42], [2, 0, 4 / 42], [-2, 1, 2 / 42], [-1, 1, 4 / 42], [0, 1, 8 / 42], [1, 1, 4 / 42], [2, 1, 2 / 42], [-2, 2, 1 / 42], [-1, 2, 2 / 42], [0, 2, 4 / 42], [1, 2, 2 / 42], [2, 2, 1 / 42]]

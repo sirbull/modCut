@@ -20,6 +20,7 @@ let sidecar;
 let recoveryStore;
 let quitRequested = false;
 let quitAllowed = false;
+const imageEditorSessions = new Map();
 const closeAllowed = new WeakSet();
 const closePending = new WeakSet();
 const rendererGone = new WeakSet();
@@ -69,6 +70,9 @@ function createWindow() {
 
 function requestQuit() {
   quitRequested = true;
+  for (const session of imageEditorSessions.values()) {
+    if (!session.window.isDestroyed()) session.window.close();
+  }
   if (win && !win.isDestroyed()) win.close();
   else {
     quitAllowed = true;
@@ -129,6 +133,8 @@ function buildMenu() {
         { label: "Duplicate", accelerator: "CmdOrCtrl+D", click: () => send("duplicate") },
         { label: "Delete", accelerator: "Delete", click: () => send("delete") },
         { label: "Select All", accelerator: "CmdOrCtrl+A", click: () => send("select-all") },
+        { type: "separator" },
+        { id: "advanced-image-editor", label: "Advanced Editing for Engraving…", accelerator: "Alt+I", enabled: false, click: () => send("advanced-image-editor") },
         { type: "separator" },
         { label: "Group", accelerator: "CmdOrCtrl+G", click: () => send("group") },
         { label: "Ungroup", accelerator: "CmdOrCtrl+Shift+G", click: () => send("ungroup") },
@@ -231,6 +237,67 @@ app.whenReady().then(() => {
       quitAllowed = true;
       app.quit();
     } else target.close();
+    return true;
+  });
+  ipcMain.handle("setImageEditorAvailable", (_event, available) => {
+    const item = Menu.getApplicationMenu()?.getMenuItemById("advanced-image-editor");
+    if (item) item.enabled = !!available;
+    return !!item;
+  });
+  ipcMain.handle("openImageEditor", (event, payload) => {
+    const parent = BrowserWindow.fromWebContents(event.sender);
+    if (!parent || parent.isDestroyed() || !payload?.dataUrl) return null;
+    const existing = [...imageEditorSessions.values()].find((session) => session.parent === parent);
+    if (existing && !existing.window.isDestroyed()) {
+      existing.window.show();
+      existing.window.focus();
+      return existing.promise;
+    }
+    let resolveResult;
+    const promise = new Promise((resolve) => { resolveResult = resolve; });
+    const editorWindow = new BrowserWindow({
+      width: 1420,
+      height: 900,
+      minWidth: 900,
+      minHeight: 650,
+      show: false,
+      parent,
+      modal: true,
+      icon: appIconPath,
+      backgroundColor: "#17201e",
+      title: "Advanced Editing for Engraving · modCut",
+      webPreferences: {
+        preload: join(__dirname, "preload.cjs"),
+        contextIsolation: true,
+        sandbox: false,
+      },
+    });
+    const session = { window: editorWindow, parent, promise, resolve: resolveResult, settled: false };
+    const editorContentsId = editorWindow.webContents.id;
+    imageEditorSessions.set(editorContentsId, session);
+    const finish = (result) => {
+      if (session.settled) return;
+      session.settled = true;
+      session.resolve(result ?? null);
+    };
+    editorWindow.once("ready-to-show", () => { editorWindow.show(); editorWindow.focus(); });
+    editorWindow.webContents.once("did-finish-load", () => editorWindow.webContents.send("image-editor-init", payload));
+    editorWindow.on("closed", () => {
+      imageEditorSessions.delete(editorContentsId);
+      finish(null);
+      if (parent && !parent.isDestroyed()) parent.focus();
+    });
+    void editorWindow.loadFile(join(root, "renderer", "image-editor.html"));
+    return promise;
+  });
+  ipcMain.handle("finishImageEditor", (event, result) => {
+    const session = imageEditorSessions.get(event.sender.id);
+    if (!session) return false;
+    if (!session.settled) {
+      session.settled = true;
+      session.resolve(result ?? null);
+    }
+    if (!session.window.isDestroyed()) session.window.close();
     return true;
   });
   if (isE2E) {

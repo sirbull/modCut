@@ -2,18 +2,18 @@ import assert from "node:assert/strict";
 
 export const wait = (ms = 100) => new Promise((resolve) => setTimeout(resolve, ms));
 
-export async function connectToApp(port, timeoutMs = 20_000) {
+export async function connectToPage(port, title, timeoutMs = 20_000) {
   const deadline = Date.now() + timeoutMs;
   let target;
   while (Date.now() < deadline) {
     try {
       const targets = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
-      target = targets.find((entry) => entry.type === "page" && entry.title === "modCut");
+      target = targets.find((entry) => entry.type === "page" && entry.title === title);
       if (target) break;
     } catch {}
     await wait(100);
   }
-  assert.ok(target, `modCut DevTools target was not found on port ${port}`);
+  assert.ok(target, `${title} DevTools target was not found on port ${port}`);
   const socket = new WebSocket(target.webSocketDebuggerUrl);
   await new Promise((resolve, reject) => {
     socket.addEventListener("open", resolve, { once: true });
@@ -58,6 +58,8 @@ export async function connectToApp(port, timeoutMs = 20_000) {
   await command("Runtime.enable");
   return { socket, command, evaluate };
 }
+
+export const connectToApp = (port, timeoutMs = 20_000) => connectToPage(port, "modCut", timeoutMs);
 
 export function inputHelpers(client) {
   const mouse = async (type, point, { buttons = 0, modifiers = 0 } = {}) => {
