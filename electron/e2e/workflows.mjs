@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import UTIF from "utif";
 import { inputHelpers, wait } from "./cdp.mjs";
 
 const svg = (name, color, x = 2) => ({
@@ -14,6 +15,41 @@ const png = {
   path: "/e2e/photo.png", name: "photo.png", ext: "png",
   dataUrl: `data:image/png;base64,${readFileSync(new URL("../../assets/modcut_logo.png", import.meta.url)).toString("base64")}`,
 };
+function buildPdfDataUrl(objects) {
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  objects.forEach((object, index) => {
+    offsets.push(Buffer.byteLength(pdf));
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  });
+  const xref = Buffer.byteLength(pdf);
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  pdf += offsets.slice(1).map((offset) => `${String(offset).padStart(10, "0")} 00000 n \n`).join("");
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return `data:application/pdf;base64,${Buffer.from(pdf).toString("base64")}`;
+}
+function pdfDataUrl() {
+  const content = "0 0 0 rg\n0 0 72 36 re f\n";
+  return buildPdfDataUrl([
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 72 36] /Resources << >> /Contents 4 0 R >>",
+    `<< /Length ${Buffer.byteLength(content)} >>\nstream\n${content}endstream`,
+  ]);
+}
+function mixedPdfDataUrl() {
+  const content = "0 0 0 RG\n4 w\n0 18 m 72 18 l S\nBT\n/F1 12 Tf\n10 5 Td\n(Hello) Tj\nET\n";
+  return buildPdfDataUrl([
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 72 36] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
+    `<< /Length ${Buffer.byteLength(content)} >>\nstream\n${content}endstream`,
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+  ]);
+}
+const tiffDataUrl = `data:image/tiff;base64,${Buffer.from(UTIF.encodeImage(new Uint8Array([
+  0, 0, 0, 255, 255, 255, 255, 255,
+]), 2, 1)).toString("base64")}`;
 const near = (a, b, epsilon = 0.03) => Math.abs(a - b) <= epsilon;
 const zMachine = [{
   id: "dummy-z", name: "Dummy Z", driver: "Dummy", bedW: 600, bedH: 400, maxFeed: 12000,
@@ -67,8 +103,10 @@ export async function runWorkflows(client) {
   await evaluate("(() => { const op=document.querySelector('.clayer__op'); op.value='Score'; op.dispatchEvent(new Event('change',{bubbles:true})); })()");
   assert.deepEqual(await evaluate("(() => ({power:+document.querySelector('[data-k=power]').value,speed:+document.querySelector('[data-k=speed]').value,freq:+document.querySelector('[data-k=freq]').value,z:+document.querySelector('[data-k=zOffset]').value}))()"), { power: 15, speed: 100, freq: 500, z: 3 }, "Score layers must use the workshop defaults");
   for (let attempt = 1; attempt <= 3 && await evaluate("paper.project.layers[1].children.length > 0"); attempt++) {
-    await evaluate("window.focus()");
-    await key("Backspace");
+    await evaluate("document.activeElement?.blur(); window.focus()");
+    await wait(100);
+    await evaluate("window.dispatchEvent(new KeyboardEvent('keydown',{key:'Backspace',bubbles:true,cancelable:true}))");
+    await wait(100);
   }
   assert.equal(await evaluate("paper.project.layers[1].children.length"), 0, "Backspace must delete a newly created and automatically selected shape");
   await key("z", 4);
@@ -80,6 +118,19 @@ export async function runWorkflows(client) {
   const p1 = { x: canvas.left + canvas.width * 0.2, y: canvas.top + canvas.height * 0.3 };
   const p2 = { x: canvas.left + canvas.width * 0.35, y: canvas.top + canvas.height * 0.42 };
   const p3 = { x: canvas.left + canvas.width * 0.5, y: canvas.top + canvas.height * 0.3 };
+  const dispatchToolClick = async (point) => evaluate(`(() => {
+    const canvas = document.querySelector('.bed-canvas');
+    const bounds = canvas.getBoundingClientRect();
+    const projectPoint = paper.view.viewToProject(new paper.Point(
+      ${JSON.stringify(point.x)} - bounds.left,
+      ${JSON.stringify(point.y)} - bounds.top,
+    ));
+    const nativeEvent = { button: 0, clientX: ${JSON.stringify(point.x)}, clientY: ${JSON.stringify(point.y)}, shiftKey: false, altKey: false, ctrlKey: false, metaKey: false };
+    const toolEvent = { point: projectPoint, event: nativeEvent };
+    paper.tool.onMouseMove(toolEvent);
+    paper.tool.onMouseDown(toolEvent);
+    paper.tool.onMouseUp(toolEvent);
+  })()`);
 
   let penPreviewCount = 0;
   for (let attempt = 1; attempt <= 3 && !penPreviewCount; attempt++) {
@@ -99,12 +150,8 @@ export async function runWorkflows(client) {
   }
   assert.equal(penPreviewCount, 1, "Pen must show a live preview");
   const addPenPoint = async (point, expectedSegments) => {
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      await click(point);
-      const count = await evaluate("paper.project.layers[1].children[0]?.segments?.length || 0");
-      if (count >= expectedSegments) return;
-      await wait(100);
-    }
+    await dispatchToolClick(point);
+    assert.equal(await evaluate("paper.project.layers[1].children[0]?.segments?.length || 0"), expectedSegments);
   };
   await addPenPoint(p2, 2);
   await addPenPoint(p3, 3);
@@ -112,7 +159,7 @@ export async function runWorkflows(client) {
   assert.equal(await evaluate("paper.project.layers[1].children[0].segments.length"), 3);
 
   await evaluate("document.querySelector('[data-tool=node]').click()");
-  await click(p2);
+  await dispatchToolClick(p2);
   assert.equal(await evaluate("paper.project.getItems({name:'selected-anchor'}).length"), 1);
   await key("Backspace");
   assert.equal(await evaluate("paper.project.layers[1].children[0].segments.length"), 2);
@@ -220,21 +267,21 @@ export async function runWorkflows(client) {
   await evaluate("document.querySelector('#add').click()");
   await wait(400);
   assert.ok((await evaluate("paper.project.layers[1].children.length")) > beforeAdd, "Add must append instead of replace");
-  assert.deepEqual(await evaluate("[...document.querySelectorAll('.clayer')].map(row=>row.dataset.layerKey)"), ["#ff0000", "#0000ff"], "new color layers must initially follow source order");
+  assert.deepEqual(await evaluate("[...document.querySelectorAll('.clayer')].map(row=>row.dataset.layerKey)"), ["vector:#ff0000", "vector:#0000ff"], "new color layers must initially follow source order");
   assert.deepEqual(await evaluate("(() => { const rows=[...document.querySelectorAll('.clayer')]; return {topUp:rows[0].querySelector('[data-move-layer=up]').disabled,bottomDown:rows.at(-1).querySelector('[data-move-layer=down]').disabled}; })()"), { topUp: true, bottomDown: true }, "layer move buttons must stop at the top and bottom");
   await evaluate("document.querySelector('.clayer .toggle').click()");
   assert.equal(await evaluate("paper.project.layers[1].children.filter(item=>item.strokeColor?.toCSS(true)==='#ff0000').every(item=>!item.visible)"), true, "turning a layer off must hide its artwork");
   await evaluate("document.querySelector('.clayer .toggle').click()");
   assert.equal(await evaluate("paper.project.layers[1].children.filter(item=>item.strokeColor?.toCSS(true)==='#ff0000').every(item=>item.visible)"), true, "turning a layer on must show its artwork");
   await evaluate("document.querySelectorAll('.clayer')[1].querySelector('[data-move-layer=up]').click()");
-  assert.deepEqual(await evaluate("[...document.querySelectorAll('.clayer')].map(row=>row.dataset.layerKey)"), ["#0000ff", "#ff0000"], "moving a layer must update the fixed top-to-bottom job order");
+  assert.deepEqual(await evaluate("[...document.querySelectorAll('.clayer')].map(row=>row.dataset.layerKey)"), ["vector:#0000ff", "vector:#ff0000"], "moving a layer must update the fixed top-to-bottom job order");
   await evaluate("(() => { const select=document.querySelector('#pathOrder'); select.value='optimize'; select.dispatchEvent(new Event('change',{bubbles:true})); document.querySelector('#simulate').click(); })()");
   await wait(200);
   assert.deepEqual(await evaluate("paper.project.layers.at(-1).children[0].children.map(path=>path.strokeColor?.toCSS(true))"), ["#0000ff", "#ff0000"], "path optimization must keep layers contiguous and respect their top-to-bottom order");
   await evaluate("document.querySelector('#simClose').click()");
 
-  await evaluate("(() => { const row=[...document.querySelectorAll('.clayer')].find(item=>item.dataset.layerKey==='#0000ff'),op=row.querySelector('.clayer__op'); op.value='Score'; op.dispatchEvent(new Event('change',{bubbles:true})); })()");
-  await evaluate("(() => { const row=[...document.querySelectorAll('.clayer')].find(item=>item.dataset.layerKey==='#0000ff'),z=row.querySelector('[data-k=zOffset]'); z.value='0'; z.dispatchEvent(new Event('input',{bubbles:true})); const split=document.querySelector('#splitJobs'); split.checked=true; split.dispatchEvent(new Event('change',{bubbles:true})); })()");
+  await evaluate("(() => { const row=[...document.querySelectorAll('.clayer')].find(item=>item.dataset.layerKey==='vector:#0000ff'),op=row.querySelector('.clayer__op'); op.value='Score'; op.dispatchEvent(new Event('change',{bubbles:true})); })()");
+  await evaluate("(() => { const row=[...document.querySelectorAll('.clayer')].find(item=>item.dataset.layerKey==='vector:#0000ff'),z=row.querySelector('[data-k=zOffset]'); z.value='0'; z.dispatchEvent(new Event('input',{bubbles:true})); const split=document.querySelector('#splitJobs'); split.checked=true; split.dispatchEvent(new Event('change',{bubbles:true})); })()");
   assert.equal(await evaluate("localStorage.getItem('modcut_split_by_operation')"), "true", "split by operation must persist as a user preference");
   await evaluate("document.querySelector('#sendBtn').click()");
   const splitDeadline = Date.now() + 5_000;
@@ -283,6 +330,41 @@ export async function runWorkflows(client) {
   assert.equal(await evaluate("document.querySelectorAll('.doc-tab').length"), 3, "a dropped project must open in a new tab");
   assert.equal(await evaluate("document.querySelector('.doc-tab.is-active .doc-tab__title').textContent"), "dropped-project.modcut");
   assert.equal(await evaluate("document.querySelector('#file').textContent.includes('*')"), false, "a dropped project must open cleanly");
+
+  const pdfPreview = await evaluate(`import('./pdfimport.js').then(module => module.pdfToArtwork(${JSON.stringify(pdfDataUrl())}, {dpi:72,maxPixels:1000000}).then(result => ({widthMm:result.widthMm,heightMm:result.heightMm,pageCount:result.pageCount,vectorPathCount:result.vectorPathCount,raster:!!result.rasterDataUrl,svg:result.svgText?.includes('<path')})))`);
+  assert.ok(near(pdfPreview.widthMm, 25.4) && near(pdfPreview.heightMm, 12.7), "PDF import must retain the page's physical dimensions");
+  assert.deepEqual({ pageCount: pdfPreview.pageCount, vectorPathCount: pdfPreview.vectorPathCount, raster: pdfPreview.raster, svg: pdfPreview.svg }, { pageCount: 1, vectorPathCount: 1, raster: false, svg: true }, "a vector-only PDF must stay editable without a duplicate raster");
+  const mixedPdf = await evaluate(`import('./pdfimport.js').then(async module => { const result=await module.pdfToArtwork(${JSON.stringify(mixedPdfDataUrl())}, {dpi:72,maxPixels:1000000}); const image=await createImageBitmap(await (await fetch(result.rasterDataUrl)).blob()),canvas=document.createElement('canvas'),context=canvas.getContext('2d'); canvas.width=image.width; canvas.height=image.height; context.drawImage(image,0,0); const pixel=[...context.getImageData(36,18,1,1).data]; return {vectorPathCount:result.vectorPathCount,raster:!!result.rasterDataUrl,linePixel:pixel}; })`);
+  assert.equal(mixedPdf.vectorPathCount, 1, "a mixed PDF must expose its solid path as an editable vector");
+  assert.equal(mixedPdf.raster, true, "a mixed PDF must retain text and images in a raster fallback");
+  assert.equal(mixedPdf.linePixel.slice(0, 3).every(channel => channel > 245), true, "an extracted PDF vector must be omitted from the raster fallback to prevent double output");
+  await evaluate(`window.modcut.setE2EImportResult(${JSON.stringify([{ path: "/e2e/mixed.pdf", name: "mixed.pdf", ext: "pdf", dataUrl: mixedPdfDataUrl() }])}); document.querySelector('#add').click()`);
+  await wait(400);
+  const mixedLayers = await evaluate("[...document.querySelectorAll('.clayer')].filter(row=>row.dataset.layerKey.endsWith(':#000000')).map(row=>({key:row.dataset.layerKey,kind:row.querySelector('.clayer__kind').textContent,op:row.querySelector('.clayer__op').value,choices:[...row.querySelector('.clayer__op').options].map(option=>option.value)}))");
+  assert.deepEqual(mixedLayers, [
+    { key: "raster:#000000", kind: "Raster", op: "Engrave", choices: ["Engrave", "Ignore"] },
+    { key: "vector:#000000", kind: "Vector", op: "Cut", choices: ["Cut", "Engrave", "Score", "Ignore"] },
+  ], "same-color PDF raster and thick vector strokes must remain independently assignable process layers");
+  const thickVectorEngrave = await evaluate("(() => { let row=[...document.querySelectorAll('.clayer')].find(item=>item.dataset.layerKey==='vector:#000000'),op=row.querySelector('.clayer__op'); op.value='Engrave'; op.dispatchEvent(new Event('change',{bubbles:true})); row=[...document.querySelectorAll('.clayer')].find(item=>item.dataset.layerKey==='vector:#000000'); return row.querySelector('[data-quality]').textContent; })()");
+  const thickVectorRows = Number(thickVectorEngrave.match(/([0-9,]+) filled-vector scan lines/)?.[1].replaceAll(",", ""));
+  assert.ok(thickVectorRows > 5, "Engrave quality must include multiple scan lines across an open vector stroke's painted width");
+  await evaluate("(() => { const target='vector:#000000',keys=[...document.querySelectorAll('.clayer')].map(row=>row.dataset.layerKey).filter(key=>key!==target); for(const key of keys){const row=[...document.querySelectorAll('.clayer')].find(item=>item.dataset.layerKey===key),toggle=row?.querySelector('.toggle'); if(toggle?.getAttribute('aria-checked')==='true') toggle.click();} document.querySelector('#simulate').click(); })()");
+  await wait(200);
+  assert.ok(await evaluate("paper.project.layers.at(-1).children[0]?.children.length || 0") > 5, "simulation must contain multiple raster scan paths for the thick open vector stroke");
+  await evaluate("document.querySelector('#simClose').click()");
+  const tiffPreview = await evaluate(`import('./tiffimport.js').then(module => { const result=module.tiffToPng(${JSON.stringify(tiffDataUrl)}); return {frameCount:result.frameCount,png:result.dataUrl.startsWith('data:image/png;base64,')}; })`);
+  assert.deepEqual(tiffPreview, { frameCount: 1, png: true }, "TIFF import must decode its first frame to a PNG raster");
+
+  await evaluate(`window.modcut.setE2EImportResult(${JSON.stringify([{ path: "/e2e/design.cdr", name: "design.cdr", ext: "cdr", kind: "unsupported", reason: "unsupported-format" }])}); document.querySelector('#add').click()`);
+  await wait();
+  assert.equal(await evaluate("document.querySelector('.message-modal .panel__header').textContent"), "Unsupported file format");
+  assert.equal(await evaluate("document.querySelector('.message-modal').textContent.includes('SVG, SVGZ, DXF, PLT, HPGL') && document.querySelector('.message-modal').textContent.includes('MODCUT')"), true, "unsupported-format dialog must list supported vector, image and document formats");
+  await evaluate("document.querySelector('.message-modal .modal-actions button').click()");
+  await evaluate(`window.modcut.setE2EImportResult(${JSON.stringify([{ path: "/e2e/legacy.ai", name: "legacy.ai", ext: "ai", kind: "unsupported", reason: "ai-not-pdf-compatible" }])}); document.querySelector('#add').click()`);
+  await wait();
+  assert.equal(await evaluate("document.querySelector('.message-modal .panel__header').textContent"), "Illustrator file is not PDF-compatible");
+  assert.equal(await evaluate("document.querySelector('.message-modal').textContent.includes('Create PDF Compatible File') && document.querySelector('.message-modal').textContent.includes('Export As → SVG')"), true, "AI warning must explain both the compatible-AI and recommended SVG fixes");
+  await evaluate("document.querySelector('.message-modal .modal-actions button').click()");
 
   await wait(700);
   const recovery = await evaluate("window.modcut.readRecovery().then(JSON.parse)");

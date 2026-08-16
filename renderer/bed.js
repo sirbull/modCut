@@ -25,16 +25,10 @@ import { defaultMotionTiming, targetMotionSpeed, trapezoidPlan } from "./motion-
 const MM_PER_PX = 25.4 / 96;
 
 export function engraveStrategy(item) {
-  if (item?.className === "Raster") return "raster";
-  // Engrave means area engraving for every closed vector. Stroke-only closed
-  // shapes must not silently degrade to Score; Score is the explicit outline
-  // operation. Open paths have no enclosed area, so tracing is their only
-  // meaningful fallback.
-  if (item?.className === "CompoundPath") {
-    const children = Array.from(item.children || []);
-    return !children.length || children.some((child) => child.closed) ? "raster" : "trace";
-  }
-  return item?.closed ? "raster" : "trace";
+  // Cut and Score trace center paths. Engrave reproduces the painted
+  // appearance instead: fills and the complete visible stroke footprint,
+  // including open paths, width, caps, joins and dash patterns.
+  return ["Path", "CompoundPath", "Raster"].includes(item?.className) ? "raster" : "trace";
 }
 
 export function containsRasterScan(groups) {
@@ -1447,7 +1441,8 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     let vectorPoints = 0;
     for (const spec of specs) for (const item of itemsForSpec(spec)) {
       if (spec.op === "Engrave" && engraveStrategy(item) === "raster") {
-        const grid = rasterGrid(item.bounds.width, item.bounds.height, spec.dpi || 300);
+        const bounds = item.className === "Raster" ? item.bounds : item.getStrokeBounds?.() || item.bounds;
+        const grid = rasterGrid(bounds.width, bounds.height, spec.dpi || 300);
         const entry = { ...grid, color: spec.color, kind: item.className === "Raster" ? "image" : "filled-vector" };
         if (item.className === "Raster") rasters.push(entry);
         else filledScans.push(entry);
@@ -1468,7 +1463,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       overlapPoint: it.closed ? it.getPointAt(Math.min(0.1, len / 4)) : null,
     });
   }
-  function rasterImageScan(it, sp, out, preview = false) {
+  function rasterImageScan(it, sp, out, preview = false, alphaOnly = false) {
     const b = it.bounds;
     if (!b.width || !b.height) return;
     let image;
@@ -1492,7 +1487,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       for (let column = 0; column < columns; column++) {
         const px = Math.max(0, Math.min(width - 1, Math.floor(((column + 0.5) / columns) * width)));
         const i = (py * width + px) * 4;
-        const dark = data[i + 3] > 8 && data[i] < 128;
+        const dark = data[i + 3] > 8 && (alphaOnly || data[i] < 128);
         if (dark && start == null) start = column;
         if ((!dark || column === columns - 1) && start != null) {
           const end = dark && column === columns - 1 ? column + 1 : column;
@@ -1512,28 +1507,18 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   }
   function rasterScan(it, sp, out, preview = false) {
     if (it.className === "Raster") { rasterImageScan(it, sp, out, preview); return; }
-    const b = it.bounds; if (!b.height) return;
-    const grid = rasterGrid(b.width, b.height, sp.dpi || 300);
-    let interval = grid.intervalMm;
-    if (preview && grid.rows > 200) interval = b.height / 200;
-    const sampleWeight = Math.max(1, interval / grid.intervalMm);
-    const ys = [];
-    for (let y = b.bottom; y >= b.top; y -= interval) ys.push(y);
-    if (!sp.bottomUp) ys.reverse();
-    let flip = false;
-    for (const y of ys) {
-      const line = new paper.Path.Line(P(b.left - 1, y), P(b.right + 1, y));
-      const xs = (it.getIntersections(line) || []).map((i) => i.point.x).sort((a, c) => a - c);
-      line.remove();
-      const runs = [];
-      for (let k = 0; k + 1 < xs.length; k += 2) runs.push([xs[k], xs[k + 1]]);
-      const ordered = flip ? runs.slice().reverse() : runs;
-      for (const [left, right] of ordered) {
-        let a = P(left, y), c = P(right, y);
-        if (flip) { const t = a; a = c; c = t; }
-        out.push({ pts: [a, c], speed: sp.speed, power: sp.power, freq: sp.freq, dpi: sp.dpi, dither: sp.dither, op: "Engrave", raster: true, sampleWeight });
-      }
-      flip = !flip;
+    const requestedDpi = Math.max(1, Number(sp.dpi) || 300);
+    const renderDpi = preview ? Math.min(requestedDpi, 150) : requestedDpi;
+    // Paper.js assumes project units are PostScript points. modCut project
+    // units are millimetres, so convert pixels/inch to Paper.js resolution.
+    const resolution = renderDpi * 72 / 25.4;
+    const raster = it.rasterize({ resolution, insert: false });
+    try {
+      // Color selects the process layer; alpha describes the complete painted
+      // silhouette and therefore includes stroke width, caps, joins and dashes.
+      rasterImageScan(raster, sp, out, preview, true);
+    } finally {
+      raster.remove();
     }
   }
   function engraveSeg(it, sp, out, preview = false) {

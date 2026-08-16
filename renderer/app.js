@@ -1,11 +1,15 @@
 import { createBed } from "./bed.js";
 import { prepareSVG } from "./svgimport.js";
 import { dxfToSvg } from "./dxfimport.js";
+import { hpglToSvg } from "./hpglimport.js";
+import { pdfToArtwork } from "./pdfimport.js";
+import { tiffToPng } from "./tiffimport.js";
 import { OPERATIONS, canAssignRasterToOperation, distinctVectorColor, isOutputLayer, operationsForLayer } from "./layer-model.mjs";
 import { RASTER_MODES, applyProcessProfile, combinedFocusOffset, normalizeProcessProfile, profilesForOperation } from "./process-profiles.mjs";
 import { groupJobOperations, jobFilename } from "./job-split.mjs";
 import { defaultMotionTiming, motionTimingForMachine } from "./motion-timing.mjs";
-import { openModal } from "./ui.js";
+import { openModal, showMessageModal } from "./ui.js";
+import { DOCUMENT_FORMATS, IMAGE_FORMATS, PDF_FORMATS, TEXT_FORMATS, TIFF_FORMATS } from "../electron/import-formats.mjs";
 
 const $ = (id) => document.getElementById(id);
 const OPS = OPERATIONS;
@@ -14,9 +18,9 @@ const clampSpeedPct = (v) => Math.max(1, Math.min(100, Number(v) || 1));
 const safeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
 const isEpilogDriver = (driver) => /^epilog\s+zing$/i.test(String(driver || ""));
 const defaultNetworkPort = (driver) => isEpilogDriver(driver) ? 515 : 23;
-const VECTOR_FILE_EXTENSIONS = new Set(["svg", "dxf"]);
-const RASTER_FILE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "bmp", "gif"]);
-const PROJECT_FILE_EXTENSION = "modcut";
+const VECTOR_FILE_EXTENSIONS = new Set(TEXT_FORMATS);
+const RASTER_FILE_EXTENSIONS = new Set([...IMAGE_FORMATS, ...TIFF_FORMATS, ...PDF_FORMATS]);
+const PROJECT_FILE_EXTENSION = DOCUMENT_FORMATS[0];
 
 // --- persisted stores (seeded from presets on first run, then fully editable) --
 const F = 20000; // default beam frequency (Hz)
@@ -606,13 +610,100 @@ function resetWorkspace({ filename = "job", label = "Untitled" } = {}) {
   refreshPos();
 }
 
-function prepareArtwork(f) {
+async function prepareArtwork(f) {
   if (VECTOR_FILE_EXTENSIONS.has(f.ext)) {
-    const svgText = f.ext === "dxf" ? dxfToSvg(f.text) : f.text;
+    const svgText = f.ext === "dxf" ? dxfToSvg(f.text)
+      : ["plt", "hpgl"].includes(f.ext) ? hpglToSvg(f.text)
+        : f.text;
     return { kind: "vector", ...prepareSVG(svgText) };
+  }
+  if (["pdf", "ai"].includes(f.ext)) {
+    const imported = await pdfToArtwork(f.dataUrl);
+    if (!imported.vectorPathCount && !imported.rasterDataUrl) throw new Error("The first PDF page contains no supported visible artwork.");
+    const source = f.ext === "ai" ? "Illustrator" : "PDF";
+    const pageSuffix = imported.pageCount > 1 ? ` Only page 1 of ${imported.pageCount} was imported.` : "";
+    let warning;
+    if (imported.vectorPathCount && imported.rasterDataUrl) {
+      warning = `${source}: imported ${imported.vectorPathCount} editable vector path${imported.vectorPathCount === 1 ? "" : "s"}; text, images and unsupported effects remain a ${imported.effectiveDpi} DPI raster engraving.${pageSuffix}`;
+    } else if (imported.vectorPathCount) {
+      warning = `${source}: imported ${imported.vectorPathCount} editable vector path${imported.vectorPathCount === 1 ? "" : "s"}.${pageSuffix}`;
+    } else {
+      warning = `${source} imported as a ${imported.effectiveDpi} DPI raster engraving.${pageSuffix} Convert Illustrator artwork or text to outlines for editable paths.`;
+    }
+    return {
+      kind: "pdf",
+      vector: imported.svgText ? prepareSVG(imported.svgText) : null,
+      rasterDataUrl: imported.rasterDataUrl,
+      widthMm: imported.widthMm,
+      warning,
+    };
+  }
+  if (["tif", "tiff"].includes(f.ext)) {
+    const rendered = tiffToPng(f.dataUrl);
+    return { kind: "image", ...rendered, warning: rendered.frameCount > 1 ? `Imported the first of ${rendered.frameCount} TIFF pages.` : null };
   }
   if (f.dataUrl) return { kind: "image", dataUrl: f.dataUrl };
   return null;
+}
+
+function formatLabel(formats) {
+  return formats.map((format) => format.toUpperCase()).join(", ");
+}
+
+async function showImportIssue(f) {
+  if (f.reason === "ai-not-pdf-compatible") {
+    await showMessageModal({
+      title: "Illustrator file is not PDF-compatible",
+      paragraphs: [
+        `modCut cannot open “${f.name}” because the AI file does not contain PDF-compatible data.`,
+        "For editable laser paths, SVG is the recommended format.",
+      ],
+      sections: [
+        {
+          title: "Save a compatible AI file in Illustrator",
+          ordered: true,
+          items: [
+            "Open the file in Adobe Illustrator and choose File → Save As.",
+            "Choose Adobe Illustrator (AI), then enable Create PDF Compatible File in Illustrator Options.",
+            "Save the file and import the new copy in modCut.",
+          ],
+        },
+        {
+          title: "Better for cutting",
+          items: ["Choose File → Export → Export As → SVG. Convert text to outlines before exporting when fonts must travel with the design."],
+        },
+      ],
+    });
+    return;
+  }
+  if (f.reason === "document-not-addable") {
+    await showMessageModal({
+      title: "Open project files with Import",
+      paragraphs: ["A .modcut file is a complete project and cannot be added as artwork. Choose Import to open it in the active project tab."],
+    });
+    return;
+  }
+  const invalidPdf = f.reason === "invalid-pdf";
+  await showMessageModal({
+    title: invalidPdf ? "Invalid PDF file" : "Unsupported file format",
+    paragraphs: [invalidPdf
+      ? `“${f.name}” does not contain valid PDF data.`
+      : `modCut cannot import ${f.ext ? `.${f.ext}` : "this file type"} from “${f.name}”.`],
+    sections: [
+      {
+        title: "Supported vector files",
+        items: [formatLabel(TEXT_FORMATS)],
+      },
+      {
+        title: "Supported image files",
+        items: [formatLabel([...IMAGE_FORMATS, ...TIFF_FORMATS])],
+      },
+      {
+        title: "Documents",
+        items: [`PDF (editable solid vectors plus raster fallback), AI (PDF-compatible), ${formatLabel(DOCUMENT_FORMATS)} projects`],
+      },
+    ],
+  });
 }
 
 async function placeArtwork(prepared) {
@@ -620,7 +711,16 @@ async function placeArtwork(prepared) {
     bed.loadSVG(prepared.node, prepared.widthMm, prepared.heightMm, prepared.viewBox);
     return;
   }
-  await bed.loadImage(prepared.dataUrl, null);
+  if (prepared.kind === "pdf") {
+    if (prepared.vector) {
+      bed.loadSVG(prepared.vector.node, prepared.vector.widthMm, prepared.vector.heightMm, prepared.vector.viewBox);
+    }
+    if (prepared.rasterDataUrl) await bed.loadImage(prepared.rasterDataUrl, prepared.widthMm || null);
+    state.mappingMode = "color";
+    [...$("mapmode").children].forEach((c) => c.classList.toggle("on", c.dataset.mode === "color"));
+    return;
+  }
+  await bed.loadImage(prepared.dataUrl, prepared.widthMm || null);
   state.mappingMode = "color";
   [...$("mapmode").children].forEach((c) => c.classList.toggle("on", c.dataset.mode === "color"));
 }
@@ -630,10 +730,15 @@ async function addArtworkFiles(files) {
   const wasEmpty = !bed.getDesign();
   let added = 0;
   for (const f of files) {
+    if (f.kind === "unsupported") {
+      await showImportIssue(f);
+      continue;
+    }
     try {
-      const prepared = prepareArtwork(f);
+      const prepared = await prepareArtwork(f);
       if (!prepared) throw new Error(`.${f.ext} files cannot be added yet.`);
       await placeArtwork(prepared);
+      if (prepared.warning) toast(`${f.name}: ${prepared.warning}`, "info");
       added++;
     } catch (e) {
       toast(`Could not add ${f.name}: ${e.message}`, "err");
@@ -659,11 +764,15 @@ async function doImport() {
     return;
   }
   if (!f) return;
+  if (f.kind === "unsupported") {
+    await showImportIssue(f);
+    return;
+  }
   let documentData = null;
   let prepared = null;
   try {
     if (f.kind === "document") documentData = JSON.parse(f.text);
-    else prepared = prepareArtwork(f);
+    else prepared = await prepareArtwork(f);
   } catch (e) {
     toast("Import failed: " + e.message, "err");
     return;
@@ -683,9 +792,9 @@ async function doImport() {
     await placeArtwork(prepared);
     syncColorsAndLayers();
     markDirty();
-    toast(prepared.kind === "image"
+    toast(prepared.warning || (prepared.kind === "image"
       ? "Image imported as grayscale raster engraving."
-      : `Imported ${f.name} into a new workspace.`, "ok");
+      : `Imported ${f.name} into a new workspace.`), prepared.warning ? "info" : "ok");
   } catch (e) {
     toast("Import failed: " + e.message, "err");
   }
@@ -737,7 +846,12 @@ async function droppedFilePayload(file) {
   try { path = window.modcut.getPathForFile?.(file) || null; } catch {}
   const payload = { name: file.name, path, ext };
   if (ext === PROJECT_FILE_EXTENSION) return { ...payload, kind: "document", text: await file.text() };
-  if (VECTOR_FILE_EXTENSIONS.has(ext)) return { ...payload, text: await file.text() };
+  if (VECTOR_FILE_EXTENSIONS.has(ext)) {
+    const text = ext === "svgz"
+      ? await new Response(file.stream().pipeThrough(new DecompressionStream("gzip"))).text()
+      : await file.text();
+    return { ...payload, text };
+  }
   if (RASTER_FILE_EXTENSIONS.has(ext)) {
     const dataUrl = await new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -896,7 +1010,7 @@ function syncLayers() {
     ];
     state.layers = orderedColors.map((c) => {
       const candidates = state.layers.filter((layer) => layer.color?.toLowerCase() === c.color.toLowerCase());
-      const existing = prev.get(c.key) || candidates.find((layer) => c.raster && layer.raster) || candidates[0];
+      const existing = prev.get(c.key) || candidates.find((layer) => Boolean(layer.raster) === Boolean(c.raster));
       if (!existing) return newLayer(c.color, c.raster ? "Engrave" : "Cut", c.raster, c.key);
       const layer = { ...existing, key: c.key, color: c.color, raster: c.raster };
       if (c.raster && !canAssignRasterToOperation(layer.op)) layer.op = "Engrave";
@@ -1013,6 +1127,7 @@ function layerRow(l, layerIndex) {
     <div class="clayer__top">
       <span class="clayer__number" title="Job order">${layerIndex + 1}</span>
       <span class="clayer__sw" style="background:${l.color || "linear-gradient(135deg,#888,#ccc)"}"></span>
+      <span class="clayer__kind">${l.raster ? "Raster" : "Vector"}</span>
       ${byColor
         ? `<select class="select clayer__op">${layerOps.map((o) => `<option ${o === l.op ? "selected" : ""}>${o}</option>`).join("")}</select>`
         : `<strong class="clayer__op">All shapes → ${l.op}</strong>`}

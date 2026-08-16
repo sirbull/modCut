@@ -8,8 +8,12 @@ and provides a guarded GRBL execution path.
 
 The first complete, hardware-testable path is available:
 
-- import SVG and DXF artwork, and import PNG/JPG raster artwork automatically as
+- import SVG/SVGZ, DXF and HP-GL/PLT artwork as editable vector paths;
+- import PNG, JPG, BMP, GIF, WebP, AVIF and TIFF images automatically as
   engraving with non-destructive grayscale photo controls;
+- split page-one PDF and PDF-compatible Adobe Illustrator artwork into editable
+  solid vector paths plus a high-resolution raster fallback for text, images,
+  clipping, patterns and unsupported effects;
 - open artwork in a new workspace with Import, or combine multiple selected
   artwork files non-destructively with Add;
 - drag SVG, DXF and raster images directly into the active project, while
@@ -57,6 +61,48 @@ The first complete, hardware-testable path is available:
 The real-execution drivers are Dummy, GRBL and Epilog Zing. Epilog output uses
 LibLaserCut's native HPGL/PCL job generation and LPR/LPD delivery on port 515;
 it is not sent as GRBL G-code. Ruida is not enabled for real execution yet.
+
+## Supported files
+
+| File type | Import mode | Important limits |
+|---|---|---|
+| SVG, SVGZ | Editable vector | Recommended Illustrator interchange format. SVGZ is gzip-compressed SVG. Convert text to paths when the receiving computer may not have the fonts. |
+| DXF | Editable vector | LINE, LWPOLYLINE, POLYLINE/VERTEX, CIRCLE, ARC and ELLIPSE in common 2D files. Text, dimensions, hatches, blocks and splines are not imported yet. |
+| HPGL, PLT | Editable vector | Common absolute/relative pen paths, pen selection, arcs and circles. Plotter coordinates use the conventional 40 units/mm. |
+| PNG, JPG/JPEG, BMP, GIF, WebP, AVIF | Raster engraving | Animated images use the decoded still frame. |
+| TIFF/TIF | Raster engraving | The first image/page is imported. |
+| PDF | Hybrid vector/raster | Solid stroked and filled paths on page 1 become editable vectors. Every real vector stroke is retained regardless of line width; no 0.001 pt/hairline convention is required. Text, images, clipping, patterns and unsupported effects remain a raster engraving at up to 300 DPI and 36 megapixels. Raster and vector content remain separate process layers even when their colors match, and extracted paths are removed from the raster pass to avoid duplicate output. |
+| AI | Hybrid vector/raster | Works when Illustrator saved a PDF-compatible AI file. Outlined artwork is retained as editable paths; live text and unsupported effects use the raster fallback. |
+| MODCUT | Editable project | Portable project document described below. |
+
+EPS/PostScript, CDR, PSD, G-code/NC and multi-page PDF/TIFF import are not
+currently supported. Existing machine output is deliberately not treated as an
+editable design source.
+
+Vector stroke width never determines whether artwork is recognized as vector.
+Cut and Score follow the center path once, while Engrave reproduces the painted
+area, including fill, stroke width, caps, joins and dash patterns.
+
+The file picker includes **All files** so an attempted unsupported import can
+show a concise dialog with the complete supported-format list. A non-PDF-compatible
+AI file gets a dedicated explanation with Illustrator's **Create PDF Compatible
+File** steps and SVG export guidance instead of a generic import error.
+
+## Portable `.modcut` projects
+
+**Save document** writes the active tab as one portable `.modcut` JSON file.
+It contains the complete Paper.js design (including embedded raster source
+data), color layers and operations, layer power/speed/frequency/focus and raster
+settings, document units, grid, path ordering, and the selected machine and
+material identifiers. The original imported artwork does not need to travel
+beside the project file.
+
+The file does not copy local machine profiles, connection details, drivers,
+material libraries or process-profile libraries. A receiving computer must
+therefore have the intended machine/material configured locally and the user
+must verify the selected machine, material, layer values and placement before
+running. **Save job** and **Export G-code / RD** create machine output; they are
+not substitutes for the editable `.modcut` document.
 
 ## Install modCut
 

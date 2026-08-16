@@ -2,17 +2,17 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { containsRasterScan, engraveStrategy } from "./bed.js";
 
-test("open vector paths are traced when assigned to Engrave", () => {
-  assert.equal(engraveStrategy({ className: "Path", closed: false, fillColor: null }), "trace");
-  assert.equal(engraveStrategy({ className: "Path", closed: false, fillColor: { alpha: 1 } }), "trace");
+test("open vector strokes use painted-area engraving", () => {
+  assert.equal(engraveStrategy({ className: "Path", closed: false, strokeWidth: 0.1 }), "raster");
+  assert.equal(engraveStrategy({ className: "Path", closed: false, strokeWidth: 5 }), "raster");
 });
 
-test("closed paths use area engraving even when they only have a stroke", () => {
+test("closed paths use painted-area engraving", () => {
   assert.equal(engraveStrategy({ className: "Path", closed: true, fillColor: null }), "raster");
   assert.equal(engraveStrategy({ className: "Path", closed: true, fillColor: { alpha: 0 } }), "raster");
 });
 
-test("filled closed vectors and raster images use scan engraving", () => {
+test("filled vectors and raster images use scan engraving", () => {
   assert.equal(engraveStrategy({ className: "Path", closed: true, fillColor: { alpha: 1 } }), "raster");
   assert.equal(engraveStrategy({ className: "CompoundPath", fillColor: { alpha: 0.5 } }), "raster");
   assert.equal(engraveStrategy({ className: "Raster" }), "raster");

@@ -46,6 +46,12 @@ the same commit that completes an item.
 
 ## Recently completed
 
+- [x] Portable `.modcut` documents with embedded vector/raster design, layers,
+  operations and document settings, separate from local machine connections and libraries.
+- [x] SVG/SVGZ, common 2D DXF and HP-GL/PLT vector import, plus PNG, JPEG, BMP, GIF,
+  WebP, AVIF and TIFF raster import.
+- [x] Hybrid page-one import for PDF and PDF-compatible Illustrator files,
+  preserving solid vector paths while rasterizing text, images and complex effects.
 - [x] Named Cut, Engrave and Score process profiles with per-operation power,
   speed, frequency, layer focus offset and engraving raster controls.
 - [x] Guarded focus control combining a global machine calibration with each
