@@ -13,6 +13,7 @@ import de.thomas_oster.liblasercut.platform.Point;
 import de.thomas_oster.liblasercut.platform.Util;
 import de.thomas_oster.liblasercut.properties.PowerSpeedFocusFrequencyProperty;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -182,8 +183,7 @@ final class EpilogJobBuilder {
     if (grayscale) {
       GreyRaster raster = new GreyRaster(bounds.width(), bounds.height());
       for (int y = 0; y < bounds.height(); y++) for (int x = 0; x < bounds.width(); x++) raster.setGreyScale(x, y, 255);
-      paintRasterRuns(segments, dpi, bounds, bedWidth, bedHeight, (x, y, segment) -> {
-        double power = bounded(segment.node(), "power", 0, 100, segment.index());
+      paintRasterRuns(segments, dpi, bounds, bedWidth, bedHeight, (x, y, segment, power) -> {
         int grey = maxPower <= 0 ? 255 : (int) Math.round(255 * (1 - Math.min(1, power / maxPower)));
         if (grey < raster.getGreyScale(x, y)) raster.setGreyScale(x, y, grey);
       });
@@ -191,31 +191,76 @@ final class EpilogJobBuilder {
     }
 
     BlackWhiteRaster raster = new BlackWhiteRaster(bounds.width(), bounds.height());
-    paintRasterRuns(segments, dpi, bounds, bedWidth, bedHeight, (x, y, segment) -> raster.setBlack(x, y, true));
+    paintRasterRuns(segments, dpi, bounds, bedWidth, bedHeight, (x, y, segment, power) -> raster.setBlack(x, y, true));
     return new RasterPart(raster, rasterProperty, origin, dpi);
   }
 
   @FunctionalInterface
-  private interface PixelPainter { void paint(int x, int y, IndexedSegment segment); }
+  private interface PixelPainter { void paint(int x, int y, IndexedSegment segment, double power); }
 
   private static void paintRasterRuns(List<IndexedSegment> segments, int dpi, RasterBounds bounds,
                                       double bedWidth, double bedHeight, PixelPainter painter) {
     for (IndexedSegment segment : segments) {
       JsonNode points = segment.node().path("points");
       JsonNode a = points.get(0), b = points.get(points.size() - 1);
-      double ax = coordinate(a, "x", bedWidth, segment.index());
       double ay = coordinate(a, "y", bedHeight, segment.index());
-      double bx = coordinate(b, "x", bedWidth, segment.index());
       double by = coordinate(b, "y", bedHeight, segment.index());
-      int y = (int) Math.round(Util.mm2px((ay + by) / 2, dpi)) - bounds.minY();
-      int start = (int) Math.floor(Util.mm2px(Math.min(ax, bx), dpi) + 1e-6) - bounds.minX();
-      int endExclusive = (int) Math.ceil(Util.mm2px(Math.max(ax, bx), dpi) - 1e-6) - bounds.minX();
-      if (endExclusive <= start) endExclusive = start + 1;
-      start = Math.max(0, start);
-      endExclusive = Math.min(bounds.width(), endExclusive);
-      if (y < 0 || y >= bounds.height()) continue;
-      for (int x = start; x < endExclusive; x++) painter.paint(x, y, segment);
+      JsonNode encodedSamples = segment.node().path("samples");
+      if (encodedSamples.isTextual()) {
+        byte[] samples;
+        try {
+          samples = Base64.getDecoder().decode(encodedSamples.asText());
+        } catch (IllegalArgumentException error) {
+          throw invalidSegment(segment.index(), "rasterraden har ugyldige samples");
+        }
+        if (samples.length == 0) throw invalidSegment(segment.index(), "rasterraden mangler samples");
+        double left = coordinate(a, "x", bedWidth, segment.index());
+        double right = coordinate(b, "x", bedWidth, segment.index());
+        double maxPower = bounded(segment.node(), "maxPower", 0, 100, segment.index());
+        int start = 0;
+        int value = Byte.toUnsignedInt(samples[0]);
+        for (int sample = 1; sample <= samples.length; sample++) {
+          int next = sample < samples.length ? Byte.toUnsignedInt(samples[sample]) : -1;
+          if (next == value) continue;
+          if (value > 0) {
+            double runLeft = left + (right - left) * start / samples.length;
+            double runRight = left + (right - left) * sample / samples.length;
+            paintRasterRange(segment, maxPower * value / 255.0, runLeft, runRight, ay, by, dpi, bounds, painter);
+          }
+          start = sample;
+          value = next;
+        }
+        continue;
+      }
+      JsonNode compactRuns = segment.node().path("runs");
+      if (compactRuns.isArray()) {
+        if (compactRuns.isEmpty()) throw invalidSegment(segment.index(), "komprimert rasterrad mangler runs");
+        for (JsonNode run : compactRuns) {
+          double left = coordinate(run, "left", bedWidth, segment.index());
+          double right = coordinate(run, "right", bedWidth, segment.index());
+          double power = bounded(run, "power", 0, 100, segment.index());
+          paintRasterRange(segment, power, left, right, ay, by, dpi, bounds, painter);
+        }
+        continue;
+      }
+      double ax = coordinate(a, "x", bedWidth, segment.index());
+      double bx = coordinate(b, "x", bedWidth, segment.index());
+      double power = bounded(segment.node(), "power", 0, 100, segment.index());
+      paintRasterRange(segment, power, ax, bx, ay, by, dpi, bounds, painter);
     }
+  }
+
+  private static void paintRasterRange(IndexedSegment segment, double power,
+                                       double ax, double bx, double ay, double by,
+                                       int dpi, RasterBounds bounds, PixelPainter painter) {
+    int y = (int) Math.round(Util.mm2px((ay + by) / 2, dpi)) - bounds.minY();
+    int start = (int) Math.floor(Util.mm2px(Math.min(ax, bx), dpi) + 1e-6) - bounds.minX();
+    int endExclusive = (int) Math.ceil(Util.mm2px(Math.max(ax, bx), dpi) - 1e-6) - bounds.minX();
+    if (endExclusive <= start) endExclusive = start + 1;
+    start = Math.max(0, start);
+    endExclusive = Math.min(bounds.width(), endExclusive);
+    if (y < 0 || y >= bounds.height()) return;
+    for (int x = start; x < endExclusive; x++) painter.paint(x, y, segment, power);
   }
 
   private static RasterBounds rasterBounds(List<IndexedSegment> segments, int dpi, double bedWidth, double bedHeight) {

@@ -145,7 +145,7 @@ function buildMenu() {
     {
       label: "View",
       submenu: [
-        { label: "Zoom in", accelerator: "CmdOrCtrl+=", click: () => send("zoom-in") },
+        { label: "Zoom in", accelerator: "CmdOrCtrl+Plus", click: () => send("zoom-in") },
         { label: "Zoom out", accelerator: "CmdOrCtrl+-", click: () => send("zoom-out") },
         { label: "Fit to bed", accelerator: "CmdOrCtrl+0", click: () => send("zoom-fit") },
         { type: "separator" },

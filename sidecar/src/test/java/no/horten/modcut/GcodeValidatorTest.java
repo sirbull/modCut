@@ -8,6 +8,13 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class GcodeValidatorTest {
+  @Test
+  void acceptsCompactRasterPowerChangesOnLinearMoves() {
+    var lines = List.of("G21", "G90", "M5", "G0 X1 Y1", "M4 S0", "G1 X2 Y1 S500 F1200", "G1 X3 Y1 S0 F1200", "M5");
+    var report = GcodeValidator.validate(lines, 100, 100, 5000);
+    assertEquals(3, report.motionCount());
+  }
+
   private static final List<String> SAFE_JOB = List.of(
       "; generated", "G21", "G90", "M5", "G0 X10 Y20", "M4 S500",
       "G1 X50 Y20 F1200", "G1 X50 Y40 F1200", "M5", "G0 X0 Y0");

@@ -35,6 +35,7 @@ final class GcodeValidator {
 
     boolean millimetres = false;
     boolean absolute = false;
+    boolean laserModeEnabled = false;
     boolean laserOn = false;
     int bytes = 0;
     int motions = 0;
@@ -77,11 +78,19 @@ final class GcodeValidator {
       if (command.equals("G90")) absolute = true;
       if (command.equals("M4")) {
         if (power == null || power < 0 || power > 1000) throw invalid(index, "laserpower S må være 0–1000");
+        laserModeEnabled = true;
         laserOn = power > 0;
       }
-      if (command.equals("M5")) laserOn = false;
+      if (command.equals("M5")) { laserModeEnabled = false; laserOn = false; }
 
       boolean motion = command.equals("G0") || command.equals("G00") || command.equals("G1") || command.equals("G01");
+      boolean linearMotion = command.equals("G1") || command.equals("G01");
+      if (power != null && !command.equals("M4")) {
+        if (!linearMotion) throw invalid(index, "S kan bare brukes med M4 eller G1");
+        if (!laserModeEnabled) throw invalid(index, "G1 med laserpower S krever M4 først");
+        if (power < 0 || power > 1000) throw invalid(index, "laserpower S må være 0–1000");
+        laserOn = power > 0;
+      }
       if (motion) {
         if (!millimetres || !absolute) throw invalid(index, "G21 og G90 må stå før første bevegelse");
         if (nextX == null && nextY == null && nextZ == null) throw invalid(index, "bevegelsen mangler X/Y/Z");
