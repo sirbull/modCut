@@ -189,6 +189,18 @@ export async function runWorkflows(client) {
   assert.ok(near(shifted.ratio, initial.ratio), "Shift must preserve aspect ratio");
   await key("z", 4);
   await click({ x: (r1.x + r2.x) / 2, y: r1.y });
+  const beforeLateShift = await transformState();
+  await mouse("mouseMoved", beforeLateShift.corner);
+  await mouse("mousePressed", beforeLateShift.corner, { buttons: 1 });
+  await mouse("mouseMoved", { x: beforeLateShift.corner.x + 35, y: beforeLateShift.corner.y + 4 }, { buttons: 1 });
+  await client.command("Input.dispatchKeyEvent", { type: "keyDown", key: "Shift", code: "ShiftLeft", modifiers: 8 });
+  await mouse("mouseMoved", { x: beforeLateShift.corner.x + 70, y: beforeLateShift.corner.y + 18 }, { buttons: 1, modifiers: 8 });
+  await mouse("mouseReleased", { x: beforeLateShift.corner.x + 70, y: beforeLateShift.corner.y + 18 }, { modifiers: 8 });
+  await client.command("Input.dispatchKeyEvent", { type: "keyUp", key: "Shift", code: "ShiftLeft" });
+  const lateShifted = await transformState();
+  assert.ok(near(lateShifted.ratio, beforeLateShift.ratio), "Shift pressed during scaling must restore the drag-start aspect ratio");
+  await key("z", 4);
+  await click({ x: (r1.x + r2.x) / 2, y: r1.y });
   const beforeAlt = await transformState();
   await evaluate("window.dispatchEvent(new KeyboardEvent('keydown',{key:'Alt',altKey:true,bubbles:true}))");
   await client.command("Input.dispatchKeyEvent", { type: "keyDown", key: "Alt", code: "AltLeft", modifiers: 1 });

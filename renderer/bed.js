@@ -754,7 +754,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   // --- select / move / scale / rotate / marquee (Paper tool) --------------
   const tool = new paper.Tool();
   let mode = null, moveItems = null, marquee = null, downPt = null;
-  let anchor = null, scaleKey = null, scaleCenter = null, scaleOpposite = null, scaleDownPoint = null, scaleFromCenter = false, lastVec = null, lastAngle = null;
+  let anchor = null, scaleKey = null, scaleCenter = null, scaleOpposite = null, scaleDownPoint = null, scaleStartVec = null, scaleFromCenter = false, appliedScaleX = 1, appliedScaleY = 1, lastAngle = null;
   let preDrag = null, dragChanged = false;
   let drawStart = null, drawPreview = null, drawMoved = false, preDraw = null;
 
@@ -1103,7 +1103,8 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
         scaleOpposite = h.anchor; scaleDownPoint = e.point.clone();
         scaleFromCenter = altDown || !!e.event.altKey || paper.Key.isDown("alt") || paper.Key.isDown("option");
         anchor = scaleFromCenter ? scaleCenter : scaleOpposite;
-        lastVec = e.point.subtract(anchor);
+        scaleStartVec = e.point.subtract(anchor);
+        appliedScaleX = appliedScaleY = 1;
       }
       else { mode = "rotate"; anchor = selectionBounds().center; lastAngle = e.point.subtract(anchor).angle; }
       return;
@@ -1151,20 +1152,29 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       if (!dragChanged && wantsCenter !== scaleFromCenter) {
         scaleFromCenter = wantsCenter;
         anchor = scaleFromCenter ? scaleCenter : scaleOpposite;
-        lastVec = scaleDownPoint.subtract(anchor);
+        scaleStartVec = scaleDownPoint.subtract(anchor);
+        appliedScaleX = appliedScaleY = 1;
       }
       dragChanged = true;
       const cur = e.point.subtract(anchor);
-      let sx = lastVec.x ? cur.x / lastVec.x : 1, sy = lastVec.y ? cur.y / lastVec.y : 1;
-      if (scaleKey === "tc" || scaleKey === "bc") sx = 1;
-      if (scaleKey === "lc" || scaleKey === "rc") sy = 1;
+      let targetScaleX = scaleStartVec.x ? cur.x / scaleStartVec.x : 1;
+      let targetScaleY = scaleStartVec.y ? cur.y / scaleStartVec.y : 1;
+      if (scaleKey === "tc" || scaleKey === "bc") targetScaleX = 1;
+      if (scaleKey === "lc" || scaleKey === "rc") targetScaleY = 1;
       if (shiftDown || e.event.shiftKey) {
-        if (scaleKey === "tc" || scaleKey === "bc") sx = sy;
-        else if (scaleKey === "lc" || scaleKey === "rc") sy = sx;
-        else { const s = Math.abs(sx - 1) >= Math.abs(sy - 1) ? sx : sy; sx = s; sy = s; }
+        if (scaleKey === "tc" || scaleKey === "bc") targetScaleX = targetScaleY;
+        else if (scaleKey === "lc" || scaleKey === "rc") targetScaleY = targetScaleX;
+        else {
+          const scale = Math.abs(targetScaleX - 1) >= Math.abs(targetScaleY - 1) ? targetScaleX : targetScaleY;
+          targetScaleX = targetScaleY = scale;
+        }
       }
+      const sx = appliedScaleX ? targetScaleX / appliedScaleX : 1;
+      const sy = appliedScaleY ? targetScaleY / appliedScaleY : 1;
       for (const it of selected) it.scale(sx, sy, anchor);
-      lastVec = cur; drawOverlay(); return;
+      appliedScaleX = targetScaleX;
+      appliedScaleY = targetScaleY;
+      drawOverlay(); return;
     }
     if (mode === "rotate") {
       dragChanged = true;
