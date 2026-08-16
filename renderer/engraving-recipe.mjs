@@ -6,7 +6,7 @@ import {
   posterizeGray,
 } from "./raster-processing.mjs";
 
-export const ENGRAVING_RECIPE_VERSION = 1;
+export const ENGRAVING_RECIPE_VERSION = 2;
 export const ENGRAVING_STYLES = Object.freeze(["Photo", "Dots", "Lines", "Crosshatch", "Sketch"]);
 export const PHOTO_MODES = Object.freeze(["Grayscale", "Jarvis", "Floyd-Steinberg", "Stucki", "Atkinson", "Bayer"]);
 
@@ -18,16 +18,18 @@ export const DEFAULT_ENGRAVING_RECIPE = Object.freeze({
   crop: Object.freeze({ x: 0, y: 0, width: 1, height: 1 }),
   adjustments: Object.freeze({
     ...DEFAULT_RASTER_SETTINGS,
+    dehaze: 0,
     denoise: 0,
     enhanceRadius: 1,
     enhanceAmount: 0,
   }),
   style: "Photo",
-  photo: Object.freeze({ mode: "Grayscale", noise: 0 }),
-  dots: Object.freeze({ cellsPerInch: 45, angle: 45, shape: "Round", minSize: 0, maxSize: 92 }),
-  lines: Object.freeze({ linesPerInch: 55, angle: 45, minWidth: 4, maxWidth: 88, roughness: 0 }),
-  crosshatch: Object.freeze({ linesPerInch: 48, angle: 35, crossAngle: 125, crossThreshold: 58, minWidth: 3, maxWidth: 82, roughness: 0 }),
-  sketch: Object.freeze({ edgeRadius: 2, edgeAmount: 1.6, threshold: 42, smoothing: 1 }),
+  photo: Object.freeze({ detail: 50, mode: "Grayscale", noise: 0 }),
+  dots: Object.freeze({ detail: 50, cellsPerInch: 45, angle: 45, shape: "Round", minSize: 0, maxSize: 92 }),
+  lines: Object.freeze({ detail: 50, linesPerInch: 55, angle: 45, minWidth: 4, maxWidth: 88, roughness: 0 }),
+  crosshatch: Object.freeze({ detail: 50, linesPerInch: 48, angle: 35, crossAngle: 125, crossThreshold: 58, minWidth: 3, maxWidth: 82, roughness: 0 }),
+  sketch: Object.freeze({ detail: 50, edgeRadius: 2, edgeAmount: 1.6, threshold: 42, smoothing: 1 }),
+  texts: Object.freeze([]),
 });
 
 function normalizedCrop(value = {}) {
@@ -41,9 +43,35 @@ function normalizedCrop(value = {}) {
   };
 }
 
+const TEXT_FALLBACK_FONT = "Arial";
+
+function normalizedText(value = {}, index = 0) {
+  const text = String(value.text ?? "").slice(0, 500);
+  const fontFamily = String(value.fontFamily || TEXT_FALLBACK_FONT).replace(/[\r\n]/g, " ").slice(0, 160);
+  return {
+    id: String(value.id || `text-${index + 1}`).slice(0, 80),
+    text,
+    fontFamily: fontFamily || TEXT_FALLBACK_FONT,
+    size: clamp(value.size ?? 8, 1, 40),
+    x: clamp(value.x ?? 50, 0, 100),
+    y: clamp(value.y ?? 50, 0, 100),
+    weight: value.weight === "bold" ? "bold" : "normal",
+    style: value.style === "italic" ? "italic" : "normal",
+    color: value.color === "#ffffff" ? "#ffffff" : "#000000",
+  };
+}
+
+function normalizedTexts(values) {
+  if (!Array.isArray(values)) return [];
+  // Keep an empty draft layer too: this lets a user choose font, style and
+  // placement before typing, while it remains a no-op in the raster output.
+  return values.slice(0, 20).map(normalizedText);
+}
+
 export function normalizeEngravingRecipe(recipe = {}, legacySettings = {}, legacyMode = "Grayscale") {
   const sourceAdjustments = { ...legacySettings, ...(recipe.adjustments || {}) };
   const adjustments = normalizeRasterSettings(sourceAdjustments);
+  adjustments.dehaze = clamp(sourceAdjustments.dehaze ?? 0, 0, 100);
   adjustments.denoise = clamp(sourceAdjustments.denoise ?? 0, 0, 4);
   adjustments.enhanceRadius = clamp(sourceAdjustments.enhanceRadius ?? 1, 0.5, 5);
   adjustments.enhanceAmount = clamp(sourceAdjustments.enhanceAmount ?? 0, 0, 3);
@@ -58,10 +86,12 @@ export function normalizeEngravingRecipe(recipe = {}, legacySettings = {}, legac
     adjustments,
     style,
     photo: {
+      detail: clamp(recipe.photo?.detail ?? 50, 1, 100),
       mode: PHOTO_MODES.includes(photoMode) ? photoMode : "Grayscale",
       noise: clamp(recipe.photo?.noise ?? 0, 0, 30),
     },
     dots: {
+      detail: clamp(recipe.dots?.detail ?? 50, 1, 100),
       cellsPerInch: clamp(recipe.dots?.cellsPerInch ?? 45, 5, 300),
       angle: clamp(recipe.dots?.angle ?? 45, -180, 180),
       shape: ["Round", "Ellipse", "Diamond", "Square"].includes(recipe.dots?.shape) ? recipe.dots.shape : "Round",
@@ -69,6 +99,7 @@ export function normalizeEngravingRecipe(recipe = {}, legacySettings = {}, legac
       maxSize: Math.max(dotMinSize, clamp(recipe.dots?.maxSize ?? 92, 5, 100)),
     },
     lines: {
+      detail: clamp(recipe.lines?.detail ?? 50, 1, 100),
       linesPerInch: clamp(recipe.lines?.linesPerInch ?? 55, 5, 300),
       angle: clamp(recipe.lines?.angle ?? 45, -180, 180),
       minWidth: lineMinWidth,
@@ -76,6 +107,7 @@ export function normalizeEngravingRecipe(recipe = {}, legacySettings = {}, legac
       roughness: clamp(recipe.lines?.roughness ?? 0, 0, 35),
     },
     crosshatch: {
+      detail: clamp(recipe.crosshatch?.detail ?? 50, 1, 100),
       linesPerInch: clamp(recipe.crosshatch?.linesPerInch ?? 48, 5, 300),
       angle: clamp(recipe.crosshatch?.angle ?? 35, -180, 180),
       crossAngle: clamp(recipe.crosshatch?.crossAngle ?? 125, -180, 180),
@@ -85,11 +117,13 @@ export function normalizeEngravingRecipe(recipe = {}, legacySettings = {}, legac
       roughness: clamp(recipe.crosshatch?.roughness ?? 0, 0, 35),
     },
     sketch: {
+      detail: clamp(recipe.sketch?.detail ?? 50, 1, 100),
       edgeRadius: clamp(recipe.sketch?.edgeRadius ?? 2, 1, 6),
       edgeAmount: clamp(recipe.sketch?.edgeAmount ?? 1.6, 0.1, 5),
       threshold: clamp(recipe.sketch?.threshold ?? 42, 1, 254),
       smoothing: clamp(recipe.sketch?.smoothing ?? 1, 0, 4),
     },
+    texts: normalizedTexts(recipe.texts),
   };
 }
 
@@ -141,6 +175,47 @@ export function cropAndResampleImageData(image, cropValue, width, height) {
   return { data, width: outWidth, height: outHeight };
 }
 
+function textCanvas(width, height) {
+  if (typeof OffscreenCanvas !== "undefined") return new OffscreenCanvas(width, height);
+  if (typeof document !== "undefined") {
+    const canvas = document.createElement("canvas");
+    canvas.width = width; canvas.height = height;
+    return canvas;
+  }
+  return null;
+}
+
+function quoteFontFamily(fontFamily) {
+  return fontFamily.split(",").map((name) => {
+    const trimmed = name.trim();
+    return /^[a-z0-9 _-]+$/i.test(trimmed) ? `"${trimmed.replace(/"/g, "")}"` : trimmed;
+  }).join(", ");
+}
+
+/** Render text in source-pixel coordinates before crop and engraving processing. */
+export function compositeTextOntoImage(image, texts = []) {
+  const visibleTexts = texts.filter((entry) => String(entry.text || "").trim());
+  if (!visibleTexts.length) return image;
+  const canvas = textCanvas(image.width, image.height);
+  const context = canvas?.getContext?.("2d", { willReadFrequently: true });
+  if (!context || typeof ImageData === "undefined") return image;
+  const input = new ImageData(new Uint8ClampedArray(image.data), image.width, image.height);
+  context.putImageData(input, 0, 0);
+  for (const entry of visibleTexts) {
+    const fontSize = Math.max(1, image.width * entry.size / 100);
+    context.save();
+    context.font = `${entry.style} ${entry.weight} ${fontSize}px ${quoteFontFamily(entry.fontFamily)}`;
+    context.fillStyle = entry.color;
+    context.textBaseline = "top";
+    const x = image.width * entry.x / 100;
+    const y = image.height * entry.y / 100;
+    const lineHeight = fontSize * 1.2;
+    for (const [line, lineIndex] of entry.text.split(/\r?\n/).entries()) context.fillText(line, x, y + lineIndex * lineHeight);
+    context.restore();
+  }
+  return context.getImageData(0, 0, image.width, image.height);
+}
+
 function boxBlur(values, width, height, radiusValue) {
   const radius = Math.max(0, Math.round(radiusValue));
   if (!radius) return new Float32Array(values);
@@ -169,6 +244,19 @@ function boxBlur(values, width, height, radiusValue) {
 
 function preparedGray(image, recipe) {
   let { gray } = grayscaleImageData(image, recipe.adjustments);
+  if (recipe.adjustments.dehaze > 0) {
+    const strength = recipe.adjustments.dehaze / 100;
+    const radius = Math.max(2, Math.min(16, Math.round(Math.min(image.width, image.height) / 40)));
+    const localAtmosphere = boxBlur(gray, image.width, image.height, radius);
+    const recovered = new Float32Array(gray.length);
+    for (let index = 0; index < gray.length; index++) {
+      // Approximate atmospheric-light recovery on luminance. Brighter local
+      // neighborhoods receive more correction while true dark marks stay put.
+      const transmission = Math.max(.35, 1 - .65 * strength * localAtmosphere[index] / 255);
+      recovered[index] = clamp(255 - (255 - gray[index]) / transmission, 0, 255);
+    }
+    gray = recovered;
+  }
   if (recipe.adjustments.denoise > 0) gray = boxBlur(gray, image.width, image.height, recipe.adjustments.denoise);
   if (recipe.adjustments.enhanceAmount > 0) {
     const blurred = boxBlur(gray, image.width, image.height, recipe.adjustments.enhanceRadius);
@@ -186,6 +274,32 @@ function deterministicNoise(index) {
   value = Math.imul(value, 0x21f0aaad);
   value ^= value >>> 15;
   return ((value >>> 0) / 0xffffffff) * 2 - 1;
+}
+
+// Detail 50 preserves the established recipe exactly. The exponential scale
+// gives the low half useful coarse steps while allowing up to twice the
+// pattern density for machines and materials that can reproduce it.
+const detailScale = (detail = 50) => Math.pow(2, (clamp(detail, 1, 100) - 50) / 50);
+
+export function detailDensity(baseDensity, detail = 50) {
+  return clamp(finite(baseDensity, 1) * detailScale(detail), 1, 300);
+}
+
+function photoDetail(gray, width, height, detail) {
+  const normalized = clamp(detail, 1, 100);
+  if (normalized === 50) return gray;
+  if (normalized < 50) {
+    const strength = (50 - normalized) / 49;
+    const blurred = boxBlur(gray, width, height, 1 + strength * 3);
+    const output = new Float32Array(gray.length);
+    for (let index = 0; index < gray.length; index++) output[index] = gray[index] * (1 - strength) + blurred[index] * strength;
+    return output;
+  }
+  const amount = (normalized - 50) / 50 * .8;
+  const blurred = boxBlur(gray, width, height, 1);
+  const output = new Float32Array(gray.length);
+  for (let index = 0; index < gray.length; index++) output[index] = clamp(gray[index] + (gray[index] - blurred[index]) * amount, 0, 255);
+  return output;
 }
 
 function spotMask(gray, width, height, dpi, settings) {
@@ -259,9 +373,10 @@ export function processEngravingImage(sourceImage, outputGrid = {}, recipeValue 
   const width = Math.max(1, Math.round(outputGrid.width || sourceImage.width * recipe.crop.width));
   const height = Math.max(1, Math.round(outputGrid.height || sourceImage.height * recipe.crop.height));
   const dpi = Math.max(1, finite(outputGrid.dpi, 300));
-  const image = cropAndResampleImageData(sourceImage, recipe.crop, width, height);
-  const gray = preparedGray(image, recipe);
+  const image = cropAndResampleImageData(compositeTextOntoImage(sourceImage, recipe.texts), recipe.crop, width, height);
+  let gray = preparedGray(image, recipe);
   if (recipe.style === "Photo") {
+    gray = photoDetail(gray, width, height, recipe.photo.detail);
     if (recipe.photo.noise) for (let index = 0; index < gray.length; index++) {
       gray[index] = clamp(gray[index] + deterministicNoise(index) * recipe.photo.noise, 0, 255);
     }
@@ -272,10 +387,26 @@ export function processEngravingImage(sourceImage, outputGrid = {}, recipeValue 
     }
     return { kind: "mask", mask: ditherMask(gray, width, height, recipe.adjustments, recipe.photo.mode), width, height, recipe };
   }
-  if (recipe.style === "Dots") return { kind: "mask", mask: spotMask(gray, width, height, dpi, recipe.dots), width, height, recipe };
-  if (recipe.style === "Lines") return { kind: "mask", mask: linesMask(gray, width, height, dpi, recipe.lines), width, height, recipe };
-  if (recipe.style === "Crosshatch") return { kind: "mask", mask: linesMask(gray, width, height, dpi, recipe.crosshatch, true), width, height, recipe };
-  return { kind: "mask", mask: sketchMask(gray, width, height, recipe.sketch), width, height, recipe };
+  if (recipe.style === "Dots") {
+    const settings = { ...recipe.dots, cellsPerInch: detailDensity(recipe.dots.cellsPerInch, recipe.dots.detail) };
+    return { kind: "mask", mask: spotMask(gray, width, height, dpi, settings), width, height, recipe };
+  }
+  if (recipe.style === "Lines") {
+    const settings = { ...recipe.lines, linesPerInch: detailDensity(recipe.lines.linesPerInch, recipe.lines.detail) };
+    return { kind: "mask", mask: linesMask(gray, width, height, dpi, settings), width, height, recipe };
+  }
+  if (recipe.style === "Crosshatch") {
+    const settings = { ...recipe.crosshatch, linesPerInch: detailDensity(recipe.crosshatch.linesPerInch, recipe.crosshatch.detail) };
+    return { kind: "mask", mask: linesMask(gray, width, height, dpi, settings, true), width, height, recipe };
+  }
+  const sketchScale = Math.sqrt(detailScale(recipe.sketch.detail));
+  const settings = {
+    ...recipe.sketch,
+    edgeRadius: clamp(recipe.sketch.edgeRadius / sketchScale, 1, 6),
+    threshold: clamp(recipe.sketch.threshold / sketchScale, 1, 254),
+    smoothing: clamp(recipe.sketch.smoothing / sketchScale, 0, 4),
+  };
+  return { kind: "mask", mask: sketchMask(gray, width, height, settings), width, height, recipe };
 }
 
 export function engravingResultToImageData(result) {

@@ -13,7 +13,7 @@ import {
   processEngravingImage,
 } from "./engraving-recipe.mjs";
 import { itemLayerColor, itemLayerKey, setItemLayerColor } from "./layer-model.mjs";
-import { VECTOR_SAMPLE_STEP_MM, assessOutputQuality, rasterGrid } from "./output-quality.mjs";
+import { MAX_RASTER_SAMPLES, VECTOR_SAMPLE_STEP_MM, assessOutputQuality, fitRasterDpi, rasterGrid } from "./output-quality.mjs";
 import { combinedFocusOffset } from "./process-profiles.mjs";
 import { defaultMotionTiming, targetMotionSpeed, trapezoidPlan } from "./motion-timing.mjs";
 
@@ -615,12 +615,16 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     const raster = selectedRaster();
     if (!raster) return null;
     if (!rasterEditOpen) beginRasterEdit();
-    raster.data.rasterSettings = normalizeRasterSettings({ ...raster.data.rasterSettings, ...partial });
-    if (raster.data.engravingRecipe) {
-      raster.data.engravingRecipe = normalizeEngravingRecipe({
-        ...raster.data.engravingRecipe,
-        adjustments: { ...raster.data.engravingRecipe.adjustments, ...partial },
-      }, raster.data.rasterSettings, raster.data.rasterMode);
+    const currentRecipe = normalizeEngravingRecipe(raster.data.engravingRecipe, raster.data.rasterSettings, raster.data.rasterMode);
+    const nextRecipe = normalizeEngravingRecipe({
+      ...currentRecipe,
+      adjustments: { ...currentRecipe.adjustments, ...partial },
+    }, raster.data.rasterSettings, raster.data.rasterMode);
+    raster.data.rasterSettings = normalizeRasterSettings(nextRecipe.adjustments);
+    // Dehaze, denoise and sharpen are recipe-only operations. Persist an
+    // explicit Photo recipe so preview and laser output stay equal.
+    if (raster.data.engravingRecipe || "dehaze" in partial || "denoise" in partial || "enhanceAmount" in partial || "enhanceRadius" in partial) {
+      raster.data.engravingRecipe = nextRecipe;
     }
     applyRasterSettings(raster);
     notifyChange();
@@ -634,7 +638,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     if (raster.data.engravingRecipe) {
       raster.data.engravingRecipe = normalizeEngravingRecipe({
         ...raster.data.engravingRecipe,
-        adjustments: { ...DEFAULT_RASTER_SETTINGS, denoise: 0, enhanceRadius: 1, enhanceAmount: 0 },
+        adjustments: { ...DEFAULT_RASTER_SETTINGS, dehaze: 0, denoise: 0, enhanceRadius: 1, enhanceAmount: 0 },
       });
     }
     applyRasterSettings(raster);
@@ -1539,7 +1543,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     if (item.className === "CompoundPath") return item.children.reduce((sum, child) => sum + vectorPointCount(child), 0);
     return item.length ? Math.ceil(item.length / VECTOR_SAMPLE_STEP_MM) + 1 + (item.closed ? 1 : 0) : 0;
   }
-  function outputQuality(specs) {
+  function outputQuality(specs, { maxRasterSamples = MAX_RASTER_SAMPLES } = {}) {
     const rasters = [];
     const filledScans = [];
     let vectorPoints = 0;
@@ -1547,12 +1551,22 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       if (spec.op === "Engrave" && engraveStrategy(item) === "raster") {
         const bounds = item.className === "Raster" ? item.bounds : item.getStrokeBounds?.() || item.bounds;
         const grid = rasterGrid(bounds.width, bounds.height, spec.dpi || 300);
-        const entry = { ...grid, color: spec.color, kind: item.className === "Raster" ? "image" : "filled-vector" };
+        const entry = { ...grid, widthMm: bounds.width, heightMm: bounds.height, color: spec.color, kind: item.className === "Raster" ? "image" : "filled-vector" };
         if (item.className === "Raster") rasters.push(entry);
         else filledScans.push(entry);
       } else vectorPoints += vectorPointCount(item);
     }
-    return { ...assessOutputQuality({ rasters, vectorPoints }), rasters, filledScans, vectorStepMm: VECTOR_SAMPLE_STEP_MM };
+    const fittedRaster = fitRasterDpi(rasters, maxRasterSamples);
+    return {
+      ...assessOutputQuality({ rasters: fittedRaster.rasters, vectorPoints, maxRasterSamples }),
+      rasters: fittedRaster.rasters,
+      filledScans,
+      requestedRasterSamples: fittedRaster.requestedSamples,
+      effectiveRasterSamples: fittedRaster.effectiveSamples,
+      rasterDpiScale: fittedRaster.dpiScale,
+      rasterAutoAdjusted: fittedRaster.adjusted,
+      vectorStepMm: VECTOR_SAMPLE_STEP_MM,
+    };
   }
   function vectorSeg(it, sp, out, preview = false) {
     if (it.className === "CompoundPath") { for (const c of it.children) vectorSeg(c, sp, out, preview); return; }
@@ -2067,9 +2081,14 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   const fmt = (n) => (Math.round(n * 1000) / 1000).toFixed(3).replace(/\.?0+$/, "");
   const feedFromPct = (pct, maxFeed = 12000) => Math.round((Math.max(1, Math.min(100, pct || 1)) / 100) * maxFeed);
   const powerToS = (power) => Math.round(Math.max(0, Math.min(100, power || 0)) * 10);
-  async function buildGcodeJob(specs, { maxFeed = 12000, zAxis = null, softwareFocus = false } = {}) {
-    const quality = outputQuality(specs);
+  async function buildGcodeJob(specs, { maxFeed = 12000, zAxis = null, softwareFocus = false, maxRasterSamples = MAX_RASTER_SAMPLES } = {}) {
+    const quality = outputQuality(specs, { maxRasterSamples });
     if (quality.blocked) throw new Error("Output quality limit: " + quality.problems.join(" "));
+    // This is intentionally applied before *all* job generation. Simulation,
+    // export and Send therefore use identical physical size and effective DPI.
+    const effectiveSpecs = quality.rasterAutoAdjusted
+      ? specs.map((spec) => spec.op === "Engrave" ? { ...spec, dpi: Math.max(1, Number(spec.dpi || 300) * quality.rasterDpiScale) } : spec)
+      : specs;
     const machineFocusOffset = zAxis?.enabled ? Number(zAxis.globalOffset) || 0 : 0;
     const requestedZ = specs.map((spec) => combinedFocusOffset(machineFocusOffset, spec.zOffset));
     if (requestedZ.some((offset) => offset !== 0) && !zAxis?.enabled && !softwareFocus) {
@@ -2085,7 +2104,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       const outside = requestedZ.find((offset) => offset < minZ || offset > maxZ);
       if (outside != null) throw new Error(`Combined focus position ${outside} mm is outside the machine Z range ${minZ}…${maxZ} mm.`);
     }
-    const orderedSegs = await orderJobSegs(specs, { compactVectorRaster: !softwareFocus });
+    const orderedSegs = await orderJobSegs(effectiveSpecs, { compactVectorRaster: !softwareFocus });
     // Epilog consumes structured native raster data, not G-code. Collapse the
     // many same-row raster runs into one transport record per scanline so a
     // normal photograph does not become hundreds of thousands of repeated

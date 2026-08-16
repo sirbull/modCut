@@ -148,10 +148,10 @@ units, travel limits and clearance have been verified physically.
 ### Output quality acceptance test
 
 1. Import a raster, resize it and change its layer DPI. The layer must show the
-   effective sample dimensions and the same requested/effective DPI.
-2. Use a size/DPI combination above the safe sample limit. The layer note must
-   turn into an explicit warning and Run must be blocked with instructions to
-   reduce DPI or physical size; modCut must not silently reduce rows or columns.
+   effective sample dimensions and the requested DPI.
+2. Use a size/DPI combination above the safe sample limit. A G-code machine
+   must show the automatically reduced effective DPI. An Epilog Zing job below
+   32 million samples must retain its requested DPI and use native raster data.
 3. Generate a long curved vector path. The job must use the documented 0.2 mm
    physical sampling tolerance rather than a fixed maximum number of points.
 4. Confirm that Import only offers modCut, SVG, DXF, PNG, JPG/JPEG, BMP and GIF.
@@ -297,6 +297,8 @@ emergency stop; it does not replace it.
 - Raster workflows generate line-based G-code. Grayscale mode uses variable
   `M4 S` power; support and useful tone range must be tested on the actual GRBL
   controller, laser and material before production use.
-- Raster output above 8,000,000 samples, or vector output above approximately
-  1,000,000 sampled points, is blocked with a visible quality warning instead
-  of being silently reduced.
+- G-code raster output above 8,000,000 samples is automatically resampled to
+  a lower effective DPI while preserving physical size. Epilog Zing uses native
+  PackBits-compressed raster data and permits up to 32,000,000 samples. Vector
+  output above approximately 1,000,000 sampled points is still blocked with a
+  visible quality warning.

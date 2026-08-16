@@ -4,6 +4,7 @@ import {
   ENGRAVING_STYLES,
   PHOTO_MODES,
   cropAndResampleImageData,
+  detailDensity,
   engravingPreset,
   engravingResultToImageData,
   normalizeEngravingRecipe,
@@ -24,11 +25,20 @@ let renderSerial = 0;
 let cropDrag = null;
 let aspectValue = "free";
 let materialPreview = false;
+let history = [];
+let historyIndex = -1;
+let restoringHistory = false;
+
+const FALLBACK_FONTS = ["Arial", "Helvetica Neue", "Avenir Next", "Times New Roman", "Georgia", "Verdana", "Trebuchet MS", "Courier New", "Menlo"];
+const defaultTextLayer = () => ({
+  id: `text-${Date.now()}`, text: "", fontFamily: "Arial", size: 8, x: 50, y: 50,
+  weight: "normal", style: "normal", color: "#000000",
+});
 
 const adjustmentFields = [
   ["brightness", "Brightness", -100, 100, 1], ["contrast", "Contrast", -100, 100, 1],
   ["blackPoint", "Black point", 0, 254, 1], ["whitePoint", "White point", 1, 255, 1],
-  ["gamma", "Midtones", .2, 3, .05], ["denoise", "Denoise", 0, 4, .25],
+  ["gamma", "Midtones", .2, 3, .05], ["dehaze", "Dehaze", 0, 100, 1], ["denoise", "Denoise", 0, 4, .25],
   ["enhanceAmount", "Sharpen", 0, 3, .05], ["enhanceRadius", "Sharpen radius", .5, 5, .25],
 ];
 
@@ -36,6 +46,8 @@ const styleCopy = {
   Photo: "Grayscale or diffusion", Dots: "Variable-size halftone", Lines: "Parallel line engraving",
   Crosshatch: "Banknote-style layers", Sketch: "Edge and line drawing",
 };
+
+const styleScope = (style = recipe.style) => style === "Photo" ? "photo" : style.toLowerCase();
 
 function controlRow(scope, key, label, min, max, step) {
   const row = document.createElement("div");
@@ -48,10 +60,11 @@ function controlRow(scope, key, label, min, max, step) {
     else recipe.adjustments[key] = clamp(value, min, max);
     changed();
     range.value = number.value = read();
+    if (scope && ["detail", "cellsPerInch", "linesPerInch"].includes(key)) updateDetailHint();
   };
   range.value = number.value = read();
   range.addEventListener("input", () => write(range.value));
-  number.addEventListener("input", () => write(number.value));
+  number.addEventListener("change", () => write(number.value === "" ? read() : number.value));
   return row;
 }
 
@@ -69,6 +82,11 @@ function buildAdjustmentControls() {
   const host = $("adjustmentControls");
   host.replaceChildren(...adjustmentFields.map((field) => controlRow(null, ...field)));
   $("invertControl").checked = recipe.adjustments.invert;
+  updateTonePipelineHint();
+}
+
+function updateTonePipelineHint() {
+  $("tonePipelineHint").textContent = `Tone, dehaze and sharpening are applied before ${recipe.style}. The preview and laser output use this same order.`;
 }
 
 function buildStyleGrid() {
@@ -86,8 +104,13 @@ function buildStyleGrid() {
 function buildStyleControls() {
   const host = $("styleControls");
   const nodes = [];
+  const scope = styleScope();
+  const detail = controlRow(scope, "detail", "Detail level", 1, 100, 1);
+  detail.classList.add("control--detail");
+  $("detailControl").replaceChildren(detail);
+  updateDetailHint();
   if (recipe.style === "Photo") {
-    nodes.push(selectField("Raster mode", PHOTO_MODES, recipe.photo.mode, (value) => { recipe.photo.mode = value; changed(); }));
+    nodes.push(selectField("Raster mode", PHOTO_MODES, recipe.photo.mode, (value) => { recipe.photo.mode = value; changed(); buildStyleControls(); }));
     if (recipe.photo.mode === "Grayscale") nodes.push(controlRow(null, "grayLevels", "Gray levels", 2, 32, 1));
     else nodes.push(controlRow(null, "threshold", "Threshold", 0, 255, 1));
     nodes.push(controlRow("photo", "noise", "Anti-banding noise", 0, 30, 1));
@@ -120,6 +143,109 @@ function buildStyleControls() {
   host.replaceChildren(...nodes);
 }
 
+function updateDetailHint() {
+  const scope = styleScope();
+  const value = recipe[scope].detail;
+  if (recipe.style === "Photo") {
+    $("detailHint").textContent = value < 50
+      ? "Smoother output: small texture and noise are reduced."
+      : value > 50 ? "Finer output: small edges are preserved and enhanced." : "Balanced detail with no extra smoothing or enhancement.";
+  } else if (recipe.style === "Dots") {
+    const density = detailDensity(recipe.dots.cellsPerInch, value);
+    $("detailHint").textContent = `About ${Math.round(density)} halftone cells/in. Higher detail creates smaller dots and may take longer to engrave.`;
+  } else if (recipe.style === "Lines") {
+    const density = detailDensity(recipe.lines.linesPerInch, value);
+    $("detailHint").textContent = `About ${Math.round(density)} lines/in. Higher detail creates finer, denser toolpaths.`;
+  } else if (recipe.style === "Crosshatch") {
+    const density = detailDensity(recipe.crosshatch.linesPerInch, value);
+    $("detailHint").textContent = `About ${Math.round(density)} lines/in in each pattern. Higher detail can substantially increase job complexity.`;
+  } else {
+    $("detailHint").textContent = value < 50
+      ? "Keeps stronger, broader edges and removes small texture."
+      : value > 50 ? "Includes finer and weaker edges; noisy photos may need more denoise." : "Balanced edge detection for drawings and photos.";
+  }
+}
+
+function currentTextLayer(create = false) {
+  if (recipe.texts?.[0]) return recipe.texts[0];
+  if (!create) return defaultTextLayer();
+  recipe.texts = [defaultTextLayer()];
+  return recipe.texts[0];
+}
+
+function updateTextControls() {
+  const text = currentTextLayer();
+  $("textContent").value = text.text;
+  if (![...$("textFont").options].some((option) => option.value === text.fontFamily)) {
+    $("textFont").add(new Option(text.fontFamily, text.fontFamily), 0);
+  }
+  $("textFont").value = text.fontFamily;
+  $("textBold").setAttribute("aria-pressed", String(text.weight === "bold"));
+  $("textItalic").setAttribute("aria-pressed", String(text.style === "italic"));
+  $("textColor").value = text.color;
+  $("textSize").value = text.size;
+  $("textSizeValue").value = `${text.size}%`;
+  $("textSizeValue").textContent = `${text.size}%`;
+  $("textX").value = text.x;
+  $("textY").value = text.y;
+  $("clearText").disabled = !recipe.texts?.length;
+}
+
+function setTextLayer(partial) {
+  Object.assign(currentTextLayer(true), partial);
+  changed();
+  updateTextControls();
+}
+
+function populateFontSelect(fonts = FALLBACK_FONTS) {
+  const select = $("textFont");
+  const selected = currentTextLayer().fontFamily;
+  const families = [...new Set([...fonts, selected].filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  select.replaceChildren(...families.map((family) => new Option(family, family)));
+  select.value = selected;
+}
+
+async function loadLocalFonts() {
+  let fonts = FALLBACK_FONTS;
+  try {
+    if (typeof window.queryLocalFonts === "function") {
+      const localFonts = await window.queryLocalFonts();
+      const families = localFonts.map((font) => font.family).filter(Boolean);
+      if (families.length) fonts = [...new Set([...FALLBACK_FONTS, ...families])].slice(0, 250);
+    }
+  } catch { /* Browsers that do not expose local fonts keep the useful system fallback list. */ }
+  populateFontSelect(fonts);
+}
+
+function recipeSnapshot() { return JSON.stringify(recipe); }
+
+function updateHistoryButtons() {
+  $("undoButton").disabled = historyIndex <= 0;
+  $("redoButton").disabled = historyIndex < 0 || historyIndex >= history.length - 1;
+}
+
+function recordHistory() {
+  if (restoringHistory) return;
+  const snapshot = recipeSnapshot();
+  if (history[historyIndex] === snapshot) return;
+  history.splice(historyIndex + 1);
+  history.push(snapshot);
+  if (history.length > 60) history.shift();
+  historyIndex = history.length - 1;
+  updateHistoryButtons();
+}
+
+function restoreHistory(direction) {
+  const next = historyIndex + direction;
+  if (next < 0 || next >= history.length) return;
+  restoringHistory = true;
+  recipe = normalizeEngravingRecipe(JSON.parse(history[next]));
+  historyIndex = next;
+  restoringHistory = false;
+  refreshAllControls();
+  updateHistoryButtons();
+}
+
 function userPresets() {
   try { return JSON.parse(localStorage.getItem("modcut_engraving_presets")) || []; } catch { return []; }
 }
@@ -143,7 +269,9 @@ function setTool(tool) {
 
 function changed() {
   recipe = normalizeEngravingRecipe(recipe);
+  recordHistory();
   buildPresets("custom");
+  updateTonePipelineHint();
   updateReadout();
   scheduleRender();
 }
@@ -189,6 +317,8 @@ function renderPreview() {
   if (!sourcePixels) return;
   const serial = ++renderSerial;
   const dimensions = displayDimensions();
+  const scroll = $("previewScroll");
+  scroll.classList.toggle("is-zoomed", dimensions.width + 96 > scroll.clientWidth || dimensions.height + 96 > scroll.clientHeight);
   $("previewSurface").style.width = `${dimensions.width}px`;
   $("previewSurface").style.height = `${dimensions.height}px`;
   const full = activeTool === "crop";
@@ -312,14 +442,17 @@ function updateReadout() {
 }
 
 function refreshAllControls() {
-  buildAdjustmentControls(); buildStyleGrid(); buildStyleControls(); updateReadout(); scheduleRender();
+  buildAdjustmentControls(); buildStyleGrid(); buildStyleControls(); updateTextControls(); updateReadout(); scheduleRender();
 }
 
 async function initialize(data) {
   payload = data;
   recipe = normalizeEngravingRecipe(data.recipe, data.settings, data.mode);
+  history = [recipeSnapshot()]; historyIndex = 0; updateHistoryButtons();
   $("imageName").textContent = data.name || "Raster image";
   buildPresets();
+  populateFontSelect();
+  void loadLocalFonts();
   sourceImage = new Image();
   sourceImage.onload = () => {
     const canvas = document.createElement("canvas");
@@ -344,7 +477,13 @@ window.addEventListener("pointermove", moveCrop);
 window.addEventListener("pointerup", endCrop);
 $("aspectRatio").addEventListener("change", (event) => { aspectValue = event.target.value; if (normalizedAspect()) { recipe.crop = clampCrop(enforceAspect({ ...recipe.crop }, "se", recipe.crop)); changed(); } });
 $("resetCrop").addEventListener("click", () => { recipe.crop = { x: 0, y: 0, width: 1, height: 1 }; $("aspectRatio").value = aspectValue = "free"; changed(); });
-$("resetAdjustments").addEventListener("click", () => { recipe.adjustments = structuredClone(DEFAULT_ENGRAVING_RECIPE.adjustments); refreshAllControls(); });
+$("resetAdjustments").addEventListener("click", () => { recipe.adjustments = structuredClone(DEFAULT_ENGRAVING_RECIPE.adjustments); recipe = normalizeEngravingRecipe(recipe); recordHistory(); refreshAllControls(); });
+$("resetStyle").addEventListener("click", () => {
+  const scope = styleScope();
+  recipe[scope] = structuredClone(DEFAULT_ENGRAVING_RECIPE[scope]);
+  recipe = normalizeEngravingRecipe(recipe);
+  recordHistory(); refreshAllControls();
+});
 $("invertControl").addEventListener("change", (event) => { recipe.adjustments.invert = event.target.checked; changed(); });
 $("presetSelect").addEventListener("change", (event) => {
   const crop = recipe.crop;
@@ -353,6 +492,8 @@ $("presetSelect").addEventListener("change", (event) => {
   if (value.startsWith("user:")) recipe = normalizeEngravingRecipe(userPresets()[Number(value.slice(5))]?.recipe);
   else recipe = engravingPreset(value);
   recipe.crop = crop;
+  recipe = normalizeEngravingRecipe(recipe);
+  recordHistory();
   const builtIn = ENGRAVING_PRESETS.find((entry) => entry.id === value);
   $("presetDescription").textContent = builtIn?.description || "Saved personal preset";
   refreshAllControls(); buildPresets(value);
@@ -367,16 +508,48 @@ $("savePreset").addEventListener("click", () => {
   buildPresets(`user:${saved.length - 1}`);
 });
 $("materialPreview").addEventListener("change", (event) => { materialPreview = event.target.checked; scheduleRender(); });
+$("textContent").addEventListener("input", (event) => setTextLayer({ text: event.target.value }));
+$("textFont").addEventListener("change", (event) => setTextLayer({ fontFamily: event.target.value }));
+$("textBold").addEventListener("click", () => {
+  const text = currentTextLayer(true);
+  setTextLayer({ weight: text.weight === "bold" ? "normal" : "bold" });
+});
+$("textItalic").addEventListener("click", () => {
+  const text = currentTextLayer(true);
+  setTextLayer({ style: text.style === "italic" ? "normal" : "italic" });
+});
+$("textColor").addEventListener("change", (event) => setTextLayer({ color: event.target.value }));
+$("textSize").addEventListener("input", (event) => setTextLayer({ size: Number(event.target.value) }));
+$("textX").addEventListener("input", (event) => setTextLayer({ x: Number(event.target.value) }));
+$("textY").addEventListener("input", (event) => setTextLayer({ y: Number(event.target.value) }));
+$("clearText").addEventListener("click", () => { recipe.texts = []; changed(); updateTextControls(); });
 $("zoomRange").addEventListener("input", (event) => { zoom = Number(event.target.value) / 100; $("zoomLabel").textContent = `${event.target.value}%`; scheduleRender(); });
 function setZoom(next) { zoom = clamp(next, .25, 2); $("zoomRange").value = Math.round(zoom * 100); $("zoomLabel").textContent = `${Math.round(zoom * 100)}%`; scheduleRender(); }
 $("zoomIn").addEventListener("click", () => setZoom(zoom + .25));
 $("zoomOut").addEventListener("click", () => setZoom(zoom - .25));
 $("zoomFit").addEventListener("click", () => setZoom(1));
+$("previewScroll").addEventListener("wheel", (event) => {
+  // Chromium reports a trackpad pinch as Ctrl+wheel. Leave regular two-finger
+  // scrolling alone so the native scroll container remains the pan gesture.
+  if (!event.ctrlKey) return;
+  event.preventDefault();
+  setZoom(zoom * Math.exp(-event.deltaY * .01));
+}, { passive: false });
+$("undoButton").addEventListener("click", () => restoreHistory(-1));
+$("redoButton").addEventListener("click", () => restoreHistory(1));
 $("cancelButton").addEventListener("click", () => window.modcut.finishImageEditor(null));
 $("applyButton").addEventListener("click", () => window.modcut.finishImageEditor(normalizeEngravingRecipe(recipe)));
 window.addEventListener("keydown", (event) => {
+  const typing = ["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement?.tagName);
+  const modifier = event.metaKey || event.ctrlKey;
+  const key = event.key.toLowerCase();
+  if (modifier && !typing && (key === "+" || key === "=")) { event.preventDefault(); setZoom(zoom + .25); return; }
+  if (modifier && !typing && (key === "-" || key === "_")) { event.preventDefault(); setZoom(zoom - .25); return; }
+  if (modifier && !typing && key === "0") { event.preventDefault(); setZoom(1); return; }
+  if (modifier && !typing && key === "z") { event.preventDefault(); restoreHistory(event.shiftKey ? 1 : -1); return; }
+  if (modifier && !typing && key === "y") { event.preventDefault(); restoreHistory(1); return; }
   if (event.key === "Escape") window.modcut.finishImageEditor(null);
-  if ((event.metaKey || event.ctrlKey) && event.key === "Enter") window.modcut.finishImageEditor(normalizeEngravingRecipe(recipe));
+  if (modifier && event.key === "Enter") window.modcut.finishImageEditor(normalizeEngravingRecipe(recipe));
 });
 window.addEventListener("resize", scheduleRender);
 window.modcut.onImageEditorInit(initialize);

@@ -70,11 +70,23 @@ EngravingRecipe {
   crop { x, y, width, height }
   adjustments {
     brightness, contrast, blackPoint, whitePoint, gamma, invert
-    denoise, enhanceRadius, enhanceAmount
+    dehaze, denoise, enhanceRadius, enhanceAmount
   }
   style: Photo | Dots | Lines | Crosshatch | Sketch
+  photo | dots | lines | crosshatch | sketch { detail: 1…100, ... }
 }
 ```
+
+Hver stil har en primær **Detail level**-kontroll med både slider og tallfelt.
+Verdien lagres separat per stil, slik at brukeren kan gå frem og tilbake mellom
+for eksempel Photo og Halftone uten å miste finjusteringen. Ved standardverdien
+50 beholdes mønsterets oppgitte grunnfrekvens. Høyere verdi gir finere
+prikke-/linjetetthet eller svakere sketch-kanter, mens lavere verdi forenkler
+motivet og kan redusere kompleksiteten i laserjobben.
+
+Tonekjeden er alltid `brightness/contrast → black/white point → gamma/invert →
+dehaze → denoise/sharpen → stil`. Derfor oppdaterer Halftone, Lines, Crosshatch og Sketch
+seg fra de justerte tonene i både preview og faktisk laseroutput.
 
 Stilvariantene får følgende kontroller:
 

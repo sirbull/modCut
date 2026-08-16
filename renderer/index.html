@@ -121,6 +121,14 @@
           <input type="range" id="bmpGamma" min="0.2" max="3" step="0.05" value="1">
           <input class="input range-num" id="bmpGammaNum" type="number" min="0.2" max="3" step="0.05" value="1">
         </label>
+        <label class="range-row" title="Reduce a pale, washed-out appearance by restoring local tonal separation. 0 is neutral.">Dehaze
+          <input type="range" id="bmpDehaze" min="0" max="100" step="1" value="0">
+          <input class="input range-num" id="bmpDehazeNum" type="number" min="0" max="100" step="1" value="0">
+        </label>
+        <label class="range-row" title="Increase local edge contrast before the engraving pattern is generated. 0 is neutral.">Sharpen
+          <input type="range" id="bmpSharpen" min="0" max="3" step="0.05" value="0">
+          <input class="input range-num" id="bmpSharpenNum" type="number" min="0" max="3" step="0.05" value="0">
+        </label>
         <label class="range-row" id="bmpGrayLevelsRow" title="Posterize the preview and laser output into this many power steps in Grayscale mode.">Gray levels
           <input type="range" id="bmpGrayLevels" min="2" max="32" step="1" value="16">
           <input class="input range-num" id="bmpGrayLevelsNum" type="number" min="2" max="32" step="1" value="16">

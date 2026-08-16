@@ -82,6 +82,23 @@ export async function runWorkflows(client, port) {
   await wait(300);
   assert.equal(await evaluate("document.querySelector('#splitJobs').checked"), false, "split by operation must be off by default");
 
+  await evaluate(`import('./ui.js').then(({openModal}) => {
+    window.__conditionalFormResult = undefined;
+    openModal({
+      title: 'Conditional validation test',
+      fields: [
+        {key:'name',label:'Name',required:true,value:'New machine'},
+        {key:'advanced',label:'Show advanced settings',type:'checkbox',value:false},
+        {key:'timing',label:'Timing',type:'number',min:0.1,step:1,value:250,showIf:v=>v.advanced},
+      ],
+    }).then(value => { window.__conditionalFormResult = value; });
+  })`);
+  await wait();
+  assert.deepEqual(await evaluate("(() => { const form=document.querySelector('.modal form'), timing=form.elements.timing; return {disabled:timing.disabled,valid:form.checkValidity()}; })()"), { disabled: true, valid: true }, "a hidden advanced field must not block native form validation");
+  await evaluate("document.querySelector('.modal form').requestSubmit()");
+  await wait();
+  assert.equal(await evaluate("window.__conditionalFormResult?.timing"), 250, "hidden advanced defaults must still be retained on submit");
+
   const zoomBeforeShortcut = await evaluate("paper.view.zoom");
   await evaluate("window.dispatchEvent(new KeyboardEvent('keydown',{key:'+',metaKey:true,bubbles:true,cancelable:true}))");
   assert.ok((await evaluate("paper.view.zoom")) > zoomBeforeShortcut, "Cmd/Ctrl++ must zoom in");
@@ -318,11 +335,15 @@ export async function runWorkflows(client, port) {
   }
   assert.equal(await evaluate("paper.project.layers[1].children.some(item=>item.className==='Raster')"), true);
   assert.equal(rasterReady, true, "the imported raster must finish loading and become the active bitmap selection");
-  assert.equal(await evaluate("[...document.querySelectorAll('[data-quality]')].some(note=>note.classList.contains('is-warning') && note.textContent.includes('Output blocked'))"), true, "oversized raster output must show a visible blocking warning");
+  assert.equal(await evaluate("[...document.querySelectorAll('[data-quality]')].some(note=>!note.classList.contains('is-warning') && note.textContent.includes('auto-adjusted'))"), true, "oversized raster output must show the automatic effective-DPI adjustment");
   await evaluate("(() => { const input=document.querySelector('.clayer--raster [data-k=dpi]'); input.value=100; input.dispatchEvent(new Event('input',{bubbles:true})); })()");
   assert.equal(await evaluate("[...document.querySelectorAll('.clayer--raster [data-quality]')].some(note=>!note.classList.contains('is-warning') && note.textContent.includes('at 100 DPI'))"), true, "reducing DPI must show effective unblocked output quality");
   await evaluate("(() => { const input=document.querySelector('#bmpBrightnessNum'); input.value=15; input.dispatchEvent(new Event('input',{bubbles:true})); input.dispatchEvent(new Event('change',{bubbles:true})); })()");
   assert.equal(await evaluate("paper.project.layers[1].children.find(item=>item.className==='Raster').data.rasterSettings.brightness"), 15);
+  await evaluate("(() => { const input=document.querySelector('#bmpSharpenNum'); input.value=1.25; input.dispatchEvent(new Event('input',{bubbles:true})); input.dispatchEvent(new Event('change',{bubbles:true})); })()");
+  assert.deepEqual(await evaluate("(() => { const raster=paper.project.layers[1].children.find(item=>item.className==='Raster'); return {slider:+document.querySelector('#bmpSharpen').value,recipe:raster.data.engravingRecipe?.adjustments?.enhanceAmount}; })()"), { slider: 1.25, recipe: 1.25 }, "the regular Sharpen control must persist in the non-destructive engraving recipe");
+  await evaluate("(() => { const input=document.querySelector('#bmpDehazeNum'); input.value=40; input.dispatchEvent(new Event('input',{bubbles:true})); input.dispatchEvent(new Event('change',{bubbles:true})); })()");
+  assert.deepEqual(await evaluate("(() => { const raster=paper.project.layers[1].children.find(item=>item.className==='Raster'); return {slider:+document.querySelector('#bmpDehaze').value,recipe:raster.data.engravingRecipe?.adjustments?.dehaze}; })()"), { slider: 40, recipe: 40 }, "the regular Dehaze control must persist in the non-destructive engraving recipe");
 
   const rasterWidthBeforeEditor = await evaluate("paper.project.layers[1].children.find(item=>item.className==='Raster').bounds.width");
   await evaluate("document.querySelector('#advancedImageEditor').click()");
@@ -345,6 +366,18 @@ export async function runWorkflows(client, port) {
   assert.notEqual(await imageEditor.evaluate("document.querySelector('#cropPercent').textContent"), "100 × 100%", "dragging a crop edge must update the crop");
   await imageEditor.evaluate("[...document.querySelectorAll('.style-card')].find(button=>button.textContent.includes('Dots')).click()");
   assert.equal(await imageEditor.evaluate("document.querySelector('.style-card.is-active strong').textContent"), "Dots", "engraving style must update inside the editor");
+  const advancedControls = await imageEditor.evaluate(`(() => {
+    const detail=document.querySelector('#detailControl input[type=range]');
+    detail.value=82; detail.dispatchEvent(new Event('input',{bubbles:true}));
+    const brightness=[...document.querySelectorAll('#adjustmentControls .control')].find(row=>row.querySelector('label').textContent==='Brightness').querySelector('input[type=number]');
+    brightness.value=-12; brightness.dispatchEvent(new Event('change',{bubbles:true}));
+    const dehaze=[...document.querySelectorAll('#adjustmentControls .control')].find(row=>row.querySelector('label').textContent==='Dehaze').querySelector('input[type=number]');
+    return {detail:+document.querySelector('#detailControl input[type=number]').value,brightness:+brightness.value,dehaze:+dehaze.value,hint:document.querySelector('#detailHint').textContent};
+  })()`);
+  assert.equal(advancedControls.detail, 82, "every engraving style must expose a synchronized detail control");
+  assert.equal(advancedControls.brightness, -12, "tone controls must remain available alongside style controls");
+  assert.equal(advancedControls.dehaze, 40, "Dehaze from regular adjustments must carry into the advanced editor");
+  assert.equal(advancedControls.hint.includes("halftone cells/in"), true, "the detail control must explain its effective halftone density");
   try { await imageEditor.evaluate("document.querySelector('#applyButton').click()"); } catch {}
   imageEditor.socket.close();
   const recipeDeadline = Date.now() + 5_000;
@@ -354,6 +387,10 @@ export async function runWorkflows(client, port) {
     if (!appliedRecipe) await wait(100);
   }
   assert.equal(appliedRecipe.style, "Dots", "Apply must persist the advanced recipe on the Paper.js raster");
+  assert.equal(appliedRecipe.dots.detail, 82, "Apply must persist the selected style's detail level");
+  assert.equal(appliedRecipe.adjustments.brightness, -12, "tone adjustments must persist in the same engraving recipe");
+  assert.equal(appliedRecipe.adjustments.enhanceAmount, 1.25, "regular Sharpen must carry into the advanced editor and final laser recipe");
+  assert.equal(appliedRecipe.adjustments.dehaze, 40, "regular Dehaze must carry into the advanced editor and final laser recipe");
   assert.ok(appliedRecipe.crop.width < 1, "Apply must persist the non-destructive crop rectangle");
   const croppedBoundsDeadline = Date.now() + 5_000;
   let croppedWidth = rasterWidthBeforeEditor;

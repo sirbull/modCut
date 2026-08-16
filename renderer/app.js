@@ -8,6 +8,7 @@ import { OPERATIONS, canAssignRasterToOperation, distinctVectorColor, isOutputLa
 import { RASTER_MODES, applyProcessProfile, combinedFocusOffset, normalizeProcessProfile, profilesForOperation } from "./process-profiles.mjs";
 import { groupJobOperations, jobFilename } from "./job-split.mjs";
 import { defaultMotionTiming, motionTimingForMachine } from "./motion-timing.mjs";
+import { EPILOG_NATIVE_MAX_RASTER_SAMPLES, MAX_RASTER_SAMPLES } from "./output-quality.mjs";
 import { openModal, showMessageModal } from "./ui.js";
 import { DOCUMENT_FORMATS, IMAGE_FORMATS, PDF_FORMATS, TEXT_FORMATS, TIFF_FORMATS } from "../electron/import-formats.mjs";
 
@@ -201,6 +202,9 @@ const materialDefaultsFor = (op) => {
 const defaultsFor = (op) => ({ ...(OPERATION_DEFAULTS[op] || materialDefaultsFor(op)) });
 const defaultUsesMaterial = (op) => !OPERATION_DEFAULTS[op];
 const driverExt = (d) => (isEpilogDriver(d) ? ".prn" : /ruida/i.test(d) ? ".rd" : ".gcode");
+const rasterSampleLimitForMachine = (profile = machine()) => isEpilogDriver(profile.driver)
+  ? EPILOG_NATIVE_MAX_RASTER_SAMPLES
+  : MAX_RASTER_SAMPLES;
 
 // --- collapsible side panel sections ---------------------------------------
 const COLLAPSED_SECTIONS_KEY = "modcut_collapsed_sections";
@@ -1063,14 +1067,17 @@ function qualityForLayer(layer) {
     key: state.mappingMode === "color" ? layer.key : null,
     color: state.mappingMode === "color" ? layer.color : null,
     op: layer.op, dpi: layer.dpi, dither: layer.dither, bottomUp: layer.bottomUp,
-  }]);
+  }], { maxRasterSamples: rasterSampleLimitForMachine() });
 }
 function qualitySummary(report) {
   if (report.blocked) return `Output blocked: ${report.problems.join(" ")}`;
   const parts = [];
   if (report.rasters.length) {
     const largest = report.rasters.reduce((best, item) => item.samples > best.samples ? item : best, report.rasters[0]);
-    parts.push(`Raster output ${largest.columns.toLocaleString("en-US")} × ${largest.rows.toLocaleString("en-US")} samples at ${largest.effectiveDpi} DPI${report.rasters.length > 1 ? ` (${report.rasters.length} images)` : ""}`);
+    const dpi = Number(largest.effectiveDpi).toFixed(1).replace(/\.0$/, "");
+    const requestedDpi = Number(largest.requestedDpi).toFixed(1).replace(/\.0$/, "");
+    const adapted = report.rasterAutoAdjusted ? ` · auto-adjusted from ${requestedDpi} to ${dpi} DPI` : "";
+    parts.push(`Raster output ${largest.columns.toLocaleString("en-US")} × ${largest.rows.toLocaleString("en-US")} samples at ${dpi} DPI${adapted}${report.rasters.length > 1 ? ` (${report.rasters.length} images)` : ""}`);
   }
   if (report.filledScans.length) {
     const lines = report.filledScans.reduce((sum, item) => sum + item.rows, 0);
@@ -1279,12 +1286,13 @@ async function runJob(label) {
     const jobs = [];
     for (let index = 0; index < groups.length; index++) {
       const group = groups[index];
-      const quality = bed.outputQuality(group.ops);
+      const quality = bed.outputQuality(group.ops, { maxRasterSamples: rasterSampleLimitForMachine() });
       if (quality.blocked) return toast("Job blocked: " + quality.problems.join(" "), "err");
       const built = await bed.buildGcodeJob(group.ops, {
         maxFeed: machine().maxFeed || 12000,
         zAxis: machine().zAxis,
         softwareFocus: epilog,
+        maxRasterSamples: rasterSampleLimitForMachine(),
       });
       jobs.push({
         ...group,
@@ -1379,6 +1387,7 @@ async function startSimulate() {
         maxFeed: machine().maxFeed || 12000,
         zAxis: machine().zAxis,
         softwareFocus: epilog,
+        maxRasterSamples: rasterSampleLimitForMachine(),
       });
       if (buildVersion !== simBuildVersion) return;
       // `lines` is precisely the GRBL program passed to startJob. Native
@@ -1469,8 +1478,8 @@ const machineFields = (m) => {
   { key: "maxFeed", label: "Max feed (mm/min)", type: "number", value: m?.maxFeed || 12000, showIf: (v) => v.advanced },
   { key: "vectorSpeedMmS", label: "Timing: vector speed at 100% (mm/s)", type: "number", min: 0.1, step: 0.1, value: timing.vectorSpeedMmS, showIf: (v) => v.advanced, sync: motionFieldSync("vectorSpeedMmS") },
   { key: "travelSpeedMmS", label: "Timing: laser-off travel speed (mm/s)", type: "number", min: 0.1, step: 0.1, value: timing.travelSpeedMmS, showIf: (v) => v.advanced, sync: motionFieldSync("travelSpeedMmS") },
-  { key: "vectorAccelerationMmS2", label: "Timing: vector acceleration (mm/s²)", type: "number", min: 0.1, step: 1, value: timing.vectorAccelerationMmS2, showIf: (v) => v.advanced, sync: motionFieldSync("vectorAccelerationMmS2") },
-  { key: "rasterSpeedMmS", label: "Timing: raster speed at 100% (mm/s)", type: "number", min: 0.1, step: 1, value: timing.rasterSpeedMmS, showIf: (v) => v.advanced, sync: motionFieldSync("rasterSpeedMmS") },
+  { key: "vectorAccelerationMmS2", label: "Timing: vector acceleration (mm/s²)", type: "number", min: 0.1, step: 0.1, value: timing.vectorAccelerationMmS2, showIf: (v) => v.advanced, sync: motionFieldSync("vectorAccelerationMmS2") },
+  { key: "rasterSpeedMmS", label: "Timing: raster speed at 100% (mm/s)", type: "number", min: 0.1, step: 0.1, value: timing.rasterSpeedMmS, showIf: (v) => v.advanced, sync: motionFieldSync("rasterSpeedMmS") },
   { key: "rasterLineDelayMs", label: "Timing: raster turnaround per line (ms)", type: "number", min: 0, step: 1, value: +(timing.rasterLineDelayS * 1000).toFixed(1), showIf: (v) => v.advanced, sync: motionFieldSync("rasterLineDelayS", 1000) },
   { key: "zEnabled", label: "Enable controlled Z-axis offsets", type: "checkbox", value: !!m?.zAxis?.enabled, showIf: (v) => v.advanced && !isEpilogDriver(v.driver) },
   { key: "zMin", label: "Minimum Z offset (mm, must include 0)", type: "number", step: 0.1, value: m?.zAxis?.min ?? -10, showIf: (v) => v.advanced && v.zEnabled && !isEpilogDriver(v.driver) },
@@ -2004,6 +2013,8 @@ const bitmapFields = {
   whitePoint: ["bmpWhitePoint", "bmpWhitePointNum"],
   threshold: ["bmpThreshold", "bmpThresholdNum"],
   gamma: ["bmpGamma", "bmpGammaNum"],
+  dehaze: ["bmpDehaze", "bmpDehazeNum"],
+  enhanceAmount: ["bmpSharpen", "bmpSharpenNum"],
   grayLevels: ["bmpGrayLevels", "bmpGrayLevelsNum"],
 };
 function setBitmapPair(key, value) {

@@ -17,6 +17,10 @@
       <button type="button" class="is-active" data-preview="after">Processed</button>
     </div>
     <div class="header-actions">
+      <div class="history-actions" role="group" aria-label="Edit history">
+        <button type="button" class="icon-button icon-button--light" id="undoButton" aria-label="Undo" title="Undo (⌘Z)">↶</button>
+        <button type="button" class="icon-button icon-button--light" id="redoButton" aria-label="Redo" title="Redo (⌘⇧Z)">↷</button>
+      </div>
       <button type="button" class="button button--ghost" id="cancelButton">Cancel</button>
       <button type="button" class="button button--primary" id="applyButton">Apply to image</button>
     </div>
@@ -32,6 +36,9 @@
       </button>
       <button type="button" class="tool" data-tool="style" title="Choose engraving style">
         <span class="tool__icon">▦</span><span>Style</span>
+      </button>
+      <button type="button" class="tool" data-tool="text" title="Add raster text">
+        <span class="tool__icon">T</span><span>Text</span>
       </button>
     </nav>
 
@@ -62,10 +69,10 @@
       <div class="preview-footer">
         <span id="previewStatus">Preparing preview…</span>
         <span class="spacer"></span>
-        <button type="button" class="icon-button" id="zoomOut" aria-label="Zoom out">−</button>
+        <button type="button" class="icon-button" id="zoomOut" aria-label="Zoom out" title="Zoom out (⌘−)">−</button>
         <input id="zoomRange" type="range" min="25" max="200" value="100" aria-label="Preview zoom">
-        <button type="button" class="icon-button" id="zoomIn" aria-label="Zoom in">+</button>
-        <button type="button" class="fit-button" id="zoomFit">Fit</button>
+        <button type="button" class="icon-button" id="zoomIn" aria-label="Zoom in" title="Zoom in (⌘+)">+</button>
+        <button type="button" class="fit-button" id="zoomFit" title="Fit preview (⌘0)">Fit</button>
         <span id="zoomLabel">100%</span>
       </div>
     </section>
@@ -94,12 +101,39 @@
         <div class="section-heading"><div><h2>Tone & detail</h2><p>Corrections are applied before the engraving pattern.</p></div><button type="button" class="text-button" id="resetAdjustments">Reset</button></div>
         <div id="adjustmentControls" class="controls"></div>
         <label class="check-field"><input type="checkbox" id="invertControl"><span>Invert light and dark</span></label>
+        <p class="pipeline-hint" id="tonePipelineHint">Tone corrections feed directly into the selected engraving style.</p>
       </section>
 
       <section class="tool-panel is-hidden" data-panel="style">
-        <div class="section-heading"><div><h2>Engraving style</h2><p>Choose how tones become laser marks.</p></div></div>
+        <div class="section-heading"><div><h2>Engraving style</h2><p>Choose how adjusted tones become laser marks.</p></div><button type="button" class="text-button" id="resetStyle">Reset style</button></div>
         <div class="style-grid" id="styleGrid"></div>
-        <div id="styleControls" class="controls style-controls"></div>
+        <div class="detail-card">
+          <div id="detailControl"></div>
+          <p id="detailHint"></p>
+        </div>
+        <details class="fine-tuning" open>
+          <summary>Fine tuning</summary>
+          <div id="styleControls" class="controls style-controls"></div>
+        </details>
+      </section>
+
+      <section class="tool-panel is-hidden" data-panel="text">
+        <div class="section-heading"><div><h2>Raster text</h2><p>Text is rendered into the engraving result and follows the image crop.</p></div><button type="button" class="text-button" id="clearText">Clear</button></div>
+        <div class="controls text-controls">
+          <label class="select-field"><span>Text</span><textarea id="textContent" rows="3" maxlength="500" placeholder="Write something…"></textarea></label>
+          <label class="select-field"><span>Font</span><select id="textFont"></select></label>
+          <div class="text-style-row">
+            <button type="button" id="textBold" aria-pressed="false"><strong>B</strong></button>
+            <button type="button" id="textItalic" aria-pressed="false"><em>I</em></button>
+            <label class="select-field"><span>Colour</span><select id="textColor"><option value="#000000">Black · engrave</option><option value="#ffffff">White · mask</option></select></label>
+          </div>
+          <label class="select-field"><span>Size</span><input id="textSize" type="range" min="1" max="40" step=".5"><output id="textSizeValue"></output></label>
+          <div class="text-position-grid">
+            <label class="select-field"><span>Horizontal</span><input id="textX" type="number" min="0" max="100" step=".5"></label>
+            <label class="select-field"><span>Vertical</span><input id="textY" type="number" min="0" max="100" step=".5"></label>
+          </div>
+        </div>
+        <p class="tip">System fonts are shown when the app can read them. Position is measured from the upper-left corner of the original image.</p>
       </section>
 
       <section class="output-card">

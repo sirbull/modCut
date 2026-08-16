@@ -68,8 +68,13 @@ export function openModal({ title, fields, submitLabel = "Save" }) {
         const f = label._field;
         if (f && f.showIf) {
           const visible = f.showIf(v);
+          const input = label.querySelector("input,select");
           label.style.display = visible ? "" : "none";
-          label.querySelector("input,select").required = visible && !!f.required;
+          // Hidden conditional fields must not participate in native form
+          // validation. They remain available through form.elements so their
+          // defaults can still be included when the form is submitted.
+          input.disabled = !visible;
+          input.required = visible && !!f.required;
         }
       }
       previousValues = { ...v };
