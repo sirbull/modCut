@@ -1553,7 +1553,7 @@ function renderMachineStatus() {
   $("dryRun").disabled = machineStatus.connected;
   $("device").disabled = machineStatus.connected;
   $("sendBtn").disabled = !machineStatus.connected || machineStatus.running || !!activeJobSequence || !connectionMatchesMachine();
-  $("sendBtn").textContent = (machineStatus.connected ? machineStatus.dryRun : $("dryRun").checked) ? "Run dry-run" : "Start job";
+  $("sendBtn").textContent = (machineStatus.connected ? machineStatus.dryRun : $("dryRun").checked) ? "Run dry-run" : "Send job";
   $("frame").disabled = !machineStatus.connected || machineStatus.running || !!activeJobSequence || !connectionMatchesMachine();
   $("stopBtn").classList.toggle("hidden", !machineStatus.running || machineStatus.canEmergencyStop === false);
   $("jobState").textContent = machineStatus.running
