@@ -42,8 +42,11 @@ export async function connectToApp(port, timeoutMs = 20_000) {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         pending.delete(id);
-        reject(new Error(`DevTools command timed out after 10 seconds: ${method}`));
-      }, 10_000);
+        const detail = method === "Runtime.evaluate"
+          ? ` (${String(params.expression || "").replace(/\s+/g, " ").slice(0, 180)})`
+          : "";
+        reject(new Error(`DevTools command timed out after 30 seconds: ${method}${detail}`));
+      }, 30_000);
       pending.set(id, { resolve, reject, timer });
     });
   };

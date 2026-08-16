@@ -102,13 +102,27 @@ function pathStyle(state, paintOp, OPS) {
       attributes.push(`stroke-dashoffset="${number(state.dashOffset)}"`);
     }
   }
-  return { extractable: true, visible: true, attributes: attributes.join(" ") };
+  return {
+    extractable: true,
+    visible: true,
+    attributes: attributes.join(" "),
+    fillVisible,
+    strokeVisible,
+    fillRule: fillVisible && evenOdd.has(paintOp) ? "evenodd" : "nonzero",
+    lineWidth: state.lineWidth,
+    lineCap: ["butt", "round", "square"][state.lineCap] || "butt",
+    lineJoin: ["miter", "round", "bevel"][state.lineJoin] || "miter",
+    miterLimit: state.miterLimit,
+    dash: [...state.dash],
+    dashOffset: state.dashOffset,
+  };
 }
 
 export function extractPdfVectors(operatorList, viewport, OPS) {
   const stack = [];
   let state = initialState();
   const paths = [];
+  const rasterMasks = [];
   const extractedIndexes = new Set();
   let hasRasterContent = false;
   const rasterPaintOps = new Set([
@@ -146,6 +160,12 @@ export function extractPdfVectors(operatorList, viewport, OPS) {
         if (d) {
           const transform = multiply(viewport.transform || IDENTITY, state.ctm);
           paths.push(`<path d="${d}" transform="matrix(${matrixValue(transform)})" ${style.attributes}/>`);
+          rasterMasks.push({
+            commands: Array.from(buffer), transform,
+            fill: style.fillVisible, stroke: style.strokeVisible, fillRule: style.fillRule,
+            lineWidth: style.lineWidth, lineCap: style.lineCap, lineJoin: style.lineJoin,
+            miterLimit: style.miterLimit, dash: style.dash, dashOffset: style.dashOffset,
+          });
           extractedIndexes.add(index);
         } else hasRasterContent = true;
       }
@@ -158,5 +178,5 @@ export function extractPdfVectors(operatorList, viewport, OPS) {
   const svgText = paths.length
     ? `<svg xmlns="http://www.w3.org/2000/svg" width="${number(widthMm)}mm" height="${number(heightMm)}mm" viewBox="0 0 ${number(viewport.width)} ${number(viewport.height)}">${paths.join("")}</svg>`
     : null;
-  return { svgText, vectorPathCount: paths.length, extractedIndexes, hasRasterContent, widthMm, heightMm };
+  return { svgText, vectorPathCount: paths.length, extractedIndexes, rasterMasks, hasRasterContent, widthMm, heightMm };
 }

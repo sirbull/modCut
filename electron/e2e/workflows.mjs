@@ -334,13 +334,18 @@ export async function runWorkflows(client) {
   const pdfPreview = await evaluate(`import('./pdfimport.js').then(module => module.pdfToArtwork(${JSON.stringify(pdfDataUrl())}, {dpi:72,maxPixels:1000000}).then(result => ({widthMm:result.widthMm,heightMm:result.heightMm,pageCount:result.pageCount,vectorPathCount:result.vectorPathCount,raster:!!result.rasterDataUrl,svg:result.svgText?.includes('<path')})))`);
   assert.ok(near(pdfPreview.widthMm, 25.4) && near(pdfPreview.heightMm, 12.7), "PDF import must retain the page's physical dimensions");
   assert.deepEqual({ pageCount: pdfPreview.pageCount, vectorPathCount: pdfPreview.vectorPathCount, raster: pdfPreview.raster, svg: pdfPreview.svg }, { pageCount: 1, vectorPathCount: 1, raster: false, svg: true }, "a vector-only PDF must stay editable without a duplicate raster");
-  const mixedPdf = await evaluate(`import('./pdfimport.js').then(async module => { const result=await module.pdfToArtwork(${JSON.stringify(mixedPdfDataUrl())}, {dpi:72,maxPixels:1000000}); const image=await createImageBitmap(await (await fetch(result.rasterDataUrl)).blob()),canvas=document.createElement('canvas'),context=canvas.getContext('2d'); canvas.width=image.width; canvas.height=image.height; context.drawImage(image,0,0); const pixel=[...context.getImageData(36,18,1,1).data]; return {vectorPathCount:result.vectorPathCount,raster:!!result.rasterDataUrl,linePixel:pixel}; })`);
+  const mixedPdf = await evaluate(`import('./pdfimport.js').then(async module => { const result=await module.pdfToArtwork(${JSON.stringify(mixedPdfDataUrl())}, {dpi:72,maxPixels:1000000}); window.__mixedPdfRaster=result.rasterDataUrl; return {vectorPathCount:result.vectorPathCount,raster:!!result.rasterDataUrl}; })`);
+  mixedPdf.linePixel = await evaluate(`(async()=>{const image=await new Promise((resolve,reject)=>{const element=new Image(); element.onload=()=>resolve(element); element.onerror=()=>reject(new Error('Raster preview could not be decoded')); element.src=window.__mixedPdfRaster;}),canvas=document.createElement('canvas'),context=canvas.getContext('2d'); canvas.width=image.width; canvas.height=image.height; context.drawImage(image,0,0); return [...context.getImageData(36,18,1,1).data];})()`);
   assert.equal(mixedPdf.vectorPathCount, 1, "a mixed PDF must expose its solid path as an editable vector");
   assert.equal(mixedPdf.raster, true, "a mixed PDF must retain text and images in a raster fallback");
   assert.equal(mixedPdf.linePixel.slice(0, 3).every(channel => channel > 245), true, "an extracted PDF vector must be omitted from the raster fallback to prevent double output");
   await evaluate(`window.modcut.setE2EImportResult(${JSON.stringify([{ path: "/e2e/mixed.pdf", name: "mixed.pdf", ext: "pdf", dataUrl: mixedPdfDataUrl() }])}); document.querySelector('#add').click()`);
-  await wait(400);
-  const mixedLayers = await evaluate("[...document.querySelectorAll('.clayer')].filter(row=>row.dataset.layerKey.endsWith(':#000000')).map(row=>({key:row.dataset.layerKey,kind:row.querySelector('.clayer__kind').textContent,op:row.querySelector('.clayer__op').value,choices:[...row.querySelector('.clayer__op').options].map(option=>option.value)}))");
+  let mixedLayers = [];
+  const mixedLayerDeadline = Date.now() + 10_000;
+  while (mixedLayers.length < 2 && Date.now() < mixedLayerDeadline) {
+    mixedLayers = await evaluate("[...document.querySelectorAll('.clayer')].filter(row=>row.dataset.layerKey.endsWith(':#000000')).map(row=>({key:row.dataset.layerKey,kind:row.querySelector('.clayer__kind').textContent,op:row.querySelector('.clayer__op').value,choices:[...row.querySelector('.clayer__op').options].map(option=>option.value)}))");
+    if (mixedLayers.length < 2) await wait(100);
+  }
   assert.deepEqual(mixedLayers, [
     { key: "raster:#000000", kind: "Raster", op: "Engrave", choices: ["Engrave", "Ignore"] },
     { key: "vector:#000000", kind: "Vector", op: "Cut", choices: ["Cut", "Engrave", "Score", "Ignore"] },
