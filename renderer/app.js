@@ -14,6 +14,9 @@ const clampSpeedPct = (v) => Math.max(1, Math.min(100, Number(v) || 1));
 const safeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
 const isEpilogDriver = (driver) => /^epilog\s+zing$/i.test(String(driver || ""));
 const defaultNetworkPort = (driver) => isEpilogDriver(driver) ? 515 : 23;
+const VECTOR_FILE_EXTENSIONS = new Set(["svg", "dxf"]);
+const RASTER_FILE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "bmp", "gif"]);
+const PROJECT_FILE_EXTENSION = "modcut";
 
 // --- persisted stores (seeded from presets on first run, then fully editable) --
 const F = 20000; // default beam frequency (Hz)
@@ -604,7 +607,7 @@ function resetWorkspace({ filename = "job", label = "Untitled" } = {}) {
 }
 
 function prepareArtwork(f) {
-  if (f.ext === "svg" || f.ext === "dxf") {
+  if (VECTOR_FILE_EXTENSIONS.has(f.ext)) {
     const svgText = f.ext === "dxf" ? dxfToSvg(f.text) : f.text;
     return { kind: "vector", ...prepareSVG(svgText) };
   }
@@ -620,6 +623,30 @@ async function placeArtwork(prepared) {
   await bed.loadImage(prepared.dataUrl, null);
   state.mappingMode = "color";
   [...$("mapmode").children].forEach((c) => c.classList.toggle("on", c.dataset.mode === "color"));
+}
+
+async function addArtworkFiles(files) {
+  bed.finishDrawing();
+  const wasEmpty = !bed.getDesign();
+  let added = 0;
+  for (const f of files) {
+    try {
+      const prepared = prepareArtwork(f);
+      if (!prepared) throw new Error(`.${f.ext} files cannot be added yet.`);
+      await placeArtwork(prepared);
+      added++;
+    } catch (e) {
+      toast(`Could not add ${f.name}: ${e.message}`, "err");
+    }
+  }
+  if (!added) return 0;
+  if (wasEmpty) {
+    $("filename").value = files[0].name.replace(/\.[^.]+$/, "");
+    setFileLabel(files.length === 1 ? files[0].name : "Untitled");
+  }
+  syncColorsAndLayers();
+  markDirty();
+  return added;
 }
 
 async function doImport() {
@@ -665,7 +692,6 @@ async function doImport() {
 }
 
 async function addFiles() {
-  bed.finishDrawing();
   let files;
   try {
     files = await window.modcut.openImport({ multiple: true, allowDocuments: false });
@@ -674,26 +700,126 @@ async function addFiles() {
     return;
   }
   if (!files?.length) return;
-  const wasEmpty = !bed.getDesign();
-  let added = 0;
-  for (const f of files) {
+  const added = await addArtworkFiles(files);
+  if (!added) return;
+  toast(`Added ${added} file${added === 1 ? "" : "s"} to the project.`, "ok");
+}
+
+function openDocumentInNewTab(documentData, path, name) {
+  captureActiveTab();
+  const previousTabId = activeTabId;
+  const tab = { id: String(nextTabId++), title: name || "Untitled", dirty: false, session: null };
+  documentTabs.push(tab);
+  activeTabId = tab.id;
+  try {
+    resetWorkspace();
+    applyDocument(documentData, path, name);
+    captureActiveTab();
+    renderTabs();
+    scheduleRecovery();
+    return true;
+  } catch (error) {
+    documentTabs = documentTabs.filter((item) => item.id !== tab.id);
+    activeTabId = previousTabId;
+    restoreWorkspace(activeTab()?.session);
+    throw error;
+  }
+}
+
+function droppedFileExtension(file) {
+  const match = String(file?.name || "").toLowerCase().match(/\.([^.]+)$/);
+  return match ? match[1] : "";
+}
+
+async function droppedFilePayload(file) {
+  const ext = droppedFileExtension(file);
+  let path = null;
+  try { path = window.modcut.getPathForFile?.(file) || null; } catch {}
+  const payload = { name: file.name, path, ext };
+  if (ext === PROJECT_FILE_EXTENSION) return { ...payload, kind: "document", text: await file.text() };
+  if (VECTOR_FILE_EXTENSIONS.has(ext)) return { ...payload, text: await file.text() };
+  if (RASTER_FILE_EXTENSIONS.has(ext)) {
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.addEventListener("load", () => resolve(reader.result), { once: true });
+      reader.addEventListener("error", () => reject(reader.error || new Error("The image could not be read.")), { once: true });
+      reader.readAsDataURL(file);
+    });
+    return { ...payload, dataUrl };
+  }
+  return null;
+}
+
+async function handleDroppedFiles(fileList) {
+  const files = [...fileList];
+  if (!files.length) return;
+  const targetTabId = activeTabId;
+  const documents = [];
+  const artwork = [];
+  let unsupported = 0;
+  for (const file of files) {
     try {
-      const prepared = prepareArtwork(f);
-      if (!prepared) throw new Error(`.${f.ext} files cannot be added yet.`);
-      await placeArtwork(prepared);
-      added++;
-    } catch (e) {
-      toast(`Could not add ${f.name}: ${e.message}`, "err");
+      const payload = await droppedFilePayload(file);
+      if (!payload) { unsupported++; continue; }
+      if (payload.kind === "document") {
+        const data = JSON.parse(payload.text);
+        if (data?.app !== "modCut") throw new Error("Not a modCut document.");
+        documents.push({ payload, data });
+      } else artwork.push(payload);
+    } catch (error) {
+      toast(`Could not read ${file.name}: ${error.message}`, "err");
     }
   }
-  if (!added) return;
-  if (wasEmpty) {
-    $("filename").value = files[0].name.replace(/\.[^.]+$/, "");
-    setFileLabel(files.length === 1 ? files[0].name : "Untitled");
+
+  let opened = 0;
+  for (const { payload, data } of documents) {
+    try {
+      if (openDocumentInNewTab(data, payload.path, payload.name)) opened++;
+    } catch (error) {
+      toast(`Could not open ${payload.name}: ${error.message}`, "err");
+    }
   }
-  syncColorsAndLayers();
-  markDirty();
-  toast(`Added ${added} file${added === 1 ? "" : "s"} to the project.`, "ok");
+
+  let added = 0;
+  if (artwork.length) {
+    if (targetTabId && activeTabId !== targetTabId) switchDocumentTab(targetTabId);
+    added = await addArtworkFiles(artwork);
+  }
+  if (opened) toast(`Opened ${opened} project${opened === 1 ? "" : "s"} in new tab${opened === 1 ? "" : "s"}.`, "ok");
+  if (added) toast(`Added ${added} file${added === 1 ? "" : "s"} to the active project.`, "ok");
+  if (unsupported) toast(`${unsupported} unsupported file${unsupported === 1 ? " was" : "s were"} skipped.`, "info");
+}
+
+function initFileDrop() {
+  const overlay = $("dropOverlay");
+  let dragDepth = 0;
+  const hasFiles = (event) => [...(event.dataTransfer?.types || [])].includes("Files");
+  const hide = () => { dragDepth = 0; overlay.classList.add("hidden"); overlay.setAttribute("aria-hidden", "true"); };
+  window.addEventListener("dragenter", (event) => {
+    if (!hasFiles(event)) return;
+    event.preventDefault();
+    dragDepth++;
+    overlay.classList.remove("hidden");
+    overlay.setAttribute("aria-hidden", "false");
+  });
+  window.addEventListener("dragover", (event) => {
+    if (!hasFiles(event)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  });
+  window.addEventListener("dragleave", (event) => {
+    if (!dragDepth) return;
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (!dragDepth) hide();
+  });
+  window.addEventListener("dragend", hide);
+  window.addEventListener("drop", (event) => {
+    if (!hasFiles(event)) return;
+    event.preventDefault();
+    const files = event.dataTransfer.files;
+    hide();
+    void handleDroppedFiles(files);
+  });
 }
 
 function newDocument() {
@@ -1628,6 +1754,21 @@ window.addEventListener("keydown", (e) => {
   const key = e.key.toLowerCase();
   const mod = e.metaKey || e.ctrlKey;
   if (mod) {
+    if (key === "+" || key === "=") {
+      e.preventDefault();
+      bed.zoomIn();
+      return;
+    }
+    if (key === "-" || key === "_") {
+      e.preventDefault();
+      bed.zoomOut();
+      return;
+    }
+    if (key === "0") {
+      e.preventDefault();
+      bed.fit();
+      return;
+    }
     if (key === "tab") {
       e.preventDefault();
       switchRelativeTab(e.shiftKey ? -1 : 1);
@@ -1905,6 +2046,7 @@ window.modcut.onCloseRequest(async () => {
 // --- boot -------------------------------------------------------------------
 initCollapsibleSections();
 initTooltips();
+initFileDrop();
 refreshMachines(state.machineId);
 bed.setGrid(state.gridXmm, state.gridYmm);
 initializeDocumentTabs();

@@ -46,6 +46,11 @@ export async function runWorkflows(client) {
   await wait(300);
   assert.equal(await evaluate("document.querySelector('#splitJobs').checked"), false, "split by operation must be off by default");
 
+  const zoomBeforeShortcut = await evaluate("paper.view.zoom");
+  await evaluate("window.dispatchEvent(new KeyboardEvent('keydown',{key:'+',metaKey:true,bubbles:true,cancelable:true}))");
+  assert.ok((await evaluate("paper.view.zoom")) > zoomBeforeShortcut, "Cmd/Ctrl++ must zoom in");
+  await evaluate("window.dispatchEvent(new KeyboardEvent('keydown',{key:'-',metaKey:true,bubbles:true,cancelable:true}))");
+
   let shapeSteps = null;
   for (let attempt = 1; attempt <= 3 && !shapeSteps; attempt++) {
     await evaluate("window.focus(); document.querySelector('[data-tool=rect]').click()");
@@ -251,9 +256,37 @@ export async function runWorkflows(client) {
   await evaluate("(() => { const input=document.querySelector('#bmpBrightnessNum'); input.value=15; input.dispatchEvent(new Event('input',{bubbles:true})); input.dispatchEvent(new Event('change',{bubbles:true})); })()");
   assert.equal(await evaluate("paper.project.layers[1].children.find(item=>item.className==='Raster').data.rasterSettings.brightness"), 15);
 
+  const droppedSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="20mm" height="10mm" viewBox="0 0 20 10"><rect x="1" y="1" width="18" height="8" fill="none" stroke="#00aa00"/></svg>`;
+  await evaluate(`(() => {
+    const transfer=new DataTransfer();
+    transfer.items.add(new File([${JSON.stringify(droppedSvg)}], 'dropped.svg', {type:'image/svg+xml'}));
+    window.dispatchEvent(new DragEvent('dragenter',{bubbles:true,cancelable:true,dataTransfer:transfer}));
+  })()`);
+  assert.equal(await evaluate("!document.querySelector('#dropOverlay').classList.contains('hidden')"), true, "dragging files over the editor must show the drop target");
+  const beforeDrop = await evaluate("paper.project.layers[1].children.length");
+  await evaluate(`(() => {
+    const transfer=new DataTransfer();
+    transfer.items.add(new File([${JSON.stringify(droppedSvg)}], 'dropped.svg', {type:'image/svg+xml'}));
+    window.dispatchEvent(new DragEvent('drop',{bubbles:true,cancelable:true,dataTransfer:transfer}));
+  })()`);
+  await wait(400);
+  assert.ok((await evaluate("paper.project.layers[1].children.length")) > beforeDrop, "a dropped vector must be appended to the active project");
+  assert.equal(await evaluate("document.querySelector('#dropOverlay').classList.contains('hidden')"), true, "the drop target must close after the drop");
+
+  await evaluate(`(() => {
+    const documentData={app:'modCut',version:2,design:paper.project.layers[1].exportJSON({asString:true}),filename:'dropped-project',mappingMode:'color',layers:[],units:'cm'};
+    const transfer=new DataTransfer();
+    transfer.items.add(new File([JSON.stringify(documentData)], 'dropped-project.modcut', {type:'application/json'}));
+    window.dispatchEvent(new DragEvent('drop',{bubbles:true,cancelable:true,dataTransfer:transfer}));
+  })()`);
+  await wait(400);
+  assert.equal(await evaluate("document.querySelectorAll('.doc-tab').length"), 3, "a dropped project must open in a new tab");
+  assert.equal(await evaluate("document.querySelector('.doc-tab.is-active .doc-tab__title').textContent"), "dropped-project.modcut");
+  assert.equal(await evaluate("document.querySelector('#file').textContent.includes('*')"), false, "a dropped project must open cleanly");
+
   await wait(700);
   const recovery = await evaluate("window.modcut.readRecovery().then(JSON.parse)");
-  assert.equal(recovery.tabs.length, 2);
+  assert.equal(recovery.tabs.length, 3);
   assert.equal(recovery.tabs.some((tab) => tab.dirty), true);
 
   await evaluate("window.close()");
@@ -261,12 +294,12 @@ export async function runWorkflows(client) {
   assert.equal(await evaluate("document.querySelector('[data-x=cancel]') !== null"), true, "native window close must ask about dirty tabs");
   await evaluate("document.querySelector('[data-x=cancel]').click()");
   await wait();
-  assert.equal(await evaluate("document.querySelectorAll('.doc-tab').length"), 2, "Cancel must keep the window and tabs open");
+  assert.equal(await evaluate("document.querySelectorAll('.doc-tab').length"), 3, "Cancel must keep the window and tabs open");
   await evaluate("window.modcut.requestE2EQuit()");
   await wait(200);
   assert.equal(await evaluate("document.querySelector('[data-x=cancel]') !== null"), true, "application Quit must guard dirty tabs too");
   await evaluate("document.querySelector('[data-x=cancel]').click()");
-  return { tabCount: 2 };
+  return { tabCount: 3 };
 }
 
 export async function verifyRecoveredSession(client, expected) {

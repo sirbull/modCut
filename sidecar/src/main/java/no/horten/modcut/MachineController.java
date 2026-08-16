@@ -236,15 +236,22 @@ final class MachineController implements AutoCloseable {
     if (!dryRun && !params.path("confirmed").asBoolean(false)) {
       throw new IllegalArgumentException("Ekte kjøring krever eksplisitt sikkerhetsbekreftelse.");
     }
-    List<String> lines = lines(params);
-    GcodeValidator.Report report = GcodeValidator.validate(lines, connectedBedWidth, connectedBedHeight, connectedMaxFeed,
-        connectedZEnabled, connectedZMin, connectedZMax, connectedZFeed);
     if (connectedDriver.equalsIgnoreCase("Epilog Zing")) {
       var built = EpilogJobBuilder.build(params, connectedBedWidth, connectedBedHeight);
       startEpilogAsync(params.path("filename").asText("job.prn"), built);
-    } else {
-      startGrblAsync(params.path("filename").asText("job.gcode"), lines);
+      ObjectNode out = json.createObjectNode();
+      out.put("lineCount", 0);
+      out.put("bytes", 0);
+      out.put("motionCount", built.pointCount());
+      out.put("segmentCount", built.segmentCount());
+      out.put("started", true);
+      out.put("dryRun", dryRun);
+      return out;
     }
+    List<String> lines = lines(params);
+    GcodeValidator.Report report = GcodeValidator.validate(lines, connectedBedWidth, connectedBedHeight, connectedMaxFeed,
+        connectedZEnabled, connectedZMin, connectedZMax, connectedZFeed);
+    startGrblAsync(params.path("filename").asText("job.gcode"), lines);
     ObjectNode out = reportNode(report);
     out.put("started", true);
     out.put("dryRun", dryRun);

@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import de.thomas_oster.liblasercut.VectorCommand;
 import de.thomas_oster.liblasercut.VectorPart;
 import de.thomas_oster.liblasercut.RasterPart;
+import de.thomas_oster.liblasercut.Raster3dPart;
 import de.thomas_oster.liblasercut.drivers.EpilogEngraveProperty;
 import de.thomas_oster.liblasercut.drivers.EpilogZing;
 import de.thomas_oster.liblasercut.platform.Util;
@@ -128,6 +129,29 @@ class EpilogJobBuilderTest {
     assertEquals(70, property.getSpeed());
     assertEquals(-0.5, property.getFocus());
     assertTrue(property.isEngraveBottomUp());
+  }
+
+  @Test
+  void expandsCompactGrayscaleRowsInsideTheNativeRasterBuilder() throws Exception {
+    var params = json.readTree("""
+        {"filename":"compact-photo.prn","laserSegments":[
+          {"layerIndex":0,"operation":"Engrave","raster":true,"rasterRow":true,"engraveMode":"native",
+           "dpi":100,"dither":"Grayscale","bottomUp":true,"maxPower":40,
+           "power":20,"speed":70,"frequency":500,"focus":0,
+           "points":[{"x":10,"y":20},{"x":12.54,"y":20}],
+           "samples":"gP8="}
+        ]}
+        """);
+
+    var built = EpilogJobBuilder.build(params, 100, 100);
+    assertEquals(1, built.segmentCount(), "one compact transport segment must represent the complete row");
+    assertTrue(built.job().getParts().get(0) instanceof Raster3dPart);
+    var raster = (Raster3dPart) built.job().getParts().get(0);
+    assertEquals(11, raster.getRasterWidth());
+    assertEquals(1, raster.getRasterHeight());
+    var row = new java.util.ArrayList<Byte>();
+    raster.getRasterLine(0, row);
+    assertTrue(new java.util.HashSet<>(row).size() > 1, "both grayscale powers must survive row expansion");
   }
 
   @Test

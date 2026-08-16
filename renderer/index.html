@@ -28,7 +28,7 @@
     <span class="tb-sep"></span>
     <button class="btn btn--ghost btn--sm btn--icon" id="zoomOut" title="Zoom out (Cmd/Ctrl+-)">−</button>
     <button class="btn btn--ghost btn--sm" id="zoomFit" title="Fit to bed (Cmd/Ctrl+0)">Fit</button>
-    <button class="btn btn--ghost btn--sm btn--icon" id="zoomIn" title="Zoom in (Cmd/Ctrl+=)">+</button>
+    <button class="btn btn--ghost btn--sm btn--icon" id="zoomIn" title="Zoom in (Cmd/Ctrl++)">+</button>
     <span class="tb-sep"></span>
     <button class="btn btn--ghost btn--sm" id="selMode" title="Selection scope: individual elements vs whole design">Mark elements</button>
     <div class="spacer"></div>
@@ -209,6 +209,13 @@
     <div class="spacer"></div>
     <span id="msg"></span>
   </footer>
+</div>
+<div class="drop-overlay hidden" id="dropOverlay" aria-hidden="true">
+  <div class="drop-overlay__card">
+    <svg class="drop-overlay__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>
+    <strong>Drop files into modCut</strong>
+    <span>SVG, DXF and images are added to the active project.<br>.modcut projects open in new tabs.</span>
+  </div>
 </div>
 <div class="toasts" id="toasts"></div>
 <script src="../node_modules/paper/dist/paper-core.min.js"></script>

@@ -54,6 +54,18 @@
 .side { border-left: 1px solid var(--border); background: var(--bg); overflow: auto; padding: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-5); }
 .workspace.collapsed .side { border-left: 0; }
 
+/* --- file drop ---------------------------------------------------------- */
+.drop-overlay { position: fixed; inset: 0; z-index: 65; display: grid; place-items: center; padding: var(--sp-6);
+                background: color-mix(in srgb, var(--brand-deep) 24%, transparent); pointer-events: none;
+                backdrop-filter: blur(2px); }
+.drop-overlay__card { width: min(520px, calc(100vw - 48px)); padding: 34px 28px; border: 2px dashed var(--brand);
+                      border-radius: 18px; background: color-mix(in srgb, var(--bg) 96%, transparent);
+                      box-shadow: var(--shadow-2); color: var(--text); text-align: center; }
+.drop-overlay__icon { width: 42px; height: 42px; display: block; margin: 0 auto var(--sp-3); fill: none;
+                      stroke: var(--brand-deep); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.drop-overlay__card strong { display: block; margin-bottom: var(--sp-2); font-size: var(--fs-xl); }
+.drop-overlay__card span { color: var(--text-muted); font-size: var(--fs-sm); line-height: 1.5; }
+
 /* --- side sections ------------------------------------------------------ */
 .sec { display: flex; flex-direction: column; gap: var(--sp-2); }
 /* natural height + the whole side scrolls (no clipping/overlap between sections) */

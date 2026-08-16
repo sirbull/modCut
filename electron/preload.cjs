@@ -1,9 +1,10 @@
-const { contextBridge, ipcRenderer } = require("electron");
+const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 // Only surface a narrow, safe bridge to the renderer.
 contextBridge.exposeInMainWorld("modcut", {
   call: (method, params) => ipcRenderer.invoke("sidecar", method, params),
   openImport: (options) => ipcRenderer.invoke("importFile", options),
+  getPathForFile: (file) => webUtils.getPathForFile(file),
   saveDocument: (json, path, saveAs, name) => ipcRenderer.invoke("saveDocument", { json, path, saveAs, name }),
   exportSettings: (json, name) => ipcRenderer.invoke("exportSettings", { json, name }),
   importSettings: () => ipcRenderer.invoke("importSettings"),

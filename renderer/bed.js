@@ -1,6 +1,7 @@
 import {
   DEFAULT_RASTER_SETTINGS,
   ditherMask,
+  grayToPower,
   grayscaleImageData,
   grayscaleRuns,
   normalizeRasterSettings,
@@ -1620,9 +1621,17 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       let end = at + 1;
       while (end < segs.length && segs[end].layerIndex === layerIndex) end++;
       const layer = segs.slice(at, end);
+      // Job rasterization can already emit compact rows directly. Keep those
+      // intact; this function still consolidates preview/fill scan segments.
+      if (layer.some((segment) => segment.nativeRaster && (Array.isArray(segment.runs) || segment.rasterSamples))) {
+        out.push(...layer);
+        at = end;
+        continue;
+      }
       const raster = layer.filter((segment) => segment.raster && segment.engraveMode !== "vector");
       if (!raster.length) out.push(...layer);
       else {
+        const rasterSet = new Set(raster);
         const rows = new Map();
         for (const segment of raster) {
           const y = (segStart(segment).y + segEnd(segment).y) / 2;
@@ -1646,7 +1655,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
                   P(leftToRight ? intervals[intervals.length - 1].right : intervals[intervals.length - 1].left, y)],
           });
         }
-        out.push(...layer.filter((segment) => !raster.includes(segment)));
+        out.push(...layer.filter((segment) => !rasterSet.has(segment)));
       }
       at = end;
     }
@@ -1760,7 +1769,10 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       img.src = src;
     });
   }
-  async function rasterDitherScan(it, sp, out) {
+  function encodeRasterSamples(samples) {
+    return btoa(String.fromCharCode(...samples));
+  }
+  async function rasterDitherScan(it, sp, out, compactRows = false) {
     const image = await loadRasterImageData(it);
     if (!image) return rasterImageScan(it, sp, out, false);
     const b = it.bounds;
@@ -1787,6 +1799,19 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
           start = null;
         }
       }
+      if (compactRows && runs.length) {
+        const samples = new Uint8Array(columns);
+        for (const [startColumn, endColumn] of runs) samples.fill(255, startColumn, endColumn);
+        out.push({
+          pts: [P(flip ? b.right : b.left, y), P(flip ? b.left : b.right, y)],
+          leftToRight: !flip,
+          rasterSamples: encodeRasterSamples(samples), nativeRaster: true, rasterRow: true,
+          speed: sp.speed, power: sp.power, freq: sp.freq,
+          dpi: sp.dpi, dither: sp.dither, op: "Engrave", raster: true,
+        });
+        flip = !flip;
+        continue;
+      }
       const ordered = flip ? runs.slice().reverse() : runs;
       for (const [aPx, cPx] of ordered) {
         let a = P(b.left + (aPx / columns) * b.width, y);
@@ -1797,7 +1822,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       flip = !flip;
     }
   }
-  async function rasterGrayscaleScan(it, sp, out) {
+  async function rasterGrayscaleScan(it, sp, out, compactRows = false) {
     const image = await loadRasterImageData(it);
     if (!image) return rasterImageScan(it, sp, out, false);
     const b = it.bounds;
@@ -1818,6 +1843,23 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
         samples[column] = gray[py * image.width + px];
       }
       const runs = grayscaleRuns(samples, settings.grayLevels, sp.power);
+      if (compactRows && runs.length) {
+        const powers = new Uint8Array(columns);
+        const maxPower = Math.max(0, Number(sp.power) || 0);
+        for (let column = 0; column < columns; column++) {
+          const power = grayToPower(samples[column], settings.grayLevels, maxPower);
+          powers[column] = maxPower > 0 ? Math.round(255 * power / maxPower) : 0;
+        }
+        out.push({
+          pts: [P(flip ? b.right : b.left, y), P(flip ? b.left : b.right, y)],
+          leftToRight: !flip,
+          rasterSamples: encodeRasterSamples(powers), nativeRaster: true, rasterRow: true,
+          speed: sp.speed, power: sp.power, freq: sp.freq,
+          dpi: sp.dpi, dither: "Grayscale", op: "Engrave", raster: true,
+        });
+        flip = !flip;
+        continue;
+      }
       const ordered = flip ? runs.slice().reverse() : runs;
       for (const run of ordered) {
         let a = P(b.left + (run.start / columns) * b.width, y);
@@ -1831,15 +1873,16 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       flip = !flip;
     }
   }
-  async function collectJobSegs(specs) {
+  async function collectJobSegs(specs, { compactVectorRaster = false } = {}) {
     const batches = [];
     for (let layerIndex = 0; layerIndex < specs.length; layerIndex++) {
       const sp = specs[layerIndex];
       const groups = [];
       for (const it of itemsForSpec(sp)) {
         const g = [];
-        if (sp.op === "Engrave" && it.className === "Raster" && String(sp.dither).toLowerCase() === "grayscale") await rasterGrayscaleScan(it, sp, g);
-        else if (sp.op === "Engrave" && it.className === "Raster") await rasterDitherScan(it, sp, g);
+        const compactRows = sp.engraveMode !== "vector" || compactVectorRaster;
+        if (sp.op === "Engrave" && it.className === "Raster" && String(sp.dither).toLowerCase() === "grayscale") await rasterGrayscaleScan(it, sp, g, compactRows);
+        else if (sp.op === "Engrave" && it.className === "Raster") await rasterDitherScan(it, sp, g, compactRows);
         else sp.op === "Engrave" ? engraveSeg(it, sp, g, false) : vectorSeg(it, sp, g, false);
         for (const segment of g) {
           segment.zOffset = Number(sp.zOffset) || 0;
@@ -1856,8 +1899,8 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     }
     return batches;
   }
-  async function orderJobSegs(specs) {
-    return orderLayerBatches(await collectJobSegs(specs));
+  async function orderJobSegs(specs, options) {
+    return orderLayerBatches(await collectJobSegs(specs, options));
   }
   const fmt = (n) => (Math.round(n * 1000) / 1000).toFixed(3).replace(/\.?0+$/, "");
   const feedFromPct = (pct, maxFeed = 12000) => Math.round((Math.max(1, Math.min(100, pct || 1)) / 100) * maxFeed);
@@ -1880,8 +1923,13 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       const outside = requestedZ.find((offset) => offset < minZ || offset > maxZ);
       if (outside != null) throw new Error(`Combined focus position ${outside} mm is outside the machine Z range ${minZ}…${maxZ} mm.`);
     }
-    const segs = await orderJobSegs(specs);
-    const lines = [
+    const orderedSegs = await orderJobSegs(specs, { compactVectorRaster: !softwareFocus });
+    // Epilog consumes structured native raster data, not G-code. Collapse the
+    // many same-row raster runs into one transport record per scanline so a
+    // normal photograph does not become hundreds of thousands of repeated
+    // segment objects (or an equally large, unused G-code program).
+    const segs = softwareFocus ? consolidateNativeRasterRows(orderedSegs) : orderedSegs;
+    const lines = softwareFocus ? [] : [
       "; Generated by modCut",
       "G21 ; millimeters",
       "G90 ; absolute positioning",
@@ -1890,13 +1938,38 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     let burnMoves = 0;
     let currentZ = 0;
     const zFeed = Math.max(1, Number(zAxis?.feed) || 300);
-    for (const seg of segs) {
+    for (const seg of softwareFocus ? [] : segs) {
       if (!seg.pts || seg.pts.length < 2) continue;
       const nextZ = combinedFocusOffset(machineFocusOffset, seg.zOffset);
       if (!softwareFocus && nextZ !== currentZ) {
         lines.push("M5");
         lines.push(`G1 Z${fmt(nextZ)} F${Math.round(zFeed)} ; set combined focus position with laser off`);
         currentZ = nextZ;
+      }
+      if (seg.rasterSamples) {
+        const samples = Uint8Array.from(atob(seg.rasterSamples), (char) => char.charCodeAt(0));
+        if (!samples.length) continue;
+        const left = Math.min(seg.pts[0].x, seg.pts[1].x);
+        const right = Math.max(seg.pts[0].x, seg.pts[1].x);
+        const y = (seg.pts[0].y + seg.pts[1].y) / 2;
+        const leftToRight = seg.leftToRight !== false;
+        const sampleAt = (index) => samples[leftToRight ? index : samples.length - 1 - index];
+        lines.push(`G0 X${fmt(leftToRight ? left : right)} Y${fmt(y)}`);
+        lines.push("M4 S0 ; dynamic raster power");
+        const feed = feedFromPct(seg.speed, maxFeed);
+        let value = sampleAt(0);
+        for (let sample = 1; sample <= samples.length; sample++) {
+          const next = sample < samples.length ? sampleAt(sample) : -1;
+          if (next === value) continue;
+          const ratio = sample / samples.length;
+          const x = leftToRight ? left + (right - left) * ratio : right - (right - left) * ratio;
+          const power = (Number(seg.layerPower) || Number(seg.power) || 0) * value / 255;
+          lines.push(`G1 X${fmt(x)} Y${fmt(y)} S${powerToS(power)} F${feed}`);
+          if (value > 0) burnMoves++;
+          value = next;
+        }
+        lines.push("M5");
+        continue;
       }
       const start = seg.pts[0];
       lines.push(`G0 X${fmt(start.x)} Y${fmt(start.y)}`);
@@ -1911,6 +1984,9 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     }
     if (!softwareFocus && currentZ !== 0) lines.push(`G1 Z0 F${Math.round(zFeed)} ; restore focused Z=0`);
     lines.push("G0 X0 Y0");
+    if (!softwareFocus && lines.length > 500_000) {
+      throw new Error(`Raster job requires ${lines.length.toLocaleString("en-US")} G-code lines; the controller limit is 500,000. Reduce the raster DPI or physical image size.`);
+    }
     const laserSegments = segs
       .filter((segment) => segment.pts?.length >= 2)
       .map((segment) => ({
@@ -1928,6 +2004,12 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
         bottomUp: segment.bottomUp !== false,
         engraveMode: segment.engraveMode || "auto",
         maxPower: Number(segment.layerPower) || Number(segment.power) || 0,
+        ...(segment.nativeRaster ? {
+          rasterRow: true,
+          ...(segment.rasterSamples ? { samples: segment.rasterSamples } : { runs: segment.runs.map((run) => ({
+            left: Number(run.left), right: Number(run.right), power: Number(run.power) || 0,
+          })) }),
+        } : {}),
         ...(segment.closed && segment.op === "Cut" && segment.overlapPoint ? {
           overlapPoint: { x: segment.overlapPoint.x, y: segment.overlapPoint.y },
         } : {}),

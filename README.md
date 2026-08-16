@@ -12,6 +12,8 @@ The first complete, hardware-testable path is available:
   engraving with non-destructive grayscale photo controls;
 - open artwork in a new workspace with Import, or combine multiple selected
   artwork files non-destructively with Add;
+- drag SVG, DXF and raster images directly into the active project, while
+  dropped `.modcut` documents open in independent new tabs;
 - keep multiple independent projects open as tabs, including separate designs,
   layers, raster settings, materials and undo/redo histories;
 - guard every dirty tab during native Close/Quit and recover all open tabs from
@@ -37,7 +39,8 @@ The first complete, hardware-testable path is available:
   offset as bounded Epilog software focus; unsafe values are rejected;
 - group selected objects with Cmd/Ctrl+G, isolate a group by double-clicking it,
   and return to the main canvas by double-clicking outside;
-- generate and simulate GRBL G-code;
+- generate and simulate GRBL G-code, with compact modal power changes for
+  high-resolution raster rows;
 - honor requested raster DPI and a fixed 0.2 mm vector tolerance, with visible
   effective-quality details and blocking warnings instead of silent reduction;
 - connect to GRBL over serial/TCP or an Epilog Zing through its LPD print queue;

@@ -85,11 +85,12 @@ class MachineControllerTest {
 
       var job = json.readTree("""
           {"machineId":"zing","filename":"test.prn","confirmed":false,
-           "gcodeLines":["G21","G90","M5","G0 X1 Y1","M4 S100","G1 X2 Y2 F1000","M5"],
            "laserSegments":[{"power":10,"speed":10,"frequency":5000,"focus":-1,
             "points":[{"x":1,"y":1},{"x":2,"y":2}]}]}
           """);
-      assertTrue(controller.handle("startJob", job).path("started").asBoolean());
+      var started = controller.handle("startJob", job);
+      assertTrue(started.path("started").asBoolean());
+      assertEquals(0, started.path("lineCount").asInt(), "native Epilog jobs must not require an unused G-code program");
       long deadline = System.currentTimeMillis() + 2_000;
       while (controller.status().path("running").asBoolean() && System.currentTimeMillis() < deadline) Thread.sleep(5);
       assertEquals("completed", controller.status().path("lastResult").asText());
