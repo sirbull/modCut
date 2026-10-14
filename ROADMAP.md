@@ -1,6 +1,6 @@
 # modCut roadmap
 
-Last updated: 2026-08-07
+Last updated: 2026-10-14
 
 This is the living engineering checklist for the work required before modCut is
 ready for routine workshop use. Update the checkbox and the short result note in
@@ -46,9 +46,35 @@ the same commit that completes an item.
 
 ## P3: Draw workspace (vector editor)
 
+- [x] D0.1: Draw/Cut switch with an isolated canvas and PaperScope per tab,
+  workspace-specific native menu and Electron regression coverage.
+- [x] D0.2: Pure JS document model, validated commands, atomic undo/redo,
+  nested transactions, selection and safe loading. 16 tests, 100% model line
+  coverage and a seeded 1,000-command undo/redo round trip.
+- [x] D0.3: Pinned VectorCraft WASM spike and six-criterion report. JS fallback
+  selected: WASM is 15.58 MB raw / 5.35 MB gzip, exceeding the 6 MB / 2 MB budgets.
+  See [`docs/draw/spike-vectorcraft.md`](docs/draw/spike-vectorcraft.md) for measurements
+  and the PDF/CI checks that remain unverified.
+- [x] D0.4: Worker-based GeometryKernel with JS flatten/union, cancellation,
+  timeout/restart and busy hooks. Clipper 6 JS is pinned with notices and package
+  inclusion. 42 Draw tests and the full `npm test` suite pass in this run.
+
 - [ ] Build the Draw workspace described in
   [`docs/DRAW_WORKSPACE.md`](docs/DRAW_WORKSPACE.md). Task status is tracked in
   chapter 23 of that document.
+
+- [ ] Phase 0 — Foundation: workspace, document model/history, geometry kernel,
+  keymap and `.modcut` v4 persistence. In progress; D0.1–D0.4 complete, D0.5 is next.
+- [ ] Phase 1 — Basic drawing MVP: artboards, Pen, shapes, layers, bitmap
+  references and Send to Cut v1.
+- [ ] Phase 2 — Core vector editing: text, Pathfinder, gradients, import/export
+  and Send to Cut v2.
+- [ ] Phase 3 — Advanced editing: stroke expansion, effects, Image Trace,
+  additional editing tools and AI/DXF export.
+- [ ] Phase 4 — Full feature set: Width, Blend, brushes, additional export
+  formats and performance work.
+- [ ] Phase 5 — Polish and extras: localization, additional typography,
+  print features and an optional MCP server. Deferred until phases 0–4 are complete.
 
 ## Recently completed
 

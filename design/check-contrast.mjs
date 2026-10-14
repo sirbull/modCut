@@ -39,15 +39,34 @@ const PAIRS = [
   ["brand-deep", "lime", 3.0, "LARGE green text on lime (large only)"],
 ];
 
+const darkBlock = css.match(/:root\[data-theme="dark"\]\s*\{([^}]+)\}/)[1];
+const darkTokens = { ...tokens };
+for (const m of darkBlock.matchAll(/--([\w-]+):\s*(#[0-9a-fA-F]{6})\b/g)) darkTokens[m[1]] = m[2];
+const commonPairs = [
+  ...["bg", "surface", "surface-2"].flatMap((bg) => [
+    ["text", bg, 4.5, `body text on ${bg}`],
+    ["text-muted", bg, 4.5, `muted text on ${bg}`],
+    ["brand-deep", bg, 4.5, `accent text on ${bg}`],
+    ["danger", bg, 4.5, `error text on ${bg}`],
+    ["warning", bg, 4.5, `warning text on ${bg}`],
+  ]),
+  ["on-brand", "brand-fill", 4.5, "filled button"],
+  ["on-brand", "brand-fill-top", 4.5, "filled button gradient top"],
+  ["on-danger", "danger-fill", 4.5, "destructive button"],
+  ["on-accent", "brand", 4.5, "score tag"],
+];
 let failed = 0;
 console.log("modCut WCAG contrast check\n" + "=".repeat(52));
-for (const [fg, bg, min, label] of PAIRS) {
-  const cfg = tokens[fg], cbg = tokens[bg];
-  if (!cfg || !cbg) { console.log(`?? MISSING token ${fg}/${bg}`); failed++; continue; }
-  const r = ratio(cfg, cbg);
-  const ok = r >= min;
-  if (!ok) failed++;
-  console.log(`${ok ? "PASS" : "FAIL"}  ${r.toFixed(2).padStart(5)}:1 (>=${min})  ${label}`);
+for (const [theme, values, pairs] of [["light", tokens, [...PAIRS, ...commonPairs]], ["dark", darkTokens, commonPairs]]) {
+  console.log(`\n${theme} theme`);
+  for (const [fg, bg, min, label] of pairs) {
+    const cfg = values[fg], cbg = values[bg];
+    if (!cfg || !cbg) { console.log(`?? MISSING token ${fg}/${bg}`); failed++; continue; }
+    const r = ratio(cfg, cbg);
+    const ok = r >= min;
+    if (!ok) failed++;
+    console.log(`${ok ? "PASS" : "FAIL"}  ${r.toFixed(2).padStart(5)}:1 (>=${min})  ${label}`);
+  }
 }
 console.log("=".repeat(52));
 console.log(failed ? `${failed} FAILURE(S)` : "All contrast pairs pass WCAG AA.");

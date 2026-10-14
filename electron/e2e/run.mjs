@@ -5,7 +5,9 @@ import { join } from "node:path";
 import electronPath from "electron";
 
 import { connectToApp, wait } from "./cdp.mjs";
+import { runDrawWorkflows, runDrawTabWorkflows } from "./draw-workflows.mjs";
 import { runWorkflows, verifyRecoveredSession } from "./workflows.mjs";
+import { runThemeWorkflows } from "./theme-workflows.mjs";
 
 const port = 9400 + (process.pid % 200);
 const profile = await mkdtemp(join(tmpdir(), "modcut-e2e-profile-"));
@@ -49,30 +51,50 @@ async function stop(signal = "SIGTERM") {
 try {
   launch();
   const first = await connectToApp(port);
-  const expected = await runWorkflows(first, port);
-  first.socket.close();
-  await stop("SIGKILL");
-  await wait(500);
-
-  let recovered = false;
-  let recoveryError = null;
-  for (let attempt = 1; attempt <= 2 && !recovered; attempt++) {
-    output = "";
-    launch();
-    try {
-      const second = await connectToApp(port);
-      await verifyRecoveredSession(second, expected);
-      second.socket.close();
-      recovered = true;
-    } catch (error) {
-      recoveryError = error;
-      process.stderr.write(`Recovery verification attempt ${attempt} failed: ${error.message}\n`);
-      await stop();
-      if (attempt < 2) await wait(750);
+  if (process.argv.includes("--theme")) {
+    await runThemeWorkflows(first, port);
+    first.socket.close();
+  } else if (process.argv.includes("--draw")) {
+    let ready = false;
+    for (let attempt = 0; attempt < 100 && !ready; attempt++) {
+      ready = await first.evaluate("!!document.querySelector('.doc-tab.is-active') && !!window.paper?.project");
+      if (!ready) await wait(100);
     }
+    if (!ready) throw new Error("Draw test: project did not initialize");
+    await runDrawTabWorkflows(first);
+    await first.evaluate(`(() => {
+      paper.project.layers[1].activate();
+      const shape = new paper.Path.Rectangle(new paper.Rectangle(10, 10, 40, 30));
+      shape.strokeColor = 'black'; shape.selected = true; paper.view.update();
+    })()`);
+    await runDrawWorkflows(first);
+    first.socket.close();
+  } else {
+    const expected = await runWorkflows(first, port);
+    first.socket.close();
+    await stop("SIGKILL");
+    await wait(500);
+
+    let recovered = false;
+    let recoveryError = null;
+    for (let attempt = 1; attempt <= 2 && !recovered; attempt++) {
+      output = "";
+      launch();
+      try {
+        const second = await connectToApp(port);
+        await verifyRecoveredSession(second, expected);
+        second.socket.close();
+        recovered = true;
+      } catch (error) {
+        recoveryError = error;
+        process.stderr.write(`Recovery verification attempt ${attempt} failed: ${error.message}\n`);
+        await stop();
+        if (attempt < 2) await wait(750);
+      }
+    }
+    if (!recovered) throw recoveryError;
+    process.stdout.write("PASS Electron E2E: tabs, Pen/node, scaling, save prompt, import/add, raster quality, native Close/Quit and crash recovery\n");
   }
-  if (!recovered) throw recoveryError;
-  process.stdout.write("PASS Electron E2E: tabs, Pen/node, scaling, save prompt, import/add, raster quality, native Close/Quit and crash recovery\n");
 } catch (error) {
   process.stderr.write(output + "\n");
   throw error;

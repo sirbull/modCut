@@ -1,0 +1,8 @@
+{
+  "repository": "https://github.com/storytold/vectorcraft.git",
+  "commit": "0a33cff3f6e2a1e9e672f4c3816f58cd8d3d032e",
+  "version": "0.11.0",
+  "license": "MIT OR Apache-2.0",
+  "rust": "1.95.0",
+  "wasmBindgen": "0.2.105"
+}

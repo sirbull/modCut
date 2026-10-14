@@ -1,6 +1,6 @@
 # modCut Draw: vektoreditor i modCut
 
-> Status: spesifikasjon og byggeplan. Ingen kode er skrevet ennå.
+> Status: D0.1–D0.4 er fullført. JS-fallback er implementert; D0.5 er neste oppgave.
 > Sist oppdatert: 2026-10-14.
 > Målgruppe: utviklere og kodeagenter (Claude Code og Codex) som skal bygge løsningen.
 
@@ -109,11 +109,13 @@ To MCP-servere er **valgfrie** hjelpemidler under utviklingen. Ingen av dem er e
 ### 3.1 Bytte mellom Cut og Draw
 
 * I hovedverktøylinjen (`renderer/index.html`, `header.toolbar`) legges en knapp
-  **Draw** med klassen `btn btn--primary btn--sm` (CTA, `--grad-primary`), plassert rett etter
+  **Draw** med klassen `btn btn--primary btn--sm` (CTA, ensfarget `--brand-fill`), plassert rett etter
   `Import`/`Add`-gruppen. Ikon: pennespiss (`draw`), tekst "Draw", tooltip
   `Draw: vektoreditor (Shift+Cmd/Ctrl+D)` hvis tasten er ledig, ellers kun klikk og menyvalg
   `View > Draw workspace`.
-* Når Draw er aktiv, byttes knappen til **Cut** (`btn--secondary`) som tar brukeren tilbake.
+* Når Draw er aktiv, byttes knappens tekst og ikon til **Cut**, som tar brukeren tilbake.
+  Knappen beholder `btn--primary`, hvitt ikon og fast bredde (104 px) i begge moduser.
+  Ikon og tekst midtstilles samlet; bakgrunnen er ensfarget grønn uten gradient i lyst og mørkt tema.
   Ved siden av vises **Send til Cut** som `btn--primary` når minst ett artboard er valgt.
 * Bytte er øyeblikkelig og taper ingen tilstand. Hver prosjektfane husker sist brukte modus.
 * `body` får `data-workspace="cut"` eller `data-workspace="draw"`. All synlighet styres med CSS
@@ -301,8 +303,9 @@ interface GeometryKernel {
 * `PathData` = `{ closed: boolean, segments: [{ p:[x,y], in:[dx,dy], out:[dx,dy] }] }[]` (en
   compound path er en liste av subpaths). Fill rule lagres separat (`nonzero`/`evenodd`).
 * Kjernen er **ren funksjon**: samme input gir samme output. Det gjør golden tests mulig.
-* `kernel.mjs` velger implementasjon: wasm hvis den lastes, ellers JS-fallback, og logger
-  valget én gang. Begge implementasjonene kjører samme testsuite.
+* `kernel.mjs` bruker implementasjonen valgt i D0.3 og logger valget én gang per
+  instans. Nå brukes JS-fallback; den avviste WASM-spiken lastes ikke automatisk.
+  En senere godkjent WASM-backend skal kjøre samme testsuite.
 * Kall som tar over 50 ms viser en ikke-blokkerende fremdriftsindikator. Kall kan avbrytes.
 
 ### 4.4 Rendering
@@ -1043,6 +1046,11 @@ og spørsmålet tas opp igjen før fase 4:
 5. Crate-API-ene kan pakkes inn uten å forke mer enn 200 linjer av upstream.
 6. Bygget kjører i CI på Linux, macOS og Windows (`.github/workflows/ci.yml`).
 
+D0.3-resultat (2026-10-14): bygget lykkes uten upstream-patcher, men WASM er
+15,58 MB rått / 5,35 MB gzip og overskrider kriterium 1. **JS-fallback velges for
+fase 1–3.** Manuell PDF-kontroll og CI på tre operativsystemer er uverifisert.
+Full målerapport og begrensninger: [`draw/spike-vectorcraft.md`](draw/spike-vectorcraft.md).
+
 ---
 
 ## 17. MCP og agentverktøy
@@ -1163,7 +1171,22 @@ Hver oppgave har id, avhengigheter, filer den eier, og akseptkriterier. En agent
 oppgave per PR. Oppgaver i samme fase uten avhengighet til hverandre kan kjøres parallelt
 av forskjellige agenter fordi de eier ulike filer.
 
-### Fase 0: Fundament (ingen synlig funksjon ennå)
+### Faseoversikt
+
+| Fase | Leveranse | Status |
+|---|---|---|
+| 0 — Fundament | Workspace-bytte, dokumentmodell, geometri-kjerne, keymap og lagring. | Påbegynt: D0.1–D0.4 ferdige; JS-fallback implementert. D0.5 er neste oppgave. |
+| 1 — Grunnleggende tegning | Artboards, markering, Pen, former, lag, bitmap-referanser og Send til Cut v1. | Ikke startet. |
+| 2 — Illustrator-kjernen | Tekst, Pathfinder, gradienter, import/eksport og Send til Cut v2. | Ikke startet. |
+| 3 — Avansert redigering og trace | Outline Stroke, effekter, Image Trace, flere redigeringsverktøy og AI/DXF-eksport. | Ikke startet. |
+| 4 — Fullpakke | Width, Blend, brushes, flere effekter/eksportformater og ytelsespass. | Ikke startet. |
+| 5 — Polering og ekstra | Lokalisering, ekstra tekstverktøy, trykkfunksjoner og valgfri MCP-server. | Utsatt til fase 0–4 er ferdige. |
+
+Fasene følges i rekkefølge som leveransemilepæler. Oppgaveavhengighetene i tabellene under
+styrer hva som kan bygges underveis. En fase markeres først ferdig når alle oppgavene i
+fasen og relevante kvalitetskrav i kapittel 19 er oppfylt. Detaljert status føres i kapittel 23.
+
+### Fase 0: Fundament (ingen tegneverktøy ennå)
 
 | Id | Oppgave | Avhenger av | Eier filer | Ferdig når |
 |---|---|---|---|---|
@@ -1280,8 +1303,9 @@ Denne seksjonen er skrevet direkte til kodeagentene.
 
 1. **Les først**: dette dokumentet, `README.md`, `ROADMAP.md`, `design/tokens.css` og filene
    oppgaven nevner. Ikke les hele `bed.js` hvis oppgaven ikke trenger det; den er stor.
-2. **Én oppgave, én gren, én PR.** Grennavn: `draw/<oppgave-id>-<kort-navn>`, f.eks.
-   `draw/D1.5-pen-tool`. PR-tittel starter med oppgave-id.
+2. **Felles arbeidsgren: `feat/vector-draw`.** Alle Draw-oppgaver bygges videre på
+   denne grenen, etter eierens ønske. Ikke opprett nye grener per deloppgave. Hold
+   oppgavene avgrenset og oppdater status etter hvert trinn.
 3. **Hold deg innenfor "Eier filer".** Trenger du å endre en fil en annen oppgave eier, gjør
    minst mulig endring og skriv det i PR-beskrivelsen.
 4. **Ikke endre** `renderer/bed.js` utover API-et beskrevet i 14.2, og ikke endre
@@ -1308,8 +1332,8 @@ Forslag til prompt for en agent:
 ```text
 Du jobber i repoet sirbull/modCut. Les docs/DRAW_WORKSPACE.md, spesielt kapittel 2, 4, 20
 og oppgave <ID> i kapittel 18. Implementer kun oppgave <ID>. Hold deg til filene oppgaven eier.
-Skriv tester, kjør `npm run test:draw` og `npm test`, oppdater statussjekklisten, og lag én PR
-fra grenen draw/<ID>-<navn>.
+Skriv tester, kjør `npm run test:draw` og `npm test`, og oppdater statussjekklisten.
+Arbeid videre på fellesgrenen feat/vector-draw; ikke opprett en ny gren for oppgaven.
 ```
 
 ---
@@ -1349,10 +1373,10 @@ fra grenen draw/<ID>-<navn>.
 
 Oppdateres i samme PR som fullfører oppgaven.
 
-* [ ] D0.1 Workspace-bytte
-* [ ] D0.2 Dokumentmodell og historikk
-* [ ] D0.3 VectorCraft-spike
-* [ ] D0.4 GeometryKernel og worker
+* [x] D0.1 Workspace-bytte
+* [x] D0.2 Dokumentmodell og historikk
+* [x] D0.3 VectorCraft-spike
+* [x] D0.4 GeometryKernel og worker
 * [ ] D0.5 Keymap og verktøyregister
 * [ ] D0.6 `.modcut` v4
 * [ ] D1.1 Render-adapter
@@ -1385,5 +1409,91 @@ Oppdateres i samme PR som fullfører oppgaven.
 * [ ] D3.6 Free Transform, Transform Each, Split Into Grid
 * [ ] D3.7 AI- og DXF-eksport
 * [ ] D3.8 Links, Crop Image, Document Info, Rediger i Draw
-* [ ] D4.1 til D4.6 Fullpakke
+* [ ] D4.1 Width og width profiles
+* [ ] D4.2 Blend
+* [ ] D4.3 Warp, Live Pathfinder og opacity masks
+* [ ] D4.4 Paintbrush og Blob Brush
+* [ ] D4.5 EPS/TIFF, Graphic Styles, Navigator, Rotate View og Asset Export
+* [ ] D4.6 Ytelsespass
 * [ ] Fase 5
+
+### Implementasjonsnotater D0.1
+
+* Draw/Cut-knapp, lazy canvas og eget PaperScope per prosjektfane, CSS via
+  `data-workspace`, validert IPC og en Draw-meny uten Cut-akseleratorer er implementert.
+* Ingen Draw-hurtigtast innføres før den sentrale keymap-motoren i D0.5.
+* Smale integrasjonsendringer i `renderer/app.js` knytter modus og opprydding til
+  prosjektfanene og hindrer at Draw-taster/menyvalg endrer skjult Cut-innhold.
+* E2E i `electron/e2e/draw-workflows.mjs` kjøres gjennom eksisterende suite og
+  kontrollerer canvas, menyer, modus per fane samt uendret Cut-geometri, zoom og lag.
+  Kan også kjøres isolert med `npm run test:e2e:draw`.
+* Tegneverktøy, Send til Cut og lagring av Draw-data/modus på disk kommer i senere oppgaver.
+
+Verifisering 2026-10-14: `npm run test:e2e:draw` passerer. Sidecar-, bridge-, main-,
+renderer- og kontrastsjekkene i `npm test` passerer. Hele E2E-suiten er foreløpig
+ikke grønn: bildebeskjæring feiler også på uendret HEAD (`439379e`); en annen lokal
+kjøring stoppet i Cut-testen for Backspace. Ingen endring i disse funksjonene inngår i D0.1.
+
+### Implementasjonsnotater D0.2
+
+* `renderer/draw/doc/` har versjon 1 av Draw-modellen, defaults og validering,
+  immutable snapshots, indeksert nodeoppslag, artboards og utvalg med ankermarkering
+  og navngitte utvalg. Ingen DOM, Paper.js eller nye avhengigheter.
+* Struktur- og egenskapsendringer går via Commands. Kandidatdokumenter valideres
+  før commit. Paths krever identitetsmatrise; transformasjon av ankre kommer med verktøyene.
+* History støtter undo/redo, nested synkrone transaksjoner med rollback, sammenslåing
+  med eksplisitt `mergeKey`, endringsvarsler og saved/dirty-grenser. Historikken lagrer
+  endrede felt/subtrær, ikke et helt dokument for hvert angresteg.
+* Lasting fyller manglende defaults og rapporterer reparasjoner. Ugyldige subtrær
+  holdes utenfor et skrivebeskyttet dokument i safe mode; originaldata følger rapporten.
+  Ukjente versjoner og ikke-JSON-data avvises. Uversjonerte utkast tolkes som v1;
+  det finnes ingen eldre Draw-versjon å migrere fra ennå.
+* API og brukseksempel: [`draw/document-model.md`](draw/document-model.md).
+* UI-integrasjon, filformat v4, autosave og recovery hører til senere oppgaver.
+
+Verifisering 2026-10-14: `npm run test:draw` passerer 16 tester og måler 100 %
+linjedekning i alle seks `doc/`-modulene (krav: minst 95 %). Property-testen bruker
+fast seed og 1 000 blandede kommandoer; hvert mellomsteg og sluttdokumentet blir
+identiske etter undo/redo. Hele `npm test` kjørte sidecar-, bridge-, main-, renderer-,
+Draw- og kontrastsjekkene grønt, men stoppet i den tidligere påviste E2E-feilen
+«dragging a crop edge must update the crop» i bildeeditoren.
+
+### Implementasjonsnotater D0.3
+
+* Pinnet VectorCraft 0.11.0 ved commit `0a33cff3f6e2a1e9e672f4c3816f58cd8d3d032e`;
+  egen eksperimentell crate og reproduserbart byggeskript, uten upstream-endringer.
+* 30 foreløpige boolean-referanser, tracing av to 2 MP-bilder i ekte Web Worker
+  og PDF-eksport/parsing er målt. Resultater for alle seks kriterier, inkludert
+  eksplisitt uverifiserte krav, står i [`draw/spike-vectorcraft.md`](draw/spike-vectorcraft.md).
+* Beslutning: JS-fallback i D0.4, fordi WASM-størrelsen overstiger budsjettet.
+  Spiken regnes ferdig som evaluering; VectorCraft er ikke godkjent som kernel.
+* `THIRD_PARTY_NOTICES.md` er opprettet én oppgave tidligere enn planlagt, fordi
+  lisensreglene krever notat ved innføring av eksperimentets avhengigheter.
+* Ingen runtime-integrasjon, ingen ny Rust-CI og ingen endring av Cut i denne oppgaven.
+
+### Implementasjonsnotater D0.4
+
+* Promise-basert `GeometryKernel` med modul-worker og ren JS-fallback er implementert
+  i `renderer/draw/geom/kernel*.mjs`, uten DOM/Paper.js eller dokumentmutasjoner.
+  `flatten` og `boolean('unite')` virker; øvrige metoder avviser med `NOT_IMPLEMENTED`.
+* Kall tar en kopi av inngangsdata ved innsending og støtter AbortSignal, kø, 10 s
+  timeout og gjenoppretting etter worker-feil. Aktiv avbryting terminerer workeren;
+  senere kall/kø kan bruke en ny. Busy-hook varsler etter 50 ms, og ryddes ved alle utfall.
+* Fallbacken bruker eksakt pinnet `clipper-lib@6.4.2` (Boost 1.0, med Tom Wu/JSBN-notis)
+  og egen adaptiv Bézier-flattening. Dette er Clipper 6 i ren JS, ikke Clipper2/WASM:
+  valgt som et lite, avhengighetsfritt skjelett med nonzero/evenodd-støtte uten bundler.
+  Kurver approksimeres, og backendmetadata merker dette eksplisitt.
+* Standard toleranse er 0,001 mm; union bruker heltallsskala 1 000 000 per mm.
+  12 foreløpige union-referanser fra D0.3 passerer. Manuelt godkjente Pathfinder-goldens
+  og full støtte for geometrioperasjoner kommer i senere oppgaver.
+* Lisensnotater/-tekster, npm-lock og pakking er oppdatert. Smale endringer utenfor
+  kernel-filene gjelder avhengigheten og pakkeoppsettet samt eksisterende Draw-E2E.
+* API, presisjon, grenser og feilkoder: [`draw/geometry-kernel.md`](draw/geometry-kernel.md).
+  Ingen tegneverktøy, modell-UI-integrasjon eller nytt statuspanel er lagt til i D0.4.
+
+Verifisering 2026-10-14: `npm run test:draw` passerer 42 tester, inkludert reelle
+Node-workers, 12 union-referanser, timeout, aktiv/kø-avbryting, restart, protokollfeil
+og busy-hendelser. `npm run test:e2e:draw` passerer med ekte Web Worker i Electron
+og uendret Cut-tilstand. Hele `npm test` passerer i denne kjøringen, også full E2E
+med native Close/Quit og krasjgjenoppretting. Tidligere dokumenterte E2E-feil er
+historiske observasjoner; det påstås ikke at D0.4 har rettet bildeeditoren eller Cut.

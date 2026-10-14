@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, Menu, nativeImage } from "electron";
+import { app, BrowserWindow, ipcMain, dialog, Menu, nativeImage, nativeTheme } from "electron";
 import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join, extname, basename } from "node:path";
@@ -18,6 +18,7 @@ const isMac = process.platform === "darwin";
 let win;
 let sidecar;
 let recoveryStore;
+let imageEditorAvailable = false;
 let quitRequested = false;
 let quitAllowed = false;
 const imageEditorSessions = new Map();
@@ -40,7 +41,7 @@ function createWindow() {
     height: 880,
     show: false,
     icon: appIconPath,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: nativeTheme.shouldUseDarkColors ? "#071411" : "#FFFFFF",
     webPreferences: {
       preload: join(__dirname, "preload.cjs"),
       contextIsolation: true,
@@ -82,7 +83,7 @@ function requestQuit() {
 
 const send = createWindowCommandRouter({ getWindow: () => win, createWindow });
 
-function buildMenu() {
+function buildMenu(mode = "cut") {
   const template = [
     ...(isMac
       ? [{
@@ -134,7 +135,7 @@ function buildMenu() {
         { label: "Delete", accelerator: "Delete", click: () => send("delete") },
         { label: "Select All", accelerator: "CmdOrCtrl+A", click: () => send("select-all") },
         { type: "separator" },
-        { id: "advanced-image-editor", label: "Advanced Editing for Engraving…", accelerator: "Alt+I", enabled: false, click: () => send("advanced-image-editor") },
+        { id: "advanced-image-editor", label: "Advanced Editing for Engraving…", accelerator: "Alt+I", enabled: imageEditorAvailable, click: () => send("advanced-image-editor") },
         { type: "separator" },
         { label: "Group", accelerator: "CmdOrCtrl+G", click: () => send("group") },
         { label: "Ungroup", accelerator: "CmdOrCtrl+Shift+G", click: () => send("ungroup") },
@@ -194,6 +195,30 @@ function buildMenu() {
       ],
     },
   ];
+  const viewMenu = template.find((item) => item.label === "View");
+  viewMenu.submenu.unshift({
+    id: "workspace-toggle", label: mode === "draw" ? "Cut workspace" : "Draw workspace",
+    click: () => send(mode === "draw" ? "workspace-cut" : "workspace-draw"),
+  }, { type: "separator" });
+  if (mode === "draw") {
+    // D0.1 shell: expose shared project commands and no Cut editing accelerators.
+    const fileMenu = template.find((item) => item.label === "File");
+    fileMenu.submenu = fileMenu.submenu.filter((item) =>
+      ["New", "Import…", "Add…", "Close Tab", "Save document…", "Save document as…", "Quit"].includes(item.label));
+    template.find((item) => item.label === "Edit").submenu = [
+      { label: "Undo", enabled: false }, { label: "Redo", enabled: false },
+    ];
+    viewMenu.submenu = [viewMenu.submenu[0], { type: "separator" },
+      { role: "togglefullscreen", label: "Full screen" },
+      { role: "toggleDevTools", label: "Developer Tools" }];
+    for (const label of ["Machine", "Materials"]) {
+      template.splice(template.findIndex((item) => item.label === label), 1);
+    }
+    const editIndex = template.findIndex((item) => item.label === "Edit");
+    template.splice(editIndex + 1, 0, ...["Object", "Type", "Select", "Effect"].map((label) => ({
+      label, submenu: [{ label: "No commands available", enabled: false }],
+    })));
+  }
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
@@ -221,6 +246,19 @@ app.whenReady().then(() => {
     : join(root, "sidecar", "target", "modcut-sidecar.jar");
   sidecar = createSidecar({ command: java, args: ["-jar", sidecarJar] });
   ipcMain.handle("sidecar", (_e, method, params) => sidecar.call(method, params));
+  ipcMain.handle("setTheme", (event, preference) => {
+    if (!BrowserWindow.fromWebContents(event.sender) || !["system", "light", "dark"].includes(preference)) return false;
+    nativeTheme.themeSource = preference;
+    for (const window of BrowserWindow.getAllWindows()) {
+      window.setBackgroundColor(nativeTheme.shouldUseDarkColors ? "#071411" : "#FFFFFF");
+    }
+    return true;
+  });
+  ipcMain.handle("setWorkspace", (event, mode) => {
+    if (event.sender !== win?.webContents || !["cut", "draw"].includes(mode)) return false;
+    buildMenu(mode);
+    return true;
+  });
   ipcMain.handle("readRecovery", () => recoveryStore.read());
   ipcMain.handle("writeRecovery", (_event, json) => recoveryStore.write(json));
   ipcMain.handle("clearRecovery", () => recoveryStore.clear());
@@ -240,6 +278,7 @@ app.whenReady().then(() => {
     return true;
   });
   ipcMain.handle("setImageEditorAvailable", (_event, available) => {
+    imageEditorAvailable = !!available;
     const item = Menu.getApplicationMenu()?.getMenuItemById("advanced-image-editor");
     if (item) item.enabled = !!available;
     return !!item;
@@ -302,6 +341,10 @@ app.whenReady().then(() => {
   });
   if (isE2E) {
     ipcMain.handle("e2eSetImportResult", (_event, result) => { e2eImportResults.push(result); return true; });
+    ipcMain.handle("e2eWorkspaceMenu", () => ({
+      label: Menu.getApplicationMenu()?.getMenuItemById("workspace-toggle")?.label,
+      edit: Menu.getApplicationMenu()?.items.find((item) => item.label === "Edit")?.submenu.items.map((item) => item.accelerator || null),
+    }));
     ipcMain.handle("e2eRequestQuit", () => { requestQuit(); return true; });
   }
 

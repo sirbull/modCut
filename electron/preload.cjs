@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 // Only surface a narrow, safe bridge to the renderer.
 contextBridge.exposeInMainWorld("modcut", {
+  setTheme: (preference) => ipcRenderer.invoke("setTheme", preference),
   call: (method, params) => ipcRenderer.invoke("sidecar", method, params),
   openImport: (options) => ipcRenderer.invoke("importFile", options),
   getPathForFile: (file) => webUtils.getPathForFile(file),
@@ -14,7 +15,9 @@ contextBridge.exposeInMainWorld("modcut", {
   respondToCloseRequest: (allowed) => ipcRenderer.invoke("windowCloseResponse", !!allowed),
   onCloseRequest: (cb) => ipcRenderer.on("app-close-request", (_event, request) => cb(request)),
   setE2EImportResult: (result) => ipcRenderer.invoke("e2eSetImportResult", result),
+  getE2EWorkspaceMenu: () => ipcRenderer.invoke("e2eWorkspaceMenu"),
   requestE2EQuit: () => ipcRenderer.invoke("e2eRequestQuit"),
+  setWorkspace: (mode) => ipcRenderer.invoke("setWorkspace", mode),
   onMenu: (cb) => ipcRenderer.on("menu", (_e, cmd) => cb(cmd)),
   openImageEditor: (payload) => ipcRenderer.invoke("openImageEditor", payload),
   finishImageEditor: (result) => ipcRenderer.invoke("finishImageEditor", result),

@@ -1,0 +1,18 @@
+export const DEFAULT_PREFERENCES = Object.freeze({ showGrid: true, invertZoom: false, tooltips: true, tooltipDelay: 1000 });
+export const PREFERENCES_KEY = "modcut_preferences";
+
+export function normalizePreferences(value, defaults = DEFAULT_PREFERENCES) {
+  const result = { ...defaults };
+  if (!value || typeof value !== "object") return result;
+  for (const key of ["showGrid", "invertZoom", "tooltips"]) {
+    if (typeof value[key] === "boolean") result[key] = value[key];
+  }
+  const delay = Number(value.tooltipDelay);
+  if ([350, 1000, 1800].includes(delay)) result.tooltipDelay = delay;
+  return result;
+}
+
+export function loadPreferences(storage) {
+  try { return normalizePreferences(JSON.parse(storage.getItem(PREFERENCES_KEY))); }
+  catch { return { ...DEFAULT_PREFERENCES }; }
+}

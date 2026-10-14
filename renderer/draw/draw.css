@@ -1,0 +1,42 @@
+/* Visibility belongs to the workspace attribute; Cut retains its layout and view. */
+.workspace { position: relative; }
+.draw-workspace { display: none; }
+body[data-workspace="draw"] .draw-workspace {
+  display: block; position: absolute; inset: 0; z-index: 1;
+  overflow: hidden; background: var(--surface-2);
+}
+body[data-workspace="draw"] :is(#stage, #side, .actionbar, #tools, #zoomOut, #zoomFit, #zoomIn, #selMode, #togglePanel) {
+  visibility: hidden; pointer-events: none;
+}
+body[data-workspace="draw"] .statusbar > :is(#coords, #sel, .sep) { visibility: hidden; }
+.draw-canvas { display: block; width: 100%; height: 100%; }
+.draw-workspace__hint {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; pointer-events: none;
+  color: var(--text-muted); padding: var(--sp-5); text-align: center;
+}
+.draw-workspace__hint h1 { color: var(--text); margin: 0; font-size: var(--fs-lg); }
+.draw-project { position: absolute; inset: 0; }
+
+#workspaceToggle {
+  box-sizing: border-box;
+  width: 104px;
+  flex: 0 0 104px;
+  justify-content: center;
+  text-align: center;
+  white-space: nowrap;
+  background: var(--brand-fill);
+}
+
+/* Keep the original SVG artwork white on the primary CTA in both workspaces. */
+.workspace-toggle__icon {
+  display: block;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  background: var(--on-brand);
+  mask: url("../../ICONS/draw_icon.svg") center / contain no-repeat;
+}
+body[data-workspace="draw"] .workspace-toggle__icon {
+  mask-image: url("../../ICONS/cut_icon.svg");
+}

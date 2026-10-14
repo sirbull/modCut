@@ -1,3 +1,4 @@
+import { createDrawWorkspace } from "./draw/index.mjs";
 import { createBed } from "./bed.js";
 import { prepareSVG } from "./svgimport.js";
 import { dxfToSvg } from "./dxfimport.js";
@@ -10,9 +11,17 @@ import { groupJobOperations, jobFilename } from "./job-split.mjs";
 import { defaultMotionTiming, motionTimingForMachine } from "./motion-timing.mjs";
 import { EPILOG_NATIVE_MAX_RASTER_SAMPLES, MAX_RASTER_SAMPLES } from "./output-quality.mjs";
 import { openModal, showMessageModal } from "./ui.js";
+import { loadPreferences, normalizePreferences, PREFERENCES_KEY } from "./preferences.mjs";
 import { DOCUMENT_FORMATS, IMAGE_FORMATS, PDF_FORMATS, TEXT_FORMATS, TIFF_FORMATS } from "../electron/import-formats.mjs";
 
 const $ = (id) => document.getElementById(id);
+let preferences = loadPreferences(localStorage);
+function updatePreferences(values) {
+  preferences = normalizePreferences(values, preferences);
+  localStorage.setItem(PREFERENCES_KEY, JSON.stringify(preferences));
+  bed.setViewPreferences(preferences);
+  window.dispatchEvent(new Event("modcut-preferences-change"));
+}
 const OPS = OPERATIONS;
 const DITHERS = RASTER_MODES;
 const clampSpeedPct = (v) => Math.max(1, Math.min(100, Number(v) || 1));
@@ -156,7 +165,7 @@ function initTooltips() {
   };
   const show = (element) => {
     const label = textFor(element);
-    if (!label || target !== element) return;
+    if (!preferences.tooltips || !label || target !== element) return;
     tooltip = document.createElement("div");
     tooltip.className = "app-tooltip"; tooltip.id = "appTooltip"; tooltip.role = "tooltip";
     tooltip.textContent = label;
@@ -168,9 +177,9 @@ function initTooltips() {
     tooltip.style.left = `${left}px`;
     tooltip.style.top = `${below + box.height <= innerHeight - 8 ? below : anchor.top - box.height - 9}px`;
   };
-  const schedule = (element, delay = 1000) => {
+  const schedule = (element, delay = preferences.tooltipDelay) => {
     hide(); target = element;
-    if (!textFor(element)) { target = null; return; }
+    if (!textFor(element) || !preferences.tooltips) { target = null; return; }
     timer = setTimeout(() => show(element), delay);
   };
   document.addEventListener("pointerover", (event) => {
@@ -190,6 +199,7 @@ function initTooltips() {
   document.addEventListener("pointerdown", hide, true);
   document.addEventListener("keydown", hide, true);
   window.addEventListener("scroll", hide, true);
+  window.addEventListener("modcut-preferences-change", hide);
 }
 
 const material = () => materials.find((m) => m.id === state.materialId) || materials[0];
@@ -275,6 +285,34 @@ let closeGuardRunning = false;
 const RECOVERY_VERSION = 1;
 const RECOVERY_DELAY_MS = 350;
 function pathBase(path) { return String(path || "").split(/[\\/]/).pop(); }
+// UI state stays per project; persisted Draw documents are introduced in D0.6.
+function setWorkspace(mode) {
+  if (!["cut", "draw"].includes(mode)) return;
+  const tab = activeTab();
+  if (!tab) return;
+  if (mode === "draw" && !tab.draw) {
+    tab.drawRoot = document.createElement("div");
+    tab.drawRoot.className = "draw-project";
+    $("drawWorkspace").append(tab.drawRoot);
+    tab.draw = createDrawWorkspace(tab.drawRoot);
+  }
+  tab.workspace = mode;
+  for (const item of documentTabs) if (item.drawRoot) {
+    item.drawRoot.style.display = item === tab && mode === "draw" ? "block" : "none";
+  }
+  document.body.dataset.workspace = mode;
+  const button = $("workspaceToggle");
+  button.querySelector("span").textContent = mode === "draw" ? "Cut" : "Draw";
+  button.setAttribute("aria-expanded", String(mode === "draw"));
+  button.dataset.tooltip = mode === "draw" ? "Cut: laser workspace" : "Draw: vector editor";
+  tab.draw?.resize();
+  closeContextMenu();
+  void window.modcut.setWorkspace(mode);
+}
+$("workspaceToggle").addEventListener("click", () => {
+  setWorkspace(activeTab()?.workspace === "draw" ? "cut" : "draw");
+});
+
 function activeTab() { return documentTabs.find((tab) => tab.id === activeTabId) || null; }
 function setFileLabel(name) {
   const title = name || "Untitled";
@@ -454,6 +492,7 @@ function restoreWorkspace(session) {
   refreshPos();
   refreshProps();
   restoringTab = false;
+  setWorkspace(activeTab()?.workspace || "cut");
   renderTabs();
 }
 
@@ -608,6 +647,7 @@ function applyDocument(p, path, name) {
 
 // --- new / import / add -----------------------------------------------------
 function resetWorkspace({ filename = "job", label = "Untitled" } = {}) {
+  setWorkspace("cut");
   bed.clear();
   bed.resetHistory();
   docPath = null;
@@ -964,6 +1004,8 @@ async function closeDocumentTab(id = activeTabId) {
   if (!(await guardWorkBeforeContinue())) return;
   const index = documentTabs.findIndex((tab) => tab.id === id);
   if (index < 0) return;
+  documentTabs[index].draw?.destroy();
+  documentTabs[index].drawRoot?.remove();
   documentTabs.splice(index, 1);
   if (!documentTabs.length) {
     activeTabId = null;
@@ -1770,7 +1812,7 @@ async function exportSettings() {
       { key: "machines", label: "Machines", type: "checkbox", value: true },
       { key: "materials", label: "Materials", type: "checkbox", value: true },
       { key: "profiles", label: "Process profiles", type: "checkbox", value: true },
-      { key: "prefs", label: "Preferences (units)", type: "checkbox", value: true },
+      { key: "prefs", label: "Preferences (appearance, workspace and units)", type: "checkbox", value: true },
     ],
   });
   if (!v) return;
@@ -1779,7 +1821,7 @@ async function exportSettings() {
   if (v.machines) payload.machines = machines;
   if (v.materials) payload.materials = materials;
   if (v.profiles) payload.processProfiles = processProfiles;
-  if (v.prefs) payload.prefs = { units: state.units };
+  if (v.prefs) payload.prefs = { ...preferences, units: state.units, theme: window.modcutTheme.preference, gridUnit: state.gridUnit, gridXmm: state.gridXmm, gridYmm: state.gridYmm };
   try {
     const path = await window.modcut.exportSettings(JSON.stringify(payload, null, 2), "modcut-settings.json");
     if (path) toast("Settings exported → " + path, "ok");
@@ -1795,19 +1837,37 @@ async function importSettings() {
     if (Array.isArray(p.materials) && p.materials.length) { materials = p.materials; normalizeMaterialSpeeds(); state.materialId = materials[0].id; saveMaterials(); refreshMaterialSelect(); applyMaterialToLayers(); n++; }
     if (Array.isArray(p.processProfiles)) { processProfiles = p.processProfiles.map(normalizeProcessProfile).filter((profile) => profile.id); saveProcessProfiles(); renderLayers(); n++; }
     if (p.prefs && p.prefs.units) { setUnits(p.prefs.units); n++; }
+    if (["system", "light", "dark"].includes(p.prefs?.theme)) { window.modcutTheme.setPreference(p.prefs.theme); n++; }
+    if (p.prefs && typeof p.prefs === "object") {
+      updatePreferences(p.prefs);
+      if (["mm", "cm", "in"].includes(p.prefs.gridUnit)) state.gridUnit = p.prefs.gridUnit;
+      for (const key of ["gridXmm", "gridYmm"]) if (Number.isFinite(p.prefs[key]) && p.prefs[key] >= 0.5) state[key] = p.prefs[key];
+      persistGrid();
+      bed.setGrid(state.gridXmm, state.gridYmm);
+      n++;
+    }
     toast(n ? "Settings imported." : "No recognizable settings in that file.", n ? "ok" : "info");
   } catch (e) { toast("Import failed: " + e.message, "err"); }
 }
 
+$("settings").addEventListener("click", () => openSettings());
 async function openSettings() {
   const gu = state.gridUnit;
   const v = await openModal({
-    title: "Preferences", submitLabel: "Save",
+    title: "Preferences", submitLabel: "Save", className: "preferences-modal",
     fields: [
-      { key: "units", label: "Display units", type: "select", value: state.units, options: [{ value: "mm", label: "Millimetres (mm)" }, { value: "cm", label: "Centimetres (cm)" }, { value: "in", label: "Inches (in)" }] },
-      { key: "gridUnit", label: "Grid unit", type: "select", value: gu, options: [{ value: "mm", label: "mm" }, { value: "cm", label: "cm" }, { value: "in", label: "in" }] },
-      { key: "gridX", label: "Grid spacing X", type: "number", value: +(state.gridXmm / UNIT[gu]).toFixed(3) },
-      { key: "gridY", label: "Grid spacing Y", type: "number", value: +(state.gridYmm / UNIT[gu]).toFixed(3) },
+      { key: "theme", section: "Appearance", label: "Theme", type: "segmented", value: window.modcutTheme.preference,
+        onChange: (value) => window.modcutTheme.setPreference(value),
+        description: "System follows your device’s appearance automatically. Light and Dark keep a fixed theme. Changes apply and save immediately.",
+        options: [{ value: "system", label: "System", icon: "system" }, { value: "light", label: "Light", icon: "light" }, { value: "dark", label: "Dark", icon: "dark" }] },
+      { key: "units", section: "Units & grid", label: "Display units", description: "Units used for the design’s position, width and height. Changing units keeps its physical size.", type: "select", value: state.units, options: [{ value: "mm", label: "Millimetres (mm)" }, { value: "cm", label: "Centimetres (cm)" }, { value: "in", label: "Inches (in)" }] },
+      { key: "showGrid", label: "Show grid", type: "checkbox", value: preferences.showGrid, description: "Show grid lines on the Cut material preview. Applies immediately; artwork and output stay unchanged.", onChange: (value) => updatePreferences({ showGrid: value }) },
+      { key: "gridUnit", label: "Grid unit", description: "Units used for the grid spacing below, independently of the display units.", type: "select", value: gu, options: [{ value: "mm", label: "Millimetres (mm)" }, { value: "cm", label: "Centimetres (cm)" }, { value: "in", label: "Inches (in)" }] },
+      { key: "gridX", label: "Grid spacing X", description: "Horizontal distance between vertical grid lines, in the selected grid unit.", type: "number", step: "any", min: 0.001, value: +(state.gridXmm / UNIT[gu]).toFixed(3) },
+      { key: "gridY", label: "Grid spacing Y", description: "Vertical distance between horizontal grid lines, in the selected grid unit.", type: "number", step: "any", min: 0.001, value: +(state.gridYmm / UNIT[gu]).toFixed(3) },
+      { key: "invertZoom", section: "Navigation & help", label: "Reverse zoom direction", type: "checkbox", value: preferences.invertZoom, description: "Reverse Cmd/Ctrl + scroll and trackpad pinch zoom in Cut. Panning stays the same. Applies immediately.", onChange: (value) => updatePreferences({ invertZoom: value }) },
+      { key: "tooltips", label: "Show tooltips", type: "checkbox", value: preferences.tooltips, description: "Show explanations when hovering over or focusing toolbar buttons. Applies immediately.", onChange: (value) => updatePreferences({ tooltips: value }) },
+      { key: "tooltipDelay", label: "Tooltip delay", type: "select", value: preferences.tooltipDelay, description: "How long to hover before showing a tooltip. Keyboard help appears sooner. Applies immediately.", showIf: (values) => values.tooltips, options: [{ value: 350, label: "Quick · 0.35 seconds" }, { value: 1000, label: "Normal · 1 second" }, { value: 1800, label: "Relaxed · 1.8 seconds" }], onChange: (value) => updatePreferences({ tooltipDelay: value }) },
     ],
   });
   if (!v) return;
@@ -1815,10 +1875,14 @@ async function openSettings() {
   state.gridUnit = v.gridUnit;
   state.gridXmm = Math.max(0.5, v.gridX * UNIT[v.gridUnit]);
   state.gridYmm = Math.max(0.5, v.gridY * UNIT[v.gridUnit]);
+  persistGrid();
+  bed.setGrid(state.gridXmm, state.gridYmm);
+  scheduleRecovery();
+}
+function persistGrid() {
   localStorage.setItem("modcut_gridX", state.gridXmm);
   localStorage.setItem("modcut_gridY", state.gridYmm);
   localStorage.setItem("modcut_gridUnit", state.gridUnit);
-  bed.setGrid(state.gridXmm, state.gridYmm);
 }
 function setUnits(u) { state.units = u; localStorage.setItem("modcut_units", u); $("units").value = u; refreshPos(); }
 
@@ -1903,6 +1967,21 @@ function editAction(action) {
   if (ok && ["paste", "paste-in-place", "duplicate", "group", "ungroup", "delete"].includes(action)) syncColorsAndLayers();
   return ok;
 }
+
+// Capture before Cut's window handlers: Draw must never mutate hidden Cut artwork.
+window.addEventListener("keydown", (event) => {
+  if (document.body.dataset.workspace !== "draw") return;
+  event.stopImmediatePropagation();
+  if (event.target.closest?.("input, select, textarea, [contenteditable=true]")) return;
+  if (!(event.metaKey || event.ctrlKey)) return;
+  const key = event.key.toLowerCase();
+  const action = {
+    n: newDocument, o: event.shiftKey ? addFiles : doImport,
+    w: closeDocumentTab, s: () => saveDocument(event.shiftKey),
+    tab: () => switchRelativeTab(event.shiftKey ? -1 : 1),
+  }[key];
+  if (action && !event.altKey) { event.preventDefault(); action(); }
+}, true);
 
 // keyboard shortcuts (ignore while typing in a field)
 window.addEventListener("keydown", (e) => {
@@ -2210,7 +2289,12 @@ $("mapmode").addEventListener("click", (e) => {
   markDirty();
 });
 
-window.modcut.onMenu((cmd) => ({
+window.modcut.onMenu((cmd) => {
+  if (cmd === "workspace-cut" || cmd === "workspace-draw") return setWorkspace(cmd.slice(10));
+  if (document.body.dataset.workspace === "draw" && ![
+    "new", "import", "add", "close-tab", "save-document", "save-document-as", "docs", "about", "preferences",
+  ].includes(cmd)) return;
+  return ({
   new: newDocument, import: doImport, add: addFiles, "close-tab": closeDocumentTab,
   "zoom-in": bed.zoomIn, "zoom-out": bed.zoomOut, "zoom-fit": bed.fit,
   "toggle-panel": togglePanel, frame, simulate: startSimulate, connect,
@@ -2229,7 +2313,8 @@ window.modcut.onMenu((cmd) => ({
   "export-settings": exportSettings, "import-settings": importSettings,
   docs: () => window.open("../docs/index.html"),
   about: showAbout,
-}[cmd]?.()));
+}[cmd]?.());
+});
 window.modcut.onCloseRequest(async () => {
   const allowed = await guardAllWorkBeforeWindowClose();
   await window.modcut.respondToCloseRequest(allowed);
@@ -2242,6 +2327,7 @@ initFileDrop();
 refreshMachines(state.machineId);
 bed.setGrid(state.gridXmm, state.gridYmm);
 initializeDocumentTabs();
+bed.setViewPreferences(preferences);
 void restoreRecoverySession().then((restored) => { if (!restored) scheduleRecovery(); });
 refreshProps();
 refreshPropsVisibility();

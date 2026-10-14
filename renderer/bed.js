@@ -63,6 +63,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   const focusOpacity = new Map();
   let coordsCb = null, selectionCb = null, contextCb = null, spaceDown = false, altDown = false, shiftDown = false, changeCb = null, designAngle = 0;
   let gridX = 10, gridY = 10;                 // grid spacing in mm
+  let showGrid = true, invertZoom = false;
   let currentTool = "select";                 // select | node | pen | rect | ellipse | line
   let pathOrder = "optimize";                 // ordering inside each layer only
   let drawSizeCb = null, drawClickCb = null, toolResetCb = null;
@@ -72,11 +73,18 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   let nodeHit = null, nodeEditItem = null, nodeStrokeHover = null;
 
   // --- bed + grid ---------------------------------------------------------
+  let themeTokens = getComputedStyle(document.documentElement);
+  const themeColor = (name) => themeTokens.getPropertyValue(name).trim();
+  window.addEventListener("modcut-theme-change", () => {
+    themeTokens = getComputedStyle(document.documentElement);
+    drawBed();
+    view.update();
+  });
   function drawBed() {
     bedLayer.activate();
     bedLayer.removeChildren();
     const plate = new paper.Path.Rectangle(P(0, 0), new paper.Size(bedWmm, bedHmm));
-    plate.fillColor = "white";
+    plate.fillColor = themeColor("--bed");
     plate.strokeColor = "#00AC69";
     plate.strokeWidth = 0.6;
     plate.guide = true;
@@ -84,14 +92,14 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     plate.shadowBlur = 6;
     plate.shadowOffset = P(0, 3);
     let i = 0;
-    for (let x = 0; x <= bedWmm + 0.001; x += gridX) gridLine([x, 0], [x, bedHmm], i++ % 5 === 0);
+    if (showGrid) for (let x = 0; x <= bedWmm + 0.001; x += gridX) gridLine([x, 0], [x, bedHmm], i++ % 5 === 0);
     i = 0;
-    for (let y = 0; y <= bedHmm + 0.001; y += gridY) gridLine([0, y], [bedWmm, y], i++ % 5 === 0);
+    if (showGrid) for (let y = 0; y <= bedHmm + 0.001; y += gridY) gridLine([0, y], [bedWmm, y], i++ % 5 === 0);
     designLayer.activate();
   }
   function gridLine(a, b, major) {
     const l = new paper.Path.Line(P(...a), P(...b));
-    l.strokeColor = major ? "#CFE6DC" : "#E7F5EF";
+    l.strokeColor = themeColor(major ? "--grid-major" : "--grid-minor");
     l.strokeWidth = major ? 0.4 : 0.2;
     l.guide = true;
   }
@@ -107,6 +115,12 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   }
   function setBedSize(w, h) { bedWmm = w; bedHmm = h; drawBed(); fit(); }
   function setGrid(x, y) { gridX = Math.max(0.5, x || 10); gridY = Math.max(0.5, y || 10); drawBed(); view.update(); }
+  function setViewPreferences(values) {
+    showGrid = values.showGrid;
+    invertZoom = values.invertZoom;
+    drawBed();
+    view.update();
+  }
   function setTool(t) {
     clearNodeSelection();
     if (penPath) finishPen();
@@ -1336,7 +1350,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   canvas.addEventListener("wheel", (e) => {
     e.preventDefault();
     if (e.ctrlKey || e.metaKey) { // trackpad pinch reports ctrl+wheel in Chromium; cmd/ctrl+wheel is mouse zoom.
-      zoomAt(e.offsetX, e.offsetY, Math.exp(-e.deltaY * 0.01));
+      zoomAt(e.offsetX, e.offsetY, Math.exp(e.deltaY * (invertZoom ? 0.01 : -0.01)));
     } else {
       view.center = view.center.add(wheelPanDelta(e).divide(view.zoom));
     }
@@ -2458,7 +2472,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     setSelectionMode, undo, redo, resetHistory, exportDesign, importDesign, exportSession, importSession,
     groupSelected, ungroupSelected, arrangeSelected, copySelection, pasteSelection, duplicateSelection,
     canUngroup, selectAll, deleteSelection,
-    setGrid, setTool, setPathOrder, getColors, addShape, finishDrawing,
+    setGrid, setViewPreferences, setTool, setPathOrder, getColors, addShape, finishDrawing,
     setDrawStyle, applyStyle, getStyle, setLayerVisibility,
     getSelectionInfo: () => ({ hasRaster: selectionHasRaster(), singleRaster: isSingleRasterSelection(), rasterCount: selectedRasterTargets().length, count: selected.size }),
     getRasterSettings, getRasterMode, setRasterModes, beginRasterEdit, updateRasterSettings, endRasterEdit, resetRasterSettings,

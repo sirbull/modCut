@@ -165,6 +165,24 @@ Only move on to hardware after the dry-run checklist passes. The full procedure,
 including GRBL setup and acceptance criteria, is in [`docs/TESTING.md`](docs/TESTING.md).
 Local-network setup and troubleshooting are in [`docs/NETWORK.md`](docs/NETWORK.md).
 
+## Appearance
+
+Open **Settings** in the toolbar or **Preferences…** in the application menu.
+**Appearance** offers three options with icons: **System**, **Light** and **Dark**.
+System is the default and follows operating-system changes automatically. Choose
+a fixed theme with Light or Dark. Appearance changes apply and save immediately.
+The choice persists across restarts and also applies
+to Draw and Advanced Editing for Engraving. Appearance is included when exporting
+preferences. The material preview is dimmed in dark mode; artwork colours and
+laser output stay unchanged.
+
+Preferences also includes **Show grid**, **Reverse zoom direction**, **Show
+tooltips** and **Tooltip delay**. These choices apply and save immediately.
+Reverse zoom affects Cmd/Ctrl + scroll and trackpad pinch in Cut; ordinary
+scrolling still pans. Tooltips default to a one-second hover delay and can be
+shown sooner, later or disabled. Unit and grid-spacing edits use **Save**.
+Exported preferences include these options and grid spacing.
+
 ## Commands
 
 | Command | Purpose |
@@ -174,6 +192,7 @@ Local-network setup and troubleshooting are in [`docs/NETWORK.md`](docs/NETWORK.
 | `npm run test:bridge` | Build the fat JAR and test Node ↔ Java JSON-RPC |
 | `npm run test:renderer` | Import, layer, raster, toolpath and quality unit tests |
 | `npm run test:e2e` | Real Electron workflows, native close and crash recovery |
+| `npm run test:e2e:theme` | System appearance, Settings, persistence and editor theme synchronization |
 | `npm run check:contrast` | WCAG AA palette guardrail |
 | `npm start` | Build the sidecar and start Electron |
 | `npm run pack` | Build and verify an unpacked native application |
