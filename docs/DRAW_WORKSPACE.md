@@ -87,18 +87,18 @@ samme PR og eieren godkjenner det.
 | B9 | "Send til Cut" går via en **kanonisk cut-SVG** (mm, ekspandert, uten effekter) inn i eksisterende `bed.loadSVG`/`bed.loadImage`. | Gjenbruker den testede importstien i Cut i stedet for å lage en ny. |
 | B10 | Hver eksport og hver Send til Cut bruker samme **resolve-steg** (`resolveScene`) som gjør live effekter, tekst og appearance om til ren geometri. | Én sannhet: det man ser er det som eksporteres og det som kuttes. |
 
-### 2.1 Om "REA MCP"
+### 2.1 MCP-verktøy for utviklingen
 
-Vi fant ingen MCP-server med navnet REA. Nærmeste relevante kandidater:
+To MCP-servere brukes under utviklingen. Ingen av dem er en del av produktet modCut.
 
-* **VectorCraft MCP** (`vectorcraft-cli mcp`): en Illustrator-lik editor med MCP-server der en
-  agent kan styre alle menyer, verktøy og eksport. Dette er den vi anbefaler (se kapittel 17).
-* Inkscape-baserte MCP-servere som pakker Inkscape CLI. Nyttige som testorakel for SVG og
-  eksport, men GPL gjør at koden ikke kan gjenbrukes.
-* EditItAll MCP: lukket kildekode, ikke aktuell.
-
-Hvis REA er noe annet, skal eieren fylle inn navn og lenke i [kapittel 21](#21-åpne-spørsmål),
-og kapittel 17 oppdateres.
+* **REA** (Reverse Engineer Anything, <https://github.com/morluto/rea>, MIT, npm-pakke
+  `rea-agents`): analyse av apper, binærfiler, JavaScript/Electron, WASM og filer, med
+  sporbar evidens. Brukes til å analysere modCut selv, VectorCraft-bygget vårt og
+  eksempelfiler, og til å fange og sammenligne Electron-scenarier og skjermbilder.
+  Se 17.1 for oppsett og 17.2 for hva den skal og **ikke** skal brukes til.
+* **VectorCraft MCP** (`vectorcraft-cli mcp`): en Illustrator-lik editor der en agent kan
+  styre menyer, verktøy og eksport. Brukes til å lage referansefiler og sammenligne oppførsel.
+  Se 17.3.
 
 ---
 
@@ -1045,7 +1045,70 @@ og spørsmålet tas opp igjen før fase 4:
 
 ## 17. MCP og agentverktøy
 
-### 17.1 VectorCraft MCP som utviklingsverktøy
+### 17.1 REA: installasjon og oppsett
+
+REA krever Node.js 22.19 eller nyere (22.x), 24.11+ eller 26+. Statisk JavaScript/Electron-analyse,
+Electron-scenarier og skjermbildesammenligning trenger ingen ekstra motorer. Analyse av native
+binærfiler krever Ghidra, Hopper eller IDA, og trengs **ikke** for dette prosjektet.
+
+Anbefalt oppsett (interaktivt, velger agenter og viser endringer før de skrives):
+
+```sh
+npx rea-agents@6.5.0 setup
+# start agenten på nytt etterpå
+```
+
+Manuell registrering, pinnet versjon:
+
+```sh
+# Claude Code, kun for dette repoet (lagres i ~/.claude.json, ikke i repoet)
+cd /sti/til/modCut
+claude mcp add --scope local rea -- npx -y rea-agents@6.5.0 mcp
+# Windows:
+claude mcp add --scope local rea -- cmd.exe /d /c npx -y rea-agents@6.5.0 mcp
+```
+
+```toml
+# Codex: ~/.codex/config.toml
+[mcp_servers.rea]
+command = "npx"
+args = ["-y", "rea-agents@6.5.0", "mcp"]
+startup_timeout_sec = 30
+```
+
+Ikke bruk `claude mcp add --scope project`: det skriver `.mcp.json` inn i repoet. Hver utvikler
+registrerer REA lokalt. Kontroller med `rea doctor` (for CLI: `npm install --global rea-agents@6.5.0`).
+Oppdater bevisst og samtidig hos alle (`rea update`), og endre versjonsnummeret i dette kapitlet.
+
+Verifisert 2026-10-14: REA 6.5.0 installert i skymiljøet, og
+`rea analyze-javascript-application . --artifact-format directory --source-path renderer/bed.js --source-path renderer/app.js`
+ga en forseglet evidensgraf for modCut (applikasjonsgraf og Electron-grenser).
+
+### 17.2 REA: hva den skal brukes til
+
+| Bruk | REA-kommando (CLI-navn, samme som MCP-verktøy) | Når i planen |
+|---|---|---|
+| Kartlegge dagens modCut før Draw kobles inn: moduler, IPC-kanaler, preload-grenser, hvem som kaller `bed.loadSVG`, tastebindinger og menyer. | `analyze-javascript-application`, `inspect-analysis-view` | D0.1, D0.6, D1.12 |
+| Sjekke at Draw ikke endrer Cut: analyser `renderer/` før og etter en PR og sammenlign grafene (nye kall inn i `bed.js` skal bare gå via API-et i 14.2). | `analyze-javascript-application` + `compare-application-versions` | Alle PR-er som berører `app.js`, `bed.js`, `main.mjs` |
+| Kjøre et Draw-scenario i den ekte Electron-appen og lagre evidens (klikk, taster, skjermbilder). Supplement til `electron/e2e/`. | `capture-electron-scenario` | Fase 1 og utover |
+| Visuell regresjon: sammenligne skjermbilder av canvas før og etter, og eksportert PNG mot referanse. | `compare-web-screenshots` | 10.7, 13.3, D2.7 |
+| Kontrollere at wasm-kjernen har samme grensesnitt etter oppdatering av VectorCraft-pin. | `compare-wasm-interfaces` | D0.3, D0.4, hver oppdatering av `native/modcut-geom` |
+| Inspisere strukturen i eksempel- og eksportfiler (PDF-kompatibel `.ai`, PDF, SVGZ) for interoperabilitet, f.eks. `modCut_logo.ai` i repoet. | `extract-artifact`, `inspect` | D2.6, D3.7, 12 |
+| Analysere en tredjeparts JS/Electron- eller webapp med åpen og tillatende lisens for å forstå en teknikk. | `analyze-javascript-application`, `analyze-web-bundle` | Ved behov |
+
+**Grenser (bindende for alle agenter):**
+
+* REA skal **ikke** brukes til å dekompilere eller disassemblere Adobe Illustrator eller annen
+  lukket programvare for å kopiere implementasjon. Adobes lisensvilkår forbyr reverse
+  engineering, og REA selv er beregnet på programvare man eier eller har tillatelse til å
+  undersøke. Illustrator-paritet oppnås ved å observere **oppførsel** (dokumentasjon,
+  hurtigtaster, bruk av programmet) og implementere selv.
+* Filer fra brukere (kundelogoer o.l.) analyseres kun lokalt og sjekkes ikke inn.
+* Evidens som sjekkes inn (i `docs/draw/evidence/`) skal være liten, uten absolutte stier
+  til private mapper, og ha en kort README om hvordan den ble laget.
+* Kode kopieres aldri fra en analysert app med inkompatibel lisens, se 16.2.
+
+### 17.3 VectorCraft MCP som utviklingsverktøy
 
 VectorCraft sin MCP-server brukes **under utvikling**, ikke i produktet, til:
 
@@ -1073,7 +1136,7 @@ seksjon `[mcp_servers.vectorcraft]` med `command` og `args`).
 `vendor-tools/` skal stå i `.gitignore`. Genererte referansefiler sjekkes inn **etter**
 manuell kontroll, med en `README.md` i fixture-mappen som sier hvordan de ble laget.
 
-### 17.2 Andre verktøy for agenter
+### 17.4 Andre verktøy for agenter
 
 * **Playwright / Electron CDP**: eksisterende E2E-rammeverk i `electron/e2e/` utvides med
   Draw-arbeidsflyter (kapittel 19). Chromium er tilgjengelig i skymiljøet.
@@ -1081,7 +1144,7 @@ manuell kontroll, med en `README.md` i fixture-mappen som sier hvordan de ble la
   sammenligne SVG-eksport visuelt. Ikke en runtime-avhengighet.
 * **qpdf** for strukturkontroll av PDF-eksport.
 
-### 17.3 Fremtidig: modCut som MCP-server (fase 5, valgfritt)
+### 17.5 Fremtidig: modCut som MCP-server (fase 5, valgfritt)
 
 modCut kan senere eksponere en egen MCP-server (via main-prosessen) med kommandoer som
 `draw.createArtboard`, `draw.applyCommand`, `draw.export`, `draw.sendToCut`. Fordi all mutasjon
@@ -1230,7 +1293,10 @@ Denne seksjonen er skrevet direkte til kodeagentene.
     velkomne), samme kodestil som eksisterende filer. Ingen nye rammeverk (React, Vue o.l.).
 12. **Dokumentasjon**: når en oppgave er ferdig, oppdater sjekklisten i [kapittel 23](#23-statussjekkliste)
     og eventuelle avvik fra spesifikasjonen i samme PR.
-13. **Usikkerhet**: hvis spesifikasjonen er uklar, velg Illustrators oppførsel, skriv valget i
+13. **REA**: kjør `analyze-javascript-application` + `compare-application-versions` på `renderer/`
+    og `electron/` før og etter endringer i delte filer, og nevn resultatet i PR-beskrivelsen.
+    Følg grensene i 17.2.
+14. **Usikkerhet**: hvis spesifikasjonen er uklar, velg Illustrators oppførsel, skriv valget i
     PR-beskrivelsen, og legg et spørsmål i kapittel 21.
 
 Forslag til prompt for en agent:
@@ -1248,7 +1314,7 @@ fra grenen draw/<ID>-<navn>.
 
 | Nr | Spørsmål | Foreløpig valg |
 |---|---|---|
-| Q1 | Hva er "REA MCP"? Navn og lenke. | Ukjent. VectorCraft MCP brukes inntil videre (17.1). |
+| Q1 | Skal REA-evidens fra `capture-electron-scenario` bli en del av CI, eller bare brukes lokalt av agenter? | Lokalt i første omgang. Vurderes etter fase 1. |
 | Q2 | Hvilken lisens skal modCut ha? Påvirker NOTICE-krav og hvilke biblioteker som kan brukes. | Ingen fil i dag. Anbefaling: MIT eller Apache-2.0. |
 | Q3 | Skal Draw også fungere som frittstående vindu (som Advanced Editing), eller kun som modus i fanen? | Kun modus i fanen. |
 | Q4 | Skal Cut-verktøyenes taster endres til Illustrator-standard (L = ellipse, C = scissors) for konsistens? | Nei i første omgang, per modus. |
@@ -1262,8 +1328,8 @@ fra grenen draw/<ID>-<navn>.
 
 * VectorCraft (MIT/Apache-2.0, Rust, Illustrator-lik, MCP-server): <https://github.com/storytold/vectorcraft>
 * VectorCraft-gjennomgang: <https://pasqualepillitteri.it/en/news/21639/vectorcraft-guide-free-illustrator-alternative-rust>
-* Inkscape MCP-servere (oversikt): <https://glama.ai/mcp/servers/k24heo3z44>
-* EditItAll MCP: <https://images.glama.ai/mcp/servers/Subcue/edititall-mcp>
+* REA (Reverse Engineer Anything): <https://github.com/morluto/rea>
+* REA installasjon og MCP-registrering: <https://github.com/morluto/rea/blob/main/docs/installation.md>
 * Adobe Illustrator, standard hurtigtaster: <https://helpx.adobe.com/illustrator/using/default-keyboard-shortcuts.html>
 * Adobe Illustrator, Image Trace: <https://helpx.adobe.com/illustrator/using/image-trace.html>
 * Adobe Illustrator, Export for Screens: <https://helpx.adobe.com/illustrator/using/collect-assets-export.html>
