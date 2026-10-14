@@ -58,13 +58,17 @@ the same commit that completes an item.
 - [x] D0.4: Worker-based GeometryKernel with JS flatten/union, cancellation,
   timeout/restart and busy hooks. Clipper 6 JS is pinned with notices and package
   inclusion. 42 Draw tests and the full `npm test` suite pass in this run.
+- [x] D0.5: Central keymap with 148 entries and no context conflicts, 49 tool
+  definitions and Tabler outline SVG icons with a deterministic sprite. 52 Draw tests
+  and Draw E2E pass; the full suite still encounters the known crop assertion.
+  Progress log: [`docs/draw/WORK_LOG.md`](docs/draw/WORK_LOG.md).
 
 - [ ] Build the Draw workspace described in
   [`docs/DRAW_WORKSPACE.md`](docs/DRAW_WORKSPACE.md). Task status is tracked in
   chapter 23 of that document.
 
 - [ ] Phase 0 — Foundation: workspace, document model/history, geometry kernel,
-  keymap and `.modcut` v4 persistence. In progress; D0.1–D0.4 complete, D0.5 is next.
+  keymap and `.modcut` v4 persistence. In progress; D0.1–D0.5 complete, D0.6 is next.
 - [ ] Phase 1 — Basic drawing MVP: artboards, Pen, shapes, layers, bitmap
   references and Send to Cut v1.
 - [ ] Phase 2 — Core vector editing: text, Pathfinder, gradients, import/export

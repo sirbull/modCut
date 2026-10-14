@@ -1,5 +1,7 @@
 /** Isolated rendering shell. Document editing arrives in subsequent Draw tasks. */
-export function createDrawWorkspace(root, { paper = window.paper } = {}) {
+const workspaces = new WeakMap();
+export function getDrawWorkspace(root) { return workspaces.get(root) || null; }
+export function createDrawWorkspace(root, { paper = window.paper, state } = {}) {
   const canvas = document.createElement("canvas");
   canvas.className = "draw-canvas";
   canvas.setAttribute("aria-label", "Draw canvas");
@@ -26,14 +28,18 @@ export function createDrawWorkspace(root, { paper = window.paper } = {}) {
   }
   const observer = new ResizeObserver(resize);
   observer.observe(root);
-  return {
+  const workspace = {
+    state,
     scope,
     resize,
     destroy() {
+      workspaces.delete(root);
       observer.disconnect();
       try { scope.remove(); }
       finally { paper.activate(); }
       root.replaceChildren();
     },
   };
+  workspaces.set(root, workspace);
+  return workspace;
 }

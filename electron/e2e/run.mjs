@@ -6,6 +6,7 @@ import electronPath from "electron";
 
 import { connectToApp, wait } from "./cdp.mjs";
 import { runDrawWorkflows, runDrawTabWorkflows } from "./draw-workflows.mjs";
+import { runProjectWorkflows, verifyProjectRecovery } from "./project-workflows.mjs";
 import { runWorkflows, verifyRecoveredSession } from "./workflows.mjs";
 import { runThemeWorkflows } from "./theme-workflows.mjs";
 
@@ -68,7 +69,14 @@ try {
       shape.strokeColor = 'black'; shape.selected = true; paper.view.update();
     })()`);
     await runDrawWorkflows(first);
+    const expected = await runProjectWorkflows(first, profile);
     first.socket.close();
+    await stop("SIGKILL");
+    await wait(500);
+    launch();
+    const recovered = await connectToApp(port);
+    await verifyProjectRecovery(recovered, expected);
+    recovered.socket.close();
   } else {
     const expected = await runWorkflows(first, port);
     first.socket.close();

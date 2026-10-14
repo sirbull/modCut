@@ -1,6 +1,6 @@
 # modCut Draw: vektoreditor i modCut
 
-> Status: D0.1–D0.4 er fullført. JS-fallback er implementert; D0.5 er neste oppgave.
+> Status: D0.1–D0.5 er fullført. Neste oppgave er D0.6: lagring og gjenoppretting av Draw.
 > Sist oppdatert: 2026-10-14.
 > Målgruppe: utviklere og kodeagenter (Claude Code og Codex) som skal bygge løsningen.
 
@@ -176,10 +176,11 @@ To MCP-servere er **valgfrie** hjelpemidler under utviklingen. Ingen av dem er e
 
 * Ett ikonsett i `renderer/draw/icons/`, én SVG-fil per ikon, 24 x 24 viewBox, `currentColor`,
   samme strektykkelse og hjørneradius på alle.
-* Grunnlag: **Material Symbols Outlined** (Apache-2.0), som allerede brukes i Cut. Der Material
-  mangler et fagspesifikt ikon (Direct Selection, Add/Delete Anchor, Anchor Point, Shape Builder,
-  Width, Pathfinder-operasjonene, Outline Stroke, Image Trace, Artboard), tegnes egne ikoner
-  i samme stil. Egne ikoner kan tegnes i Draw når fase 2 er ferdig (dogfooding).
+* Grunnlag for Draw: **Tabler Icons outline** (MIT), låst til `@tabler/icons` 3.49.0.
+  Bruk bibliotekets eksisterende SVG-er med 2-enheters strek. Fagspesifikke verktøy
+  bruker nærmeste passende biblioteksymbol og tydelig tooltip; ikke tegn egne ikoner.
+  `icons/sources.json` dokumenterer kilde, versjon og hash. Lisensen følger ikonene.
+  Eierens godkjente Draw/Cut-ikoner i CTA-knappen fra `ICONS` beholdes.
 * Et byggeskript `scripts/build-icons.mjs` lager en SVG-sprite `renderer/draw/icons/sprite.svg`.
   Verktøylinjen refererer `<use href="#icon-pen">`.
 * Ikonnavnene står i verktøytabellen i kapittel 6 og er bindende for `toolRegistry`.
@@ -1018,7 +1019,8 @@ artboard -> resolveScene({ artboards:[id] }, { forCut: true, strokes, rasterEffe
 | **harfbuzzjs** | MIT (HarfBuzz: "Old MIT") | Tekstshaping | wasm, i renderer. |
 | **opentype.js** eller **fontkit** | MIT | Glyfkonturer, fontmetadata | Velg én i D2.1. |
 | **imagetracerjs** | Unlicense (public domain) | Fallback for Image Trace | Ren JS, i worker. |
-| **Material Symbols** | Apache-2.0 | Ikoner | Allerede brukt. |
+| **Material Symbols** | Apache-2.0 | Eksisterende Cut-ikoner | Allerede brukt. |
+| **Tabler Icons outline** | MIT | Draw-ikoner | 3.49.0, lokalt SVG-utvalg med kilder og lisens. |
 | **UTIF.js** | MIT | TIFF | Finnes allerede. |
 | **Inkscape** | GPL-2.0+ | **Kun referanse**: oppførsel, testfiler vi lager selv, testorakel via CLI i CI | Aldri kopier kode. |
 | **Potrace** | GPL-2.0 | **Ikke** bruk (lisens). | Bruk VectorCraft `trace` eller imagetracerjs. |
@@ -1175,7 +1177,7 @@ av forskjellige agenter fordi de eier ulike filer.
 
 | Fase | Leveranse | Status |
 |---|---|---|
-| 0 — Fundament | Workspace-bytte, dokumentmodell, geometri-kjerne, keymap og lagring. | Påbegynt: D0.1–D0.4 ferdige; JS-fallback implementert. D0.5 er neste oppgave. |
+| 0 — Fundament | Workspace-bytte, dokumentmodell, geometri-kjerne, keymap og lagring. | Påbegynt: D0.1–D0.5 ferdige. D0.6 (lagring/gjenoppretting) gjenstår før fase 0 er ferdig. |
 | 1 — Grunnleggende tegning | Artboards, markering, Pen, former, lag, bitmap-referanser og Send til Cut v1. | Ikke startet. |
 | 2 — Illustrator-kjernen | Tekst, Pathfinder, gradienter, import/eksport og Send til Cut v2. | Ikke startet. |
 | 3 — Avansert redigering og trace | Outline Stroke, effekter, Image Trace, flere redigeringsverktøy og AI/DXF-eksport. | Ikke startet. |
@@ -1371,13 +1373,13 @@ Arbeid videre på fellesgrenen feat/vector-draw; ikke opprett en ny gren for opp
 
 ## 23. Statussjekkliste
 
-Oppdateres i samme PR som fullfører oppgaven.
+Oppdateres når oppgaven fullføres. Løpende arbeidslogg: [`draw/WORK_LOG.md`](draw/WORK_LOG.md).
 
 * [x] D0.1 Workspace-bytte
 * [x] D0.2 Dokumentmodell og historikk
 * [x] D0.3 VectorCraft-spike
 * [x] D0.4 GeometryKernel og worker
-* [ ] D0.5 Keymap og verktøyregister
+* [x] D0.5 Keymap og verktøyregister
 * [ ] D0.6 `.modcut` v4
 * [ ] D1.1 Render-adapter
 * [ ] D1.2 Artboards
@@ -1497,3 +1499,30 @@ og busy-hendelser. `npm run test:e2e:draw` passerer med ekte Web Worker i Electr
 og uendret Cut-tilstand. Hele `npm test` passerer i denne kjøringen, også full E2E
 med native Close/Quit og krasjgjenoppretting. Tidligere dokumenterte E2E-feil er
 historiske observasjoner; det påstås ikke at D0.4 har rettet bildeeditoren eller Cut.
+
+### Implementasjonsnotater D0.5
+
+* `keymap.mjs` har 148 oppføringer og konfliktkontroll for Draw/globale kontekster,
+  Cmd/Ctrl, fysisk tegnsetting, ISO-alternativ for Line, tekstfelt, IME og AltGraph.
+  Space/Mod/Alt-overstyringer avsluttes ved slipp, blur og modusbytte.
+* `tools/registry.mjs` beskriver alle 49 verktøy med binding-id, gruppe, fase og
+  valgfri verktøyklasse. Manglende implementasjoner er utilgjengelige, ikke dummy-verktøy.
+* 49 24×24 SVG-ikoner fra Tabler Icons outline 3.49.0 (MIT), med currentColor
+  og 2-enheters strek. Originale forsøk er erstattet etter eierens ønske om et
+  ikonbibliotek. Kilder/hash/lisens er bevart lokalt; `npm run build:icons`
+  verifiserer kildene og bygger deterministisk sprite uten nettverk.
+* Smal integrasjon i `renderer/app.js` og `electron/main.mjs`: støttede Draw-
+  felleskommandoer og menyakseleratorer bruker tabellen. `Mod+Shift+O` utløser
+  fortsatt Add i Cut, men er reservert til Create Outlines i Draw. Add i Draw har
+  derfor ingen akselerator. Cut-implementasjonen og eierens CTA-stil er bevart.
+* Native Preferences i Draw følger `Mod+K`; `Mod+Comma` er også en renderer-alias.
+  Ingen workspace-hurtigtast legges til siden `Mod+Shift+D` allerede er reservert.
+* Hurtigtastoversikt-/toolbar-data er klare, men nye tegneverktøy og deres UI
+  aktiveres først i sine planlagte oppgaver. API: [`draw/keymap-and-tools.md`](draw/keymap-and-tools.md).
+
+Verifisering 2026-10-14: 52 Draw-tester passerer og måler 100 % linjedekning i
+keymap og register. Ingen kontekstkonflikter er funnet. Draw-E2E passerer med
+hurtigtast for ny fane, kontroll av native akselerator og rendering av alle
+49 eksterne SVG-symboler. Hele `npm test` passerer sidecar/bridge/main/renderer/
+Draw/kontrast, men stopper i den tidligere påviste bildebeskjæringstesten
+«dragging a crop edge must update the crop». Neste oppgave er D0.6.

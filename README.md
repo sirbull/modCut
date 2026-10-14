@@ -191,6 +191,8 @@ Exported preferences include these options and grid spacing.
 | `npm run test:sidecar` | Maven/JUnit sidecar tests |
 | `npm run test:bridge` | Build the fat JAR and test Node ↔ Java JSON-RPC |
 | `npm run test:renderer` | Import, layer, raster, toolpath and quality unit tests |
+| `npm run test:draw` | Draw model/kernel/keymap tests and SVG sprite consistency |
+| `npm run build:icons` | Rebuild the Draw tool SVG sprite |
 | `npm run test:e2e` | Real Electron workflows, native close and crash recovery |
 | `npm run test:e2e:theme` | System appearance, Settings, persistence and editor theme synchronization |
 | `npm run check:contrast` | WCAG AA palette guardrail |

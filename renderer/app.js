@@ -1,4 +1,6 @@
+import { createKeymap, shortcutLabel } from "./draw/keymap.mjs";
 import { createDrawWorkspace } from "./draw/index.mjs";
+import { PROJECT_VERSION, validateProject, createProjectDraw } from "./draw/io/project.mjs";
 import { createBed } from "./bed.js";
 import { prepareSVG } from "./svgimport.js";
 import { dxfToSvg } from "./dxfimport.js";
@@ -281,21 +283,42 @@ let activeTabId = null;
 let nextTabId = 1;
 let restoringTab = false;
 let recoveryTimer = null;
+let recoveryPendingSince = null;
 let closeGuardRunning = false;
+let savingDocument = false;
 const RECOVERY_VERSION = 1;
 const RECOVERY_DELAY_MS = 350;
 function pathBase(path) { return String(path || "").split(/[\\/]/).pop(); }
-// UI state stays per project; persisted Draw documents are introduced in D0.6.
+function ensureDrawState(tab) {
+  if (!tab.drawState) attachDrawState(tab, createProjectDraw(tab.session?.draw, { dirty: !!tab.session?.drawDirty }));
+  return tab.drawState;
+}
+function attachDrawState(tab, drawState) {
+  tab.unsubscribeDraw?.();
+  tab.draw?.destroy(); tab.drawRoot?.remove();
+  tab.draw = null; tab.drawRoot = null;
+  tab.drawState = drawState;
+  tab.drawWarningShown = false;
+  tab.unsubscribeDraw = drawState.subscribe(() => {
+    if (tab === activeTab()) setFileLabel(tab.title);
+    else { tab.dirty = !!(tab.session?.cutDirty ?? tab.session?.dirty) || drawState.dirty; renderTabs(); }
+    scheduleRecovery(2000);
+  });
+}
+function activeDocumentDirty() { return dirty || !!activeTab()?.drawState?.dirty; }
 function setWorkspace(mode) {
   if (!["cut", "draw"].includes(mode)) return;
   const tab = activeTab();
   if (!tab) return;
   if (mode === "draw" && !tab.draw) {
+    const drawState = ensureDrawState(tab);
     tab.drawRoot = document.createElement("div");
     tab.drawRoot.className = "draw-project";
+    tab.drawRoot.dataset.tabId = tab.id;
     $("drawWorkspace").append(tab.drawRoot);
-    tab.draw = createDrawWorkspace(tab.drawRoot);
+    tab.draw = createDrawWorkspace(tab.drawRoot, { state: drawState });
   }
+  drawKeymap.reset();
   tab.workspace = mode;
   for (const item of documentTabs) if (item.drawRoot) {
     item.drawRoot.style.display = item === tab && mode === "draw" ? "block" : "none";
@@ -305,9 +328,17 @@ function setWorkspace(mode) {
   button.querySelector("span").textContent = mode === "draw" ? "Cut" : "Draw";
   button.setAttribute("aria-expanded", String(mode === "draw"));
   button.dataset.tooltip = mode === "draw" ? "Cut: laser workspace" : "Draw: vector editor";
+  button.removeAttribute("title");
+  $("add").removeAttribute("title");
+  $("add").dataset.tooltip = mode === "draw" ? "Add files to the active project"
+    : `Add files to the active project (${shortcutLabel('add', { workspace: 'cut', isMac: drawIsMac })})`;
   tab.draw?.resize();
+  if (mode === "draw" && tab.drawState.warning && !tab.drawWarningShown) {
+    toast(tab.drawState.warning, "info"); tab.drawWarningShown = true;
+  }
   closeContextMenu();
   void window.modcut.setWorkspace(mode);
+  scheduleRecovery();
 }
 $("workspaceToggle").addEventListener("click", () => {
   setWorkspace(activeTab()?.workspace === "draw" ? "cut" : "draw");
@@ -316,11 +347,12 @@ $("workspaceToggle").addEventListener("click", () => {
 function activeTab() { return documentTabs.find((tab) => tab.id === activeTabId) || null; }
 function setFileLabel(name) {
   const title = name || "Untitled";
-  $("file").textContent = `${title}${dirty ? " *" : ""}`;
+  const changed = activeDocumentDirty();
+  $("file").textContent = `${title}${changed ? " *" : ""}`;
   const tab = activeTab();
-  if (tab) { tab.title = title; tab.dirty = dirty; renderTabs(); }
+  if (tab) { tab.title = title; tab.dirty = changed; renderTabs(); }
 }
-function markDirty() { dirty = true; setFileLabel(docPath ? pathBase(docPath) : ($("file").textContent.replace(/\s\*$/, "") || "Untitled")); scheduleRecovery(); }
+function markDirty() { dirty = true; const tab = activeTab(); if (tab) tab.cutRevision = (tab.cutRevision || 0) + 1; setFileLabel(docPath ? pathBase(docPath) : ($("file").textContent.replace(/\s\*$/, "") || "Untitled")); scheduleRecovery(); }
 function markClean() { dirty = false; setFileLabel(docPath ? pathBase(docPath) : ($("file").textContent.replace(/\s\*$/, "") || "Untitled")); scheduleRecovery(); }
 
 function renderTabs() {
@@ -364,7 +396,8 @@ function captureWorkspace() {
   return {
     bed: bed.exportSession(),
     docPath,
-    dirty,
+    dirty: activeDocumentDirty(),
+    cutDirty: dirty,
     title: $("file").textContent.replace(/\s\*$/, "") || "Untitled",
     filename: $("filename").value,
     mappingMode: state.mappingMode,
@@ -410,13 +443,17 @@ function recoveryPayload() {
       id: tab.id,
       title: tab.title,
       dirty: tab.dirty,
-      session: recoverySession(tab.session),
+      session: { ...recoverySession(tab.session),
+        workspace: tab.workspace || "cut",
+        draw: ensureDrawState(tab).snapshot(), drawDirty: tab.drawState.dirty,
+        dirty: tab.dirty },
     })),
   };
 }
 
 async function flushRecovery() {
   if (recoveryTimer) { clearTimeout(recoveryTimer); recoveryTimer = null; }
+  recoveryPendingSince = null;
   if (!documentTabs.length) return;
   try {
     await window.modcut.writeRecovery(JSON.stringify(recoveryPayload()));
@@ -425,10 +462,12 @@ async function flushRecovery() {
   }
 }
 
-function scheduleRecovery() {
+function scheduleRecovery(delayMs = RECOVERY_DELAY_MS) {
   if (!documentTabs.length || restoringTab || closeGuardRunning) return;
+  recoveryPendingSince ??= Date.now();
   if (recoveryTimer) clearTimeout(recoveryTimer);
-  recoveryTimer = setTimeout(() => { recoveryTimer = null; void flushRecovery(); }, RECOVERY_DELAY_MS);
+  const delay = Math.min(delayMs, Math.max(0, 2000 - (Date.now() - recoveryPendingSince)));
+  recoveryTimer = setTimeout(() => { recoveryTimer = null; void flushRecovery(); }, delay);
 }
 
 async function restoreRecoverySession() {
@@ -442,6 +481,7 @@ async function restoreRecoverySession() {
       title: tab.title || "Untitled",
       dirty: !!tab.dirty,
       session: tab.session,
+      workspace: tab.session.workspace === "draw" ? "draw" : "cut",
     }));
     if (!tabs.length) return false;
     documentTabs = tabs;
@@ -463,7 +503,8 @@ function restoreWorkspace(session) {
   stopSimulate();
   closeContextMenu();
   docPath = session.docPath || null;
-  dirty = !!session.dirty;
+  dirty = !!(session.cutDirty ?? session.dirty);
+  ensureDrawState(activeTab());
   state.mappingMode = session.mappingMode || "color";
   state.layers = structuredClone(session.layers || []);
   state.units = session.units || state.units;
@@ -516,7 +557,9 @@ function switchRelativeTab(offset) {
 function documentPayload() {
   return {
     app: "modCut",
-    version: 3,
+    version: PROJECT_VERSION,
+    draw: ensureDrawState(activeTab()).snapshot(),
+    workspace: activeTab()?.workspace || "cut",
     saved: new Date().toISOString(),
     design: bed.exportDesign(),
     filename: $("filename").value,
@@ -533,20 +576,41 @@ function documentPayload() {
 }
 
 async function saveDocument(saveAs = false) {
+  if (savingDocument) return false;
   bed.finishDrawing();
   const base = ($("filename").value.trim() || "untitled").replace(/\.[^.]+$/, "") + ".modcut";
   const json = JSON.stringify(documentPayload(), null, 2);
+  const tab = activeTab(), drawState = tab.drawState, cutRevision = tab.cutRevision || 0;
+  const commitDrawSave = drawState.captureSavepoint();
+  const savedLabel = pathBase(docPath) || tab.title;
+  savingDocument = true;
   try {
     const path = await window.modcut.saveDocument(json, docPath, saveAs, base);
     if (!path) return false;
-    docPath = path;
-    markClean();
+    if (documentTabs.includes(tab) && tab.drawState === drawState) {
+      // Do not mark another tab (or edits made during the picker/write) clean.
+      commitDrawSave();
+      const cutClean = (tab.cutRevision || 0) === cutRevision;
+      if (tab === activeTab()) {
+        docPath = path;
+        if (cutClean) dirty = false;
+        setFileLabel(pathBase(path) || savedLabel);
+      } else {
+        tab.session.docPath = path;
+        tab.session.title = tab.title = pathBase(path) || savedLabel;
+        if (cutClean) tab.session.cutDirty = false;
+        tab.dirty = !!(tab.session.cutDirty ?? tab.session.dirty) || tab.drawState.dirty;
+        tab.session.dirty = tab.dirty;
+        renderTabs();
+      }
+      scheduleRecovery();
+    }
     toast("Document saved.", "ok");
-    return true;
+    return !tab.dirty;
   } catch (e) {
     toast("Save failed: " + e.message, "err");
     return false;
-  }
+  } finally { savingDocument = false; }
 }
 
 function saveWorkDialog(tabName = null) {
@@ -584,7 +648,7 @@ function saveWorkDialog(tabName = null) {
 
 async function guardWorkBeforeContinue() {
   bed.finishDrawing();
-  if (!dirty) return true;
+  if (!activeDocumentDirty()) return true;
   const choice = await saveWorkDialog(activeTab()?.title);
   if (choice === "save") return saveDocument(false);
   if (choice === "discard") return true;
@@ -596,6 +660,7 @@ async function guardAllWorkBeforeWindowClose() {
   closeGuardRunning = true;
   if (recoveryTimer) { clearTimeout(recoveryTimer); recoveryTimer = null; }
   const originalTabId = activeTabId;
+  let accepted = false;
   try {
     captureActiveTab();
     for (const tab of documentTabs.filter((item) => item.dirty)) {
@@ -612,17 +677,20 @@ async function guardAllWorkBeforeWindowClose() {
       captureActiveTab();
     }
     await window.modcut.clearRecovery();
+    accepted = true;
     return true;
   } catch (error) {
     toast("Could not finish the close operation safely: " + error.message, "err");
     return false;
   } finally {
     closeGuardRunning = false;
+    if (!accepted) scheduleRecovery();
   }
 }
 
 function applyDocument(p, path, name) {
-  if (!p || p.app !== "modCut") throw new Error("Not a modCut document.");
+  validateProject(p);
+  const drawState = createProjectDraw(p.draw);
   bed.importDesign(p.design || "");
   docPath = path || null;
   if (p.filename) $("filename").value = p.filename;
@@ -640,14 +708,20 @@ function applyDocument(p, path, name) {
   if (p.pathOrder) { $("pathOrder").value = p.pathOrder; bed.setPathOrder(p.pathOrder); }
   [...$("mapmode").children].forEach((c) => c.classList.toggle("on", c.dataset.mode === state.mappingMode));
   syncColorsAndLayers();
+  attachDrawState(activeTab(), drawState);
+  setWorkspace(p.workspace === "draw" ? "draw" : "cut");
   setFileLabel(name || pathBase(path) || "Untitled");
   markClean();
   refreshPos();
+  if (drawState.warning && !activeTab().drawWarningShown) {
+    toast(drawState.warning, "info"); activeTab().drawWarningShown = true;
+  }
 }
 
 // --- new / import / add -----------------------------------------------------
 function resetWorkspace({ filename = "job", label = "Untitled" } = {}) {
   setWorkspace("cut");
+  attachDrawState(activeTab(), createProjectDraw());
   bed.clear();
   bed.resetHistory();
   docPath = null;
@@ -878,6 +952,7 @@ function openDocumentInNewTab(documentData, path, name) {
     scheduleRecovery();
     return true;
   } catch (error) {
+    tab.unsubscribeDraw?.(); tab.draw?.destroy(); tab.drawRoot?.remove();
     documentTabs = documentTabs.filter((item) => item.id !== tab.id);
     activeTabId = previousTabId;
     restoreWorkspace(activeTab()?.session);
@@ -1005,6 +1080,7 @@ async function closeDocumentTab(id = activeTabId) {
   const index = documentTabs.findIndex((tab) => tab.id === id);
   if (index < 0) return;
   documentTabs[index].draw?.destroy();
+  documentTabs[index].unsubscribeDraw?.();
   documentTabs[index].drawRoot?.remove();
   documentTabs.splice(index, 1);
   if (!documentTabs.length) {
@@ -1968,20 +2044,30 @@ function editAction(action) {
   return ok;
 }
 
-// Capture before Cut's window handlers: Draw must never mutate hidden Cut artwork.
+// Capture before Cut's window handlers; Draw shortcuts come only from keymap.mjs.
+const drawIsMac = /Mac|iPhone|iPad/.test(navigator.platform);
+const drawActions = {
+  new: newDocument, import: doImport, add: addFiles, "close-tab": closeDocumentTab,
+  "save-document": () => saveDocument(false), "save-document-as": () => saveDocument(true),
+  "next-tab": () => switchRelativeTab(1), "previous-tab": () => switchRelativeTab(-1),
+  preferences: openSettings,
+};
+const drawKeymap = createKeymap({
+  isMac: drawIsMac,
+  isEnabled: (entry) => !!entry && Object.hasOwn(drawActions, entry.command),
+  dispatch: (command) => drawActions[command]?.(),
+});
+const drawKeyContext = (event) => ({ workspace: "draw",
+  editable: !!event.target.closest?.("input, select, textarea, [contenteditable]:not([contenteditable=false]), [role=textbox]") });
 window.addEventListener("keydown", (event) => {
   if (document.body.dataset.workspace !== "draw") return;
   event.stopImmediatePropagation();
-  if (event.target.closest?.("input, select, textarea, [contenteditable=true]")) return;
-  if (!(event.metaKey || event.ctrlKey)) return;
-  const key = event.key.toLowerCase();
-  const action = {
-    n: newDocument, o: event.shiftKey ? addFiles : doImport,
-    w: closeDocumentTab, s: () => saveDocument(event.shiftKey),
-    tab: () => switchRelativeTab(event.shiftKey ? -1 : 1),
-  }[key];
-  if (action && !event.altKey) { event.preventDefault(); action(); }
+  drawKeymap.keydown(event, drawKeyContext(event));
 }, true);
+window.addEventListener("keyup", (event) => {
+  if (document.body.dataset.workspace === "draw") drawKeymap.keyup(event, drawKeyContext(event));
+}, true);
+window.addEventListener("blur", () => drawKeymap.reset());
 
 // keyboard shortcuts (ignore while typing in a field)
 window.addEventListener("keydown", (e) => {

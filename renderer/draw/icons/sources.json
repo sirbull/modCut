@@ -1,0 +1,255 @@
+{
+  "package": "@tabler/icons",
+  "version": "3.49.0",
+  "license": "MIT",
+  "repository": "https://github.com/tabler/tabler-icons",
+  "tarball": "https://registry.npmjs.org/@tabler/icons/-/icons-3.49.0.tgz",
+  "integrity": "sha512-l+GnSkFETx0U26icxv1VUFnxxiTqXfCcVRiRAnyMwibupM2S2L/hSaZ9gmSgz01rkrsH/93NvLsxykqdanc6lw==",
+  "icons": {
+    "anchor-add": {
+      "name": "pointer-plus",
+      "path": "icons/outline/pointer-plus.svg",
+      "sha256": "8b24a9bbea165a6dd0d368daab403f7e86c3f50c9faa889393dd44157828a340"
+    },
+    "anchor-convert": {
+      "name": "vector",
+      "path": "icons/outline/vector.svg",
+      "sha256": "524af223b381d52b8eee8345e4d5190ae34601d983e17728707ca9e27469a224"
+    },
+    "anchor-remove": {
+      "name": "pointer-minus",
+      "path": "icons/outline/pointer-minus.svg",
+      "sha256": "27657cf51de69a4080e50c8e03d6fa20965e947059012363602b8e01f52c208c"
+    },
+    "arc": {
+      "name": "vector-bezier-arc",
+      "path": "icons/outline/vector-bezier-arc.svg",
+      "sha256": "57ec97979365f7ff793b35dcc594a2f8c8387f6533813e6be2799c9a35a81395"
+    },
+    "artboard": {
+      "name": "artboard",
+      "path": "icons/outline/artboard.svg",
+      "sha256": "a2659ef614767a30364b8b3fe902f4622e8167889a71fb8b390c1c95ff422006"
+    },
+    "blend": {
+      "name": "circles",
+      "path": "icons/outline/circles.svg",
+      "sha256": "4a9c05a264c35bbb424bcb867bbf3fc7ae3e56a6ab590e356aca6037ca61029a"
+    },
+    "blob-brush": {
+      "name": "paint",
+      "path": "icons/outline/paint.svg",
+      "sha256": "0a2cb9a430b47cdee4ee0e0f983240b8a96333c71d99826184fa004d5003fda0"
+    },
+    "brush": {
+      "name": "brush",
+      "path": "icons/outline/brush.svg",
+      "sha256": "456657551c85f1375531559c723b889fe84663e362abe7020996b02763fda26e"
+    },
+    "curvature": {
+      "name": "vector-bezier",
+      "path": "icons/outline/vector-bezier.svg",
+      "sha256": "6b1b50285d3b645a57eb759143fbe024b31b9b29e6c5bc89dcca55e2f453cd1b"
+    },
+    "direct-select": {
+      "name": "pointer-2",
+      "path": "icons/outline/pointer-2.svg",
+      "sha256": "0d74eb5c48849db556d4e2c60d5adedc46f096c84d42e1bc6f89507b0826c309"
+    },
+    "ellipse": {
+      "name": "oval",
+      "path": "icons/outline/oval.svg",
+      "sha256": "42a48ff66c7db37a52cd52a1cdaf9f95f1a0e4feb6f3fadce18d305994db5b1d"
+    },
+    "eraser": {
+      "name": "eraser",
+      "path": "icons/outline/eraser.svg",
+      "sha256": "d90328e5924d41e41e2c16e78e181f8afec6c030b7326b8ae1e3964af9c84527"
+    },
+    "eyedropper": {
+      "name": "color-picker",
+      "path": "icons/outline/color-picker.svg",
+      "sha256": "854dc49964f90582d7e2fbe6a9853528eef51652c056c766c8e6d3eaecc4f799"
+    },
+    "free-transform": {
+      "name": "drag-drop-2",
+      "path": "icons/outline/drag-drop-2.svg",
+      "sha256": "401499c942aaeafc61f7eb4770cabc2429ed62aeb08c0968ab258ba610ff6fd5"
+    },
+    "gradient": {
+      "name": "color-swatch",
+      "path": "icons/outline/color-swatch.svg",
+      "sha256": "1ae94ff6191a0bdaeed438c7f2a872003c01b21ec12584e2947ecd390b810b97"
+    },
+    "grid-polar": {
+      "name": "radar-2",
+      "path": "icons/outline/radar-2.svg",
+      "sha256": "a5cb5fbc4203a3aa83f9a75ec85aab572633fffb5b2c37311b9431efa4fdf64e"
+    },
+    "grid-rect": {
+      "name": "grid-3x3",
+      "path": "icons/outline/grid-3x3.svg",
+      "sha256": "227ee6a6e9e726218f9224a5fa0d0b6043fe31cc6de29b54b75dbe324f3fea44"
+    },
+    "group-select": {
+      "name": "select-all",
+      "path": "icons/outline/select-all.svg",
+      "sha256": "c5da0576fc6a4b6168de10f46c469cb867e79e82b13f8981e466998a9fc89e6f"
+    },
+    "hand": {
+      "name": "hand-stop",
+      "path": "icons/outline/hand-stop.svg",
+      "sha256": "b509df9b962e8a3d0b5694abacf619c3424092337d0ba58f89431a3b5573dff6"
+    },
+    "knife": {
+      "name": "blade",
+      "path": "icons/outline/blade.svg",
+      "sha256": "5a0eafcc40bcef172f617737570a5ceb2ab612ea382728fa5f46b2fbb8e9c5b8"
+    },
+    "lasso": {
+      "name": "lasso",
+      "path": "icons/outline/lasso.svg",
+      "sha256": "6a69f86418c9691dcba0839be16b79f28ff0209c220b83f8d05aa7d3fee5d548"
+    },
+    "line": {
+      "name": "line",
+      "path": "icons/outline/line.svg",
+      "sha256": "6fb926e644c2826e734d805a00ed86dc2eefe0d6fd309b732fb6ec011982cfc8"
+    },
+    "magic-wand": {
+      "name": "wand",
+      "path": "icons/outline/wand.svg",
+      "sha256": "7c9150df5f3db346077d51dd0288152ba81c449f2daf4059324615c681e2fbc0"
+    },
+    "measure": {
+      "name": "ruler-measure",
+      "path": "icons/outline/ruler-measure.svg",
+      "sha256": "5908592a6a691268a0a64887884a4be793658a46eacb3d03c7911f7f37338666"
+    },
+    "paint-bucket": {
+      "name": "bucket",
+      "path": "icons/outline/bucket.svg",
+      "sha256": "d9e71de8e23b86469a0d620969f65a0844981af069fb0272ee47a334a65b0906"
+    },
+    "path-eraser": {
+      "name": "pencil-minus",
+      "path": "icons/outline/pencil-minus.svg",
+      "sha256": "dccc13330e57c7f8e1c39f3b81c3fbaf6b120fc014fd30ea4e58cf8c87c4450d"
+    },
+    "pen": {
+      "name": "ballpen",
+      "path": "icons/outline/ballpen.svg",
+      "sha256": "5da53d646949d00fabf278ca9fc6dd0af9dedbf4a5e57883882013857459ebcf"
+    },
+    "pencil": {
+      "name": "pencil",
+      "path": "icons/outline/pencil.svg",
+      "sha256": "61c3c827745d917f5fb153bd052209210f190af5f446284326421e5421cdbb25"
+    },
+    "polygon": {
+      "name": "polygon",
+      "path": "icons/outline/polygon.svg",
+      "sha256": "b1a1bcae5673fa257e11d73ba9a041fa17740e4fa8c6cf86c0206951c6d8c317"
+    },
+    "rect": {
+      "name": "rectangle",
+      "path": "icons/outline/rectangle.svg",
+      "sha256": "b35435f41cdf728c883a2e7239370aa371ca1636d9c22283d3f1e30db9ae595b"
+    },
+    "rect-rounded": {
+      "name": "square-rounded",
+      "path": "icons/outline/square-rounded.svg",
+      "sha256": "0209d0411a9c935381b8d53465ba46a1fcbaf8f04cfaa3b4bdf6d1db3b025cd0"
+    },
+    "reflect": {
+      "name": "flip-horizontal",
+      "path": "icons/outline/flip-horizontal.svg",
+      "sha256": "61ec0f6ef73c6186436f9b0edc6e928c1beeccb83616699274382ba2aab1a92e"
+    },
+    "rotate": {
+      "name": "rotate",
+      "path": "icons/outline/rotate.svg",
+      "sha256": "27bd2a929eee1460da0948b24156194d65b0a33fb3ba356d6ee18572d4eb76b1"
+    },
+    "rotate-view": {
+      "name": "rotate-rectangle",
+      "path": "icons/outline/rotate-rectangle.svg",
+      "sha256": "05898f71f7092bdf8935e4a00364c0c57c3d556a4adcc7c8ca7467a466e47cfa"
+    },
+    "scale": {
+      "name": "arrows-diagonal-2",
+      "path": "icons/outline/arrows-diagonal-2.svg",
+      "sha256": "bf571cc3249b6effd41d7eb0c7ac8b1e93c524696a7e1099b331dfdb1574b411"
+    },
+    "scissors": {
+      "name": "scissors",
+      "path": "icons/outline/scissors.svg",
+      "sha256": "9776d5bf798f2a9832707929d2e16ac4279420b8ccdaa7501d0ece735e564c03"
+    },
+    "select": {
+      "name": "pointer",
+      "path": "icons/outline/pointer.svg",
+      "sha256": "c3f00957eea16052a8cdc45b28144a56c6590429b5216f388c91027e903fdfc3"
+    },
+    "shape-builder": {
+      "name": "shape",
+      "path": "icons/outline/shape.svg",
+      "sha256": "db859aac77d95c9be1681829121e21e226a0d421aed7d587b84f49c95e7a25dd"
+    },
+    "shear": {
+      "name": "skew-x",
+      "path": "icons/outline/skew-x.svg",
+      "sha256": "f496f4a7edf8610103b1d8bdf035bdfc85386769534404d19ba289c1dafc097a"
+    },
+    "smooth": {
+      "name": "wave-sine",
+      "path": "icons/outline/wave-sine.svg",
+      "sha256": "3121625e0464fa7d69c290b90e70b279a1b6d4356cc027566aa44fe5050e980e"
+    },
+    "spiral": {
+      "name": "spiral",
+      "path": "icons/outline/spiral.svg",
+      "sha256": "68e7604ffcfc31ce9fe921cca43ac22c7919df39487cb5e9aefd36a355963857"
+    },
+    "star": {
+      "name": "star",
+      "path": "icons/outline/star.svg",
+      "sha256": "9903f4359966f48225710d78088db8fdfbc30eb82596a4bb28bc49b56399465d"
+    },
+    "type": {
+      "name": "letter-t",
+      "path": "icons/outline/letter-t.svg",
+      "sha256": "ef27490be0633f2837ea8939ba66b87e7c1d58f822ed6d6f80f7a7e2b4fd54d2"
+    },
+    "type-area": {
+      "name": "text-resize",
+      "path": "icons/outline/text-resize.svg",
+      "sha256": "ca931450b0b53857fabdd571f74b8f19832a493ebe20b532021c7519680f0a65"
+    },
+    "type-path": {
+      "name": "text-orientation",
+      "path": "icons/outline/text-orientation.svg",
+      "sha256": "67323112fbf52f94461dfd4d343c6214898d71b6e74785f3d85e0c1f95d90685"
+    },
+    "type-touch": {
+      "name": "cursor-text",
+      "path": "icons/outline/cursor-text.svg",
+      "sha256": "242eb31ad1c0cbf6a62bf175bc255a0ff7471f055c2a63ac1b4de64a9e444883"
+    },
+    "type-vertical": {
+      "name": "text-direction-rtl",
+      "path": "icons/outline/text-direction-rtl.svg",
+      "sha256": "b1fdb4f8f7a274f470997b50c007dcc0a58bd3f2b8cc00d4e816eef56813f98d"
+    },
+    "width": {
+      "name": "arrows-horizontal",
+      "path": "icons/outline/arrows-horizontal.svg",
+      "sha256": "19e2888a56ff65635092f2f591e2933157007709b63022737d408c293bc801e0"
+    },
+    "zoom": {
+      "name": "zoom-in",
+      "path": "icons/outline/zoom-in.svg",
+      "sha256": "4926dec8d4d4f6b35b38ebcfe862d04fc608d583671050c208deb7a85e330ba9"
+    }
+  }
+}

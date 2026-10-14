@@ -16,9 +16,11 @@ export async function runDrawWorkflows({ evaluate }) {
       visible:r.width>0&&r.height>0, cutHidden:getComputedStyle(document.querySelector('#stage')).visibility,
       cutScope:paper===window.__cutScope, canvases:document.querySelectorAll('canvas').length};
   })()`), {mode:'draw',label:'Cut',visible:true,cutHidden:'hidden',cutScope:true,canvases:2});
+  await runDrawIconWorkflows({ evaluate });
   const menu = await evaluate("window.modcut.getE2EWorkspaceMenu()");
   assert.equal(menu.label, "Cut workspace");
-  assert.ok(menu.edit.every((accelerator) => !accelerator), "Draw shell removes Cut editing accelerators");
+  assert.equal(menu.file.find((item) => item.label === "Add…").accelerator, null, "Draw must reserve Mod+Shift+O for outlines");
+  assert.ok(menu.edit.every((accelerator) => !accelerator || ["Ctrl+K", "Cmd+K"].includes(accelerator)), "Draw shell removes Cut editing accelerators");
   for (const key of ["Backspace", "Enter", "Escape", "p", "m"]) {
     await evaluate(`window.dispatchEvent(new KeyboardEvent('keydown',{key:${JSON.stringify(key)},bubbles:true,cancelable:true}))`);
   }
@@ -38,7 +40,11 @@ export async function runDrawWorkflows({ evaluate }) {
 export async function runDrawTabWorkflows({ evaluate }) {
   // New projects start in Cut; returning to an existing tab restores its Draw mode.
   const originalTab = await evaluate("document.querySelector('.doc-tab.is-active').dataset.tabId");
-  await evaluate("document.querySelector('#workspaceToggle').click(); document.querySelector('#addTab').click()");
+  await evaluate(`(() => {
+    document.querySelector('#workspaceToggle').click();
+    const isMac=/Mac/.test(navigator.platform);
+    window.dispatchEvent(new KeyboardEvent('keydown',{key:'n',code:'KeyN',metaKey:isMac,ctrlKey:!isMac,bubbles:true,cancelable:true}));
+  })()`);
   assert.equal(await evaluate("document.body.dataset.workspace"), "cut");
   const newTab = await evaluate("document.querySelector('.doc-tab.is-active').dataset.tabId");
   await evaluate(`document.querySelector('[data-tab-id="${originalTab}"]').click()`);
@@ -73,4 +79,30 @@ async function runDrawKernelWorkflows({ evaluate }) {
   })()`);
   assert.deepEqual(result, {backend:'js',approximate:true,points:4,area:150,code:'NOT_IMPLEMENTED',aborted:'AbortError',after:[20,0],logCount:1});
   process.stdout.write('PASS Draw: real geometry Web Worker, flatten, union and error recovery\n');
+}
+
+async function runDrawIconWorkflows({ evaluate }) {
+  const result = await evaluate(`(async () => {
+    const {toolRegistry, iconHref} = await import('./draw/tools/registry.mjs');
+    const host=document.createElement('div'); host.id='draw-icon-proof';
+    host.style.cssText='position:fixed;left:-10000px;top:0;width:600px;color:var(--text)';
+    document.body.append(host);
+    try {
+      for (const tool of toolRegistry.tools) {
+        const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+        svg.setAttribute('viewBox','0 0 24 24'); svg.setAttribute('width','24'); svg.setAttribute('height','24');
+        const use=document.createElementNS('http://www.w3.org/2000/svg','use');
+        use.setAttribute('href',iconHref(tool.id)); svg.append(use); host.append(svg);
+      }
+      let missing=[];
+      for (let attempt=0;attempt<50;attempt++) {
+        await new Promise(resolve=>setTimeout(resolve,20));
+        missing=[...host.querySelectorAll('use')].filter(use=>{const b=use.getBBox();return !b.width||!b.height;});
+        if (!missing.length) break;
+      }
+      return {count:toolRegistry.tools.length,missing:missing.map(use=>use.getAttribute('href').split('#')[1])};
+    } finally {host.remove();}
+  })()`);
+  assert.deepEqual(result,{count:49,missing:[]},'Every tool sprite must render through its external SVG use reference');
+  process.stdout.write('PASS Draw: 49 external SVG tool symbols render\n');
 }

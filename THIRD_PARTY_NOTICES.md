@@ -1,6 +1,6 @@
 # Third-party notices
 
-This file records Draw geometry dependencies and the experimental D0.3 spike.
+This file records Draw geometry/icon dependencies and the experimental D0.3 spike.
 It is not a complete inventory of modCut's pre-existing dependencies.
 
 ## VectorCraft — development experiment only
@@ -56,3 +56,17 @@ or font outlines are copied.
   https://github.com/andyperlitch/jsbn/blob/master/LICENSE (Tom Wu notice).
   The packaging allow-list includes clipper-lib.
 - No code is copied from GPL implementations; no WASM spike binary is used.
+
+## Tabler Icons — Draw tool icons (D0.5)
+
+- Source: https://github.com/tabler/tabler-icons
+- Package: `@tabler/icons` 3.49.0, outline SVGs only.
+- Copyright (c) 2020–2026 Paweł Kuna. License: MIT.
+- 49 SVG files copied without artwork changes into `renderer/draw/icons/`,
+  renamed to modCut's stable icon IDs and combined into a generated sprite.
+- `renderer/draw/icons/sources.json` records upstream filenames, SHA-256 hashes,
+  the exact package tarball URL and npm integrity. The complete upstream license
+  is preserved in `renderer/draw/icons/LICENSE.tabler.txt` and shipped through
+  the existing `renderer/**/*` packaging rule.
+- No runtime library, webfont or CDN is used. The user-supplied CTA icons in
+  `ICONS/` are separate assets.

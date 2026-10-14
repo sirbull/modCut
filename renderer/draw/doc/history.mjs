@@ -7,6 +7,7 @@ export class History {
   #transaction = null;
   #state = {};
   #saved = this.#state;
+  #savepoints = new WeakSet();
   constructor(doc) { this.#doc = doc; }
   get canUndo() { return this.#cursor > 0; }
   get canRedo() { return this.#cursor < this.#entries.length; }
@@ -37,7 +38,7 @@ export class History {
   #record(command) {
     const previous = this.#entries[this.#cursor - 1];
     let merged = null;
-    if (this.#cursor === this.#entries.length && this.#state !== this.#saved) {
+    if (this.#cursor === this.#entries.length && this.#state !== this.#saved && !this.#savepoints.has(this.#state)) {
       try { merged = previous?.command.merge?.(command) || null; }
       catch { /* A coalescing failure must not discard a committed edit. */ }
     }
@@ -87,8 +88,14 @@ export class History {
     else this.#record(command);
   }
   markSaved() {
+    this.captureSavepoint()();
+  }
+  /** Commit the state actually written, even if edits occur during async file IO. */
+  captureSavepoint() {
     if (this.#transaction) throw new Error('Cannot mark saved inside a transaction');
-    this.#saved = this.#state; this.#notify();
+    const state = this.#state;
+    this.#savepoints.add(state);
+    return () => { this.#saved = state; this.#notify(); };
   }
   clear() {
     if (this.#transaction) throw new Error('Cannot clear inside a transaction');

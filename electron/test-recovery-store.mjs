@@ -20,3 +20,16 @@ test("recovery store atomically writes, reads and clears a session", async () =>
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test('overlapping recovery writes and clear execute in order without reviving a closed session', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'modcut-recovery-queue-'));
+  try {
+    const store = createRecoveryStore(directory);
+    await Promise.all([store.write('first'), store.write('second')]);
+    assert.equal(await store.read(), 'second');
+    await Promise.all([store.write('third'), store.clear()]);
+    assert.equal(await store.read(), null);
+    await store.write('new session');
+    assert.equal(await store.read(), 'new session');
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});

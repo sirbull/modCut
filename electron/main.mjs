@@ -4,9 +4,11 @@ import { fileURLToPath } from "node:url";
 import { dirname, join, extname, basename } from "node:path";
 import { gunzip } from "node:zlib";
 import { promisify } from "node:util";
+import { acceleratorFor } from "../renderer/draw/keymap.mjs";
 import { createSidecar } from "./sidecar-bridge.mjs";
 import { createWindowCommandRouter } from "./window-lifecycle.mjs";
 import { createRecoveryStore } from "./recovery-store.mjs";
+import { writeProject } from "./project-store.mjs";
 import { IMAGE_FORMATS, PDF_FORMATS, TEXT_FORMATS, TIFF_FORMATS, importIssueFor } from "./import-formats.mjs";
 
 app.name = "modCut"; // makes the macOS app menu read "modCut", not "Electron"
@@ -205,8 +207,18 @@ function buildMenu(mode = "cut") {
     const fileMenu = template.find((item) => item.label === "File");
     fileMenu.submenu = fileMenu.submenu.filter((item) =>
       ["New", "Import…", "Add…", "Close Tab", "Save document…", "Save document as…", "Quit"].includes(item.label));
+    const sharedCommands = { "New": "new", "Import…": "import", "Add…": "add", "Close Tab": "close-tab",
+      "Save document…": "save-document", "Save document as…": "save-document-as" };
+    for (const item of fileMenu.submenu) {
+      const command = sharedCommands[item.label];
+      if (command) item.accelerator = acceleratorFor(command, { workspace: "draw", isMac });
+    }
+    const appMenu = template.find((item) => item.label === "modCut");
+    const preferences = appMenu?.submenu.find((item) => item.label === "Preferences…");
+    if (preferences) preferences.accelerator = acceleratorFor("preferences", { isMac });
     template.find((item) => item.label === "Edit").submenu = [
       { label: "Undo", enabled: false }, { label: "Redo", enabled: false },
+      ...(isMac ? [] : [{ type: "separator" }, { label: "Preferences…", accelerator: acceleratorFor("preferences", { isMac }), click: () => send("preferences") }]),
     ];
     viewMenu.submenu = [viewMenu.submenu[0], { type: "separator" },
       { role: "togglefullscreen", label: "Full screen" },
@@ -344,6 +356,7 @@ app.whenReady().then(() => {
     ipcMain.handle("e2eWorkspaceMenu", () => ({
       label: Menu.getApplicationMenu()?.getMenuItemById("workspace-toggle")?.label,
       edit: Menu.getApplicationMenu()?.items.find((item) => item.label === "Edit")?.submenu.items.map((item) => item.accelerator || null),
+      file: Menu.getApplicationMenu()?.items.find((item) => item.label === "File")?.submenu.items.map((item) => ({ label: item.label, accelerator: item.accelerator || null })),
     }));
     ipcMain.handle("e2eRequestQuit", () => { requestQuit(); return true; });
   }
@@ -412,8 +425,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle("saveDocument", async (_e, { json, path, name, saveAs }) => {
     if (!saveAs && path) {
-      await writeFile(path, json, "utf8");
-      return path;
+      return writeProject(path, json);
     }
     const { canceled, filePath } = await dialog.showSaveDialog(win, {
       title: "Save modCut document",
@@ -421,8 +433,7 @@ app.whenReady().then(() => {
       filters: [{ name: "modCut document", extensions: ["modcut"] }],
     });
     if (canceled || !filePath) return null;
-    await writeFile(filePath, json, "utf8");
-    return filePath;
+    return writeProject(filePath, json);
   });
 
   // Export/import all settings as one shareable JSON file.
