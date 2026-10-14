@@ -89,7 +89,9 @@ samme PR og eieren godkjenner det.
 
 ### 2.1 MCP-verktøy for utviklingen
 
-To MCP-servere brukes under utviklingen. Ingen av dem er en del av produktet modCut.
+Ingen MCP-server er nødvendig for å bygge Draw. Funksjonene bygges med egen kode, Paper.js og
+gjenbrukt kode fra VectorCraft (kapittel 16), og testes med prosjektets egne tester (kapittel 19).
+To MCP-servere er **valgfrie** hjelpemidler under utviklingen. Ingen av dem er en del av produktet.
 
 * **REA** (Reverse Engineer Anything, <https://github.com/morluto/rea>, MIT, npm-pakke
   `rea-agents`): analyse av apper, binærfiler, JavaScript/Electron, WASM og filer, med
@@ -1045,7 +1047,10 @@ og spørsmålet tas opp igjen før fase 4:
 
 ## 17. MCP og agentverktøy
 
-### 17.1 REA: installasjon og oppsett
+### 17.1 REA (valgfritt): installasjon og oppsett
+
+REA er ikke påkrevd. Ingen oppgave i byggeplanen avhenger av den, og alle krav kan verifiseres
+med `npm test`. Bruk den bare hvis den sparer tid.
 
 REA krever Node.js 22.19 eller nyere (22.x), 24.11+ eller 26+. Statisk JavaScript/Electron-analyse,
 Electron-scenarier og skjermbildesammenligning trenger ingen ekstra motorer. Analyse av native
@@ -1084,9 +1089,9 @@ Verifisert 2026-10-14: REA 6.5.0 installert i skymiljøet, og
 `rea analyze-javascript-application . --artifact-format directory --source-path renderer/bed.js --source-path renderer/app.js`
 ga en forseglet evidensgraf for modCut (applikasjonsgraf og Electron-grenser).
 
-### 17.2 REA: hva den skal brukes til
+### 17.2 REA (valgfritt): mulige bruksområder
 
-| Bruk | REA-kommando (CLI-navn, samme som MCP-verktøy) | Når i planen |
+| Bruk | REA-kommando (CLI-navn, samme som MCP-verktøy) | Kan hjelpe i |
 |---|---|---|
 | Kartlegge dagens modCut før Draw kobles inn: moduler, IPC-kanaler, preload-grenser, hvem som kaller `bed.loadSVG`, tastebindinger og menyer. | `analyze-javascript-application`, `inspect-analysis-view` | D0.1, D0.6, D1.12 |
 | Sjekke at Draw ikke endrer Cut: analyser `renderer/` før og etter en PR og sammenlign grafene (nye kall inn i `bed.js` skal bare gå via API-et i 14.2). | `analyze-javascript-application` + `compare-application-versions` | Alle PR-er som berører `app.js`, `bed.js`, `main.mjs` |
@@ -1096,7 +1101,7 @@ ga en forseglet evidensgraf for modCut (applikasjonsgraf og Electron-grenser).
 | Inspisere strukturen i eksempel- og eksportfiler (PDF-kompatibel `.ai`, PDF, SVGZ) for interoperabilitet, f.eks. `modCut_logo.ai` i repoet. | `extract-artifact`, `inspect` | D2.6, D3.7, 12 |
 | Analysere en tredjeparts JS/Electron- eller webapp med åpen og tillatende lisens for å forstå en teknikk. | `analyze-javascript-application`, `analyze-web-bundle` | Ved behov |
 
-**Grenser (bindende for alle agenter):**
+**Grenser (bindende for alle agenter som velger å bruke REA):**
 
 * REA skal **ikke** brukes til å dekompilere eller disassemblere Adobe Illustrator eller annen
   lukket programvare for å kopiere implementasjon. Adobes lisensvilkår forbyr reverse
@@ -1293,9 +1298,8 @@ Denne seksjonen er skrevet direkte til kodeagentene.
     velkomne), samme kodestil som eksisterende filer. Ingen nye rammeverk (React, Vue o.l.).
 12. **Dokumentasjon**: når en oppgave er ferdig, oppdater sjekklisten i [kapittel 23](#23-statussjekkliste)
     og eventuelle avvik fra spesifikasjonen i samme PR.
-13. **REA**: kjør `analyze-javascript-application` + `compare-application-versions` på `renderer/`
-    og `electron/` før og etter endringer i delte filer, og nevn resultatet i PR-beskrivelsen.
-    Følg grensene i 17.2.
+13. **MCP-verktøy** (REA, VectorCraft) er valgfrie. Ingen oppgave skal blokkeres av at de mangler.
+    Brukes REA, gjelder grensene i 17.2.
 14. **Usikkerhet**: hvis spesifikasjonen er uklar, velg Illustrators oppførsel, skriv valget i
     PR-beskrivelsen, og legg et spørsmål i kapittel 21.
 
@@ -1314,7 +1318,7 @@ fra grenen draw/<ID>-<navn>.
 
 | Nr | Spørsmål | Foreløpig valg |
 |---|---|---|
-| Q1 | Skal REA-evidens fra `capture-electron-scenario` bli en del av CI, eller bare brukes lokalt av agenter? | Lokalt i første omgang. Vurderes etter fase 1. |
+| Q1 | Skal valgfrie REA-sjekker noen gang inn i CI? | Nei. REA er et valgfritt lokalt hjelpemiddel. |
 | Q2 | Hvilken lisens skal modCut ha? Påvirker NOTICE-krav og hvilke biblioteker som kan brukes. | Ingen fil i dag. Anbefaling: MIT eller Apache-2.0. |
 | Q3 | Skal Draw også fungere som frittstående vindu (som Advanced Editing), eller kun som modus i fanen? | Kun modus i fanen. |
 | Q4 | Skal Cut-verktøyenes taster endres til Illustrator-standard (L = ellipse, C = scissors) for konsistens? | Nei i første omgang, per modus. |
