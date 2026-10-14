@@ -86,7 +86,7 @@ UI surfaces are not added to the empty shell in this task.
 
 ## Verification and status
 
-`npm run test:draw` checks the sprite and runs 52 tests. Ten new tests cover
+`npm run test:draw` checks the sprite and runs 58 tests after D0.6. The ten keymap tests cover
 conflicts, platform modifiers, physical punctuation/ISO alternative, text input,
 IME/AltGraph, repeats, accelerators, temporary release order, registry entries and
 all icon names in the specification. Node coverage measures 100% lines in both
@@ -97,3 +97,6 @@ Add accelerator, renders all 49 external SVG `<use>` references and confirms tha
 Cut artwork/view/layers survive switching modes. Existing geometry worker tests
 remain green. The full `npm test` reaches the previously observed image-editor
 crop assertion failure; no changes to crop editing are part of D0.5.
+
+D0.6 adds project IO and actual crash/relaunch coverage to `test:e2e:draw`.
+The full `npm test` passed at the end of D0.6; the crop failures above are earlier observations.

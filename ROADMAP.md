@@ -63,12 +63,17 @@ the same commit that completes an item.
   and Draw E2E pass; the full suite still encounters the known crop assertion.
   Progress log: [`docs/draw/WORK_LOG.md`](docs/draw/WORK_LOG.md).
 
+- [x] D0.6: `.modcut` v4 Draw persistence, legacy Cut loading, compatibility
+  warnings with original-data preservation, per-tab recovery and combined dirty
+  guards. Atomic project writes and queued recovery writes. 58 Draw tests,
+  11 main tests, Draw crash/relaunch E2E and the full `npm test` pass.
+
 - [ ] Build the Draw workspace described in
   [`docs/DRAW_WORKSPACE.md`](docs/DRAW_WORKSPACE.md). Task status is tracked in
   chapter 23 of that document.
 
-- [ ] Phase 0 — Foundation: workspace, document model/history, geometry kernel,
-  keymap and `.modcut` v4 persistence. In progress; D0.1–D0.5 complete, D0.6 is next.
+- [x] Phase 0 — Foundation: workspace, document model/history, geometry kernel,
+  keymap and `.modcut` v4 persistence. D0.1–D0.6 complete; D1.1 is next.
 - [ ] Phase 1 — Basic drawing MVP: artboards, Pen, shapes, layers, bitmap
   references and Send to Cut v1.
 - [ ] Phase 2 — Core vector editing: text, Pathfinder, gradients, import/export

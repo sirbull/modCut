@@ -74,3 +74,29 @@ Arbeidet fortsetter på `feat/vector-draw`; neste byggetrinn er fortsatt D0.6.
 - Recovery tar med alle Draw-dokumenter og valgt workspace, også i inaktive faner.
 - Pågående arbeid: tester for lagre/åpne, samtidige skriveroperasjoner og faktisk
   krasjgjenoppretting i Electron. Samme arbeidsgren: `feat/vector-draw`.
+
+## 2026-10-14 — D0.6 fullført, fase 0 ferdig
+
+- [x] `.modcut` v4 med Draw + workspace; v1–v3 åpnes med tom Draw og uendret Cut.
+- [x] Dirty-union for Cut/Draw, separat lagrepunkt og sikker async lagring ved nye edits/fanebytte.
+- [x] Alle Draw-faner og valgt modus tas med i autosave/recovery, også uten montert canvas.
+- [x] Maks 2 sekunders ventetid for Draw-autosave; kontinuerlige edits utsetter ikke recovery uendelig.
+- [x] Skrivebeskyttet safe mode/kompatibilitetsadvarsel beholder originaldata ved save/recovery.
+- [x] Atomisk prosjektfilskriving; kø for samtidige recovery-writes og clear.
+- [x] Native Close/Quit varsler om aktive/inaktive Draw-endringer. Cancel gjenopptar autosave.
+- [x] Plan, roadmap og API-/filformatdokumentasjon oppdatert.
+- [x] Dedikert Draw-E2E med prosjekt-IO/krasjtest inngår nå også i standard `npm test`.
+
+Verifisering: 58 Draw-tester, 11 main-tester og Draw-E2E er grønne.
+Prosjekt-IO og doc-modulene har 100 % linjedekning. Electron-testene bruker faktisk
+IPC-lagring til disk, åpner filen igjen og sjekker tom/befolket Draw, legacy v3,
+ukjent Draw-versjon uten datatap, begge dirty-kilder, kontinuerlig autosave og
+bevarte faner gjennom SIGKILL/restart. Hele `npm test` passerer i denne kjøringen,
+inkludert Cut-workflows og eksisterende krasjgjenoppretting. Ingen crop-fiks er gjort.
+
+Avklaring: allerede utgitte gamle apper kan ikke varsles retroaktivt og kan miste
+Draw-data ved lagring. Denne versjonen advarer og bevarer ukjent Draw-data; nyere
+prosjektversjoner avvises før arbeidsflaten endres. Recovery lagres fortsatt som
+et komplett atomisk JSON-snapshot, med gjenbruk av uendrede Draw-modellsnapshots.
+
+Arbeidsgren: `feat/vector-draw`. **Neste: D1.1**, render-adapter modell → Paper.js.

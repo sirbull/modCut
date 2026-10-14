@@ -101,6 +101,13 @@ settings, document units, grid, path ordering, and the selected machine and
 material identifiers. The original imported artwork does not need to travel
 beside the project file.
 
+Version 4 also contains the independent Draw document and the selected workspace.
+Older version 1–3 projects open with an empty Draw document. Autosave recovers
+Draw and Cut per tab; either workspace can trigger the unsaved-work prompt.
+Unknown Draw schemas are read-only, with original data preserved on saving.
+Use this or a newer modCut to save v4 projects; older releases may drop Draw data.
+Visible Draw rendering/tools are still being built.
+
 The file does not copy local machine profiles, connection details, drivers,
 material libraries or process-profile libraries. A receiving computer must
 therefore have the intended machine/material configured locally and the user
@@ -191,7 +198,7 @@ Exported preferences include these options and grid spacing.
 | `npm run test:sidecar` | Maven/JUnit sidecar tests |
 | `npm run test:bridge` | Build the fat JAR and test Node ↔ Java JSON-RPC |
 | `npm run test:renderer` | Import, layer, raster, toolpath and quality unit tests |
-| `npm run test:draw` | Draw model/kernel/keymap tests and SVG sprite consistency |
+| `npm run test:draw` | Draw model/kernel/keymap/project IO tests and SVG sprite consistency |
 | `npm run build:icons` | Rebuild the Draw tool SVG sprite |
 | `npm run test:e2e` | Real Electron workflows, native close and crash recovery |
 | `npm run test:e2e:theme` | System appearance, Settings, persistence and editor theme synchronization |

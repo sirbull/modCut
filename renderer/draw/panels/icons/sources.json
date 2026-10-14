@@ -1,0 +1,45 @@
+{
+  "package": "@tabler/icons",
+  "version": "3.49.0",
+  "license": "MIT",
+  "repository": "https://github.com/tabler/tabler-icons",
+  "tarball": "https://registry.npmjs.org/@tabler/icons/-/icons-3.49.0.tgz",
+  "integrity": "sha512-l+GnSkFETx0U26icxv1VUFnxxiTqXfCcVRiRAnyMwibupM2S2L/hSaZ9gmSgz01rkrsH/93NvLsxykqdanc6lw==",
+  "icons": {
+    "adjustments": {
+      "name": "adjustments",
+      "path": "icons/outline/adjustments.svg",
+      "sha256": "588b6b3c7f787ffc4339fec0677de0e55d44a72ca4d899d60f4d74fbdae6bf9f"
+    },
+    "align-center": {
+      "name": "align-center",
+      "path": "icons/outline/align-center.svg",
+      "sha256": "d3fea8f389e1ebf6b27c946715a8315a977c6f64f96d8513e2cf8b4817aaea0a"
+    },
+    "arrows-move": {
+      "name": "arrows-move",
+      "path": "icons/outline/arrows-move.svg",
+      "sha256": "45b5a5c95a430f7512b9b20d48a3fed70571f4cb31069da74000c94550c7ec4c"
+    },
+    "artboard": {
+      "name": "artboard",
+      "path": "icons/outline/artboard.svg",
+      "sha256": "a2659ef614767a30364b8b3fe902f4622e8167889a71fb8b390c1c95ff422006"
+    },
+    "layers-intersect": {
+      "name": "layers-intersect",
+      "path": "icons/outline/layers-intersect.svg",
+      "sha256": "d5e04801ab417901f74b16e976f3db732d920f4f9f73ebf0ca61643506d127fd"
+    },
+    "line-dashed": {
+      "name": "line-dashed",
+      "path": "icons/outline/line-dashed.svg",
+      "sha256": "38f82a1f06e01bc1753e0f1d66771c346bc97003b46e69ad3cf333ee38258965"
+    },
+    "palette": {
+      "name": "palette",
+      "path": "icons/outline/palette.svg",
+      "sha256": "0b462801eadbeeb017eb323aee44880c13336ea8b4ac2182afac81d79d58d45e"
+    }
+  }
+}

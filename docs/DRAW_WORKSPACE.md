@@ -1,6 +1,6 @@
 # modCut Draw: vektoreditor i modCut
 
-> Status: D0.1–D0.5 er fullført. Neste oppgave er D0.6: lagring og gjenoppretting av Draw.
+> Status: Fase 0 (D0.1–D0.6) er fullført. Neste oppgave er D1.1: render-adapter fra modellen til Paper.js.
 > Sist oppdatert: 2026-10-14.
 > Målgruppe: utviklere og kodeagenter (Claude Code og Codex) som skal bygge løsningen.
 
@@ -994,9 +994,12 @@ artboard -> resolveScene({ artboards:[id] }, { forCut: true, strokes, rasterEffe
 * Store binærdata (bilder, fonter) lagres i `draw.assets` som base64 med sha256-nøkkel og
   deles hvis samme bilde brukes flere ganger. Hvis filen blir over 50 MB, foreslå
   "Link i stedet for embed" (fase 4).
-* Versjon 3-filer åpnes som før, med tomt Draw-dokument. Version 4-filer åpnet i eldre modCut:
-  den eldre appen ignorerer `draw` og viser en advarsel om at tegnedata ikke kan redigeres
-  (legg inn sjekken i `app.js` nå, i fase 0, slik at den finnes i neste release).
+* Versjon 1–3-filer åpnes som før, med tomt Draw-dokument. Ukjent Draw-versjon i en
+  støttet prosjektfil åpnes skrivebeskyttet med advarsel; originaldata beholdes ved lagring.
+  Prosjektversjoner nyere enn 4 avvises før arbeidsflaten endres.
+* Allerede utgitte eldre modCut-versjoner kan ikke få en advarsel retroaktivt. De kan
+  ignorere `draw` og miste det ved ny lagring. V4-prosjekter må lagres i denne eller
+  en nyere versjon. Kompatibilitetssjekken gjelder denne versjonen og senere utgaver.
 * `migrate.mjs` har en migreringsfunksjon per Draw-versjon og tester for hver.
 * Autosave/recovery serialiserer `draw` inkrementelt (maks hvert 2. sekund ved endring).
 * Eget eksportformat **`.modcut-draw`** er ikke nødvendig; `.modcut` holder. Alle vanlige
@@ -1177,7 +1180,7 @@ av forskjellige agenter fordi de eier ulike filer.
 
 | Fase | Leveranse | Status |
 |---|---|---|
-| 0 — Fundament | Workspace-bytte, dokumentmodell, geometri-kjerne, keymap og lagring. | Påbegynt: D0.1–D0.5 ferdige. D0.6 (lagring/gjenoppretting) gjenstår før fase 0 er ferdig. |
+| 0 — Fundament | Workspace-bytte, dokumentmodell, geometri-kjerne, keymap og lagring. | Fullført: D0.1–D0.6. Draw-data lagres i `.modcut` v4 og krasjgjenopprettes per fane. |
 | 1 — Grunnleggende tegning | Artboards, markering, Pen, former, lag, bitmap-referanser og Send til Cut v1. | Ikke startet. |
 | 2 — Illustrator-kjernen | Tekst, Pathfinder, gradienter, import/eksport og Send til Cut v2. | Ikke startet. |
 | 3 — Avansert redigering og trace | Outline Stroke, effekter, Image Trace, flere redigeringsverktøy og AI/DXF-eksport. | Ikke startet. |
@@ -1380,7 +1383,7 @@ Oppdateres når oppgaven fullføres. Løpende arbeidslogg: [`draw/WORK_LOG.md`](
 * [x] D0.3 VectorCraft-spike
 * [x] D0.4 GeometryKernel og worker
 * [x] D0.5 Keymap og verktøyregister
-* [ ] D0.6 `.modcut` v4
+* [x] D0.6 `.modcut` v4
 * [ ] D1.1 Render-adapter
 * [ ] D1.2 Artboards
 * [ ] D1.3 Selection, Hand, Zoom
@@ -1451,7 +1454,7 @@ kjøring stoppet i Cut-testen for Backspace. Ingen endring i disse funksjonene i
   Ukjente versjoner og ikke-JSON-data avvises. Uversjonerte utkast tolkes som v1;
   det finnes ingen eldre Draw-versjon å migrere fra ennå.
 * API og brukseksempel: [`draw/document-model.md`](draw/document-model.md).
-* UI-integrasjon, filformat v4, autosave og recovery hører til senere oppgaver.
+* UI-integrasjon, filformat v4, autosave og recovery ble koblet inn i D0.6 (se under).
 
 Verifisering 2026-10-14: `npm run test:draw` passerer 16 tester og måler 100 %
 linjedekning i alle seks `doc/`-modulene (krav: minst 95 %). Property-testen bruker
@@ -1526,3 +1529,35 @@ hurtigtast for ny fane, kontroll av native akselerator og rendering av alle
 49 eksterne SVG-symboler. Hele `npm test` passerer sidecar/bridge/main/renderer/
 Draw/kontrast, men stopper i den tidligere påviste bildebeskjæringstesten
 «dragging a crop edge must update the crop». Neste oppgave er D0.6.
+
+
+### Implementasjonsnotater D0.6
+
+* `.modcut` v4 legger til `draw` og valgt `workspace`. Cut-feltene beholder samme
+  struktur. V1–v3 åpnes med et nytt, tomt Draw-dokument; åpning endrer ikke kildefilen.
+* `draw/io/project.mjs` eier per-fane DrawDocument, History og Selection uavhengig
+  av lazy canvas/PaperScope. Uendrede, immutable modell-snapshots gjenbrukes ved autosave.
+  History og Selection er midlertidige og lagres ikke. Recovery-filen skrives fortsatt
+  som ett komplett, atomisk JSON-snapshot; dette er ikke en differensiell filjournal.
+* Recovery beholder alle faners Draw-data, workspace og separate Cut/Draw-dirty-flagg.
+  Draw-endringer samles i et intervall på inntil 2 sekunder uten debounce-sult ved
+  kontinuerlig redigering. Cut beholder 350 ms debounce med samme øvre ventetid.
+* Lukk/avslutt og import/erstatt kontrollerer samlet dirty-status. Async lagring markerer
+  bare faktisk skrevet Draw-historikktilstand og Cut-revisjon som lagret, også ved fanebytte.
+  En pending savepoint stopper coalescing over lagringsgrensen. Avbrutt/feilet lagring
+  markerer ikke dokumentet som lagret. Autosave fortsetter etter avbrutt Close/Quit.
+* Ugyldig/ukjent Draw-skjema gir skrivebeskyttet visning og kompatibilitetsadvarsel.
+  Originaldata beholdes ved lagring og recovery. Begrensningen for eldre utgitte apper
+  er beskrevet i kapittel 15 og [`draw/project-io.md`](draw/project-io.md).
+* Smale støtteendringer utenfor dokument-IO: History har snapshot-savepoints,
+  Draw-shell mottar modelltilstand, og `electron/project-store.mjs` skriver prosjektfiler
+  via unik temp-fil + rename. `recovery-store.mjs` køer writes/clear for å unngå tmp-fil-race.
+  Ingen endringer i `bed.js` eller sidecar; ingen ny avhengighet eller ny arbeidsgren.
+
+Verifisering 2026-10-14: 58 Draw-tester passerer med 100 % linjedekning i prosjekt-IO
+og doc-modulene. 11 main-tester passerer, inkludert atomisk prosjektlagring og samtidige
+recovery-operasjoner. Draw-E2E lagrer/åpner tomme og befolkede dokumenter, sjekker v3,
+ukjent Draw-versjon uten datatap, dirty-grenser, native Close/Quit, kontinuerlig autosave
+og to faner gjennom faktisk SIGKILL/restart. Hele `npm test` passerte denne gangen,
+inkludert eksisterende Cut-E2E og krasjgjenoppretting. Tidligere crop-feil er historiske
+observasjoner, ikke rettelser i D0.6. Fase 0 er ferdig; neste oppgave er D1.1.
