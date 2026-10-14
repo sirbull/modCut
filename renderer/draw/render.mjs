@@ -51,6 +51,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {} } = {}
       let item = items.get(node.id);
       if (!item || fingerprints.get(node.id) !== fingerprint) {
         item?.remove(); item = make(node);
+        item.applyMatrix = false;
         item.data.nodeId = node.id;
         item.visible = node.visible; item.opacity = node.opacity; item.blendMode = node.blendMode;
         if (!node.children && node.type !== 'image') {

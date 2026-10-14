@@ -19,8 +19,9 @@ export async function runDrawWorkflows({ evaluate }) {
   await runDrawIconWorkflows({ evaluate });
   const menu = await evaluate("window.modcut.getE2EWorkspaceMenu()");
   assert.equal(menu.label, "Cut workspace");
-  assert.equal(menu.file.find((item) => item.label === "Add…").accelerator, null, "Draw must reserve Mod+Shift+O for outlines");
-  assert.ok(menu.edit.every((accelerator) => !accelerator || ["Ctrl+K", "Cmd+K"].includes(accelerator)), "Draw shell removes Cut editing accelerators");
+  assert.equal(menu.file.find((item) => item.label === "Import…").accelerator, process.platform === 'darwin' ? 'Cmd+Shift+P' : 'Ctrl+Shift+P', "Draw imports into the current model through Place");
+  assert.ok(menu.file.some(item => item.label === 'Open…'));
+  assert.ok(menu.edit.every((a) => !a || ['Ctrl+K','Cmd+K','Ctrl+Z','Cmd+Z','Ctrl+Shift+Z','Cmd+Shift+Z'].includes(a)), "Draw editing accelerators belong to Draw history");
   for (const key of ["Backspace", "Enter", "Escape", "p", "m"]) {
     await evaluate(`window.dispatchEvent(new KeyboardEvent('keydown',{key:${JSON.stringify(key)},bubbles:true,cancelable:true}))`);
   }
@@ -38,18 +39,18 @@ export async function runDrawWorkflows({ evaluate }) {
 }
 
 export async function runDrawTabWorkflows({ evaluate }) {
-  // New projects start in Cut; returning to an existing tab restores its Draw mode.
+  // New preserves the current workspace; returning to an existing tab restores its mode.
   const originalTab = await evaluate("document.querySelector('.doc-tab.is-active').dataset.tabId");
   await evaluate(`(() => {
     document.querySelector('#workspaceToggle').click();
     const isMac=/Mac/.test(navigator.platform);
     window.dispatchEvent(new KeyboardEvent('keydown',{key:'n',code:'KeyN',metaKey:isMac,ctrlKey:!isMac,bubbles:true,cancelable:true}));
   })()`);
-  assert.equal(await evaluate("document.body.dataset.workspace"), "cut");
+  assert.equal(await evaluate("document.body.dataset.workspace"), "draw");
   const newTab = await evaluate("document.querySelector('.doc-tab.is-active').dataset.tabId");
   await evaluate(`document.querySelector('[data-tab-id="${originalTab}"]').click()`);
   assert.equal(await evaluate("document.body.dataset.workspace"), "draw");
-  assert.equal(await evaluate("document.querySelectorAll('.draw-canvas').length"), 1, "Draw mounts lazily once per project");
+  assert.equal(await evaluate("document.querySelectorAll('.draw-canvas').length"), 2, "New Draw documents mount their own canvas");
   await evaluate("document.querySelector('#workspaceToggle').click()");
   await evaluate(`document.querySelector('[data-close-tab="${newTab}"]').click()`);
   await wait();

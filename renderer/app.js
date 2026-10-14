@@ -316,7 +316,7 @@ function setWorkspace(mode) {
     tab.drawRoot.className = "draw-project";
     tab.drawRoot.dataset.tabId = tab.id;
     $("drawWorkspace").append(tab.drawRoot);
-    tab.draw = createDrawWorkspace(tab.drawRoot, { state: drawState });
+    tab.draw = createDrawWorkspace(tab.drawRoot, { state: drawState, onError: message => toast(message,"err"), onImport: () => importDrawFiles() });
   }
   drawKeymap.reset();
   tab.workspace = mode;
@@ -330,7 +330,13 @@ function setWorkspace(mode) {
   button.dataset.tooltip = mode === "draw" ? "Cut: laser workspace" : "Draw: vector editor";
   button.removeAttribute("title");
   $("add").removeAttribute("title");
-  $("add").dataset.tooltip = mode === "draw" ? "Add files to the active project"
+  $("newDoc").dataset.tooltip = mode === "draw" ? "New Draw document (Cmd/Ctrl+N)" : "New project tab (Cmd/Ctrl+N)";
+  $("newDoc").removeAttribute("title");
+  $("import").textContent = mode === "draw" ? "Open" : "Import";
+  $("import").removeAttribute("title");
+  $("import").dataset.tooltip = mode === "draw" ? "Open a file in a new Draw document (Cmd/Ctrl+O)" : "Import — replace the active project (Cmd/Ctrl+O)";
+  $("add").textContent = mode === "draw" ? "Import" : "Add";
+  $("add").dataset.tooltip = mode === "draw" ? "Import artwork into this Draw document (Cmd/Ctrl+Shift+P)"
     : `Add files to the active project (${shortcutLabel('add', { workspace: 'cut', isMac: drawIsMac })})`;
   tab.draw?.resize();
   if (mode === "draw" && tab.drawState.warning && !tab.drawWarningShown) {
@@ -850,6 +856,7 @@ async function placeArtwork(prepared) {
 }
 
 async function addArtworkFiles(files) {
+  if (document.body.dataset.workspace === "draw") return addDrawArtworkFiles(files);
   bed.finishDrawing();
   const wasEmpty = !bed.getDesign();
   let added = 0;
@@ -879,6 +886,7 @@ async function addArtworkFiles(files) {
 }
 
 async function doImport() {
+  if (document.body.dataset.workspace === "draw") return openDrawFile();
   if (!(await guardWorkBeforeContinue())) return;
   let f;
   try {
@@ -925,6 +933,7 @@ async function doImport() {
 }
 
 async function addFiles() {
+  if (document.body.dataset.workspace === "draw") return importDrawFiles();
   let files;
   try {
     files = await window.modcut.openImport({ multiple: true, allowDocuments: false });
@@ -938,7 +947,75 @@ async function addFiles() {
   toast(`Added ${added} file${added === 1 ? "" : "s"} to the project.`, "ok");
 }
 
-function openDocumentInNewTab(documentData, path, name) {
+async function prepareDrawArtwork(file) {
+  if (["svg","svgz"].includes(file.ext)) return { kind:"vector", svgText:file.text };
+  return prepareArtwork(file);
+}
+
+async function addDrawArtworkFiles(files, tab = activeTab()) {
+  if (!tab?.draw || tab.drawState.document.readOnly) {
+    toast("Create an editable Draw document before importing artwork.","info"); return 0;
+  }
+  const workspace = tab.draw;
+  let added = 0;
+  for (const file of files) {
+    try {
+      if (file.kind === "unsupported" || file.kind === "document") {
+        if (file.reason === "document-not-addable" || file.kind === "document") {
+          await showMessageModal({title:"Open project files with Open",paragraphs:["Use Open to open a .modcut project in a new Draw tab. Import adds vector or raster artwork to the current document."]});
+        } else await showImportIssue(file);
+        continue;
+      }
+      const prepared = await prepareDrawArtwork(file);
+      if (!prepared) throw new Error("This format cannot be imported into Draw yet.");
+      if (!documentTabs.includes(tab) || tab.draw !== workspace) throw new Error("The target Draw document was closed or replaced.");
+      const result = await workspace.import(prepared,file.name);
+      if (result.warning) toast(result.warning,"info");
+      added++;
+    } catch (error) { toast(`Could not import ${file.name}: ${error.message}`,"err"); }
+  }
+  return added;
+}
+
+async function importDrawFiles() {
+  const tab = activeTab();
+  if (tab?.drawState?.document.readOnly) { toast("This Draw document is read-only.","info"); return; }
+  try {
+    const files = await window.modcut.openImport({multiple:true,allowDocuments:false,intent:"draw-import"});
+    if (!files?.length) return;
+    const added = await addDrawArtworkFiles(files,tab);
+    if (added) toast(`Imported ${added} file${added === 1 ? "" : "s"} into Draw.`,"ok");
+  } catch (error) { toast("Import failed: "+error.message,"err"); }
+}
+
+async function openDrawFile() {
+  try {
+    const file = await window.modcut.openImport({multiple:false,allowDocuments:true,intent:"draw-open"});
+    if (!file) return;
+    if (file.kind === "unsupported") return showImportIssue(file);
+    if (file.kind === "document") {
+      openDocumentInNewTab(JSON.parse(file.text),file.path,file.name,"draw");
+    } else {
+      const prepared = await prepareDrawArtwork(file);
+      if (!prepared) throw new Error("This format cannot be opened in Draw yet.");
+      const previousId = activeTabId;
+      newDocument("draw");
+      const tab = activeTab();
+      try {
+        const result = await tab.draw.import(prepared,file.name,{fitArtboard:true});
+        $("filename").value = file.name.replace(/\.[^.]+$/,""); setFileLabel(file.name);
+        if (result.warning) toast(result.warning,"info");
+      } catch (error) {
+        tab.unsubscribeDraw?.(); tab.draw?.destroy(); tab.drawRoot?.remove();
+        documentTabs = documentTabs.filter(item => item !== tab); activeTabId = previousId;
+        restoreWorkspace(activeTab()?.session); throw error;
+      }
+    }
+    toast("Opened in a new Draw document.","ok");
+  } catch (error) { toast("Open failed: "+error.message,"err"); }
+}
+
+function openDocumentInNewTab(documentData, path, name, mode = document.body.dataset.workspace === "draw" ? "draw" : null) {
   captureActiveTab();
   const previousTabId = activeTabId;
   const tab = { id: String(nextTabId++), title: name || "Untitled", dirty: false, session: null };
@@ -947,6 +1024,7 @@ function openDocumentInNewTab(documentData, path, name) {
   try {
     resetWorkspace();
     applyDocument(documentData, path, name);
+    if (mode) setWorkspace(mode);
     captureActiveTab();
     renderTabs();
     scheduleRecovery();
@@ -1061,12 +1139,13 @@ function initFileDrop() {
   });
 }
 
-function newDocument() {
+function newDocument(mode = document.body.dataset.workspace === "draw" ? "draw" : "cut") {
   captureActiveTab();
   const tab = { id: String(nextTabId++), title: "Untitled", dirty: false, session: null };
   documentTabs.push(tab);
   activeTabId = tab.id;
   resetWorkspace();
+  if (mode === "draw") setWorkspace("draw");
   captureActiveTab();
   renderTabs();
   scheduleRecovery();
@@ -1971,8 +2050,8 @@ function togglePanel() {
 }
 
 // --- wire UI ----------------------------------------------------------------
-$("newDoc").addEventListener("click", newDocument);
-$("addTab").addEventListener("click", newDocument);
+$("newDoc").addEventListener("click", () => newDocument());
+$("addTab").addEventListener("click", () => newDocument());
 $("import").addEventListener("click", doImport);
 $("add").addEventListener("click", addFiles);
 $("zoomIn").addEventListener("click", bed.zoomIn);
@@ -2051,11 +2130,15 @@ const drawActions = {
   "save-document": () => saveDocument(false), "save-document-as": () => saveDocument(true),
   "next-tab": () => switchRelativeTab(1), "previous-tab": () => switchRelativeTab(-1),
   preferences: openSettings,
+  place: importDrawFiles,
 };
+const drawWorkspaceCommands = new Set(["undo","redo","delete","select-all","deselect","cancel","fit-artboard","fit-all","zoom-in","zoom-out",
+  "panel.layers","panel.color","panel.stroke","panel.align","panel.transform"]);
 const drawKeymap = createKeymap({
   isMac: drawIsMac,
-  isEnabled: (entry) => !!entry && Object.hasOwn(drawActions, entry.command),
-  dispatch: (command) => drawActions[command]?.(),
+  isEnabled: (entry) => !!entry && (Object.hasOwn(drawActions,entry.command) || drawWorkspaceCommands.has(entry.command)
+    || entry.command.startsWith("tool.") && activeTab()?.draw?.availableTool(entry.command.slice(5))),
+  dispatch: (command) => Object.hasOwn(drawActions,command) ? drawActions[command]() : activeTab()?.draw?.handle(command),
 });
 const drawKeyContext = (event) => ({ workspace: "draw",
   editable: !!event.target.closest?.("input, select, textarea, [contenteditable]:not([contenteditable=false]), [role=textbox]") });
@@ -2377,6 +2460,7 @@ $("mapmode").addEventListener("click", (e) => {
 
 window.modcut.onMenu((cmd) => {
   if (cmd === "workspace-cut" || cmd === "workspace-draw") return setWorkspace(cmd.slice(10));
+  if (document.body.dataset.workspace === "draw" && drawWorkspaceCommands.has(cmd)) return activeTab()?.draw?.handle(cmd);
   if (document.body.dataset.workspace === "draw" && ![
     "new", "import", "add", "close-tab", "save-document", "save-document-as", "docs", "about", "preferences",
   ].includes(cmd)) return;

@@ -13,9 +13,10 @@ async function until(check, message) {
 }
 
 async function openProject(evaluate, path, project) {
+  const before = await evaluate("({id:document.querySelector('.doc-tab.is-active').dataset.tabId,mode:document.body.dataset.workspace})");
   await evaluate(`window.modcut.setE2EImportResult(${JSON.stringify({ path, name: path.split(/[\\/]/).pop(), kind: 'document', text: JSON.stringify(project) })})`);
   await evaluate("document.querySelector('#import').click()");
-  await until(() => evaluate(`document.querySelector('.doc-tab.is-active .doc-tab__title').textContent === ${JSON.stringify(path.split(/[\\/]/).pop())}`), 'Project import did not finish');
+  await until(() => evaluate(`document.querySelector('.doc-tab.is-active .doc-tab__title').textContent === ${JSON.stringify(path.split(/[\\/]/).pop())} && (${JSON.stringify(before.mode)} !== 'draw' || document.querySelector('.doc-tab.is-active').dataset.tabId !== ${JSON.stringify(before.id)})`), 'Project open did not finish');
 }
 
 async function save(evaluate, path) {
@@ -76,6 +77,7 @@ export async function runProjectWorkflows({ evaluate }, directory) {
   await openProject(evaluate, path, JSON.parse(await readFile(path, 'utf8')));
 
   // Continuous editing must not starve the maximum two-second recovery interval.
+  const continuousTabId = await evaluate("document.querySelector('.doc-tab.is-active').dataset.tabId");
   await wait(600);
   await evaluate(`(async()=>{
     const state=${activeState}, {updateNode}=await import('./draw/doc/commands.mjs');
@@ -84,13 +86,13 @@ export async function runProjectWorkflows({ evaluate }, directory) {
   try {
     await wait(2400);
     const recovery = await evaluate('window.modcut.readRecovery().then(JSON.parse)');
-    const tab = recovery.tabs.find(tab => tab.session.docPath === path);
+    const tab = recovery.tabs.find(tab => tab.id === continuousTabId);
     assert.match(tab.session.draw.layers[0].children[0].name, /^Continuous /, 'recovery runs while edits continue');
   } finally { await evaluate('clearInterval(window.__drawEdits);delete window.__drawEdits'); }
 
   const firstTabId = await evaluate("document.querySelector('.doc-tab.is-active').dataset.tabId");
   const firstDraw = await snapshot(evaluate);
-  await evaluate("document.querySelector('#newDoc').click();document.querySelector('#workspaceToggle').click()");
+  await evaluate("document.querySelector('#newDoc').click();if(document.body.dataset.workspace==='cut')document.querySelector('#workspaceToggle').click()");
   await evaluate(`(async()=>{
     const state=${activeState}, {updateNode}=await import('./draw/doc/commands.mjs');
     state.history.execute(updateNode(state.document.data.layers[0].id,{name:'Recovered inactive document'}));

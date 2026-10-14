@@ -1,6 +1,6 @@
 import { parseSVG } from '../svgimport.js';
 import { createNode } from './doc/schema.mjs';
-import { insertNode, updateDocument } from './doc/commands.mjs';
+import { insertNode, updateDocument, updateArtboard } from './doc/commands.mjs';
 import { appearance } from './geometry.mjs';
 
 async function imageFrom(source) {
@@ -60,19 +60,22 @@ async function rasterize(vector) {
 }
 
 /** Prepare everything before committing one atomic command per imported file. */
-export async function importArtwork(scope, state, prepared, name, layerId) {
+export async function importArtwork(scope, state, prepared, name, layerId, { fitArtboard = false, alive = () => true } = {}) {
   if (state.document.readOnly) throw new Error('This Draw document is read-only. Create a new document to import artwork.');
-  const board = state.document.data.artboards[0], offset = [board.x+10,board.y+10];
+  const board = state.document.data.artboards[0], offset = fitArtboard ? [board.x,board.y] : [board.x+10,board.y+10];
   const nodes = [], assets = {};
+  let dimensions = null;
   let warning = prepared.warning;
   async function addImage(source, width, height) {
     const raster = await rasterAsset(source,width,height);
+    dimensions ||= {width:raster.width,height:raster.height};
     assets[raster.id] = raster.asset;
     nodes.push(createNode('image', { name, assetId: raster.id, width: raster.width, height: raster.height,
       ppiEffective: raster.asset.width/raster.width*25.4, transform: [1,0,0,1,...offset] }));
   }
   if (prepared.kind === 'vector' || prepared.vector) {
     const vector = prepareVector(prepared.vector || prepared);
+    dimensions = {width:vector.widthMm,height:vector.heightMm};
     warning ||= vector.warning;
     if (vector.complex) await addImage(await rasterize(vector),vector.widthMm,vector.heightMm);
     else {
@@ -108,9 +111,11 @@ export async function importArtwork(scope, state, prepared, name, layerId) {
   }
   if (prepared.kind === 'image' || prepared.rasterDataUrl) await addImage(prepared.rasterDataUrl || prepared.dataUrl,prepared.widthMm,prepared.heightMm);
   if (!nodes.length) throw new Error('No supported artwork found.');
+  if (!alive()) throw new Error('The target Draw document was closed or replaced.');
   const layer = state.document.getNode(layerId);
   if (!layer || layer.type !== 'layer' || !state.document.isEditable(layerId)) throw new Error('Select a visible, unlocked layer before importing.');
   state.history.transaction(`Import ${name}`, () => {
+    if (fitArtboard && dimensions?.width > 0 && dimensions?.height > 0) state.history.execute(updateArtboard(board.id,dimensions));
     if (Object.keys(assets).length) state.history.execute(updateDocument({ assets: { ...state.document.data.assets, ...assets } }));
     for (const node of nodes) state.history.execute(insertNode(layerId,node));
   });

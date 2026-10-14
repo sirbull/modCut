@@ -33,7 +33,7 @@ export function createPanels(shell, state, api) {
   function field(host, label, value, action, { type = 'number', disabled = false, min, max, key = label } = {}) {
     const row = document.createElement('label'); row.className = 'draw-field';
     const name = document.createElement('span'); name.textContent = label;
-    const input = document.createElement('input'); input.type = type; input.value = value; input.dataset.drawField = key;
+    const input = document.createElement('input'); input.type = type; input.value = type === 'color' ? value || '#FFFFFF' : value; input.dataset.drawField = key;
     input.disabled = disabled || state.document.readOnly; if (min !== undefined) input.min = min; if (max !== undefined) input.max = max;
     if (type === 'number') input.step = '.01';
     input.addEventListener('change',() => api.run(() => {

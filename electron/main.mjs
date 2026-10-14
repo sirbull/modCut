@@ -203,7 +203,7 @@ function buildMenu(mode = "cut") {
     click: () => send(mode === "draw" ? "workspace-cut" : "workspace-draw"),
   }, { type: "separator" });
   if (mode === "draw") {
-    // D0.1 shell: expose shared project commands and no Cut editing accelerators.
+    // Draw file actions use a new document for Open and the current document for Import.
     const fileMenu = template.find((item) => item.label === "File");
     fileMenu.submenu = fileMenu.submenu.filter((item) =>
       ["New", "Import…", "Add…", "Close Tab", "Save document…", "Save document as…", "Quit"].includes(item.label));
@@ -211,13 +211,16 @@ function buildMenu(mode = "cut") {
       "Save document…": "save-document", "Save document as…": "save-document-as" };
     for (const item of fileMenu.submenu) {
       const command = sharedCommands[item.label];
-      if (command) item.accelerator = acceleratorFor(command, { workspace: "draw", isMac });
+      if (command) item.accelerator = acceleratorFor(command === "add" ? "place" : command, { workspace: "draw", isMac });
+      if (item.label === "Import…") item.label = "Open…";
+      else if (item.label === "Add…") item.label = "Import…";
     }
     const appMenu = template.find((item) => item.label === "modCut");
     const preferences = appMenu?.submenu.find((item) => item.label === "Preferences…");
     if (preferences) preferences.accelerator = acceleratorFor("preferences", { isMac });
     template.find((item) => item.label === "Edit").submenu = [
-      { label: "Undo", enabled: false }, { label: "Redo", enabled: false },
+      { label:"Undo", accelerator:acceleratorFor("undo",{isMac}), click:() => send("undo") },
+      { label:"Redo", accelerator:acceleratorFor("redo",{isMac}), click:() => send("redo") },
       ...(isMac ? [] : [{ type: "separator" }, { label: "Preferences…", accelerator: acceleratorFor("preferences", { isMac }), click: () => send("preferences") }]),
     ];
     viewMenu.submenu = [viewMenu.submenu[0], { type: "separator" },
@@ -376,7 +379,7 @@ app.whenReady().then(() => {
       ...(allowDocuments ? ["modcut"] : []),
     ];
     const { canceled, filePaths } = await dialog.showOpenDialog(win, {
-      title: multiple ? "Add files to project" : "Import file",
+      title: options.intent === "draw-open" ? "Open Draw document" : options.intent === "draw-import" ? "Import artwork into Draw" : multiple ? "Add files to project" : "Import file",
       properties: ["openFile", ...(multiple ? ["multiSelections"] : [])],
       filters: [
         { name: "All supported files", extensions: supported },
