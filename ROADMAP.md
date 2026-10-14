@@ -44,6 +44,12 @@ the same commit that completes an item.
 - [ ] Split the large renderer and bed modules into document, editing, toolpath,
   machine and UI components with focused tests.
 
+## P3: Draw workspace (vector editor)
+
+- [ ] Build the Draw workspace described in
+  [`docs/DRAW_WORKSPACE.md`](docs/DRAW_WORKSPACE.md). Task status is tracked in
+  chapter 23 of that document.
+
 ## Recently completed
 
 - [x] Dedicated non-destructive engraving image editor with direct-manipulation
