@@ -3,6 +3,8 @@
 Arbeidsgren: `feat/vector-draw`. Oppdateres underveis og ved fullføring av hvert trinn.
 Detaljer og samlet sjekkliste finnes i `docs/DRAW_WORKSPACE.md` kapittel 23.
 
+**Fortsette med en annen agent:** Les [gjeldende overlevering](HANDOFF.md) først. D1.7 er ferdig; neste oppgave er D1.8.
+
 ## 2026-10-14 — før D0.5
 
 - D0.1 fullført: Draw/Cut-bytte, isolert canvas/PaperScope og menyer per modus.

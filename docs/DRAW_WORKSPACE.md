@@ -1,5 +1,7 @@
 # modCut Draw: vektoreditor i modCut
 
+**Ny agent:** Start med [overleveringen](draw/HANDOFF.md) for gjeldende stoppunkt, teststatus og lokale kjøreinstruksjoner.
+
 > Status: Fase 0 og D1.1–D1.7 er fullført. Rotate, Reflect og Scale har dialoger, Copy, referansepunkt og Transform Again. Neste oppgave er D1.8: resten av grunnpanelene og template-lag. Fase 1 er fortsatt under arbeid.
 > Sist oppdatert: 2026-10-15.
 > Målgruppe: utviklere og kodeagenter (Claude Code og Codex) som skal bygge løsningen.
