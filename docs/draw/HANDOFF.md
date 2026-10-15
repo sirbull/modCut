@@ -102,8 +102,8 @@ Les hovedplanen (kapittel 3, 8, 18 og sjekklisten i kapittel 23) og
 - Autosave-testen «recovery runs while edits continue» er tidsfølsom og kan feile under
   last eller ved parallelle Electron-kjøringer; den passerte ved omkjøring.
 - Full `npm test` er ikke grønn: den kjente Cut-beskjæringstesten (`electron/e2e/workflows.mjs`,
-  «dragging a crop edge must update the crop») feilet også før Draw-arbeidet. Se arbeidsloggen
-  for resultatet av siste fulle kjøring.
+  «dragging a crop edge must update the crop») feilet også før Draw-arbeidet. Siste fulle kjøring (etter c93383b): alt før
+  denne testen passerer, inkludert sidecar, bridge, main, renderer, Draw og kontrast.
 
 ## Kjøring på denne maskinen
 

@@ -496,3 +496,8 @@ Kjent: pilstørrelse for `strokeScaling:false` under skalerte foreldre er omtren
 Color, Stroke uten profiles og Fill/Stroke-boks. **Neste: D1.9 kontrollinje og
 statuslinje.** Merk at commit d337a8f (annen agent) allerede flyttet
 visningskontrollene til appens statuslinje; sammenlign med 3.2 før D1.9 startes.
+
+Full `npm test` etter D1.8 (commit c93383b): sidecar, bridge, main, renderer, 126 Draw-
+tester og kontrast passerer. Den stopper deretter i den kjente Cut-testen
+`electron/e2e/workflows.mjs` «dragging a crop edge must update the crop», uendret fra
+før Draw-arbeidet. Komplett Draw-E2E (`--draw`) passerer separat.
