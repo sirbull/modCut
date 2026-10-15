@@ -20,8 +20,8 @@ utklippstavle og isolasjonsmodus. Det som mangler for å kunne **kutte** det man
 |---|---|---|---|
 | Dokk: Properties over Layers med delelinje | Ferdig | Ja | |
 | Panelstolpe med grupper og faner | Ferdig | Swatches, Color, Stroke/Gradient/Transparency, Appearance, Transform/Align/Pathfinder, Artboards | Brushes, Symbols, Color Guide, Graphic Styles (ikke bygget). Gradient-fanen er deaktivert. |
-| Layers: rader, søk, bunnlinje, Layer Options | Ferdig | Øye, lås, fargelinje, thumbnail, navn, målsirkel, søppelkasse, teller | Se 2.1 |
-| Properties | Delvis | Tittel, navn, utseende, form, quick actions, dokument | Se 2.2 |
+| Layers | Ferdig | Øye, lås, fargelinje, thumbnail, navn, målsirkel, søppelkasse, søk, filter, bunnlinje med teller, Layer Options, panelmeny (≡), flervalg av lag, dra utvalg til lag | Paste Remembers Layers; Make Clipping Mask (venter på D2.2) |
+| Properties | Ferdig | Tittel, navn, Transform (referansepunkt, X, Y, B, H, lenke, rotasjon, Flip), Appearance (fyll, strek, vekt, opacity), form, Align, Quick Actions, Document uten utvalg | Character/Paragraph når tekst finnes (D2.1) |
 | Swatches | Ferdig for solide farger | Bibliotek, laserfarger, Recent Colors, ny/rediger/slett, liste/rutenett | Swatch-grupper, globale swatches, mønstre |
 | Color | Ferdig | Fill/Stroke, modus, glidere, hex, Recent Colors | Spekterfelt |
 | Stroke | Ferdig | Vekt, cap, corner, limit, align, dash, pilspisser | Width profiles (D4.1) |
@@ -33,27 +33,18 @@ utklippstavle og isolasjonsmodus. Det som mangler for å kunne **kutte** det man
 | Artboards | Fungerer | Liste, navn, størrelse, ny, dupliser, slett, rekkefølge | Thumbnails og radmønster som Layers |
 | Scrubby labels | Ferdig | Dra i tittel, Shift raskere, Alt finere | |
 
-### 2.1 Layers: gjenstår for Illustrator-paritet
+### 2.1 Gjort for Illustrator-paritet (2026-10-15)
 
-* Panelmeny (≡) med New Layer, New Sublayer, **Duplicate**, Delete, Options, Make/Release Clipping Mask,
-  Locate Object, **Merge Selected**, **Flatten Artwork**, Collect in New Layer, Release to Layers,
-  **Hide Others**, **Lock Others**, Paste Remembers Layers.
-* Flere valgte lag (Shift/Ctrl-klikk på rader) for Merge Selected.
-* Dra den lille fargede firkanten (valgt kunst) til et annet lag for å flytte utvalget dit.
-* Dobbeltklikk på laget utenfor navnet (rad eller thumbnail) åpner Layer Options.
-
-### 2.2 Properties: gjenstår for Illustrator-paritet
-
-Illustrators Properties viser kontekstuelle seksjoner med de samme kontrollene som panelene:
-
-* **Transform**: referansepunkt, X, Y, B, H, lenke, rotasjon, og knapper for Flip horisontalt/vertikalt.
-* **Appearance**: Fill-rute og Stroke-rute som åpner fargevelger, strekvekt, Opacity.
-* **Align**: seks align-knapper når noe er valgt (og distribute ved tre eller flere).
-* Quick Actions som i dag.
-
-Tidligere regel (fra D1.8) var at Properties ikke skulle gjenta panelkontroller. Brukeren har nå bedt om
-at Properties skal fungere ganske likt Illustrator, så seksjonene over gjenbruker **samme komponenter**
-som panelene (ingen kopiert kode), og Layers vises fortsatt bare ett sted.
+* **Layers:** panelmeny (≡) med New Layer, New Sublayer, Duplicate, Delete, Options, Make Clipping Mask
+  (deaktivert til D2.2), Locate Object, Merge Selected, Flatten Artwork, Collect in New Layer,
+  Release to Layers, Hide Others og Lock Others. Shift/Ctrl-klikk velger flere lag (for Merge Selected).
+  Den fargede firkanten for valgt kunst kan dras til et annet lag. Dobbeltklikk på lagets thumbnail
+  åpner Layer Options.
+* **Properties:** seksjonene Transform (kompakt, med Flip horisontalt/vertikalt), Appearance (fargeruter,
+  strekvekt med scrubby label, opacity, og knapper som åpner Color/Stroke), formparametre, Align (seks
+  knapper; ett objekt justeres mot artboardet) og Quick Actions. Seksjonene gjenbruker panelenes komponenter.
+  Regelen fra D1.8 om at Properties ikke skal gjenta panelkontroller er erstattet av brukerens ønske om
+  Illustrator-likhet. Layers vises fortsatt bare ett sted.
 
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
@@ -81,11 +72,10 @@ som panelene (ingen kopiert kode), og Layers vises fortsatt bare ett sted.
 
 ## 4. Rekkefølge videre
 
-1. Properties og Layers til Illustrator-paritet (2.1 og 2.2).
-2. **D1.12 Send til Cut v1**: fra artboard til Cut med én knapp.
-3. D1.11 Place bitmap med Template-valg.
-4. D1.9 Kontrollinje.
-5. Deretter fase 2: tekst, SVG/PDF/PNG-eksport, path-kommandoer, compound og clipping.
+1. **D1.12 Send til Cut v1**: fra artboard til Cut med én knapp.
+2. D1.11 Place bitmap med Template-valg.
+3. D1.9 Kontrollinje.
+4. Deretter fase 2: tekst, SVG/PDF/PNG-eksport, path-kommandoer, compound og clipping.
 
 ## 5. Kjente begrensninger og risiko
 

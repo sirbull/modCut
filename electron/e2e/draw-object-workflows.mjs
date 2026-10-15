@@ -110,6 +110,45 @@ export async function runDrawObjectWorkflows(client) {
   for (let i = 0; i < 3; i++) await command('undo');
   assert.deepEqual(await order(), [a, b, c], 'Undo paste, rectangle and group');
 
+  // Properties like Illustrator: Flip, Fill colour and Align right in the panel.
+  await select([a]);
+  const before = await evaluate(`(async()=>{const b=${active}.renderer.bounds('${a}');return[b.x,b.y,b.width,b.height].map(v=>+v.toFixed(3))})()`);
+  await evaluate(`document.querySelector('${root} [data-draw-dock=properties] [data-draw-flip=horizontal]').click()`);
+  assert.equal(await evaluate(`(async()=>(${active}.state.history.undoLabel))()`), 'Flip Horizontal');
+  assert.deepEqual(await evaluate(`(async()=>{const b=${active}.renderer.bounds('${a}');return[b.x,b.y,b.width,b.height].map(v=>+v.toFixed(3))})()`), before, 'Flip around the centre keeps the bounds');
+  await command('undo');
+  await evaluate(`(()=>{const i=document.querySelector('${root} [data-draw-dock=properties] [data-draw-field=prop-fill]');i.value='#ff0000';i.dispatchEvent(new Event('change',{bubbles:true}))})()`);
+  const fill = (await model()).layers[0].children.find(n => n.id === a).appearance.fills[0].paint.color.values.map(v => Math.round(v * 255));
+  assert.deepEqual(fill, [255, 0, 0], 'Fill colour from Properties'); await command('undo');
+  await evaluate(`document.querySelector('${root} [data-draw-dock=properties] [data-draw-prop-align=right]').click()`);
+  const right = await evaluate(`(async()=>{const b=${active}.renderer.bounds('${a}');return +(b.x+b.width).toFixed(3)})()`);
+  assert.equal(right, (await model()).artboards[0].width, 'A single object aligns to the artboard from Properties'); await command('undo');
+
+  // Layers panel menu (≡): New Layer, Duplicate, Hide Others, Merge Selected, and dragging the selection to a layer.
+  const menu = key => evaluate(`(()=>{if(!document.querySelector('${root} .draw-layer-menu'))document.querySelector('${root} [data-draw-layer-menu]').click();document.querySelector('${root} [data-draw-layer-menu-item=${key}]').click()})()`);
+  await select([c]); await menu('duplicate');
+  assert.equal((await model()).layers[0].children.length, 4, 'Duplicate "<object>"'); await command('undo');
+  await menu('new-sublayer'); await command('undo');
+  const firstLayer = (await model()).layers[0].id;
+  await evaluate(`(async()=>{const w=${active},{insertNode}=await import('./draw/doc/commands.mjs'),{newLayer}=await import('./draw/doc/layers.mjs');w.state.history.execute(insertNode(null,newLayer(w.state.document)))})()`);
+  let layers = (await model()).layers; const secondLayer = layers[1].id;
+  await evaluate(`document.querySelector('${root} [data-draw-node="${secondLayer}"] .draw-layer-name').click()`);
+  await menu('hide-others'); assert.equal((await model()).layers[0].visible, false, 'Hide Others'); await command('undo');
+  await select([b]);
+  await evaluate(`(()=>{const dt=new DataTransfer(),src=document.querySelector('${root} [data-draw-node="${b}"] .draw-layer-target'),dst=document.querySelector('${root} [data-draw-node="${secondLayer}"]');
+    src.dispatchEvent(new DragEvent('dragstart',{bubbles:true,dataTransfer:dt}));dst.dispatchEvent(new DragEvent('dragover',{bubbles:true,cancelable:true,dataTransfer:dt}));dst.dispatchEvent(new DragEvent('drop',{bubbles:true,cancelable:true,dataTransfer:dt}));})()`);
+  layers = (await model()).layers;
+  assert.deepEqual(layers[1].children.map(n => n.id), [b], 'Dragging the selected-art square moves the selection to that layer');
+  await evaluate(`document.querySelector('${root} [data-draw-node="${firstLayer}"] .draw-layer-name').click()`);
+  await evaluate(`document.querySelector('${root} [data-draw-node="${secondLayer}"] .draw-layer-name').dispatchEvent(new MouseEvent('click',{bubbles:true,ctrlKey:true}))`);
+  await evaluate(`document.querySelector('${root} [data-draw-node="${firstLayer}"] .draw-layer-name').click()`);
+  await evaluate(`document.querySelector('${root} [data-draw-node="${secondLayer}"] .draw-layer-name').dispatchEvent(new MouseEvent('click',{bubbles:true,ctrlKey:true}))`);
+  await menu('merge');
+  layers = (await model()).layers;
+  assert.equal(layers.length, 1, 'Merge Selected'); assert.deepEqual(layers[0].children.map(n => n.id).sort(), [a, b, c].sort());
+  await command('undo'); await command('undo'); await command('undo');
+  assert.deepEqual(await order(), [a, b, c], 'Undo merge, move and new layer');
+
   // Properties quick actions.
   await select([a, c]);
   await evaluate(`document.querySelector('${root} [data-draw-quick=group]').click()`);
@@ -125,5 +164,5 @@ export async function runDrawObjectWorkflows(client) {
     await wait(50);
   }
   if (await evaluate("document.body.dataset.workspace") === 'draw') await evaluate("document.querySelector('#workspaceToggle').click()");
-  process.stdout.write('PASS Draw objects: Group/Ungroup, Arrange keys, Lock/Unlock All, Hide/Show All, quick actions, Cut/Copy/Paste, Paste in Front/Back/Place/All Artboards, isolation mode\n');
+  process.stdout.write('PASS Draw objects: Group/Ungroup, Arrange keys, Lock/Unlock All, Hide/Show All, quick actions, Cut/Copy/Paste, Paste in Front/Back/Place/All Artboards, isolation mode, Properties Flip/Fill/Align, Layers menu and drag to layer\n');
 }

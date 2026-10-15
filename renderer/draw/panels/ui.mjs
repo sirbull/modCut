@@ -2,7 +2,7 @@ import { DOCK_PANELS, PANEL_DEFINITIONS, PANEL_GROUPS, clampDockSplit, groupForP
 import { insertNode, updateDocument, updateNode } from '../doc/commands.mjs';
 import { createId } from '../doc/schema.mjs';
 import { addSwatch, documentSwatches, editSwatch, groupSwatches, rememberColor, removeSwatch } from '../doc/swatches.mjs';
-import { ROOT_CONTEXT, collectCommands, deleteLayerCommands, deleteRowCommands, filterLayerTree, layerContext, moveCommand, newLayer, releaseCommands, soloUpdates } from '../doc/layers.mjs';
+import { ROOT_CONTEXT, collectCommands, deleteLayerCommands, deleteRowCommands, duplicateCommands, filterLayerTree, flattenCommands, layerContext, mergeLayersCommands, moveCommand, moveToLayerCommands, newLayer, othersUpdates, releaseCommands, soloUpdates } from '../doc/layers.mjs';
 import { shortcutLabel } from '../keymap.mjs';
 import { REFERENCE_POINTS } from '../geom/transforms.mjs';
 import { attachScrub } from '../ui/number-field.mjs';
@@ -61,7 +61,7 @@ export function createPanels(shell, state, api) {
     button.setAttribute('aria-haspopup','dialog'); button.append(icon(panelSpriteHref(group.icon)));
     button.addEventListener('click',() => { state.ui.flyout = state.ui.flyout === group.id ? null : group.id; render(); }); rail.append(button);
   }
-  function close() { if (!state.ui.flyout) return false; const id = state.ui.flyout; state.ui.flyout = null; render(); rail.querySelector(`[data-draw-panel="${id}"]`)?.focus({ preventScroll: true }); return true; }
+  function close() { if (state.ui.layerMenu) { state.ui.layerMenu = false; render(); return true; } if (!state.ui.flyout) return false; const id = state.ui.flyout; state.ui.flyout = null; render(); rail.querySelector(`[data-draw-panel="${id}"]`)?.focus({ preventScroll: true }); return true; }
   function open(id) {
     if (DOCK_PANELS.includes(id)) {
       state.ui.dockCollapsed[id] = false; layoutDock();
@@ -156,7 +156,42 @@ export function createPanels(shell, state, api) {
     const filter = document.createElement('select'); filter.className = 'draw-select draw-layer-search__filter'; filter.dataset.drawField = 'layer-filter';
     filter.setAttribute('aria-label','Filter layers'); filter.dataset.tooltip = 'Filter';
     for (const [value,label] of [['all','Show all'],['layers','Only layers'],['visible','Only visible'],['locked','Only locked']]) filter.append(new Option(label,value,false,value === (state.ui.layerFilter ?? 'all')));
-    top.append(search,filter); host.append(top);
+    // Layers panel menu (≡), as in Illustrator.
+    const menuButton = iconButton('Layers panel menu','menu-2',() => { state.ui.layerMenu = !state.ui.layerMenu; render(); },'draw-layer-action draw-layer-menu-button');
+    menuButton.dataset.drawLayerMenu = ''; menuButton.setAttribute('aria-haspopup','menu'); menuButton.setAttribute('aria-expanded',String(!!state.ui.layerMenu));
+    top.append(search,filter,menuButton); host.append(top);
+    if (state.ui.layerMenu) host.append(layerMenu());
+    function layerMenu() {
+      const menu = document.createElement('div'); menu.className = 'draw-layer-menu'; menu.setAttribute('role','menu');
+      const current = doc.getNode(state.ui.layerId)?.type === 'layer' ? doc.getNode(state.ui.layerId) : activeLayer();
+      const target = api.selectedIds()[0] ? doc.getNode(api.selectedIds()[0]) : current, name = target.name || (target.type === 'layer' ? 'Layer' : `<${target.type}>`);
+      const picked = [...(state.ui.pickedLayers ?? [])].filter(id => doc.getNode(id)?.type === 'layer');
+      const items = [
+        ['New Layer…',() => { const node = newTopLayer(); api.layerOptions(node.id); },readOnly,'new'],
+        ['New Sublayer',() => { const parent = activeLayer(), node = newLayer(doc); state.ui.layerId = node.id; collapsed.delete(parent.id); state.history.execute(insertNode(parent.id,node)); },readOnly,'new-sublayer'],
+        [`Duplicate "${name}"`,() => { const r = duplicateCommands(doc,target.id); transaction('Duplicate',r.commands); if (target.type === 'layer') state.ui.layerId = r.node.id; else api.select([r.node.id]); },readOnly,'duplicate'],
+        [`Delete "${name}"`,() => transaction(target.type === 'layer' ? 'Delete Layer' : 'Delete',deleteRowCommands(doc,target.id)),readOnly || (target.type === 'layer' && doc.data.layers.length === 1 && doc.locate(target.id).parentId === null),'delete'],
+        [`Options for "${current.name}"…`,() => api.layerOptions(current.id),readOnly,'options'],
+        null,
+        ['Make Clipping Mask',null,true,'clip'],
+        ['Locate Object',() => dock.layers.body.querySelector('[data-draw-layer-action=focus-2]')?.click(),!api.selectedIds().length,'locate'],
+        null,
+        ['Merge Selected',() => { transaction('Merge Selected',mergeLayersCommands(doc,picked,current.id)); state.ui.pickedLayers = new Set(); },readOnly || picked.length < 2 || !picked.includes(current.id),'merge'],
+        ['Flatten Artwork',() => transaction('Flatten Artwork',flattenCommands(doc)),readOnly || doc.data.layers.length < 2,'flatten'],
+        ['Collect in New Layer',() => { const { layer, commands } = collectCommands(doc,api.selectedIds()); transaction('Collect in New Layer',commands); state.ui.layerId = layer.id; },readOnly || !api.selectedIds().length,'collect'],
+        ['Release to Layers (Sequence)',() => transaction('Release to Layers',releaseCommands(doc,current.id).commands),readOnly,'release'],
+        null,
+        ['Hide Others',() => transaction('Hide Others',othersUpdates(doc,topLevel(current.id).id,'visible')),readOnly || doc.data.layers.length < 2,'hide-others'],
+        ['Lock Others',() => transaction('Lock Others',othersUpdates(doc,topLevel(current.id).id,'locked')),readOnly || doc.data.layers.length < 2,'lock-others'],
+      ];
+      for (const entry of items) {
+        if (!entry) { menu.append(Object.assign(document.createElement('hr'),{ className: 'draw-layer-menu__sep' })); continue; }
+        const [label,action,disabled,key] = entry, b = document.createElement('button'); b.type = 'button'; b.className = 'draw-layer-menu__item'; b.setAttribute('role','menuitem');
+        b.textContent = label; b.dataset.drawLayerMenuItem = key; b.disabled = !!disabled;
+        b.addEventListener('click',() => { state.ui.layerMenu = false; api.run(action); render(); }); menu.append(b);
+      }
+      return menu;
+    }
     let list = buildList(); host.append(list);
     const rebuild = () => { const next = buildList(); list.replaceWith(next); list = next; };
     search.addEventListener('input',() => { state.ui.layerQuery = search.value; rebuild(); });
@@ -242,17 +277,25 @@ export function createPanels(shell, state, api) {
         choose.dataset.tooltip = 'Double-click: rename';
         const pick = event => api.run(() => {
           const layer = layerOf(node);
+          // Shift or Ctrl/Cmd-click on layers picks several (for Merge Selected); a plain click picks one.
+          if (isLayer) { const set = state.ui.pickedLayers ??= new Set(); if (event.shiftKey || event.ctrlKey || event.metaKey) { if (set.has(node.id) && node.id !== state.ui.layerId) set.delete(node.id); else set.add(node.id); if (state.ui.layerId) set.add(state.ui.layerId); } else state.ui.pickedLayers = new Set([node.id]); }
           if (layer) state.ui.layerId = layer.id;
           if (isLayer) render();
           else api.select(event.shiftKey ? (selected.has(node.id) ? [...selected].filter(id => id !== node.id) : [...selected,node.id]) : [node.id]);
         });
         choose.addEventListener('click',pick); thumb.addEventListener('click',pick);
+        if (isLayer) { thumb.addEventListener('dblclick',() => api.layerOptions(node.id)); item.classList.toggle('is-picked',!!state.ui.pickedLayers?.has(node.id) && state.ui.pickedLayers.size > 1); }
         choose.addEventListener('dblclick',() => { if (!readOnly) rename(choose,node); });
         const target = iconButton(`Select ${name}`,null,event => {
           const ids = isLayer ? doc.descendants(node.id).filter(n => n.type !== 'layer' && doc.getNode(doc.locate(n.id).parentId).type === 'layer' && doc.isEditable(n.id)).map(n => n.id) : [node.id];
           api.select(event.shiftKey ? [...new Set([...selected,...ids])] : ids);
         },'draw-layer-target');
         target.classList.toggle('is-selected',selected.has(node.id) || doc.descendants(node.id).some(n => selected.has(n.id)));
+        // Drag the selected-art indicator onto another layer to move the selection there.
+        if (!readOnly && target.classList.contains('is-selected')) {
+          target.draggable = true; target.dataset.tooltip = `Select ${name} · Drag to move the selection to another layer`;
+          target.addEventListener('dragstart',event => { event.stopPropagation(); event.dataTransfer.setData('application/x-modcut-selection','1'); event.dataTransfer.effectAllowed = 'move'; });
+        }
         const lastLayer = isLayer && doc.locate(node.id).parentId === null && doc.data.layers.length === 1;
         const remove = iconButton(`Delete ${name}`,'trash',() => transaction(isLayer ? 'Delete Layer' : 'Delete',deleteRowCommands(doc,node.id)),'draw-layer-toggle draw-layer-delete');
         remove.dataset.drawRowDelete = node.id; remove.disabled = readOnly || lastLayer;
@@ -266,12 +309,17 @@ export function createPanels(shell, state, api) {
             return node.children && node.type !== 'compoundPath' ? (y < .25 ? 'above' : y > .75 ? 'below' : 'inside') : (y < .5 ? 'above' : 'below');
           };
           item.addEventListener('dragover',event => {
+            if (isLayer && event.dataTransfer.types.includes('application/x-modcut-selection')) { event.preventDefault(); item.dataset.drop = 'inside'; return; }
             if (!event.dataTransfer.types.includes('application/x-modcut-node')) return;
             event.preventDefault(); item.dataset.drop = placement(event);
           });
           item.addEventListener('dragleave',() => delete item.dataset.drop);
           item.addEventListener('drop',event => {
             event.preventDefault(); delete item.dataset.drop;
+            if (event.dataTransfer.types.includes('application/x-modcut-selection')) {
+              if (isLayer) api.run(() => { transaction('Move to Layer',moveToLayerCommands(doc,api.selectedIds(),node.id)); state.ui.layerId = node.id; api.select(api.selectedIds()); });
+              return;
+            }
             const id = event.dataTransfer.getData('application/x-modcut-node'), where = placement(event);
             api.run(() => { const command = id && moveCommand(doc,id,node.id,where); if (command) state.history.execute(command); });
           });
@@ -298,7 +346,7 @@ export function createPanels(shell, state, api) {
     const input = document.createElement('input'); input.type = 'checkbox'; input.checked = value; input.dataset.drawField = key;
     input.addEventListener('change',() => onChange(input.checked)); row.append(input,document.createTextNode(label)); host.append(row); return input;
   }
-  function transform(host) {
+  function transform(host, { compact = false } = {}) {
     const box = api.bounds(), ref = state.ui.referencePoint ?? [.5,.5], disabled = !box || state.document.readOnly;
     const top = document.createElement('div'); top.className = 'draw-transform-top'; host.append(top);
     const locator = document.createElement('div'); locator.className = 'draw-reference'; locator.setAttribute('role','group'); locator.setAttribute('aria-label','Reference point');
@@ -313,14 +361,24 @@ export function createPanels(shell, state, api) {
     top.append(locator);
     const grid = document.createElement('div'); grid.className = 'draw-fields'; top.append(grid);
     const point = box ? [box.x+box.width*ref[0],box.y+box.height*ref[1]] : [0,0];
-    field(grid,'X (mm)',point[0],value => api.transformPanel('x',value),{ disabled, key:'x' });
-    field(grid,'Y (mm)',point[1],value => api.transformPanel('y',value),{ disabled, key:'y' });
-    field(grid,'W (mm)',box?.width ?? 0,value => api.transformPanel('width',value),{ disabled: disabled || box.width < 1e-9, min:.001, key:'width' });
-    field(grid,'H (mm)',box?.height ?? 0,value => api.transformPanel('height',value),{ disabled: disabled || box.height < 1e-9, min:.001, key:'height' });
+    // Properties uses Illustrator's short labels; the Transform panel names the unit.
+    const unit = compact ? '' : ' (mm)';
+    field(grid,`X${unit}`,point[0],value => api.transformPanel('x',value),{ disabled, key:'x', step:.1 });
+    field(grid,`Y${unit}`,point[1],value => api.transformPanel('y',value),{ disabled, key:'y', step:.1 });
+    field(grid,`W${unit}`,box?.width ?? 0,value => api.transformPanel('width',value),{ disabled: disabled || box.width < 1e-9, min:.001, key:'width', step:.1 });
+    field(grid,`H${unit}`,box?.height ?? 0,value => api.transformPanel('height',value),{ disabled: disabled || box.height < 1e-9, min:.001, key:'height', step:.1 });
     const link = iconButton(state.ui.linkProportions ? 'Proportions linked' : 'Link proportions',state.ui.linkProportions ? 'link' : 'unlink',() => { state.ui.linkProportions = !state.ui.linkProportions; render(); },'draw-layer-action draw-transform-link');
     link.setAttribute('aria-pressed',String(!!state.ui.linkProportions)); link.dataset.drawField = 'link'; grid.append(link);
     const angles = document.createElement('div'); angles.className = 'draw-fields'; host.append(angles);
-    field(angles,'Rotate by (°)',0,value => api.transformPanel('rotate',value),{ disabled, key:'rotate' });
+    field(angles,compact ? 'Rotate (°)' : 'Rotate by (°)',0,value => api.transformPanel('rotate',value),{ disabled, key:'rotate' });
+    if (compact) {
+      // Properties: rotation plus Flip buttons, as in Illustrator; Shear and the scaling options live in the Transform panel.
+      const flips = document.createElement('div'); flips.className = 'draw-flip-row'; flips.setAttribute('role','group'); flips.setAttribute('aria-label','Flip');
+      for (const [label,iconId,axis] of [['Flip horizontal','flip-vertical','horizontal'],['Flip vertical','flip-horizontal','vertical']]) {
+        const b = iconButton(label,iconId,() => api.flip(axis),'draw-layer-action draw-align-button'); b.dataset.drawFlip = axis; b.disabled = disabled; flips.append(b);
+      }
+      angles.append(flips); return;
+    }
     field(angles,'Shear by (°)',0,value => api.transformPanel('shear',value),{ disabled, min:-89.99, max:89.99, key:'shear' });
     check(host,'Scale strokes & effects','scale-strokes',state.ui.scaleStrokes !== false,value => { state.ui.scaleStrokes = value; });
     check(host,'Scale corners','scale-corners',state.ui.scaleCorners !== false,value => { state.ui.scaleCorners = value; });
@@ -652,6 +710,7 @@ export function createPanels(shell, state, api) {
     const node = state.document.getNode(ids[0]);
     return node?.type === 'shape' ? { rect: 'Rectangle', ellipse: 'Ellipse', polygon: 'Polygon', star: 'Star', line: 'Line' }[node.shape] ?? 'Shape' : TYPE_NAMES[node?.type] ?? 'Object';
   }
+  function section(host, title) { const h = document.createElement('h3'); h.className = 'draw-panel__section draw-prop-section'; h.textContent = title; host.append(h); }
   function quickActions(host, actions) {
     const row = document.createElement('div'); row.className = 'draw-quick-actions'; row.setAttribute('aria-label','Quick actions');
     for (const [label,action,key,disabled] of actions) { const b = button(label,action); b.dataset.drawQuick = key; b.disabled = !!disabled; row.append(b); }
@@ -675,27 +734,46 @@ export function createPanels(shell, state, api) {
     if (!ids.length) return documentProperties(host);
     const node = state.document.getNode(ids[0]);
     if (ids.length === 1) field(host,'Name',node.name,value => state.history.execute(updateNode(node.id,{name:value})),{type:'text'});
-    const opacity = state.document.getNode(api.selectedIds()[0])?.opacity ?? 1;
-    field(host,'Opacity (%)',opacity*100,value => state.history.transaction('Opacity',() => {
-      for (const id of api.selectedIds()) state.history.execute(updateNode(id,{opacity:value/100}));
-    }),{min:0,max:100,disabled:!api.selectedIds().length,key:'opacity'});
-    // Appearance summary: shortcuts to Color and Stroke, without repeating their editors.
-    const painted = state.document.getNode(api.paintIds()[0]);
+    section(host,'Transform'); transform(host,{ compact: true });
+    // Appearance: the same fill, stroke, weight and opacity Illustrator shows; the buttons open the full panels.
+    section(host,'Appearance');
+    const painted = state.document.getNode(api.paintIds()[0]), ro = state.document.readOnly;
     if (painted) {
       const summary = document.createElement('div'); summary.className = 'draw-appearance'; summary.setAttribute('aria-label','Appearance');
       const fill = paintHex(painted.appearance.fills[0]), stroke = paintHex(painted.appearance.strokes[0]), weight = painted.appearance.strokes[0]?.width;
       for (const [kind,label,value,panel] of [['fill','Fill',fill,'color'],['stroke','Stroke',stroke,'color'],['weight','Weight',stroke ? `${Number(weight.toFixed(3))} mm` : '—','stroke']]) {
+        const line = document.createElement('div'); line.className = 'draw-appearance__line';
+        if (kind !== 'weight') {
+          const picker = document.createElement('input'); picker.type = 'color'; picker.className = 'draw-appearance-color'; picker.value = (value ?? '#ffffff').toLowerCase();
+          picker.setAttribute('aria-label',`${label} color`); picker.dataset.drawField = `prop-${kind}`; picker.disabled = ro;
+          picker.addEventListener('change',() => api.run(() => api.paint(kind,picker.value.toUpperCase())));
+          line.append(picker);
+        } else {
+          const w = document.createElement('label'); w.className = 'draw-appearance-width';
+          const unit = document.createElement('span'); unit.textContent = 'mm';
+          const input = document.createElement('input'); input.type = 'number'; input.min = '0'; input.step = 'any'; input.value = String(Number((weight ?? 0).toFixed(3)));
+          input.dataset.drawField = 'prop-stroke-weight'; input.setAttribute('aria-label','Stroke weight (mm)'); input.disabled = ro || !stroke;
+          const apply = v => api.paint('width',v);
+          input.addEventListener('change',() => api.run(() => { if (!(input.valueAsNumber >= 0)) throw new Error('Enter a valid stroke weight.'); apply(input.valueAsNumber); }));
+          attachScrub(unit,input,{ step: .05, min: 0, onScrub: scrubField('prop-stroke-weight',apply) });
+          w.append(input,unit); line.append(w);
+        }
         const b = document.createElement('button'); b.type = 'button'; b.className = 'draw-appearance__item'; b.dataset.drawOpen = kind;
         const chip = document.createElement('span'); chip.className = 'draw-appearance__chip'; chip.setAttribute('aria-hidden','true');
         if (kind !== 'weight') { chip.style.setProperty('--paint-color',value || 'transparent'); chip.classList.toggle('is-none',!value); } else chip.classList.add('is-weight');
         const name = document.createElement('span'); name.textContent = kind === 'weight' ? `${label} ${value}` : `${label} ${value ?? 'none'}`;
         b.setAttribute('aria-label',`${name.textContent}: open ${panel === 'color' ? 'Color' : 'Stroke'} panel`);
         b.addEventListener('click',() => { if (kind !== 'weight') state.ui.paintFocus = kind; open(panel); if (kind !== 'weight') api.paintFocus(kind); });
-        b.append(chip,name); summary.append(b);
+        b.append(chip,name); line.append(b); summary.append(line);
       }
       host.append(summary);
     }
+    const opacity = state.document.getNode(api.selectedIds()[0])?.opacity ?? 1;
+    field(host,'Opacity (%)',opacity*100,value => state.history.transaction('Opacity',() => {
+      for (const id of api.selectedIds()) state.history.execute(updateNode(id,{opacity:value/100}));
+    }),{min:0,max:100,disabled:!api.selectedIds().length,key:'opacity'});
     const corners=api.cornerInfo?.();
+    if (corners || node?.type === 'shape') section(host,node?.type === 'shape' ? selectionTitle([node.id]) : 'Corners');
     if(corners){
       const input=field(host,'Corner radius (mm)',corners.radius??0,value=>api.setCornerRadius(value),{min:0,key:'corner-radius'});
       if(corners.radius===null){input.value='';input.placeholder='Mixed';}
@@ -704,8 +782,16 @@ export function createPanels(shell, state, api) {
       const editable=node.shape==='rect' ? [['cornerRadius','Corner radius (mm)',0]] : node.shape==='polygon' ? [['sides','Sides',3]] : node.shape==='star' ? [['points','Points',2],['innerRadius','Inner radius (mm)',0],['outerRadius','Outer radius (mm)',0]] : node.shape==='ellipse' ? [['startAngle','Pie start (°)',-360],['endAngle','Pie end (°)',-360]] : [];
       for(const [key,label,min] of editable)field(host,label,node.params[key]??({sides:6,points:5,endAngle:360}[key] || 0),value=>state.history.execute(updateNode(node.id,{params:{...node.params,[key]:value}})),{min,max:['sides','points'].includes(key)?100:undefined,key:`shape-${key}`});
     }
+    section(host,'Align');
+    const alignRow = document.createElement('div'); alignRow.className = 'draw-align-row'; alignRow.setAttribute('role','group'); alignRow.setAttribute('aria-label','Align objects');
+    for (const [label,iconId,mode] of [['Horizontal align left','layout-align-left','left'],['Horizontal align center','layout-align-center','centerX'],['Horizontal align right','layout-align-right','right'],
+      ['Vertical align top','layout-align-top','top'],['Vertical align center','layout-align-middle','centerY'],['Vertical align bottom','layout-align-bottom','bottom']]) {
+      const b = iconButton(label,iconId,() => api.alignPanel('align',mode),'draw-layer-action draw-align-button'); b.dataset.drawPropAlign = mode; b.disabled = state.document.readOnly; alignRow.append(b);
+    }
+    host.append(alignRow);
+    if (ids.length === 1 && (state.ui.alignTo ?? 'selection') === 'selection') text(host,'A single object aligns to the artboard.');
     const shapes = ids.filter(id => state.document.getNode(id)?.type === 'shape' && state.document.isEditable(id));
-    const groups = ids.filter(id => state.document.getNode(id)?.type === 'group'), ro = state.document.readOnly;
+    const groups = ids.filter(id => state.document.getNode(id)?.type === 'group');
     quickActions(host,[
       ['Group',() => api.command('group'),'group',ro],
       ['Ungroup',() => api.command('ungroup'),'ungroup',ro || !groups.length],

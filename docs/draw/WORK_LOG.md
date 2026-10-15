@@ -763,3 +763,25 @@ tom flate og angring. Alle Draw-arbeidsflyter passerer; den kjente autolagringst
 
 D1.10 er dermed ferdig. Neste: D1.9 (kontrollinje), D1.11 (Place bitmap og template-lag) og
 D1.12 (Send til Cut).
+
+## 2026-10-15: Høyresiden til Illustrator-paritet
+
+Brukeren ba om at Properties og Layers skal se ut og fungere ganske likt Illustrator.
+
+- **Properties** har nå seksjonene Transform (kompakte felt X, Y, B, H med referansepunkt og lenke,
+  rotasjon og Flip horisontalt/vertikalt), Appearance (fargeruter for fyll og strek, strekvekt med
+  scrubby label, opacity og knapper som åpner Color/Stroke), formparametre under formens navn, Align
+  (seks knapper) og Quick Actions. Feltene er kompakte med etikett ved siden av, som i Illustrator.
+  Seksjonene bruker samme komponenter som panelene. Regelen fra D1.8 om ikke å gjenta panelkontroller
+  i Properties er erstattet av dette ønsket; Layers vises fortsatt bare ett sted.
+- **Layers** har fått panelmeny (≡): New Layer…, New Sublayer, Duplicate, Delete, Options, Make Clipping
+  Mask (deaktivert), Locate Object, Merge Selected, Flatten Artwork, Collect in New Layer, Release to
+  Layers, Hide Others og Lock Others. Shift/Ctrl-klikk velger flere lag; den fargede firkanten for valgt
+  kunst kan dras til et annet lag; dobbeltklikk på lagets thumbnail åpner Layer Options.
+- Nye rene funksjoner i `doc/layers.mjs`: `duplicateCommands`, `mergeLayersCommands`,
+  `flattenCommands`, `othersUpdates`, `moveToLayerCommands`. Flatten nekter når lag er skjult (Illustrator
+  spør først). Nye Tabler-ikoner: `flip-horizontal`, `flip-vertical`, `menu-2`.
+- Statusoversikt over hele Draw er lagt i [STATUS.md](STATUS.md).
+
+Verifisering: 158 Draw-enhetstester passerer. Objekt-E2E dekker Flip, fyllfarge og Align fra
+Properties, panelmenyen (Duplicate, Hide Others, Merge Selected) og dra av utvalg til et annet lag.

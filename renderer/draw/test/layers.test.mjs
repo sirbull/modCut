@@ -149,3 +149,28 @@ test('row delete removes an object or a whole layer in one step', () => {
   run(history, 'Delete', deleteRowCommands(doc, 'top'));
   assert.throws(() => deleteRowCommands(doc, 'bottom'), /at least one layer/);
 });
+
+test('Layers panel menu: duplicate, merge, flatten, hide/lock others and move selection to a layer', async () => {
+  const { duplicateCommands, mergeLayersCommands, flattenCommands, othersUpdates, moveToLayerCommands } = await import('../doc/layers.mjs');
+  let { doc, history } = setup();
+  const dup = duplicateCommands(doc, 'top'); run(history, 'Duplicate', dup.commands);
+  assert.deepEqual(doc.data.layers.map((l) => l.name), ['Bottom', 'Top', 'Top copy']);
+  assert.notEqual(doc.data.layers[2].children[0].id, 'image', 'contents get fresh ids');
+  history.undo();
+  run(history, 'Merge', mergeLayersCommands(doc, ['bottom', 'top'], 'top'));
+  assert.deepEqual(doc.data.layers.map((l) => l.id), ['top']);
+  assert.deepEqual(doc.getNode('top').children.map((n) => n.id), ['a', 'b', 'sub', 'image'], 'artwork from the layer below goes underneath');
+  history.undo();
+  run(history, 'Merge', mergeLayersCommands(doc, ['bottom', 'top'], 'bottom'));
+  assert.deepEqual(doc.getNode('bottom').children.map((n) => n.id), ['a', 'b', 'sub', 'image'], 'artwork from the layer above goes on top');
+  history.undo();
+  assert.throws(() => mergeLayersCommands(doc, ['top'], 'top'), /two or more/);
+  run(history, 'Flatten', flattenCommands(doc)); assert.equal(doc.data.layers.length, 1); history.undo();
+  history.execute(updateNode('bottom', { visible: false }));
+  assert.throws(() => flattenCommands(doc), /hidden layers/); history.undo();
+  run(history, 'Hide Others', othersUpdates(doc, 'top', 'visible')); assert.equal(doc.getNode('bottom').visible, false); history.undo();
+  run(history, 'Lock Others', othersUpdates(doc, 'top', 'locked')); assert.equal(doc.getNode('bottom').locked, true); history.undo();
+  run(history, 'Move', moveToLayerCommands(doc, ['a', 'c'], 'top'));
+  assert.deepEqual(doc.getNode('top').children.map((n) => n.id), ['image', 'a', 'c']);
+  assert.deepEqual(moveToLayerCommands(doc, ['image'], 'top'), [], 'already there');
+});

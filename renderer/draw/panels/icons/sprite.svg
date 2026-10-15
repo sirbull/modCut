@@ -285,6 +285,36 @@
   <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
   <path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6" />
 </symbol>
+<symbol id="icon-flip-horizontal" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-flip-horizontal"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M12 3l0 18" />
+  <path d="M16 7l0 10l5 0l-5 -10" />
+  <path d="M8 7l0 10l-5 0l5 -10" />
+</symbol>
+<symbol id="icon-flip-vertical" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-flip-vertical"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M3 12l18 0" />
+  <path d="M7 16l10 0l-10 5l0 -5" />
+  <path d="M7 8l10 0l-10 -5l0 5" />
+</symbol>
 <symbol id="icon-focus-2" width="24"
   height="24"
   viewBox="0 0 24 24"
@@ -585,6 +615,21 @@
   <path d="M5 12h6" />
   <path d="M15 12l6 6" />
   <path d="M15 18l6 -6" />
+</symbol>
+<symbol id="icon-menu-2" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-menu-2"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M4 6l16 0" />
+  <path d="M4 12l16 0" />
+  <path d="M4 18l16 0" />
 </symbol>
 <symbol id="icon-palette" width="24"
   height="24"

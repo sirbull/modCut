@@ -153,7 +153,8 @@ export async function runDrawPanelWorkflows(client) {
   await evaluate(`document.querySelector('${row(rect.id)} .draw-layer-name').click()`);
   await evaluate(`document.querySelector('${root} [data-draw-panel=transform]').click()`);
   const start = await bounds();
-  assert.equal(await evaluate(`document.querySelectorAll('${root} [data-draw-reference]').length`), 9);
+  assert.equal(await evaluate(`document.querySelectorAll('${root} .draw-flyout [data-draw-reference]').length`), 9);
+  assert.equal(await evaluate(`document.querySelectorAll('${root} [data-draw-dock=properties] [data-draw-reference]').length`), 9, 'Properties shows the same Transform controls, as in Illustrator');
   near({ x: Number(await evaluate(`document.querySelector('${root} [data-draw-field=x]').value`)) }, { x: start.x + start.width / 2 }, 'X shows the center reference by default');
   await evaluate(`document.querySelector('${root} [data-draw-reference="1,1"]').click()`);
   near({ y: Number(await evaluate(`document.querySelector('${root} [data-draw-field=y]').value`)) }, { y: start.y + start.height }, 'Y shows the bottom reference');
@@ -179,7 +180,7 @@ export async function runDrawPanelWorkflows(client) {
   const chooseSelect = (key, value) => evaluate(`(()=>{const s=document.querySelector('${root} [data-draw-field=${key}]');s.value='${value}';s.dispatchEvent(new Event('change',{bubbles:true}))})()`);
   await evaluate(`(async()=>(${active}.select(['${rect.id}','${ellipse.id}'])))()`);
   await command('panel.align');
-  assert.equal(await evaluate(`document.querySelectorAll('${root} [data-draw-align]').length`), 14);
+  assert.equal(await evaluate(`document.querySelectorAll('${root} .draw-flyout [data-draw-align]').length`), 14);
   const alignShot = await client.command('Page.captureScreenshot', { format: 'png' });
   await writeFile(join(tmpdir(), 'modcut-draw-align-panel.png'), Buffer.from(alignShot.data, 'base64'));
   const r0 = await boxOf(rect.id), e0 = await boxOf(ellipse.id);

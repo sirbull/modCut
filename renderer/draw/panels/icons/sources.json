@@ -96,6 +96,16 @@
       "path": "icons/outline/eye-off.svg",
       "sha256": "0b761c8c6d812f3e40068454614b49e372df1546d74f718988365b423ff9adac"
     },
+    "flip-horizontal": {
+      "name": "flip-horizontal",
+      "path": "icons/outline/flip-horizontal.svg",
+      "sha256": "61ec0f6ef73c6186436f9b0edc6e928c1beeccb83616699274382ba2aab1a92e"
+    },
+    "flip-vertical": {
+      "name": "flip-vertical",
+      "path": "icons/outline/flip-vertical.svg",
+      "sha256": "d02fee23b806e881549907fd760f8f3524ab4644e15236cd2be1842e9f4098e3"
+    },
     "focus-2": {
       "name": "focus-2",
       "path": "icons/outline/focus-2.svg",
@@ -195,6 +205,11 @@
       "name": "math-function",
       "path": "icons/outline/math-function.svg",
       "sha256": "4e7b2efdcffa74f0d29f4f90e712f99466c75e4b0fe156657c899b363e1d9347"
+    },
+    "menu-2": {
+      "name": "menu-2",
+      "path": "icons/outline/menu-2.svg",
+      "sha256": "a7630e8fc37c090e8d665c8739ea838566db4bcf79c7710a554ace3bf4733e04"
     },
     "palette": {
       "name": "palette",

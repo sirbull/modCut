@@ -159,3 +159,47 @@ export function deleteRowCommands(doc, id) {
   if (!doc.isEditable(id)) throw new Error('Unlock and show the object first.');
   return [removeNode(id)];
 }
+
+const withFreshIds = (node) => { const copy = structuredClone(node); copy.id = createNode(node.type).id; if (copy.children) copy.children = copy.children.map(withFreshIds); return copy; };
+/** Duplicate a layer (with contents, named "… copy") or an object, directly above the original. */
+export function duplicateCommands(doc, id) {
+  const node = doc.getNode(id);
+  if (!node) throw new Error('Choose a layer or object to duplicate.');
+  const { parentId, index } = doc.locate(id), copy = withFreshIds(node);
+  if (node.type === 'layer') copy.name = `${node.name || 'Layer'} copy`;
+  return { commands: [insertNode(parentId, copy, index + 1)], node: copy };
+}
+/** Merge Selected: the contents of the other layers move into the target layer (stacking order kept), then those layers go. */
+export function mergeLayersCommands(doc, ids, targetId) {
+  const layers = [...new Set(ids)].filter((id) => doc.getNode(id)?.type === 'layer');
+  if (layers.length < 2 || !layers.includes(targetId)) throw new Error('Select two or more layers to merge.');
+  const order = new Map(doc.descendants(null).map((n, i) => [n.id, i]));
+  const sources = layers.filter((id) => id !== targetId).sort((a, b) => order.get(a) - order.get(b));
+  // Final order: artwork from layers below the target, the target's own artwork, then artwork from layers above.
+  const below = sources.filter((id) => order.get(id) < order.get(targetId)), above = sources.filter((id) => order.get(id) > order.get(targetId));
+  const final = [...below.flatMap((id) => doc.getNode(id).children), ...doc.getNode(targetId).children, ...above.flatMap((id) => doc.getNode(id).children)];
+  const commands = [];
+  // Placing incoming objects by ascending final index leaves everything before each one already in place.
+  final.forEach((child, index) => { if (doc.locate(child.id).parentId !== targetId) commands.push(moveNode(child.id, targetId, index)); });
+  for (const id of sources) commands.push(removeNode(id));
+  return commands;
+}
+/** Flatten Artwork: every top-level layer merges into the topmost visible one. Hidden layers are refused, as Illustrator asks first. */
+export function flattenCommands(doc) {
+  const layers = doc.data.layers;
+  if (layers.length < 2) throw new Error('There is only one layer.');
+  if (layers.some((l) => !l.visible)) throw new Error('Show or delete hidden layers before flattening.');
+  return mergeLayersCommands(doc, layers.map((l) => l.id), layers.at(-1).id);
+}
+/** Hide Others / Lock Others: every other top-level layer. */
+export function othersUpdates(doc, layerId, key) {
+  if (!['visible', 'locked'].includes(key)) throw new Error(`Unknown layer property: ${key}`);
+  return doc.data.layers.filter((l) => l.id !== layerId).map((l) => updateNode(l.id, { [key]: key === 'locked' }));
+}
+/** Drag the selected-art square to another layer: move the selected objects to the top of that layer. */
+export function moveToLayerCommands(doc, ids, layerId) {
+  if (doc.getNode(layerId)?.type !== 'layer') throw new Error('Drop on a layer.');
+  const order = new Map(doc.descendants(null).map((n, i) => [n.id, i]));
+  const moving = [...new Set(ids)].filter((id) => doc.getNode(id) && doc.getNode(id).type !== 'layer' && doc.locate(id).parentId !== layerId).sort((a, b) => order.get(a) - order.get(b));
+  return moving.map((id) => moveNode(id, layerId));
+}

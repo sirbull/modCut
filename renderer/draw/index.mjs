@@ -210,6 +210,8 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       const scaling=key==='width'||key==='height',matrix=panelMatrix(b,state.ui.referencePoint??[.5,.5],key,value,{linked:!!state.ui.linkProportions});
       transform(matrix,{x:'Move',y:'Move',width:'Scale',height:'Scale',rotate:'Rotate',shear:'Shear'}[key],scaling?{scaleStrokes:state.ui.scaleStrokes!==false,scaleCorners:state.ui.scaleCorners!==false}:{});
     },
+    flip(axis){const b=renderer.selectionBounds();if(!b)return;const ref=state.ui.referencePoint??[.5,.5];
+      transform(operationMatrix({tool:'reflect',angle:axis==='horizontal'?90:0},[b.x+b.width*ref[0],b.y+b.height*ref[1]]),axis==='horizontal'?'Flip Horizontal':'Flip Vertical');},
     alignPanel(kind,mode){
       const ids=selectedIds().filter(id=>state.document.isEditable(id)),boxes=ids.map(id=>{const b=renderer.bounds(id);return b&&{id,x:b.x,y:b.y,width:b.width,height:b.height};}).filter(Boolean);
       if(!boxes.length)return;const a=activeArtboard(state),alignTo=state.ui.alignTo??'selection';
