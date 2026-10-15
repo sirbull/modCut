@@ -215,10 +215,46 @@ export async function runDrawPanelWorkflows(client) {
   assert.deepEqual([await fillHex(rect.id), await strokeHex(rect.id)], [fill0, stroke0], 'Undo restores the original paint');
   await evaluate(`document.querySelector('${root} [data-draw-paint-target=fill]').click()`);
 
+  // Stroke panel: weight, cap, corner/limit, unavailable inside/outside, dashes and rendered arrowheads.
+  const strokeOf = id => evaluate(`(async()=>(${active}.state.document.getNode('${id}').appearance.strokes[0]))()`);
+  const strokeButton = id => evaluate(`document.querySelector('${root} [data-draw-stroke="${id}"]').click()`);
+  const strokeBefore = await strokeOf(rect.id);
+  await evaluate(`(async()=>(${active}.select(['${rect.id}'])))()`);
+  await evaluate(`document.querySelector('${root} [data-draw-panel=stroke]').click()`);
+  await setField('stroke-weight', 2); await strokeButton('cap-square'); await strokeButton('join-bevel');
+  let st = await strokeOf(rect.id);
+  assert.deepEqual([st.width, st.cap, st.join], [2, 'square', 'bevel']);
+  assert.equal(await evaluate(`document.querySelector('${root} [data-draw-field=stroke-limit]').disabled`), true, 'Limit only applies to miter corners');
+  assert.deepEqual(await evaluate(`['inside','outside'].map(a=>document.querySelector('${root} [data-draw-stroke="align-'+a+'"]').disabled)`), [true, true]);
+  await evaluate(`(()=>{const c=document.querySelector('${root} [data-draw-field=stroke-dashed]');c.checked=true;c.dispatchEvent(new Event('change',{bubbles:true}))})()`);
+  assert.deepEqual((await strokeOf(rect.id)).dash.array, [2, 1]);
+  await setField('dash-2', 3);
+  assert.deepEqual((await strokeOf(rect.id)).dash.array, [2, 1, 3]);
+  assert.deepEqual(await evaluate(`(async()=>{const it=${active}.renderer.items.get('${rect.id}');return [...it.dashArray].map(v=>Math.round(v*1000)/1000)})()`), [2, 1, 3], 'Dashes render');
+  for (let i = 0; i < 12 && JSON.stringify(await strokeOf(rect.id)) !== JSON.stringify(strokeBefore); i++) await command('undo');
+  assert.deepEqual(await strokeOf(rect.id), strokeBefore, 'Undo restores the stroke');
+  await tool('line'); await drag(await screen([20, 60]), await screen([60, 60]));
+  const flat = nodes => nodes.flatMap(n => [n, ...flat(n.children ?? [])]);
+  const line = flat((await model()).layers).find(n => n.shape === 'line');
+  assert.ok(line, 'The Line tool drew a line');
+  await evaluate(`document.querySelector('${root} [data-draw-panel=stroke]').click()`);
+  await chooseSelect('stroke-endArrow', 'triangle');
+  assert.deepEqual((await strokeOf(line.id)).endArrow, { type: 'triangle', scale: 1 });
+  const arrowBox = () => evaluate(`(async()=>{const w=${active},g=w.scope.project.getItems({match:i=>i.data.arrows&&i.data.nodeId==='${line.id}'});return g.length===1&&g[0].visible?Math.round(g[0].bounds.width*1000)/1000:null})()`);
+  const small = await arrowBox();
+  assert.ok(small > 0, 'The arrowhead renders');
+  await setField('stroke-endArrow-scale', 200);
+  assert.ok(await arrowBox() > small * 1.9, 'Arrowhead scale renders');
+  await chooseSelect('stroke-startArrow', 'bar');
+  assert.equal((await strokeOf(line.id)).startArrow.type, 'bar');
+  const arrowShot = await client.command('Page.captureScreenshot', { format: 'png' });
+  await writeFile(join(tmpdir(), 'modcut-draw-stroke-panel.png'), Buffer.from(arrowShot.data, 'base64'));
+  await tool('select');
+
   await evaluate(`document.querySelector('[data-close-tab="${scratch}"]').click()`); await wait(100);
   if (await evaluate("!!document.querySelector('[data-x=discard]')")) { await evaluate("document.querySelector('[data-x=discard]').click()"); await wait(100); }
   await evaluate(`document.querySelector('[data-tab-id="${original.id}"]').click()`);
   if (await evaluate("document.body.dataset.workspace") === 'draw') await evaluate("document.querySelector('#workspaceToggle').click()");
   assert.equal(await evaluate("paper.project.layers[1].exportJSON({asString:true})"), original.cut, 'Draw panels preserve the Cut document');
-  process.stdout.write('PASS Draw panels: Layers tree, Layer Options, template layers, solo/outline, drag, collect/release, delete, rename, Transform, Align and Color panels\n');
+  process.stdout.write('PASS Draw panels: Layers tree, Layer Options, template layers, solo/outline, drag, collect/release, delete, rename, Transform, Align, Color and Stroke panels\n');
 }

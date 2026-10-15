@@ -7,6 +7,7 @@ import { editablePath,cornerGeometry,roundCorners } from '../geom/corners.mjs';
 import { shapeSelectionKey } from '../doc/selection.mjs';
 import { scaledStrokeProperties } from '../geom/transforms.mjs';
 import { layerContext, ROOT_CONTEXT } from '../doc/layers.mjs';
+import { arrowShapes } from '../geom/arrows.mjs';
 
 export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withScope = fn => fn() } = {}) {
   const boards = new scope.Layer({ name: 'Artboards' });
@@ -139,6 +140,28 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     item.dashOffset = asOutline ? 0 : (stroke?.dash?.offset ?? 0)*strokeZoom;
     if (node.type === 'path') item.fillRule = node.fillRule;
   }
+  // Arrowheads are view items beside the path, sharing its transform and node id for hit-testing.
+  function arrowGroup(item, node) {
+    const stroke = node.appearance?.strokes[0];
+    if (!stroke || (!stroke.startArrow && !stroke.endArrow) || node.children || node.type === 'image') return null;
+    const path = item.children ? item.children[0] : item;
+    if (!path?.segments?.length || path.closed || !(path.length > 0)) return null;
+    const group = new scope.Group({ insert: false }), paint = color(stroke.paint);
+    group.applyMatrix = false; group.matrix = new scope.Matrix(...node.transform); group.data.nodeId = node.id; group.data.arrows = true;
+    if (paint) paint.alpha = stroke.opacity ?? 1;
+    for (const [key, offset, sign] of [['startArrow', 0, -1], ['endArrow', path.length, 1]]) {
+      if (!stroke[key]) continue;
+      const p = path.getPointAt(offset), t = path.getTangentAt(offset);
+      for (const shape of arrowShapes([p.x, p.y], [t.x * sign, t.y * sign], stroke.width, stroke[key])) {
+        const piece = shape.kind === 'circle' ? new scope.Path.Circle({ center: shape.center, radius: shape.radius, insert: false })
+          : new scope.Path({ segments: shape.points, closed: shape.kind === 'polygon', insert: false });
+        if (shape.kind === 'polyline') Object.assign(piece, { strokeColor: paint, strokeWidth: stroke.width, strokeCap: 'round', strokeJoin: 'round' });
+        else piece.fillColor = paint;
+        group.addChild(piece);
+      }
+    }
+    return group.children.length ? group : null;
+  }
   function place(parent, item, index) {
     if (parent.children[index] !== item) parent.insertChild(index, item);
   }
@@ -151,7 +174,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
       let record = records.get(node.id), item = items.get(node.id);
       const replaced = !record || record.node.type !== node.type || record.geometry !== geometry;
       if (replaced) {
-        item?.remove(); record?.frame?.remove();
+        item?.remove(); record?.frame?.remove(); record?.arrows?.remove();
         item = make(node); item.applyMatrix = false; item.data.nodeId = node.id;
         items.set(node.id, item);
         record = { node, geometry, context }; records.set(node.id, record);
@@ -168,11 +191,13 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
           record.frame.data.nodeId = node.id; record.frame.strokeColor = '#071411'; record.frame.strokeScaling = false;
         }
         style(item, node);
+        record.arrows?.remove(); record.arrows = arrowGroup(item, node);
       }
       // Bounds must be measured before viewport visibility is applied.
       item.visible = node.visible;
       place(parent, item, index++);
       if (record.frame) { record.frame.visible = false; place(parent, record.frame, index++); }
+      if (record.arrows) place(parent, record.arrows, index++);
       if (node.children) reconcile(node.children, item, alive, context);
     }
   }
@@ -220,7 +245,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     for (const [id, record] of boardItems) if (!data.artboards.some(b => b.id === id)) { record.item.remove(); record.label.remove(); record.labelRect.remove(); boardItems.delete(id); }
     reconcile(data.layers, artwork, alive);
     for (const [id, item] of items) if (!alive.has(id)) {
-      item.remove(); records.get(id).frame?.remove(); items.delete(id); records.delete(id);
+      item.remove(); records.get(id).frame?.remove(); records.get(id).arrows?.remove(); items.delete(id); records.delete(id);
     }
     updateBounds(); updateView();
   }
@@ -241,6 +266,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
       item.visible = visible && !(asOutline && node.type === 'image') && !editPreviews.has(id) && !transformPreviewIds.has(id);
       if (asOutline && !node.children && node.type !== 'image') item.strokeWidth = 1 / scope.view.zoom;
       if (record.frame) { record.frame.visible = visible && asOutline; record.frame.strokeWidth = 1 / scope.view.zoom; }
+      if (record.arrows) record.arrows.visible = item.visible && !asOutline;
     }
     for (const [id,{item,label,labelRect}] of boardItems) {
       item.strokeWidth=(id===activeArtboard(state).id ? 2 : 1)/scope.view.zoom; item.visible=item.bounds.intersects(viewport);

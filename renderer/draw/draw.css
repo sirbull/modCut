@@ -224,3 +224,6 @@ body[data-workspace="draw"] .statusbar .spacer { display: none; }
 .draw-color-channel { display: grid; grid-template-columns: 18px 1fr 64px; gap: 8px; align-items: center; margin-bottom: 8px; font-size: var(--fs-xs); color: var(--text-muted); }
 .draw-color-channel input[type=range] { width: 100%; accent-color: var(--brand-fill); }
 .draw-color-channel input[type=number] { box-sizing: border-box; width: 100%; border: 1px solid var(--border); border-radius: 5px; background: var(--bg); color: var(--text); padding: 5px 6px; font: inherit; font-size: var(--fs-sm); }
+.draw-dash-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.draw-dash-grid .draw-field { margin-bottom: 8px; }
+.draw-segmented__option:disabled { opacity: .4; cursor: default; }

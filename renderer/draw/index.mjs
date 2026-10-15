@@ -13,7 +13,7 @@ import { transformedBox } from './tools/selection.mjs';
 import { SHAPE_TOOLS, shapeFromDrag } from './tools/shapes.mjs';
 import { insertNode, removeNode, updateNode, updateDocument } from './doc/commands.mjs';
 import { activeArtboard } from './doc/artboards.mjs';
-import { changePaint, paintHex } from './doc/paint.mjs';
+import { changePaint, changeStroke, paintHex } from './doc/paint.mjs';
 import { importArtwork } from './import-artwork.mjs';
 import { shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog,layerOptionsDialog } from './ui/dialogs.mjs';
 import { layerOptionsPatch } from './doc/layers.mjs';
@@ -143,6 +143,9 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   artboards=createArtboardController(state,{refresh,fit,bounds:id=>renderer.bounds(id),localMatrix:(id,m)=>renderer.localMatrix(id,m)});
   panels=createPanels(shell,state,{run,select,selectedIds,paintIds,paint,bounds:()=>renderer.selectionBounds(),fit,artboards,
     cornerInfo:()=>paths?.cornerInfo()??null,setCornerRadius:radius=>paths.setCornerRadius(radius),
+    strokeProps(props,{mergeKey=null}={}){const ids=paintIds();if(!ids.length||state.document.readOnly)return;
+      if(props.width!==undefined)state.ui.strokeWidth=props.width;
+      state.history.transaction('Stroke',()=>{for(const id of ids)state.history.execute(updateNode(id,{appearance:changeStroke(state.document.getNode(id).appearance,props,state.ui)}));},{mergeKey});},
     paintFocus(kind){state.ui.paintFocus=kind;toolbar?.update();panels?.render();},
     async layerOptions(id){const layer=state.document.getNode(id);if(layer?.type!=='layer'||state.document.readOnly)return;
       const values=await layerOptionsDialog(layer);if(!values||destroyed)return;

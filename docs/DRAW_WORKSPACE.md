@@ -1403,7 +1403,7 @@ Oppdateres når oppgaven fullføres. Løpende arbeidslogg: [`draw/WORK_LOG.md`](
 * [x] D1.5 Pen og ankerverktøy
 * [x] D1.6 Former
 * [x] D1.7 Rotate, Reflect, Scale med Copy og Transform Again
-* [ ] D1.8 Grunnpaneler — pågår: Layers, template-lag, Transform, Align og Color ferdig; Stroke, Fill/Stroke-boks og Properties gjenstår
+* [ ] D1.8 Grunnpaneler — pågår: Layers, template-lag, Transform, Align, Color og Stroke ferdig; Fill/Stroke-boks og Properties gjenstår
 * [ ] D1.9 Kontrollinje og statuslinje
 * [ ] D1.10 Group, Arrange, Clipboard
 * [ ] D1.11 Place bitmap og template-lag
@@ -1777,3 +1777,8 @@ rundt nøkkelobjektet). Avvik: nøkkelobjektet velges i en liste i panelet, ikke
 tallfelt, Fill/Stroke-mål og None. Maling lagres som RGB (CMYK/Grayscale er
 visninger uten fargeprofil). Glidere oppdaterer canvas live; et drag er ett
 angresteg via `History.transaction(..., {mergeKey})`. Fargespekter/ramp er ikke laget.
+
+**Del D2 — Stroke-panel (ferdig).** Weight, Cap, Corner, Limit, Dashed line (3 par)
+og pilspisser (arrow, triangle, circle, square, bar med skala) som rendres. Align
+Stroke: bare Center; Inside/Outside er synlige, men deaktivert til Outline Stroke
+(fase 3). Ikke laget: «align dashes to corners» og width profiles (fase 4).

@@ -4,7 +4,7 @@ import { ROOT_CONTEXT, collectCommands, deleteLayerCommands, layerContext, moveC
 import { shortcutLabel } from '../keymap.mjs';
 import { REFERENCE_POINTS } from '../geom/transforms.mjs';
 import { COLOR_MODES, colorFromValues, colorValues, normalizeHex } from '../doc/color.mjs';
-import { paintHex } from '../doc/paint.mjs';
+import { ARROW_TYPES, paintHex } from '../doc/paint.mjs';
 
 export function icon(href) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
@@ -274,24 +274,52 @@ export function createPanels(shell, state, api) {
     hexInput.maxLength = 7; hexInput.spellcheck = false;
     text(host,api.paintIds().length ? 'Changes apply live to the selected artwork; a slider drag is one undo step.' : 'No artwork selected: these colors apply to new shapes.');
   }
-  function paint(host, strokeOnly = false) {
-    const ids = api.paintIds(), first = state.document.getNode(ids[0]);
-    function hex(entry, fallback) {
-      const color = entry?.paint?.color;
-      return color?.space === 'rgb' ? '#'+color.values.map(v => Math.round(v*255).toString(16).padStart(2,'0')).join('') : fallback;
+  function segmented(host, label, key, options, value, onPick, { disabled = false, unavailable = {} } = {}) {
+    const wrap = document.createElement('div'); wrap.className = 'draw-field';
+    const name = document.createElement('span'); name.textContent = label; wrap.append(name);
+    const group = document.createElement('div'); group.className = 'draw-segmented'; group.setAttribute('role','group'); group.setAttribute('aria-label',label);
+    for (const [id,text] of options) {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'draw-segmented__option'; b.textContent = text;
+      b.dataset.drawStroke = `${key}-${id}`; b.setAttribute('aria-pressed',String(id === value)); b.disabled = disabled || !!unavailable[id];
+      if (unavailable[id]) b.dataset.tooltip = unavailable[id];
+      b.addEventListener('click',() => api.run(() => onPick(id))); group.append(b);
     }
-    const fill = first ? hex(first.appearance.fills[0],state.ui.fill) : state.ui.fill;
-    const stroke = first ? hex(first.appearance.strokes[0],state.ui.stroke) : state.ui.stroke;
-    const width = first?.appearance.strokes[0]?.width ?? state.ui.strokeWidth;
-    if (!strokeOnly) {
-      field(host,'Fill',fill,v => api.paint('fill',v),{type:'color'});
-      host.append(button('No fill',() => api.paint('fill',null)));
-    } else {
-      field(host,'Stroke',stroke,v => api.paint('stroke',v),{type:'color'});
-      field(host,'Width (mm)',width,v => api.paint('width',v),{min:0,key:'stroke-width'});
-      host.append(button('No stroke',() => api.paint('stroke',null)));
+    wrap.append(group); host.append(wrap);
+  }
+  function strokePanel(host) {
+    const node = state.document.getNode(api.paintIds()[0]), stroke = node?.appearance.strokes[0] ?? null, readOnly = state.document.readOnly;
+    const s = stroke ?? { width: state.ui.strokeWidth, cap: 'round', join: 'round', miterLimit: 4, align: 'center' }, disabled = readOnly || !node;
+    const apply = props => api.strokeProps(props);
+    field(host,'Weight (mm)',s.width,value => node ? apply({ width: value }) : api.paint('width',value),{ min:0, max:352.8, key:'stroke-weight', disabled: readOnly });
+    segmented(host,'Cap','cap',[['butt','Butt'],['round','Round'],['square','Projecting']],s.cap,cap => apply({ cap }),{ disabled });
+    segmented(host,'Corner','join',[['miter','Miter'],['round','Round'],['bevel','Bevel']],s.join,join => apply({ join }),{ disabled });
+    field(host,'Limit (×)',s.miterLimit ?? 4,value => apply({ miterLimit: value }),{ min:1, max:500, key:'stroke-limit', disabled: disabled || s.join !== 'miter' });
+    const later = 'Inside and Outside alignment come with Outline Stroke (phase 3).';
+    segmented(host,'Align stroke','align',[['center','Center'],['inside','Inside'],['outside','Outside']],s.align ?? 'center',() => {},{ disabled, unavailable: { inside: later, outside: later } });
+    check(host,'Dashed line','stroke-dashed',!!s.dash?.array?.length,on => api.run(() => apply({ dash: on ? [2,1] : null }))).disabled = disabled;
+    if (s.dash?.array?.length) {
+      const grid = document.createElement('div'); grid.className = 'draw-dash-grid'; host.append(grid);
+      const inputs = [];
+      for (let i = 0; i < 6; i++) {
+        const input = field(grid,`${i % 2 ? 'Gap' : 'Dash'} (mm)`,s.dash.array[i] ?? '',() => apply({ dash: inputs.map(x => x.value === '' ? null : x.valueAsNumber) }),{ min:0, key:`dash-${i}`, disabled });
+        if (s.dash.array[i] === undefined) input.value = '';
+        inputs.push(input);
+      }
     }
-    if (!ids.length) text(host,'These colors apply to new shapes. Select artwork to change its appearance.');
+    const arrows = document.createElement('div'); arrows.className = 'draw-fields'; host.append(arrows);
+    for (const [key,label] of [['startArrow','Start arrowhead'],['endArrow','End arrowhead']]) {
+      const row = document.createElement('label'); row.className = 'draw-field';
+      const name = document.createElement('span'); name.textContent = label;
+      const select = document.createElement('select'); select.className = 'draw-select'; select.dataset.drawField = `stroke-${key}`; select.disabled = disabled;
+      select.append(new Option('None','none',false,!s[key]));
+      for (const type of ARROW_TYPES) select.append(new Option(type[0].toUpperCase()+type.slice(1),type,false,s[key]?.type === type));
+      select.addEventListener('change',() => api.run(() => apply({ [key]: select.value === 'none' ? null : { type: select.value, scale: s[key]?.scale ?? 1 } })));
+      row.append(name,select); arrows.append(row);
+    }
+    for (const [key,label] of [['startArrow','Start scale (%)'],['endArrow','End scale (%)']]) {
+      field(arrows,label,(s[key]?.scale ?? 1)*100,value => apply({ [key]: { type: s[key].type, scale: value/100 } }),{ min:1, max:1000, key:`stroke-${key}-scale`, disabled: disabled || !s[key] });
+    }
+    text(host,node ? (stroke ? 'Stroke color is set in the Color panel.' : 'This artwork has no stroke; editing an option adds one in the current stroke color.') : 'Select artwork to edit stroke options. Weight applies to new shapes.');
   }
   function render() {
     // A slider drag or color-picker session updates the canvas live; rebuilding would interrupt it.
@@ -319,7 +347,7 @@ export function createPanels(shell, state, api) {
         const b=button(label,action);b.disabled=disabled || state.document.readOnly;primary.append(b);
       }
     } else if (state.ui.panel === 'color') colorPanel(primary);
-    else if (state.ui.panel === 'stroke') paint(primary,true);
+    else if (state.ui.panel === 'stroke') strokePanel(primary);
     else if (state.ui.panel === 'align') alignPanel(primary);
     else if (state.ui.panel === 'transform') transform(primary);
     else {

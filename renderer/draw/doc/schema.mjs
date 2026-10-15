@@ -112,6 +112,18 @@ export function validateDocument(doc) {
         enumeration(entry.cap, ['butt', 'round', 'square'], `${p}.cap`);
         enumeration(entry.join, ['miter', 'round', 'bevel'], `${p}.join`);
         enumeration(entry.align, ['center', 'inside', 'outside'], `${p}.align`);
+        if (entry.dash !== undefined) {
+          if (!object(entry.dash)) fail(`${p}.dash`, 'Expected dash settings');
+          else {
+            array(entry.dash.array, `${p}.dash.array`).forEach((v, j) => number(v, `${p}.dash.array.${j}`, 0));
+            if (entry.dash.offset !== undefined) number(entry.dash.offset, `${p}.dash.offset`);
+          }
+        }
+        for (const end of ['startArrow', 'endArrow']) if (entry[end] !== undefined && entry[end] !== null) {
+          if (!object(entry[end])) { fail(`${p}.${end}`, 'Expected an arrowhead'); continue; }
+          enumeration(entry[end].type, ['arrow', 'triangle', 'circle', 'square', 'bar'], `${p}.${end}.type`);
+          number(entry[end].scale, `${p}.${end}.scale`, Number.MIN_VALUE, 10);
+        }
       }
     });
   }

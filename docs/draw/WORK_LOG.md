@@ -456,3 +456,25 @@ HSB, CMYK-visning, Stroke-mål, Hex, None og full angring. Skjermbilde:
 Harness: Draw-grenen i `electron/e2e/run.mjs` prøver nå gjenstart én gang til hvis
 DevTools-målet ikke dukker opp etter simulert krasj (samme mønster som Cut-grenen).
 Den forbigående feilen traff 2 av 4 fulle kjøringer før endringen.
+
+## 2026-10-15 — D1.8 del D2: Stroke-panel og pilspisser
+
+- `doc/paint.mjs`: `changeStroke` validerer og endrer første strek (vekt 0–352,8
+  mm, cap, corner, limit 1–500, dash med opptil 6 verdier, start-/sluttpil).
+  Mangler objektet strek, lages en i gjeldende strekfarge.
+- Skjemaet validerer `dash` og `startArrow`/`endArrow` (`type` arrow, triangle,
+  circle, square, bar; `scale` 0–10).
+- Ren `geom/arrows.mjs` beregner pilgeometri langs utovervendt tangent. Adapteren
+  tegner pilene som egne visningsobjekter ved siden av banen, med samme transform
+  og node-id (klikk velger banen). Kun åpne baner får piler; skjult i Outline.
+- Stroke-panelet: Weight, Cap, Corner, Limit (kun miter), Align stroke (bare
+  Center aktiv; Inside/Outside er deaktivert med forklaring til Outline Stroke i
+  fase 3), Dashed line med 3 dash/gap-par, pilspiss-type og -skala.
+- Fjernet den gamle felles `paint()`-panelfunksjonen; Color og Stroke har egne paneler.
+
+Verifisering: 126 Draw-enhetstester (ny `stroke.test.mjs`). Panel-E2E dekker
+vekt/cap/corner, deaktivert limit og Inside/Outside, dash i modell og rendering,
+angring, og rendrede pilspisser med skala. Skjermbilde:
+`%TEMP%\modcut-draw-stroke-panel.png`.
+Kjent: pilstørrelse for `strokeScaling:false` under skalerte foreldre er omtrentlig;
+«align dashes to corners» og profiler er ikke laget. Send til Cut må håndtere piler.
