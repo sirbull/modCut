@@ -1403,7 +1403,7 @@ Oppdateres når oppgaven fullføres. Løpende arbeidslogg: [`draw/WORK_LOG.md`](
 * [x] D1.5 Pen og ankerverktøy
 * [x] D1.6 Former
 * [x] D1.7 Rotate, Reflect, Scale med Copy og Transform Again
-* [ ] D1.8 Grunnpaneler — pågår: Layers og template-lag ferdig; Transform, Align, Color/Stroke og Fill/Stroke-boks gjenstår
+* [ ] D1.8 Grunnpaneler — pågår: Layers, template-lag og Transform ferdig; Align, Color/Stroke og Fill/Stroke-boks gjenstår
 * [ ] D1.9 Kontrollinje og statuslinje
 * [ ] D1.10 Group, Arrange, Clipboard
 * [ ] D1.11 Place bitmap og template-lag
@@ -1753,3 +1753,9 @@ drag-and-drop. Alt-klikk øye gir solo, Ctrl/Cmd-klikk veksler Outline/Preview.
 Layer Options åpnes med dobbeltklikk. New layer/sublayer, Collect in New Layer,
 Release to Layers (Sequence), Locate Object og Delete er hver ett angresteg.
 Utvalgsrammen følger lagfargen. Virtualisering for 500+ rader er ikke gjort.
+
+**Del B — Transform-panel (ferdig).** Ni-punkts referanse, X/Y for referansepunktet,
+W/H med lenkede proporsjoner, relative felt for Rotate by og Shear by, samt
+Scale strokes & effects og Scale corners. Avvik fra Illustrator: objektrotasjon
+lagres ikke, så vinkelfeltene er relative og nullstilles. Scale corners gjelder
+direkte valgte live rektangler og paths med `cornerData`, ikke former i grupper.

@@ -116,10 +116,38 @@ export async function runDrawPanelWorkflows(client) {
   const shot = await client.command('Page.captureScreenshot', { format: 'png' });
   await writeFile(join(tmpdir(), 'modcut-draw-layers-panel.png'), Buffer.from(shot.data, 'base64'));
 
+  // Transform panel: 9-point reference, linked proportions, relative Rotate/Shear, one undo step each.
+  const bounds = () => evaluate(`(async()=>{const b=${active}.renderer.selectionBounds();return{x:b.x,y:b.y,width:b.width,height:b.height}})()`);
+  const setField = (key, value) => evaluate(`(()=>{const i=document.querySelector('${root} [data-draw-field=${key}]');i.value='${value}';i.dispatchEvent(new Event('change',{bubbles:true}))})()`);
+  const near = (a, b, message) => Object.keys(b).forEach(k => assert.ok(Math.abs(a[k]-b[k]) < 1e-6, `${message}: ${JSON.stringify(a)} vs ${JSON.stringify(b)}`));
+  await evaluate(`document.querySelector('${root} [data-draw-panel=layers]').click()`);
+  await evaluate(`document.querySelector('${row(rect.id)} .draw-layer-name').click()`);
+  await evaluate(`document.querySelector('${root} [data-draw-panel=transform]').click()`);
+  const start = await bounds();
+  assert.equal(await evaluate(`document.querySelectorAll('${root} [data-draw-reference]').length`), 9);
+  assert.equal(Number(await evaluate(`document.querySelector('${root} [data-draw-field=x]').value`)), start.x + start.width / 2, 'X shows the center reference by default');
+  await evaluate(`document.querySelector('${root} [data-draw-reference="1,1"]').click()`);
+  assert.equal(Number(await evaluate(`document.querySelector('${root} [data-draw-field=y]').value`)), start.y + start.height);
+  const depth = await evaluate(`(async()=>(${active}.state.history.entries.length))()`);
+  await setField('width', start.width * 2);
+  near(await bounds(), { x: start.x - start.width, y: start.y, width: start.width * 2, height: start.height }, 'Bottom-right reference stays fixed');
+  await command('undo');
+  await evaluate(`document.querySelector('${root} [data-draw-field=link]').click()`);
+  await setField('height', start.height * 2);
+  near(await bounds(), { width: start.width * 2, height: start.height * 2 }, 'Linked proportions');
+  assert.equal(await evaluate(`(async()=>(${active}.state.history.entries.length))()`), depth + 1, 'Panel edit is one undo step');
+  await command('undo'); near(await bounds(), start, 'Undo restores size');
+  await evaluate(`document.querySelector('${root} [data-draw-reference="0,0"]').click()`);
+  await setField('x', 0); near(await bounds(), { x: 0, y: start.y }, 'X moves the reference point'); await command('undo');
+  await setField('rotate', 90); near(await bounds(), { x: start.x, y: start.y - start.width, width: start.height, height: start.width }, 'Rotate about top-left, counterclockwise'); await command('undo');
+  await setField('shear', 45); near(await bounds(), { width: start.width + start.height, height: start.height }, 'Shear'); await command('undo');
+  assert.equal(Number(await evaluate(`document.querySelector('${root} [data-draw-field=rotate]').value`)), 0, 'Relative fields reset');
+  await evaluate(`document.querySelector('${root} [data-draw-reference="0.5,0.5"]').click()`);
+
   await evaluate(`document.querySelector('[data-close-tab="${scratch}"]').click()`); await wait(100);
   if (await evaluate("!!document.querySelector('[data-x=discard]')")) { await evaluate("document.querySelector('[data-x=discard]').click()"); await wait(100); }
   await evaluate(`document.querySelector('[data-tab-id="${original.id}"]').click()`);
   if (await evaluate("document.body.dataset.workspace") === 'draw') await evaluate("document.querySelector('#workspaceToggle').click()");
   assert.equal(await evaluate("paper.project.layers[1].exportJSON({asString:true})"), original.cut, 'Draw panels preserve the Cut document');
-  process.stdout.write('PASS Draw panels: Layers tree, Layer Options, template layers, solo/outline, drag, collect/release, delete and rename\n');
+  process.stdout.write('PASS Draw panels: Layers tree, Layer Options, template layers, solo/outline, drag, collect/release, delete, rename and Transform panel\n');
 }

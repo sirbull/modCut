@@ -12,7 +12,7 @@ export function createTransformController(state,api) {
   }
   function origin(){selectionChanged();const b=api.bounds();return state.ui.transformOrigin??(b?[b.x+b.width/2,b.y+b.height/2]:null);}
   function setOrigin(point){selectionChanged();state.ui.transformOrigin=point?[...point]:null;api.update();}
-  function apply(matrix,label='Transform',{copy=false,ids:targets=ids(),mergeKey=null,scaleStrokes=null,remember=true}={}) {
+  function apply(matrix,label='Transform',{copy=false,ids:targets=ids(),mergeKey=null,scaleStrokes=null,scaleCorners=true,remember=true}={}) {
     if(state.document.readOnly||!targets.length||!copy&&isIdentity(matrix))return false;
     if(matrix.length!==6||!matrix.every(Number.isFinite))throw new RangeError('Invalid transform');
     targets=[...new Set(targets)].filter(id=>state.document.isEditable(id)).filter(id=>!state.document.ancestors(id).some(n=>targets.includes(n.id)));
@@ -21,7 +21,7 @@ export function createTransformController(state,api) {
     const strokeProperties=node=>scaleStrokes===null?{}:scaledStrokeProperties(node,api.worldMatrix(node.id),matrix,scaleStrokes);
     state.history.transaction(copy?`Copy ${label}`:label,()=>{
       for(const id of targets){
-        const node=state.document.getNode(id),properties=transformProperties(node,api.localMatrix(id,matrix));
+        const node=state.document.getNode(id),properties=transformProperties(node,api.localMatrix(id,matrix),{scaleCorners});
         if(copy){
           const clone=structuredClone({...node,...properties}),prepare=(n,source)=>{Object.assign(n,strokeProperties(source));n.id=createId();n.children?.forEach((c,i)=>prepare(c,source.children[i]));};prepare(clone,node);
           const location=state.document.locate(id);state.history.execute(insertNode(location.parentId,clone,location.index+1));result.push(clone.id);
@@ -35,7 +35,7 @@ export function createTransformController(state,api) {
       }
     });
     internalSelection=true;try{api.select(result);state.ui.transformOrigin=pivot;selectionChanged();}finally{internalSelection=false;}
-    api.update();if(remember)last={matrix:[...matrix],label,copy,scaleStrokes};return true;
+    api.update();if(remember)last={matrix:[...matrix],label,copy,scaleStrokes,scaleCorners};return true;
   }
   return {apply,origin,setOrigin,selectionChanged,again(){return last?apply(last.matrix,last.label,last):false;},get last(){return last&&structuredClone(last);}};
 }

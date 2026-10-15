@@ -8,7 +8,7 @@ import { createInteractions } from './tools/interactions.mjs';
 import { createPathInteractions, PATH_TOOLS } from './tools/paths.mjs';
 import { createArtboardController } from './tools/artboards.mjs';
 import { createTransformController } from './tools/transforms.mjs';
-import { TRANSFORM_TOOLS, operationMatrix, dialogOperation } from './geom/transforms.mjs';
+import { TRANSFORM_TOOLS, operationMatrix, dialogOperation, panelMatrix } from './geom/transforms.mjs';
 import { transformedBox } from './tools/selection.mjs';
 import { SHAPE_TOOLS, shapeFromDrag } from './tools/shapes.mjs';
 import { insertNode, removeNode, updateNode, updateDocument } from './doc/commands.mjs';
@@ -143,9 +143,9 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       const values=await layerOptionsDialog(layer);if(!values||destroyed)return;
       run(()=>{const current=state.document.getNode(id);if(!current)return;const patch=layerOptionsPatch(current,values);if(Object.keys(patch).length)state.history.execute(updateNode(id,patch,{label:'Layer Options'}));});},
     async rearrange(){const options=await rearrangeDialog();if(options&&!destroyed)run(()=>artboards.rearrange(options));},
-    resize(key,value){const b=renderer.selectionBounds();if(!b)return;
-      if(key==='x'||key==='y')transform([1,0,0,1,key==='x'?value-b.x:0,key==='y'?value-b.y:0],'Move');
-      else {const sx=key==='width'&&b.width>0?value/b.width:1,sy=key==='height'&&b.height>0?value/b.height:1;transform([sx,0,0,sy,b.x*(1-sx),b.y*(1-sy)],'Resize');}
+    transformPanel(key,value){const b=renderer.selectionBounds();if(!b)return;
+      const scaling=key==='width'||key==='height',matrix=panelMatrix(b,state.ui.referencePoint??[.5,.5],key,value,{linked:!!state.ui.linkProportions});
+      transform(matrix,{x:'Move',y:'Move',width:'Scale',height:'Scale',rotate:'Rotate',shear:'Shear'}[key],scaling?{scaleStrokes:state.ui.scaleStrokes!==false,scaleCorners:state.ui.scaleCorners!==false}:{});
     },
     align(key){const b=renderer.selectionBounds(),a=activeArtboard(state);if(!b)return;
       const x={left:a.x,centerX:a.x+(a.width-b.width)/2,right:a.x+a.width-b.width}[key],y={top:a.y,centerY:a.y+(a.height-b.height)/2,bottom:a.y+a.height-b.height}[key];

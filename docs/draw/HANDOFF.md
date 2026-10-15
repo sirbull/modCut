@@ -5,7 +5,7 @@ Oppdatert 2026-10-15. Arbeidsgren: `feat/vector-draw`.
 ## Status og neste oppgave
 
 Fase 0 og D1.1–D1.7 er fullført. **D1.8 pågår** og gjøres i delsteg som committes
-og pushes hver for seg: A Layers/template-lag (**ferdig**), B Transform-panel,
+og pushes hver for seg: A Layers/template-lag (**ferdig**), B Transform-panel (**ferdig**),
 C Align-panel, D Color/Stroke, Fill/Stroke-boks og Properties-gjennomgang.
 Fortsett med første ikke-ferdige delsteg. Se [arbeidsloggen](WORK_LOG.md) for detaljer.
 

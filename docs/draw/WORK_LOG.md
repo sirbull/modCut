@@ -338,6 +338,23 @@ Gjenstår i D1.8: Transform-panel (B), Align (C), Color/Stroke, Fill/Stroke-boks
 og Properties-gjennomgang (D). Virtualisert lagliste for 500+ objekter er ikke
 gjort (AK i 10.9); vurder ved ytelsespass.
 
+## 2026-10-15 — D1.8 del B: Transform-panel
+
+- `geom/transforms.mjs` har `REFERENCE_POINTS` og ren `panelMatrix(box, ref, key,
+  value, {linked})`. X/Y viser og flytter valgt referansepunkt (standard senter).
+  W/H skalerer rundt referansepunktet, med lenkede proporsjoner som valg.
+- Rotate by og Shear by er relative felt som nullstilles etter bruk (vi lagrer
+  ikke objektrotasjon slik Illustrator gjør). Positiv vinkel er mot klokken /
+  toppen mot høyre. Shear er begrenset til ±89,99°.
+- Scale strokes & effects og Scale corners er avkrysninger i panelet (standard
+  på, som Scale-dialogen). `transformProperties(node, m, {scaleCorners})` beholder
+  synlig radius for live rektangler og `cornerData`-radier ved jevn skalering når
+  valget er av. Gjelder direkte valgte objekter, ikke former inne i grupper.
+- Panelvalgene er midlertidig `state.ui` per fane og lagres ikke.
+
+Verifisering: 110 Draw-enhetstester (ny `panel-math.test.mjs`). Panel-E2E dekker
+referansepunkt, lenket skalering, flytting, rotasjon, shear og ett angresteg.
+
 ## 2026-10-15 — Nytt dokument-dialog, statuslinje og dokumentmaler
 
 Utført på brukerens forespørsel, parallelt med D1.8 del B (egen commit).

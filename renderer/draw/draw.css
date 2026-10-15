@@ -153,6 +153,12 @@ body[data-workspace="draw"] :is(#tools,#zoomOut,#zoomFit,#zoomIn,#selMode,#toggl
 body[data-workspace="draw"] .workspace-toggle__icon {
   mask-image: url("../../ICONS/cut_icon.svg");
 }
+.draw-transform-top { display: grid; grid-template-columns: 54px 1fr; gap: 12px; align-items: start; }
+.draw-reference { display: grid; grid-template-columns: repeat(3, 14px); gap: 6px; padding: 6px; border: 1px solid var(--border); border-radius: 5px; margin-top: 18px; }
+.draw-reference__point { width: 14px; height: 14px; padding: 0; border: 1.5px solid var(--text-muted); border-radius: 2px; background: transparent; cursor: pointer; }
+.draw-reference__point[aria-pressed=true] { border-color: var(--brand-fill); background: var(--brand-fill); }
+.draw-reference__point:focus-visible { outline: 2px solid var(--brand-mid); outline-offset: 1px; }
+.draw-transform-link { grid-column: 2; justify-self: end; margin: -8px 0 8px; }
 
 /* New document: browse presets on the left, edit details on the right. */
 body[data-workspace="draw"] .statusbar .spacer { display: none; }

@@ -66,6 +66,11 @@
       "path": "icons/outline/line-dashed.svg",
       "sha256": "38f82a1f06e01bc1753e0f1d66771c346bc97003b46e69ad3cf333ee38258965"
     },
+    "link": {
+      "name": "link",
+      "path": "icons/outline/link.svg",
+      "sha256": "63c88f996a6c8c3a1687b92f75ef11cab9a549a1408f9ed85d7baf78c7cad12d"
+    },
     "lock": {
       "name": "lock",
       "path": "icons/outline/lock.svg",
@@ -105,6 +110,11 @@
       "name": "trash",
       "path": "icons/outline/trash.svg",
       "sha256": "94176fd47075e845088ac13745104d722daae7fa8be94ae9665c143f8e2705a7"
+    },
+    "unlink": {
+      "name": "unlink",
+      "path": "icons/outline/unlink.svg",
+      "sha256": "468977ced647fb5acc651c377817c46e2547549869f8a5d0165b60b176d64e3a"
     }
   }
 }

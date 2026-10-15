@@ -35,3 +35,22 @@ export function scaledStrokeProperties(node,worldMatrix,matrix,scaleStrokes) {
   appearance.strokes=appearance.strokes.map(s=>({...s,width:s.width*factor,...(s.dash?{dash:{...s.dash,array:(s.dash.array??[]).map(n=>n*factor),offset:(s.dash.offset??0)*factor}}:{})}));
   return {appearance,strokeScaling:false};
 }
+export const REFERENCE_POINTS=Object.freeze([0,.5,1].flatMap(v=>[0,.5,1].map(u=>Object.freeze([u,v]))));
+/** Transform panel edit around a 9-point reference. Rotate/Shear are relative edits, positive counterclockwise/rightward at the top. */
+export function panelMatrix(box,reference,key,value,{linked=false}={}) {
+  if(!Number.isFinite(value))throw new RangeError('Enter a finite number.');
+  const [u,v]=reference,x=box.x+box.width*u,y=box.y+box.height*v;
+  if(key==='x'||key==='y')return [1,0,0,1,key==='x'?value-x:0,key==='y'?value-y:0];
+  if(key==='width'||key==='height'){
+    const size=box[key];if(!(value>0))throw new RangeError('Size must be greater than zero.');
+    if(size<1e-9)throw new RangeError(`The selection has no ${key} to scale.`);
+    const factor=value/size,other=linked?factor:1;
+    return operationMatrix({tool:'scale',x:key==='width'?factor:other,y:key==='height'?factor:other},[x,y]);
+  }
+  if(key==='rotate')return operationMatrix({tool:'rotate',angle:value},[x,y]);
+  if(key==='shear'){
+    if(Math.abs(value)>=89.99)throw new RangeError('Shear angle must be between -89.99° and 89.99°.');
+    const c=-Math.tan(value*Math.PI/180);return [1,0,c,1,-c*y,0];
+  }
+  throw new Error(`Unknown Transform field: ${key}`);
+}

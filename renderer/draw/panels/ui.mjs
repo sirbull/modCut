@@ -2,6 +2,7 @@ import { PANEL_DEFINITIONS, panelIconHref, panelSpriteHref } from './registry.mj
 import { insertNode, updateNode } from '../doc/commands.mjs';
 import { ROOT_CONTEXT, collectCommands, deleteLayerCommands, layerContext, moveCommand, newLayer, releaseCommands, soloUpdates } from '../doc/layers.mjs';
 import { shortcutLabel } from '../keymap.mjs';
+import { REFERENCE_POINTS } from '../geom/transforms.mjs';
 
 export function icon(href) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
@@ -150,14 +151,38 @@ export function createPanels(shell, state, api) {
     }
     [...doc.data.layers].reverse().forEach(node => row(node,0,ROOT_CONTEXT)); host.append(list);
   }
+  function check(host, label, key, value, onChange) {
+    const row = document.createElement('label'); row.className = 'draw-check';
+    const input = document.createElement('input'); input.type = 'checkbox'; input.checked = value; input.dataset.drawField = key;
+    input.addEventListener('change',() => onChange(input.checked)); row.append(input,document.createTextNode(label)); host.append(row); return input;
+  }
   function transform(host) {
-    const box = api.bounds();
-    const grid = document.createElement('div'); grid.className = 'draw-fields'; host.append(grid);
-    for (const [label,key] of [['X (mm)','x'],['Y (mm)','y'],['W (mm)','width'],['H (mm)','height']]) {
-      field(grid,label,box ? Number(box[key].toFixed(2)) : 0,value => api.resize(key,value),
-        { disabled: !box, min: ['width','height'].includes(key) ? .001 : undefined, key });
+    const box = api.bounds(), ref = state.ui.referencePoint ?? [.5,.5], disabled = !box || state.document.readOnly;
+    const top = document.createElement('div'); top.className = 'draw-transform-top'; host.append(top);
+    const locator = document.createElement('div'); locator.className = 'draw-reference'; locator.setAttribute('role','group'); locator.setAttribute('aria-label','Reference point');
+    const names = { 0: ['left','top'], .5: ['center','middle'], 1: ['right','bottom'] };
+    for (const [u,v] of REFERENCE_POINTS) {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'draw-reference__point';
+      const label = u === .5 && v === .5 ? 'center' : `${names[v][1]} ${names[u][0]}`;
+      b.setAttribute('aria-label',`Reference point: ${label}`); b.dataset.drawReference = `${u},${v}`;
+      b.setAttribute('aria-pressed',String(ref[0] === u && ref[1] === v));
+      b.addEventListener('click',() => { state.ui.referencePoint = [u,v]; render(); }); locator.append(b);
     }
-    if (!box) text(host,'Select an object to edit its position and size.');
+    top.append(locator);
+    const grid = document.createElement('div'); grid.className = 'draw-fields'; top.append(grid);
+    const point = box ? [box.x+box.width*ref[0],box.y+box.height*ref[1]] : [0,0];
+    field(grid,'X (mm)',point[0],value => api.transformPanel('x',value),{ disabled, key:'x' });
+    field(grid,'Y (mm)',point[1],value => api.transformPanel('y',value),{ disabled, key:'y' });
+    field(grid,'W (mm)',box?.width ?? 0,value => api.transformPanel('width',value),{ disabled: disabled || box.width < 1e-9, min:.001, key:'width' });
+    field(grid,'H (mm)',box?.height ?? 0,value => api.transformPanel('height',value),{ disabled: disabled || box.height < 1e-9, min:.001, key:'height' });
+    const link = iconButton(state.ui.linkProportions ? 'Proportions linked' : 'Link proportions',state.ui.linkProportions ? 'link' : 'unlink',() => { state.ui.linkProportions = !state.ui.linkProportions; render(); },'draw-layer-action draw-transform-link');
+    link.setAttribute('aria-pressed',String(!!state.ui.linkProportions)); link.dataset.drawField = 'link'; grid.append(link);
+    const angles = document.createElement('div'); angles.className = 'draw-fields'; host.append(angles);
+    field(angles,'Rotate by (°)',0,value => api.transformPanel('rotate',value),{ disabled, key:'rotate' });
+    field(angles,'Shear by (°)',0,value => api.transformPanel('shear',value),{ disabled, min:-89.99, max:89.99, key:'shear' });
+    check(host,'Scale strokes & effects','scale-strokes',state.ui.scaleStrokes !== false,value => { state.ui.scaleStrokes = value; });
+    check(host,'Scale corners','scale-corners',state.ui.scaleCorners !== false,value => { state.ui.scaleCorners = value; });
+    text(host,box ? 'X and Y show the reference point. Rotate and Shear apply relative to the reference point; positive angles turn counterclockwise.' : 'Select an object to edit its position and size.');
   }
   function paint(host, strokeOnly = false) {
     const ids = api.paintIds(), first = state.document.getNode(ids[0]);
