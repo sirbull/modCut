@@ -705,8 +705,12 @@ export function createPanels(shell, state, api) {
       for(const [key,label,min] of editable)field(host,label,node.params[key]??({sides:6,points:5,endAngle:360}[key] || 0),value=>state.history.execute(updateNode(node.id,{params:{...node.params,[key]:value}})),{min,max:['sides','points'].includes(key)?100:undefined,key:`shape-${key}`});
     }
     const shapes = ids.filter(id => state.document.getNode(id)?.type === 'shape' && state.document.isEditable(id));
+    const groups = ids.filter(id => state.document.getNode(id)?.type === 'group'), ro = state.document.readOnly;
     quickActions(host,[
-      ['Expand Shape',() => api.expandShapes(shapes),'expand-shape',!shapes.length || state.document.readOnly],
+      ['Group',() => api.command('group'),'group',ro],
+      ['Ungroup',() => api.command('ungroup'),'ungroup',ro || !groups.length],
+      ['Bring to Front',() => api.command('bring-front'),'bring-front',ro],['Send to Back',() => api.command('send-back'),'send-back',ro],
+      ['Expand Shape',() => api.expandShapes(shapes),'expand-shape',!shapes.length || ro],
       ['Transform…',() => open('transform'),'transform'],['Align…',() => open('align'),'align'],
       ['Pathfinder…',() => open('pathfinder'),'pathfinder',ids.length < 2],['Appearance…',() => open('appearance'),'appearance'],
     ]);

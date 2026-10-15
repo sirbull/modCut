@@ -237,10 +237,13 @@ function buildMenu(mode = "cut") {
     template.splice(editIndex + 1, 0, ...["Object", "Type", "Select", "Effect"].map((label) => ({
       label, submenu: [{ label: "No commands available", enabled: false }],
     })));
+    const objectItem=(label,command)=>({label,accelerator:acceleratorFor(command,{isMac}),click:()=>send(command)});
     template.find(item=>item.label==='Object').submenu=[{label:'Transform',submenu:[
       ...['Rotate','Reflect','Scale'].map(label=>({label:`${label}…`,click:()=>send(`${label.toLowerCase()}-dialog`)})),
       {type:'separator'},{label:'Transform Again',accelerator:acceleratorFor('transform-again',{isMac}),click:()=>send('transform-again')},
-    ]}];
+    ]},{label:'Arrange',submenu:[objectItem('Bring to Front','bring-front'),objectItem('Bring Forward','bring-forward'),objectItem('Send Backward','send-backward'),objectItem('Send to Back','send-back')]},
+    {type:'separator'},objectItem('Group','group'),objectItem('Ungroup','ungroup'),
+    {type:'separator'},objectItem('Lock Selection','lock'),objectItem('Unlock All','unlock-all'),objectItem('Hide Selection','hide'),objectItem('Show All','show-all')];
   }
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }

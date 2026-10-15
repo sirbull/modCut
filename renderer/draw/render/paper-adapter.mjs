@@ -319,7 +319,8 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     const results=artwork.hitTestAll(point,{fill:!outline,stroke:true,pixel:!outline,tolerance:6/scope.view.zoom});
     for (const result of results) {
       let item=result.item; while(item && !item.data.nodeId) item=item.parent;
-      if (item?.data.nodeId && state.document.isEditable(item.data.nodeId)) return item.data.nodeId;
+      // Locked or hidden objects let clicks through; a layer itself is never the hit (a click on a locked object must not select its layer).
+      if (item?.data.nodeId && state.document.getNode(item.data.nodeId)?.type !== 'layer' && state.document.isEditable(item.data.nodeId)) return item.data.nodeId;
     }
     return null;
   }

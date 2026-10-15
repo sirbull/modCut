@@ -2,6 +2,7 @@ import { createProjectDraw } from './io/project.mjs';
 import { createDrawRenderer } from './render.mjs';
 import { createPanels } from './panels/ui.mjs';
 import { rememberColor } from './doc/swatches.mjs';
+import { arrangeCommands, groupCommands, hideCommands, lockCommands, showAllCommands, ungroupCommands, unlockAllCommands } from './doc/arrange.mjs';
 import { PATHFINDER_LABELS, runPathfinder } from './geom/pathfinder.mjs';
 import { fillHex, pathfinderCommands, stackingOrder } from './doc/pathfinder-commands.mjs';
 import { cancelActiveScrub } from './ui/number-field.mjs';
@@ -28,6 +29,7 @@ const workspaces=new WeakMap();
 export function getDrawWorkspace(root) {return workspaces.get(root) || null;}
 const implementedTools=new Set(['select','hand','zoom','artboard',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
 const commands=new Set(['undo','redo','delete','select-all','select-artboard','deselect','cancel','fit-artboard','fit-all','actual-size','zoom-in','zoom-out','outline',
+  'group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
   'paint-focus','paint-swap','paint-none','paint-solid','default-paint','smart-guides','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','toggle-panels','toggle-panels-except-tools',
   ...PANEL_DEFINITIONS.map(p=>`panel.${p.id}`),...['left','right','up','down'].flatMap(d=>[`nudge-${d}`,`nudge-large-${d}`,`duplicate-${d}`])]);
 export function createDrawWorkspace(root,{paper=window.paper,state=createProjectDraw(),onError=console.warn,onImport=()=>{},getPreferences=()=>({}),statusHost=null}={}) {
@@ -186,6 +188,19 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       state.history.transaction(label,()=>{for(const m of moves)transforms.apply([1,0,0,1,...m.offset],label,{ids:[m.id],remember:false});});select(ids);
     },
   });
+  // Object menu: Group, Ungroup, Arrange, Lock and Hide. Each is one undo step with a menu-style label.
+  function objectCommand(command) {
+    const doc=state.document,ids=()=>selectedIds(),apply=(label,commands)=>{if(commands.length)state.history.transaction(label,()=>commands.forEach(c=>state.history.execute(c)));};
+    const arrange={'bring-front':['front','Bring to Front'],'bring-forward':['forward','Bring Forward'],'send-backward':['backward','Send Backward'],'send-back':['back','Send to Back']}[command];
+    if(arrange)return()=>apply(arrange[1],arrangeCommands(doc,ids(),arrange[0]));
+    if(command==='group')return()=>{const {commands,group}=groupCommands(doc,ids());apply('Group',commands);select([group.id]);};
+    if(command==='ungroup')return()=>{const {commands,released}=ungroupCommands(doc,ids());apply('Ungroup',commands);select(released);};
+    if(command==='lock')return()=>{apply('Lock',lockCommands(doc,ids()));select([]);};
+    if(command==='hide')return()=>{apply('Hide',hideCommands(doc,ids()));select([]);};
+    if(command==='unlock-all')return()=>{const before=new Set(doc.descendants(null).filter(n=>n.locked&&n.type!=='layer').map(n=>n.id));apply('Unlock All',unlockAllCommands(doc));select([...before]);};
+    if(command==='show-all')return()=>{const before=new Set(doc.descendants(null).filter(n=>!n.visible&&n.type!=='layer').map(n=>n.id));apply('Show All',showAllCommands(doc));select([...before]);};
+    return null;
+  }
   function handle(command) {return run(()=>{
     if(command.startsWith('tool.'))return setTool(command.slice(5));
     if(command.startsWith('panel.'))return openPanel(command.slice(6));
@@ -203,6 +218,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       if(command==='toggle-panels'||command==='toggle-panels-except-tools'){shell.classList.toggle('draw-shell--panels-hidden');shell.classList.toggle('draw-shell--all-hidden',command==='toggle-panels' && shell.classList.contains('draw-shell--panels-hidden'));return;}
     if(state.document.readOnly)return;
     if(command==='transform-again')return transforms.again();
+    const object=objectCommand(command);if(object)return object();
     if(['rotate-dialog','reflect-dialog','scale-dialog'].includes(command))return void transformToolDialog(command.split('-')[0]);
     if(command==='delete') {
       if(state.ui.tool==='artboard')return artboards.remove();

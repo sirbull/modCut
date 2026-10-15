@@ -701,3 +701,29 @@ dokumentinfo og Smart Guides.
 
 Høyrepanel-planen i RIGHT_PANELS.md er dermed gjennomført. Neste i hovedplanen er D1.9 (kontrollinje),
 D1.10 (Group, isolasjon, Arrange, utklippstavle), D1.11 (Place bitmap) og D1.12 (Send til Cut).
+
+## 2026-10-15: D1.10 del A, Group, Arrange, Lock og Hide
+
+- **Group** (Mod+G): gruppen tar plassen til det øverste objektet og beholder rekkefølgen; den nye
+  gruppen blir valgt. **Ungroup** (Mod+Shift+G): barna erstatter gruppen der den lå, og arver gruppens
+  transform og opasitet slik at utseendet ikke endres; barna blir valgt.
+- **Arrange**: Bring to Front (Mod+Shift+]), Bring Forward (Mod+]), Send Backward (Mod+[), Send to Back
+  (Mod+Shift+[), innenfor hvert lag eller hver gruppe. Valgte naboer flyttes sammen, og bare valgte
+  objekter flyttes, så låste naboer blokkerer ikke.
+- **Lock** (Mod+2), **Unlock All** (Mod+Alt+2), **Hide** (Mod+3), **Show All** (Mod+Alt+3) for objekter
+  (ikke lag). Unlock All og Show All velger det de låste opp eller viste.
+- Object-menyen i Draw har fått Arrange-undermeny, Group, Ungroup, Lock Selection, Unlock All,
+  Hide Selection og Show All. Properties har fått Group, Ungroup, Bring to Front og Send to Back.
+- **Rettet feil:** klikk på et låst objekt valgte laget det lå i. Trefftesten returnerer nå aldri et lag,
+  og låste eller skjulte objekter slipper klikket gjennom, som i Illustrator.
+- Ren logikk i `doc/arrange.mjs` med enhetstester. Alt er ett angresteg per kommando.
+
+Verifisering: 154 Draw-enhetstester passerer. Ny E2E `draw-object-workflows.mjs` (`--draw-objects`)
+med hurtigtaster, Object-menyen og Properties passerer. Komplett Draw-E2E: alle Draw-arbeidsflyter
+passerer; autolagringstesten (`project-workflows.mjs:113`) passerte i én av tre kjøringer.
+
+Undersøkelse av autolagringstesten: en CPU-profil rett før testen viser hovedtråden ledig ca. 85 %
+av tiden, og én dokumentendring tar 8 til 14 ms, men en `setTimeout` på 10 ms fyrer først etter
+160 til 180 ms. Tidtakerne forsinkes altså uten at Draw-koden jobber. `backgroundThrottling: false`
+for testvinduet hjalp ikke og er ikke tatt med. Feilen fantes også på `feat/vector-draw` uten disse
+endringene. Neste kandidat er hvordan Xvfb/Electron prioriterer et vindu uten fokus.
