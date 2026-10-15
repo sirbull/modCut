@@ -6,7 +6,7 @@ Oppdatert 2026-10-15. Arbeidsgren: `feat/vector-draw`.
 
 Fase 0 og D1.1–D1.7 er fullført. **D1.8 pågår** og gjøres i delsteg som committes
 og pushes hver for seg: A Layers/template-lag (**ferdig**), B Transform-panel (**ferdig**),
-C Align-panel, D Color/Stroke, Fill/Stroke-boks og Properties-gjennomgang.
+C Align-panel (**ferdig**), D Color/Stroke, Fill/Stroke-boks og Properties-gjennomgang.
 I tillegg er live tilbakemelding og Illustrator-markører gjort (eierprioritet): se arbeidsloggen.
 **Eierkrav:** linjer, håndtak og endringer skal alltid vises live under tegning, og markøren
 skal alltid være synlig med Illustrator-likt ikon per verktøy/tilstand.

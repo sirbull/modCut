@@ -18,6 +18,7 @@ import { importArtwork } from './import-artwork.mjs';
 import { shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog,layerOptionsDialog } from './ui/dialogs.mjs';
 import { layerOptionsPatch } from './doc/layers.mjs';
 import { toolCursor } from './tools/cursors.mjs';
+import { alignReference, alignOffsets, distributeOffsets, spacingOffsets } from './geom/align.mjs';
 
 const workspaces=new WeakMap();
 export function getDrawWorkspace(root) {return workspaces.get(root) || null;}
@@ -150,9 +151,16 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       const scaling=key==='width'||key==='height',matrix=panelMatrix(b,state.ui.referencePoint??[.5,.5],key,value,{linked:!!state.ui.linkProportions});
       transform(matrix,{x:'Move',y:'Move',width:'Scale',height:'Scale',rotate:'Rotate',shear:'Shear'}[key],scaling?{scaleStrokes:state.ui.scaleStrokes!==false,scaleCorners:state.ui.scaleCorners!==false}:{});
     },
-    align(key){const b=renderer.selectionBounds(),a=activeArtboard(state);if(!b)return;
-      const x={left:a.x,centerX:a.x+(a.width-b.width)/2,right:a.x+a.width-b.width}[key],y={top:a.y,centerY:a.y+(a.height-b.height)/2,bottom:a.y+a.height-b.height}[key];
-      transform([1,0,0,1,x===undefined?0:x-b.x,y===undefined?0:y-b.y],'Align');
+    alignPanel(kind,mode){
+      const ids=selectedIds().filter(id=>state.document.isEditable(id)),boxes=ids.map(id=>{const b=renderer.bounds(id);return b&&{id,x:b.x,y:b.y,width:b.width,height:b.height};}).filter(Boolean);
+      if(!boxes.length)return;const a=activeArtboard(state),alignTo=state.ui.alignTo??'selection';
+      const keyId=alignTo==='key'?(ids.includes(state.ui.keyObject)?state.ui.keyObject:ids.at(-1)):null;
+      const reference=alignReference(boxes,alignTo,{artboard:{x:a.x,y:a.y,width:a.width,height:a.height},keyId});
+      const offsets=kind==='align'?alignOffsets(boxes,mode,reference):kind==='distribute'?distributeOffsets(boxes,mode,reference):spacingOffsets(boxes,mode,reference,alignTo==='key'?state.ui.alignSpacing??null:null);
+      const moves=offsets.filter(o=>Math.hypot(...o.offset)>1e-9),label=kind==='align'?'Align':kind==='distribute'?'Distribute':'Distribute Spacing';
+      if(!moves.length)return;
+      // Each object moves by its own offset; all moves form one undo step.
+      state.history.transaction(label,()=>{for(const m of moves)transforms.apply([1,0,0,1,...m.offset],label,{ids:[m.id],remember:false});});select(ids);
     },
   });
   function handle(command) {return run(()=>{

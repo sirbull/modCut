@@ -416,3 +416,21 @@ markør per verktøy/tilstand. Skjermbilder: `%TEMP%\modcut-draw-pen-handles.png
 
 Kjent begrensning: objekter uten både fyll og strek kan ikke treffes på canvas
 (Paper hit-test krever maling); Illustrator treffer dem på banen. Bør fikses.
+
+## 2026-10-15 — D1.8 del C: Align-panel
+
+- Ren `geom/align.mjs`: `alignReference` (Selection, Key Object, Artboard; ett
+  valgt objekt justeres mot artboard som i Illustrator), `alignOffsets`,
+  `distributeOffsets` (kanter/sentre; tre objekter eller artboard) og
+  `spacingOffsets` (like mellomrom, eller eksakt avstand rundt nøkkelobjektet).
+- Panelet har Align Objects (6), Distribute Objects (6), Distribute Spacing (2),
+  Align to og, i nøkkelmodus, valg av nøkkelobjekt og Spacing (tom = Auto).
+  Nøkkelobjektet velges fra en liste over valgte objekter (standard: sist valgt)
+  i stedet for Illustrators klikk-på-valgt-objekt; det står fast.
+- Hvert objekt flyttes med egen forskyvning via transformkontrolleren; alle
+  flyttinger er ett angresteg. Geometriske grenser brukes (ikke strekgrenser).
+- 14 nye Tabler-ikoner i `panels/icons`.
+
+Verifisering: 121 Draw-enhetstester (inkl. ny `align.test.mjs`). Panel-E2E dekker
+justering mot utvalg, nøkkelobjekt, artboard, eksakt avstand, sentrumsfordeling
+og ett angresteg. Skjermbilde: `%TEMP%\modcut-draw-align-panel.png`.
