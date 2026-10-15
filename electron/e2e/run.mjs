@@ -105,10 +105,21 @@ try {
     first.socket.close();
     await stop("SIGKILL");
     await wait(500);
-    launch();
-    const recovered = await connectToApp(port);
-    await verifyProjectRecovery(recovered, expected);
-    recovered.socket.close();
+    // As in the Cut recovery path, retry only when the relaunched window never exposes DevTools.
+    for (let attempt = 1; ; attempt++) {
+      launch();
+      let recovered;
+      try { recovered = await connectToApp(port); }
+      catch (error) {
+        process.stderr.write(`Draw relaunch attempt ${attempt} failed: ${error.message}\n`);
+        await stop();
+        if (attempt >= 2) throw error;
+        await wait(750); continue;
+      }
+      await verifyProjectRecovery(recovered, expected);
+      recovered.socket.close();
+      break;
+    }
   } else {
     const expected = await runWorkflows(first, port);
     first.socket.close();

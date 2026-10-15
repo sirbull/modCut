@@ -181,10 +181,44 @@ export async function runDrawPanelWorkflows(client) {
   assert.ok(Math.abs((centers[1] - centers[0]) - (centers[2] - centers[1])) < 1e-3, 'Distribute centers evenly');
   await command('undo'); near(await boxOf(image.id), before[1], 'Undo distribute');
 
+  // Color panel: Fill/Stroke target, RGB/HSB/CMYK/Grayscale/Hex, live slider (one undo step) and None.
+  const fillHex = id => evaluate(`(async()=>{const n=${active}.state.document.getNode('${id}'),c=n.appearance.fills[0]?.paint.color.values;return c?c.map(v=>Math.round(v*255)):null})()`);
+  const strokeHex = id => evaluate(`(async()=>{const n=${active}.state.document.getNode('${id}'),c=n.appearance.strokes[0]?.paint.color.values;return c?c.map(v=>Math.round(v*255)):null})()`);
+  const applied = () => evaluate(`(async()=>(${active}.state.history.entries.filter(e=>e.applied).length))()`);
+  await evaluate(`(async()=>(${active}.select(['${rect.id}'])))()`);
+  const fill0 = await fillHex(rect.id), stroke0 = await strokeHex(rect.id);
+  await evaluate(`document.querySelector('${root} [data-draw-panel=color]').click()`);
+  await evaluate(`document.querySelector('${root} [data-draw-paint-target=fill]').click()`);
+  await chooseSelect('color-mode', 'rgb');
+  for (const [i, v] of [[0, 255], [1, 0], [2, 0]]) await setField(`color-rgb-${i}`, v);
+  assert.deepEqual(await fillHex(rect.id), [255, 0, 0], 'RGB fields set the fill');
+  const colorDepth = await applied();
+  const sliderLive = await evaluate(`(async()=>{const r=document.querySelector('${root} [data-draw-field=color-rgb-1-range]');r.focus();r.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));
+    for(const v of [40,80,120]){r.value=String(v);r.dispatchEvent(new Event('input',{bubbles:true}));}const connected=r.isConnected,g=${active}.state.document.getNode('${rect.id}').appearance.fills[0].paint.color.values[1];
+    r.dispatchEvent(new Event('change',{bubbles:true}));return{connected,g:Math.round(g*255)}})()`);
+  assert.deepEqual(sliderLive, { connected: true, g: 120 }, 'The slider updates artwork live without rebuilding mid-drag');
+  assert.equal(await applied(), colorDepth + 1, 'A slider drag is one undo step');
+  await chooseSelect('color-mode', 'hsb');
+  await setField('color-hsb-0', 120); await setField('color-hsb-1', 100); await setField('color-hsb-2', 100);
+  assert.deepEqual(await fillHex(rect.id), [0, 255, 0], 'HSB sets the fill');
+  await chooseSelect('color-mode', 'cmyk');
+  assert.deepEqual(await evaluate(`[0,1,2,3].map(i=>+document.querySelector('${root} [data-draw-field=color-cmyk-'+i+']').value)`), [100, 0, 100, 0]);
+  const colorShot = await client.command('Page.captureScreenshot', { format: 'png' });
+  await writeFile(join(tmpdir(), 'modcut-draw-color-panel.png'), Buffer.from(colorShot.data, 'base64'));
+  await evaluate(`document.querySelector('${root} [data-draw-paint-target=stroke]').click()`);
+  assert.equal(await evaluate(`document.querySelector('${root} [data-paint=stroke]').getAttribute('aria-pressed')`), 'true', 'Toolbar focus follows the panel target');
+  await setField('color-hex', '0000ff');
+  assert.deepEqual(await strokeHex(rect.id), [0, 0, 255], 'Hex sets the stroke');
+  await evaluate(`document.querySelector('${root} [data-draw-field=color-none]').click()`);
+  assert.equal(await strokeHex(rect.id), null, 'None removes the stroke');
+  for (let i = 0; i < 12 && JSON.stringify([await fillHex(rect.id), await strokeHex(rect.id)]) !== JSON.stringify([fill0, stroke0]); i++) await command('undo');
+  assert.deepEqual([await fillHex(rect.id), await strokeHex(rect.id)], [fill0, stroke0], 'Undo restores the original paint');
+  await evaluate(`document.querySelector('${root} [data-draw-paint-target=fill]').click()`);
+
   await evaluate(`document.querySelector('[data-close-tab="${scratch}"]').click()`); await wait(100);
   if (await evaluate("!!document.querySelector('[data-x=discard]')")) { await evaluate("document.querySelector('[data-x=discard]').click()"); await wait(100); }
   await evaluate(`document.querySelector('[data-tab-id="${original.id}"]').click()`);
   if (await evaluate("document.body.dataset.workspace") === 'draw') await evaluate("document.querySelector('#workspaceToggle').click()");
   assert.equal(await evaluate("paper.project.layers[1].exportJSON({asString:true})"), original.cut, 'Draw panels preserve the Cut document');
-  process.stdout.write('PASS Draw panels: Layers tree, Layer Options, template layers, solo/outline, drag, collect/release, delete, rename, Transform and Align panels\n');
+  process.stdout.write('PASS Draw panels: Layers tree, Layer Options, template layers, solo/outline, drag, collect/release, delete, rename, Transform, Align and Color panels\n');
 }

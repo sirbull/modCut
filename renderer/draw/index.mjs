@@ -110,11 +110,11 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     hint.hidden=state.document.data.layers.some(layer=>layer.children.length) || state.document.readOnly || state.ui.tool!=='select';
     outlineButton.setAttribute('aria-pressed',String(renderer.outline));status();
   }
-  function paint(kind,value) {
+  function paint(kind,value,{mergeKey=null}={}) {
     if(state.document.readOnly)return;
     if(kind==='width')state.ui.strokeWidth=value;else state.ui[kind]=value;
     const ids=paintIds();
-    if(ids.length)state.history.transaction('Appearance',()=>{for(const id of ids)state.history.execute(updateNode(id,{appearance:changePaint(state.document.getNode(id).appearance,kind,value,state.ui)}));});
+    if(ids.length)state.history.transaction('Appearance',()=>{for(const id of ids)state.history.execute(updateNode(id,{appearance:changePaint(state.document.getNode(id).appearance,kind,value,state.ui)}));},{mergeKey});
     else {panels?.render();toolbar?.update();}
   }
   function layerId() {
@@ -143,6 +143,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   artboards=createArtboardController(state,{refresh,fit,bounds:id=>renderer.bounds(id),localMatrix:(id,m)=>renderer.localMatrix(id,m)});
   panels=createPanels(shell,state,{run,select,selectedIds,paintIds,paint,bounds:()=>renderer.selectionBounds(),fit,artboards,
     cornerInfo:()=>paths?.cornerInfo()??null,setCornerRadius:radius=>paths.setCornerRadius(radius),
+    paintFocus(kind){state.ui.paintFocus=kind;toolbar?.update();panels?.render();},
     async layerOptions(id){const layer=state.document.getNode(id);if(layer?.type!=='layer'||state.document.readOnly)return;
       const values=await layerOptionsDialog(layer);if(!values||destroyed)return;
       run(()=>{const current=state.document.getNode(id);if(!current)return;const patch=layerOptionsPatch(current,values);if(Object.keys(patch).length)state.history.execute(updateNode(id,patch,{label:'Layer Options'}));});},

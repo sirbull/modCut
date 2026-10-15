@@ -1403,7 +1403,7 @@ Oppdateres når oppgaven fullføres. Løpende arbeidslogg: [`draw/WORK_LOG.md`](
 * [x] D1.5 Pen og ankerverktøy
 * [x] D1.6 Former
 * [x] D1.7 Rotate, Reflect, Scale med Copy og Transform Again
-* [ ] D1.8 Grunnpaneler — pågår: Layers, template-lag, Transform og Align ferdig; Color/Stroke, Fill/Stroke-boks og Properties gjenstår
+* [ ] D1.8 Grunnpaneler — pågår: Layers, template-lag, Transform, Align og Color ferdig; Stroke, Fill/Stroke-boks og Properties gjenstår
 * [ ] D1.9 Kontrollinje og statuslinje
 * [ ] D1.10 Group, Arrange, Clipboard
 * [ ] D1.11 Place bitmap og template-lag
@@ -1772,3 +1772,8 @@ Selection, Key Object og Artboard; ett objekt mot Selection justeres mot artboar
 Distribute Objects (kanter/sentre) og Distribute Spacing (Auto eller eksakt mm
 rundt nøkkelobjektet). Avvik: nøkkelobjektet velges i en liste i panelet, ikke ved
 å klikke på et valgt objekt. Grensene er geometriske, ikke strekgrenser.
+
+**Del D1 — Color-panel (ferdig).** RGB, HSB, CMYK, Grayscale og Hex med glider og
+tallfelt, Fill/Stroke-mål og None. Maling lagres som RGB (CMYK/Grayscale er
+visninger uten fargeprofil). Glidere oppdaterer canvas live; et drag er ett
+angresteg via `History.transaction(..., {mergeKey})`. Fargespekter/ramp er ikke laget.

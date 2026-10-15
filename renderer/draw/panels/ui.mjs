@@ -3,6 +3,8 @@ import { insertNode, updateNode } from '../doc/commands.mjs';
 import { ROOT_CONTEXT, collectCommands, deleteLayerCommands, layerContext, moveCommand, newLayer, releaseCommands, soloUpdates } from '../doc/layers.mjs';
 import { shortcutLabel } from '../keymap.mjs';
 import { REFERENCE_POINTS } from '../geom/transforms.mjs';
+import { COLOR_MODES, colorFromValues, colorValues, normalizeHex } from '../doc/color.mjs';
+import { paintHex } from '../doc/paint.mjs';
 
 export function icon(href) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
@@ -12,6 +14,7 @@ export function icon(href) {
 }
 export function createPanels(shell, state, api) {
   const rail = document.createElement('nav'); rail.className = 'draw-panel-rail'; rail.setAttribute('aria-label','Draw panels');
+  let liveEdit = false;
   const panels = document.createElement('aside'); panels.className = 'draw-panels'; panels.setAttribute('aria-label','Draw options');
   const primary = document.createElement('section'); primary.className = 'draw-panel draw-panel--primary';
   panels.append(primary); shell.append(rail,panels);
@@ -226,6 +229,51 @@ export function createPanels(shell, state, api) {
     }
     text(host,!ids.length ? 'Select objects to align or distribute them.' : alignTo === 'key' ? 'The key object stays in place. Enter a spacing to use an exact gap.' : ids.length === 1 && alignTo === 'selection' ? 'A single object aligns to the active artboard.' : 'Distribute Objects needs three objects, or an artboard.');
   }
+  function currentPaint(kind) {
+    const node = state.document.getNode(api.paintIds()[0]);
+    if (!node) return state.ui[kind];
+    return paintHex(kind === 'fill' ? node.appearance.fills[0] : node.appearance.strokes[0]);
+  }
+  function colorPanel(host) {
+    const target = state.ui.paintFocus === 'stroke' ? 'stroke' : 'fill', mode = state.ui.colorMode ?? 'rgb', hex = currentPaint(target);
+    const disabled = state.document.readOnly, shown = hex || '#FFFFFF', live = `color-${target}`;
+    const targets = document.createElement('div'); targets.className = 'draw-segmented'; targets.setAttribute('role','group'); targets.setAttribute('aria-label','Color target');
+    for (const kind of ['fill','stroke']) {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'draw-segmented__option'; b.textContent = kind === 'fill' ? 'Fill' : 'Stroke';
+      b.dataset.drawPaintTarget = kind; b.setAttribute('aria-pressed',String(kind === target));
+      b.addEventListener('click',() => api.paintFocus(kind)); targets.append(b);
+    }
+    host.append(targets);
+    const top = document.createElement('div'); top.className = 'draw-color-top'; host.append(top);
+    const swatch = document.createElement('input'); swatch.type = 'color'; swatch.className = 'draw-color-swatch'; swatch.value = shown.toLowerCase();
+    swatch.setAttribute('aria-label',`${target === 'fill' ? 'Fill' : 'Stroke'} color picker`); swatch.dataset.drawField = 'color-picker'; swatch.dataset.live = 'true'; swatch.disabled = disabled;
+    swatch.classList.toggle('is-none',!hex);
+    swatch.addEventListener('input',() => { liveEdit = true; }); swatch.addEventListener('input',() => api.run(() => api.paint(target,swatch.value.toUpperCase(),{ mergeKey: live })));
+    swatch.addEventListener('change',() => { liveEdit = false; render(); });
+    const none = button('None',() => api.paint(target,null)); none.dataset.drawField = 'color-none'; none.disabled = disabled; none.setAttribute('aria-pressed',String(!hex));
+    const modeSelect = document.createElement('select'); modeSelect.className = 'draw-select'; modeSelect.dataset.drawField = 'color-mode'; modeSelect.setAttribute('aria-label','Color mode');
+    for (const [value,spec] of Object.entries(COLOR_MODES)) modeSelect.append(new Option(spec.name,value,false,value === mode));
+    modeSelect.addEventListener('change',() => { state.ui.colorMode = modeSelect.value; render(); });
+    top.append(swatch,modeSelect,none);
+    const values = colorValues(mode,shown), inputs = [];
+    const apply = (mergeKey) => api.run(() => api.paint(target,colorFromValues(mode,inputs.map(i => i.number.valueAsNumber)),{ mergeKey }));
+    COLOR_MODES[mode].channels.forEach(([label,max],i) => {
+      const row = document.createElement('label'); row.className = 'draw-color-channel';
+      const name = document.createElement('span'); name.textContent = label;
+      const range = document.createElement('input'); range.type = 'range'; range.min = '0'; range.max = String(max); range.step = mode === 'rgb' ? '1' : '0.1'; range.value = String(values[i]);
+      range.dataset.drawField = `color-${mode}-${i}-range`; range.dataset.live = 'true'; range.setAttribute('aria-label',`${label} slider`); range.disabled = disabled;
+      const number = document.createElement('input'); number.type = 'number'; number.min = '0'; number.max = String(max); number.step = 'any'; number.value = String(values[i]);
+      number.dataset.drawField = `color-${mode}-${i}`; number.setAttribute('aria-label',label); number.disabled = disabled;
+      range.addEventListener('pointerdown',() => { liveEdit = true; });
+      range.addEventListener('input',() => { number.value = range.value; apply(live); });
+      range.addEventListener('change',() => { liveEdit = false; render(); });
+      number.addEventListener('change',() => { range.value = number.value; apply(null); });
+      inputs.push({ range, number }); row.append(name,range,number); host.append(row);
+    });
+    const hexInput = field(host,'Hex',hex ? hex.slice(1).toUpperCase() : '',value => api.paint(target,normalizeHex(value)),{ type:'text', key:'color-hex', disabled });
+    hexInput.maxLength = 7; hexInput.spellcheck = false;
+    text(host,api.paintIds().length ? 'Changes apply live to the selected artwork; a slider drag is one undo step.' : 'No artwork selected: these colors apply to new shapes.');
+  }
   function paint(host, strokeOnly = false) {
     const ids = api.paintIds(), first = state.document.getNode(ids[0]);
     function hex(entry, fallback) {
@@ -246,6 +294,9 @@ export function createPanels(shell, state, api) {
     if (!ids.length) text(host,'These colors apply to new shapes. Select artwork to change its appearance.');
   }
   function render() {
+    // A slider drag or color-picker session updates the canvas live; rebuilding would interrupt it.
+    if (liveEdit && primary.contains(document.activeElement)) return;
+    liveEdit = false;
     for (const button of rail.children) button.setAttribute('aria-pressed',String(button.dataset.drawPanel === state.ui.panel));
     primary.replaceChildren();
     if (state.ui.panel !== 'layers') heading(primary,PANEL_DEFINITIONS.find(p => p.id === state.ui.panel)?.name || 'Properties');
@@ -267,7 +318,7 @@ export function createPanels(shell, state, api) {
       for(const [label,action,disabled] of [['New artboard',()=>api.artboards.add(),false],['Duplicate',()=>api.artboards.duplicate(),false],['Delete',()=>api.artboards.remove(),state.document.data.artboards.length===1],['Move up',()=>api.artboards.order(-1),state.document.data.artboards[0].id===board.id],['Move down',()=>api.artboards.order(1),state.document.data.artboards.at(-1).id===board.id],['Rearrange…',api.rearrange,false]]) {
         const b=button(label,action);b.disabled=disabled || state.document.readOnly;primary.append(b);
       }
-    } else if (state.ui.panel === 'color') paint(primary);
+    } else if (state.ui.panel === 'color') colorPanel(primary);
     else if (state.ui.panel === 'stroke') paint(primary,true);
     else if (state.ui.panel === 'align') alignPanel(primary);
     else if (state.ui.panel === 'transform') transform(primary);

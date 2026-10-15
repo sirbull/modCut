@@ -434,3 +434,25 @@ Kjent begrensning: objekter uten både fyll og strek kan ikke treffes på canvas
 Verifisering: 121 Draw-enhetstester (inkl. ny `align.test.mjs`). Panel-E2E dekker
 justering mot utvalg, nøkkelobjekt, artboard, eksakt avstand, sentrumsfordeling
 og ett angresteg. Skjermbilde: `%TEMP%\modcut-draw-align-panel.png`.
+
+## 2026-10-15 — D1.8 del D1: Color-panel
+
+- Ren `doc/color.mjs`: hex-normalisering og RGB/HSB/CMYK (enhets-CMYK uten
+  profil, samme som rendererens forhåndsvisning)/Grayscale (K = dekning) til og
+  fra hex, med validering per kanal. Maling lagres fortsatt som RGB; andre modi
+  er visninger. Dokumentets `colorMode` er uendret.
+- `History.transaction(label, fn, {mergeKey})` slår sammen påfølgende
+  transaksjoner med samme nøkkel og noder. Brukes for live glidere/fargevelger:
+  canvas oppdateres for hvert steg, men ett drag blir ett angresteg.
+- Color-panelet: Fill/Stroke-mål (synket med verktøylinjens fokus), fargevelger,
+  modus, glider + tallfelt per kanal, Hex og None. Panelet bygges ikke om under
+  en aktiv glider-/velgerøkt (`liveEdit`), så draget ikke avbrytes.
+
+Verifisering: 124 Draw-enhetstester (ny `color.test.mjs`, inkl. sammenslåtte
+transaksjoner). Panel-E2E dekker RGB, live glider (ett steg, uten ombygging),
+HSB, CMYK-visning, Stroke-mål, Hex, None og full angring. Skjermbilde:
+`%TEMP%\modcut-draw-color-panel.png`.
+
+Harness: Draw-grenen i `electron/e2e/run.mjs` prøver nå gjenstart én gang til hvis
+DevTools-målet ikke dukker opp etter simulert krasj (samme mønster som Cut-grenen).
+Den forbigående feilen traff 2 av 4 fulle kjøringer før endringen.

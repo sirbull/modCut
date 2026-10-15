@@ -103,7 +103,7 @@ the same commit that completes an item.
   keymap and `.modcut` v4 persistence. D0.1–D0.6 complete.
 - [ ] Phase 1 — Basic drawing MVP: artboards, Pen, shapes, layers, bitmap
   references and Send to Cut v1. D1.1–D1.7 complete. D1.8 in progress: Layers
-  panel, template layers, Transform and Align panels done; Color/Stroke, the
+  panel, template layers, Transform, Align and Color panels done; Stroke, the
   Fill/Stroke box and Properties remain. The phase remains in progress.
 - [ ] Phase 2 — Core vector editing: text, Pathfinder, gradients, import/export
   and Send to Cut v2.
