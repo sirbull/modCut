@@ -387,6 +387,53 @@ kjøring traff en ustabil Rotate-drag-assert (`draw-transform-workflows.mjs:47`)
 som passerte isolert og i neste fulle kjøring. En annen agent (Codex) arbeidet
 samtidig i samme tre; parallelle Electron-kjøringer ga da en autosave-feil.
 
+## 2026-10-15 — Live tilbakemelding og Illustrator-markører (prioritert av eier)
+
+Eieren presiserte at linjer og håndtak alltid må synes mens man tegner, at
+endringer skal vises live, og at markøren alltid skal være synlig med
+Illustrator-lik ikon per verktøy og tilstand. Dette ble tatt før D1.8 del C.
+
+- Ny `tools/cursors.mjs`: SVG-markører med hvit glorie og CSS-fallback for
+  Selection (svart pil, over objekt, Alt-kopi), Direct Selection (hvit pil, over
+  anker/segment), Pen (ny `*`, aktiv, fortsett `/`, lukk `o`, legg til `+`,
+  fjern `−`, konverter `^`), ankerverktøy, former (sikte), Artboard, Hand
+  (åpen/lukket under drag), Zoom inn/ut (Alt), transformverktøy, rotasjon,
+  hjørne-widget og resize-håndtak. `toolCursor` brukes for aktivt og midlertidig
+  verktøy (Space/Ctrl+Space), så canvas aldri står uten markør.
+- Redigerings-forhåndsvisninger (Pen, Direct Selection, hjørner) får en tynn
+  kontur i lagfargen. Banen synes derfor også uten strek/fyll eller hvit fyll
+  på hvitt artboard.
+- Pen viser nå retningshåndtak (linjer + knotter) og ankerpunkt for ankeret som
+  dras, og forrige ankers håndtak under gummistrikk-linjen. Tidligere manglet
+  håndtakene helt under drag.
+- `renderer.layerColor(id)` gir arvet lagfarge til overlays.
+
+Verifisering: 121 Draw-enhetstester (ny `cursors.test.mjs`). Ny
+`electron/e2e/draw-feedback-workflows.mjs` (`--draw-feedback`) måler faktiske
+piksler midt i Pen-gesten (gummistrikk, begge håndtak) uten strek/fyll og sjekker
+markør per verktøy/tilstand. Skjermbilder: `%TEMP%\modcut-draw-pen-handles.png`,
+`modcut-draw-pen-rubberband.png` og markørgalleri `modcut-draw-cursors.png`.
+
+Kjent begrensning: objekter uten både fyll og strek kan ikke treffes på canvas
+(Paper hit-test krever maling); Illustrator treffer dem på banen. Bør fikses.
+
+## 2026-10-15 — D1.8 del C: Align-panel
+
+- Ren `geom/align.mjs`: `alignReference` (Selection, Key Object, Artboard; ett
+  valgt objekt justeres mot artboard som i Illustrator), `alignOffsets`,
+  `distributeOffsets` (kanter/sentre; tre objekter eller artboard) og
+  `spacingOffsets` (like mellomrom, eller eksakt avstand rundt nøkkelobjektet).
+- Panelet har Align Objects (6), Distribute Objects (6), Distribute Spacing (2),
+  Align to og, i nøkkelmodus, valg av nøkkelobjekt og Spacing (tom = Auto).
+  Nøkkelobjektet velges fra en liste over valgte objekter (standard: sist valgt)
+  i stedet for Illustrators klikk-på-valgt-objekt; det står fast.
+- Hvert objekt flyttes med egen forskyvning via transformkontrolleren; alle
+  flyttinger er ett angresteg. Geometriske grenser brukes (ikke strekgrenser).
+- 14 nye Tabler-ikoner i `panels/icons`.
+
+Verifisering: 121 Draw-enhetstester (inkl. ny `align.test.mjs`). Panel-E2E dekker
+justering mot utvalg, nøkkelobjekt, artboard, eksakt avstand, sentrumsfordeling
+og ett angresteg. Skjermbilde: `%TEMP%\modcut-draw-align-panel.png`.
 ## 2026-10-15: Høyrepanel trinn 1, dokk og panelgrupper
 
 Spesifikasjon: [RIGHT_PANELS.md](RIGHT_PANELS.md). Gren: `claude/draw-properties-layers-panels`

@@ -17,6 +17,8 @@ import { changePaint, paintHex } from './doc/paint.mjs';
 import { importArtwork } from './import-artwork.mjs';
 import { shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog,layerOptionsDialog } from './ui/dialogs.mjs';
 import { layerOptionsPatch } from './doc/layers.mjs';
+import { toolCursor } from './tools/cursors.mjs';
+import { alignReference, alignOffsets, distributeOffsets, spacingOffsets } from './geom/align.mjs';
 
 const workspaces=new WeakMap();
 export function getDrawWorkspace(root) {return workspaces.get(root) || null;}
@@ -68,6 +70,8 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       tool.id==='artboard' ? 'Drag: create/move · Edges: resize · Alt+drag: duplicate' :
       tool.id==='select' ? 'Shift: add to selection · Alt+drag: copy · Space: Hand' : 'Space: Hand · Ctrl/Cmd+Space: Zoom');
   }
+  // The canvas always shows an Illustrator-style cursor for the current or temporary tool.
+  const cursor=()=>toolCursor(temporary?.id || state.ui.tool,{zoomOut:!!temporary?.zoomOut});
   function select(ids) {state.selection.set(ids);transforms.selectionChanged();syncPaint();withScope(()=>renderer.select());panels?.render();toolbar?.update();status();}
   function selectionChanged(){transforms.selectionChanged();syncPaint();withScope(()=>renderer.select());panels?.render();toolbar?.update();status();}
   function transform(matrix,label='Transform',options={}) {return transforms.apply(matrix,label,options);}
@@ -132,7 +136,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   function setTool(id) {
     if(!implementedTools.has(id) || state.document.readOnly && !['select','hand','zoom'].includes(id))return;
     if(id!==state.ui.tool&&['direct-selection','anchor-point','delete-anchor'].some(tool=>tool===id||tool===state.ui.tool))state.selection.set(state.selection.ids);
-    interactions?.cancel();paths?.finish();toolbar?.close();temporary=null;state.ui.tool=id;canvas.dataset.tool=id;canvas.style.cursor='';
+    interactions?.cancel();paths?.finish();toolbar?.close();temporary=null;state.ui.tool=id;canvas.dataset.tool=id;canvas.style.cursor=cursor();
     withScope(()=>renderer.select());toolbar?.update();panels?.render();hint.hidden=state.document.data.layers.some(l=>l.children.length)||state.document.readOnly||id!=='select';status();
   }
   function openPanel(id) {toolbar?.close();panels.open(id);}
@@ -147,9 +151,16 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       const scaling=key==='width'||key==='height',matrix=panelMatrix(b,state.ui.referencePoint??[.5,.5],key,value,{linked:!!state.ui.linkProportions});
       transform(matrix,{x:'Move',y:'Move',width:'Scale',height:'Scale',rotate:'Rotate',shear:'Shear'}[key],scaling?{scaleStrokes:state.ui.scaleStrokes!==false,scaleCorners:state.ui.scaleCorners!==false}:{});
     },
-    align(key){const b=renderer.selectionBounds(),a=activeArtboard(state);if(!b)return;
-      const x={left:a.x,centerX:a.x+(a.width-b.width)/2,right:a.x+a.width-b.width}[key],y={top:a.y,centerY:a.y+(a.height-b.height)/2,bottom:a.y+a.height-b.height}[key];
-      transform([1,0,0,1,x===undefined?0:x-b.x,y===undefined?0:y-b.y],'Align');
+    alignPanel(kind,mode){
+      const ids=selectedIds().filter(id=>state.document.isEditable(id)),boxes=ids.map(id=>{const b=renderer.bounds(id);return b&&{id,x:b.x,y:b.y,width:b.width,height:b.height};}).filter(Boolean);
+      if(!boxes.length)return;const a=activeArtboard(state),alignTo=state.ui.alignTo??'selection';
+      const keyId=alignTo==='key'?(ids.includes(state.ui.keyObject)?state.ui.keyObject:ids.at(-1)):null;
+      const reference=alignReference(boxes,alignTo,{artboard:{x:a.x,y:a.y,width:a.width,height:a.height},keyId});
+      const offsets=kind==='align'?alignOffsets(boxes,mode,reference):kind==='distribute'?distributeOffsets(boxes,mode,reference):spacingOffsets(boxes,mode,reference,alignTo==='key'?state.ui.alignSpacing??null:null);
+      const moves=offsets.filter(o=>Math.hypot(...o.offset)>1e-9),label=kind==='align'?'Align':kind==='distribute'?'Distribute':'Distribute Spacing';
+      if(!moves.length)return;
+      // Each object moves by its own offset; all moves form one undo step.
+      state.history.transaction(label,()=>{for(const m of moves)transforms.apply([1,0,0,1,...m.offset],label,{ids:[m.id],remember:false});});select(ids);
     },
   });
   function handle(command) {return run(()=>{
@@ -203,7 +214,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   paths=createPathInteractions(canvas,state,{scope,renderer,withScope,run,select,selectionChanged,layerId,status,
     tool:()=>temporary?.id || state.ui.tool,closeMenus:()=>toolbar.close()});
   interactions=createInteractions(canvas,state,{scope,renderer,withScope,run,select,selectedIds,transform,artboards,status,shapeOptions,insertShape,shapeDialog,zoomAt,
-    transforms,transformDialog:transformToolDialog,
+    transforms,transformDialog:transformToolDialog,cursor,
     tool:()=>temporary?.id || state.ui.tool,zoomOut:()=>!!temporary?.zoomOut,preferences:getPreferences,closeMenus:()=>toolbar.close()});
   const unsubscribe=state.subscribe(()=>{interactions.cancel();paths.documentChanged();refresh();});
   function resize(){const {width,height}=stage.getBoundingClientRect();if(width<=0||height<=0)return;
@@ -215,7 +226,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   zoomInput.addEventListener('change',()=>{if(Number.isFinite(zoomInput.valueAsNumber)&&zoomInput.valueAsNumber>=.0001&&zoomInput.valueAsNumber<=10000)zoomAt(scope.view.center,zoomInput.valueAsNumber/100*(96/25.4)/scope.view.zoom);else status();});
   outlineButton.addEventListener('click',()=>handle('outline'));fitButton.addEventListener('click',()=>fit());
   const workspace={state,scope,renderer,statusElement:controls,artboards,transforms,resize,select,setTool,handle,availableTool:id=>implementedTools.has(id),canHandle:command=>commands.has(command),
-    setTemporaryTool(value){temporary=value;canvas.dataset.tool=temporary?.id || state.ui.tool;status();},
+    setTemporaryTool(value){temporary=value;canvas.dataset.tool=temporary?.id || state.ui.tool;canvas.style.cursor=cursor();status();},
     async import(prepared,name,options={}){const result=await importArtwork(scope,state,prepared,name,layerId(),{...options,alive:()=>!destroyed});select(result.ids);if(options.fitArtboard)fit();return result;},
     destroy(){destroyed=true;ownedTransformModal?.querySelector('[data-x=cancel]').click();paths.destroy();interactions.destroy();toolbar.destroy();unsubscribe();observer.disconnect();window.removeEventListener('modcut-theme-change',syncTheme);workspaces.delete(root);withScope(()=>{renderer.destroy();scope.remove();});controls.remove();root.replaceChildren();},
   };

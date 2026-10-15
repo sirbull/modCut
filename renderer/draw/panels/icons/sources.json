@@ -11,6 +11,26 @@
       "path": "icons/outline/adjustments.svg",
       "sha256": "588b6b3c7f787ffc4339fec0677de0e55d44a72ca4d899d60f4d74fbdae6bf9f"
     },
+    "align-box-bottom-center": {
+      "name": "align-box-bottom-center",
+      "path": "icons/outline/align-box-bottom-center.svg",
+      "sha256": "1b164ebd6fb7c3a49323acb665c92eb4e8e0a2e7da2adb876a1b14edcffd5fa8"
+    },
+    "align-box-left-middle": {
+      "name": "align-box-left-middle",
+      "path": "icons/outline/align-box-left-middle.svg",
+      "sha256": "5db660ffe996d971798271788d518b78a7c9f5b185ade5607ecb221a0b8c2e06"
+    },
+    "align-box-right-middle": {
+      "name": "align-box-right-middle",
+      "path": "icons/outline/align-box-right-middle.svg",
+      "sha256": "749118e60bd228a3ec464bb94dac6ea70f0325d0d53e14ceca721e59b30a5669"
+    },
+    "align-box-top-center": {
+      "name": "align-box-top-center",
+      "path": "icons/outline/align-box-top-center.svg",
+      "sha256": "e07ac23c1aef4c50a019e8702eb8804c2f99b6eb885a4a9dc012685e6a82e210"
+    },
     "align-center": {
       "name": "align-center",
       "path": "icons/outline/align-center.svg",
@@ -56,10 +76,50 @@
       "path": "icons/outline/folder-plus.svg",
       "sha256": "add07c96cd278366823b4d028cb0a4cb135ce6f7d2d8b72bece4fd65dcd3e521"
     },
+    "keyframe-align-horizontal": {
+      "name": "keyframe-align-horizontal",
+      "path": "icons/outline/keyframe-align-horizontal.svg",
+      "sha256": "3fcb7408c26c0368538efc8273ebefb03ba2e2b322e7a3a9152016670db70554"
+    },
+    "keyframe-align-vertical": {
+      "name": "keyframe-align-vertical",
+      "path": "icons/outline/keyframe-align-vertical.svg",
+      "sha256": "096711771a0329910c8bdbaeacd5d9b621c06886da4a1755d4809db65ede5b2f"
+    },
     "layers-intersect": {
       "name": "layers-intersect",
       "path": "icons/outline/layers-intersect.svg",
       "sha256": "d5e04801ab417901f74b16e976f3db732d920f4f9f73ebf0ca61643506d127fd"
+    },
+    "layout-align-bottom": {
+      "name": "layout-align-bottom",
+      "path": "icons/outline/layout-align-bottom.svg",
+      "sha256": "67bbc1370381d8af8a557bc1314fde46b00b5451a454ee7a414ca993464341d4"
+    },
+    "layout-align-center": {
+      "name": "layout-align-center",
+      "path": "icons/outline/layout-align-center.svg",
+      "sha256": "873213dbeabf8f5c47e672418dfdf6df8b9430b47402f4dff80dbdc87ca30b1b"
+    },
+    "layout-align-left": {
+      "name": "layout-align-left",
+      "path": "icons/outline/layout-align-left.svg",
+      "sha256": "e87bd2ba04b5ce21e24c14ffad0366f715caac34fec32b546114c2be3477e17d"
+    },
+    "layout-align-middle": {
+      "name": "layout-align-middle",
+      "path": "icons/outline/layout-align-middle.svg",
+      "sha256": "b2cd41ae7ddac06d44b1f855e3cbdcb33faa6e69681f9c55ad6f298c23027d0e"
+    },
+    "layout-align-right": {
+      "name": "layout-align-right",
+      "path": "icons/outline/layout-align-right.svg",
+      "sha256": "dd3d7b1f3b0c70fec9f0f36f5738ee068330d4962f65e871816c45a6c6c288de"
+    },
+    "layout-align-top": {
+      "name": "layout-align-top",
+      "path": "icons/outline/layout-align-top.svg",
+      "sha256": "3088b34b43596b0550f8aedb74a09123b294878b065ec44a7ba2355cc06c054c"
     },
     "line-dashed": {
       "name": "line-dashed",
@@ -90,6 +150,16 @@
       "name": "plus",
       "path": "icons/outline/plus.svg",
       "sha256": "c273c746b4db19bebe87aaad5142f649c8e60cecfeb63d457ad4633d9907d17d"
+    },
+    "spacing-horizontal": {
+      "name": "spacing-horizontal",
+      "path": "icons/outline/spacing-horizontal.svg",
+      "sha256": "c8940fa6ba85039a0f9e4cf5a96a1db3ec471aecc0a85a31ffa32f7835228fd7"
+    },
+    "spacing-vertical": {
+      "name": "spacing-vertical",
+      "path": "icons/outline/spacing-vertical.svg",
+      "sha256": "680d259668cb07c1f8ed7ca8fe7fe66bae25567a3a97b66aa162f2ef17fbc0b0"
     },
     "stack-pop": {
       "name": "stack-pop",

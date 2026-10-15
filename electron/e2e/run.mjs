@@ -13,6 +13,7 @@ import { runDrawPathWorkflows } from './draw-path-workflows.mjs';
 import { runDrawCornerWorkflows } from './draw-corner-workflows.mjs';
 import { runDrawTransformWorkflows } from './draw-transform-workflows.mjs';
 import { runDrawPanelWorkflows } from './draw-panel-workflows.mjs';
+import { runDrawFeedbackWorkflows } from './draw-feedback-workflows.mjs';
 import { runWorkflows, verifyRecoveredSession } from "./workflows.mjs";
 import { runThemeWorkflows } from "./theme-workflows.mjs";
 
@@ -61,6 +62,9 @@ try {
   if (process.argv.includes("--theme")) {
     await runThemeWorkflows(first, port);
     first.socket.close();
+  } else if (process.argv.includes('--draw-feedback')) {
+    for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
+    await runDrawFeedbackWorkflows(first);first.socket.close();
   } else if (process.argv.includes('--draw-panels')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawPanelWorkflows(first);first.socket.close();
@@ -96,6 +100,7 @@ try {
     await runDrawCornerWorkflows(first);
     await runDrawTransformWorkflows(first);
     await runDrawPanelWorkflows(first);
+    await runDrawFeedbackWorkflows(first);
     const expected = await runProjectWorkflows(first, profile);
     first.socket.close();
     await stop("SIGKILL");

@@ -4,6 +4,7 @@ import { appearance } from '../geometry.mjs';
 import { anchor,reversePath,splitCurve,moveAnchors,deleteAnchors,convertAnchor,constrain } from '../geom/path-editing.mjs';
 import { editablePath,editCornerSource,bakeCorners,roundCorners } from '../geom/corners.mjs';
 import { shapeSelectionKey } from '../doc/selection.mjs';
+import { CURSORS } from './cursors.mjs';
 
 export const PATH_TOOLS=['direct-selection','pen','add-anchor','delete-anchor','anchor-point'];
 const same=(a,b)=>a.nodeId===b.nodeId&&a.subpath===b.subpath&&a.segment===b.segment;
@@ -30,7 +31,19 @@ export function createPathInteractions(canvas,state,api) {
     selectAnchors([{...curve,segment:curve.segment+1}]);
   }
   function validSession(){if(session){const node=state.document.getNode(session.id);if(!state.document.isEditable(session.id)||!node?.subpaths[session.subpath]||node.subpaths[session.subpath].closed)session=null;}return session;}
-  function preview(nodes){withScope(()=>{clear();for(const node of nodes){const item=renderer.shapePreview(node,spaceId(node));item.opacity=node.opacity;previews.push(item);}renderer.setEditPreview(nodes);scope.view.update();});}
+  // Direction handles of the anchor being drawn, in the layer color at constant screen size.
+  function handleItems(node,subpath,index){
+    const s=node.subpaths[subpath]?.segments[index];if(!s)return [];
+    const id=state.document.getNode(node.id)?node.id:spaceId(node),color=renderer.layerColor(id),z=scope.view.zoom,world=v=>renderer.pointToWorld(id,v),p=world(s.p),items=[];
+    for(const key of ['in','out'])if(Math.hypot(...s[key])>1e-9){const end=world(s.p.map((n,i)=>n+s[key][i]));
+      items.push(new scope.Path.Line({from:p,to:end,strokeColor:color,strokeWidth:1/z,insert:false}),new scope.Path.Circle({center:end,radius:3/z,fillColor:'#FFFFFF',strokeColor:color,strokeWidth:1/z,insert:false}));}
+    items.push(new scope.Path.Rectangle({rectangle:new scope.Rectangle(p.subtract(3/z),new scope.Size(6/z,6/z)),fillColor:color,insert:false}));
+    return items;
+  }
+  function preview(nodes,handles=null){withScope(()=>{clear();for(const node of nodes){const item=renderer.shapePreview(node,spaceId(node));item.opacity=node.opacity;previews.push(item);
+    const outline=item.clone();outline.opacity=1;outline.fillColor=null;outline.dashArray=[];outline.strokeColor=renderer.layerColor(state.document.getNode(node.id)?node.id:spaceId(node));outline.strokeScaling=false;outline.strokeWidth=1;previews.push(outline);}
+    if(handles)for(const item of handleItems(handles.node,handles.subpath,handles.index)){scope.project.layers.at(-1).addChild(item);previews.push(item);}
+    renderer.setEditPreview(nodes);scope.view.update();});}
   function cornerSelection(){return renderer.cornerWidgets().map(({nodeId,subpath,segment})=>descriptor(nodeId,subpath,segment));}
   function roundedNodes(anchors,radius){
     return [...new Set(anchors.map(a=>a.nodeId))].map(id=>{const node=editNode(id);
@@ -117,19 +130,21 @@ export function createPathInteractions(canvas,state,api) {
       if(!PATH_TOOLS.includes(api.tool())||state.document.readOnly)return;
       e.stopImmediatePropagation();const p=point(e);api.status(p);clear();
       const tool=api.tool(),corner=tool==='direct-selection'&&renderer.cornerHandle(p),hit=renderer.pathHit(p,{handles:['direct-selection','pen'].includes(tool),shapes:tool==='direct-selection',logical:tool!=='pen'});
-      canvas.style.cursor=corner?'nwse-resize':hit?'pointer':'crosshair';
+      const tool0=api.tool(),base={'add-anchor':'anchor-add','delete-anchor':'anchor-remove','anchor-point':'anchor-convert'}[tool0]??'direct';
+      canvas.style.cursor=CURSORS[corner?'corner':hit&&tool0==='direct-selection'?(hit.kind==='point'?'direct-anchor':'direct-segment'):base];
       if(api.tool()==='pen') {
         const current=validSession(),node=current&&state.document.getNode(current.id),first=current?.reverse?node.subpaths[current.subpath].segments.length-1:0;
         const closing=current&&hit?.nodeId===current.id&&hit.subpath===current.subpath&&hit.segment===first&&node.subpaths[current.subpath].segments.length>1;
         const endpoint=!current&&renderer.pathHit(p,{handles:false,endpoints:true}),curve=!current&&!hit&&!endpoint&&renderer.curveHit(p);
         canvas.dataset.pathAction=closing?'close':endpoint?'continue':curve?'add-anchor':'draw';
-        canvas.style.cursor=closing?'cell':endpoint?'alias':curve?'copy':hit?'pointer':'crosshair';
+        const last=current&&hit?.nodeId===current.id&&hit.subpath===current.subpath&&hit.segment===(current.reverse?0:node.subpaths[current.subpath].segments.length-1);
+        canvas.style.cursor=CURSORS[closing?'pen-close':endpoint?'pen-continue':curve?'pen-add':last?'pen-convert':hit?'direct-anchor':current?'pen-active':'pen-new'];
       }
       if(api.tool()==='pen'&&validSession()){
         const node=structuredClone(state.document.getNode(session.id)),path=node.subpaths[session.subpath];if(session.reverse)node.subpaths[session.subpath]=reversePath(path);
         const current=node.subpaths[session.subpath],origin=renderer.pointToWorld(node.id,current.segments.at(-1).p);
         const end=e.shiftKey?new scope.Point(...constrain(xy(p),xy(origin))):p;
-        current.segments.push(anchor(xy(renderer.pointToLocal(node.id,end))));preview([node]);
+        current.segments.push(anchor(xy(renderer.pointToLocal(node.id,end))));preview([node],{node,subpath:session.subpath,index:current.segments.length-2});
       }else scope.view.update();return;
     }
     e.stopImmediatePropagation();const p=point(e),g=gesture;api.status(p);
@@ -162,7 +177,7 @@ export function createPathInteractions(canvas,state,api) {
           if(p.getDistance(g.start)>2/scope.view.zoom||g.dragged){s.out=v;if(!e.altKey)s.in=v.map(n=>-n);g.dragged=true;}
         }
         if(g.mode==='convert')g.node.subpaths[g.subpath]=editCornerSource(data,path=>{path.segments[g.index]=structuredClone(s);});
-        preview([g.node]);
+        preview([g.node],{node:g.node,subpath:g.subpath,index:g.index});
       }
     });g.last=p;
   }

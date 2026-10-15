@@ -1,4 +1,5 @@
 import { shapeFromDrag, SHAPE_TOOLS } from './shapes.mjs';
+import { CURSORS, RESIZE_CURSORS } from './cursors.mjs';
 import { resizeMatrix, rotationMatrix, transformedBox, snapTranslation } from './selection.mjs';
 import { activeArtboard } from '../doc/artboards.mjs';
 import { TRANSFORM_TOOLS,dragTransform,operationMatrix } from '../geom/transforms.mjs';
@@ -43,8 +44,12 @@ export function createInteractions(canvas, state, api) {
   function update(event) {
     const p=point(event);api.status(p);
     if (!gesture) {
-      const handle=['select','artboard'].includes(api.tool()) ? renderer.selectionHandle(p) : null;
-      canvas.style.cursor=handle==='rotate' ? 'crosshair' : handle ? `${handle}-resize` : '';
+      const tool=api.tool(),handle=['select','artboard'].includes(tool) ? renderer.selectionHandle(p) : null;
+      // Illustrator-style feedback: handles, object under Selection, Alt copy and Alt zoom-out.
+      canvas.style.cursor=handle==='rotate' ? CURSORS.rotate : handle ? CURSORS[RESIZE_CURSORS[handle]]
+        : tool==='select' && renderer.hit(p) ? CURSORS[event.altKey ? 'select-copy' : 'select-anchor']
+        : tool==='zoom' && event.altKey ? CURSORS['zoom-out'] : api.cursor();
+      return;
       return;
     }
     if(SHAPE_TOOLS.includes(gesture.tool) && api.tool()==='hand')gesture.start=gesture.start.add(p.subtract(gesture.end));
@@ -96,7 +101,7 @@ export function createInteractions(canvas, state, api) {
     if (event.button!==0) return;
     api.closeMenus();canvas.focus();canvas.setPointerCapture(event.pointerId);const p=point(event),tool=api.tool();
     const base={tool,start:p,end:p,center:scope.view.center.clone(),zoom:scope.view.zoom,screen:[event.clientX,event.clientY],modifiers:{shift:event.shiftKey,alt:event.altKey}};
-    if (tool==='hand' || tool==='zoom') {gesture=base;return;}
+    if (tool==='hand' || tool==='zoom') {gesture=base;if(tool==='hand')canvas.style.cursor=CURSORS['hand-active'];return;}
     if (state.document.readOnly) {
       if (tool==='select') {const id=renderer.hit(p);api.select(id ? [targetId(id)] : []);} return;
     }
@@ -131,7 +136,7 @@ export function createInteractions(canvas, state, api) {
     if (!gesture) return;
     const end=point(event);if (end.getDistance(gesture.end)>.000001)update(event);
     const drag=gesture,moved=Math.hypot(event.clientX-drag.screen[0],event.clientY-drag.screen[1])>3;cancel();
-    if (drag.tool==='hand')return;
+    if (drag.tool==='hand'){canvas.style.cursor=api.cursor();return;}
     if (drag.tool==='zoom') {if(!drag.scrubbed)api.zoomAt(drag.start,event.altKey || api.zoomOut() ? .8 : 1.25);return;}
     run(()=>{
       if (state.document.readOnly)return;

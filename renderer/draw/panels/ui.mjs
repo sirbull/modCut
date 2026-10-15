@@ -249,6 +249,48 @@ export function createPanels(shell, state, api) {
     check(host,'Scale corners','scale-corners',state.ui.scaleCorners !== false,value => { state.ui.scaleCorners = value; });
     text(host,box ? 'X and Y show the reference point. Rotate and Shear apply relative to the reference point; positive angles turn counterclockwise.' : 'Select an object to edit its position and size.');
   }
+  function alignPanel(host) {
+    const ids = api.selectedIds(), disabled = !ids.length || state.document.readOnly, alignTo = state.ui.alignTo ?? 'selection';
+    const section = (title, rows) => {
+      const h = document.createElement('h3'); h.className = 'draw-panel__section'; h.textContent = title; host.append(h);
+      const group = document.createElement('div'); group.className = 'draw-align-row'; group.setAttribute('role','group'); group.setAttribute('aria-label',title);
+      for (const [label,iconId,kind,mode] of rows) {
+        const b = iconButton(label,iconId,() => api.alignPanel(kind,mode),'draw-layer-action draw-align-button');
+        b.dataset.drawAlign = `${kind}-${mode}`; b.disabled = disabled; group.append(b);
+      }
+      host.append(group);
+    };
+    section('Align Objects',[['Horizontal align left','layout-align-left','align','left'],['Horizontal align center','layout-align-center','align','centerX'],['Horizontal align right','layout-align-right','align','right'],
+      ['Vertical align top','layout-align-top','align','top'],['Vertical align center','layout-align-middle','align','centerY'],['Vertical align bottom','layout-align-bottom','align','bottom']]);
+    section('Distribute Objects',[['Horizontal distribute left','align-box-left-middle','distribute','left'],['Horizontal distribute center','keyframe-align-vertical','distribute','centerX'],['Horizontal distribute right','align-box-right-middle','distribute','right'],
+      ['Vertical distribute top','align-box-top-center','distribute','top'],['Vertical distribute center','keyframe-align-horizontal','distribute','centerY'],['Vertical distribute bottom','align-box-bottom-center','distribute','bottom']]);
+    section('Distribute Spacing',[['Horizontal distribute space','spacing-horizontal','spacing','x'],['Vertical distribute space','spacing-vertical','spacing','y']]);
+    const row = document.createElement('label'); row.className = 'draw-field';
+    const name = document.createElement('span'); name.textContent = 'Align to';
+    const select = document.createElement('select'); select.className = 'draw-select'; select.dataset.drawField = 'align-to';
+    for (const [value,label] of [['selection','Selection'],['key','Key object'],['artboard','Artboard']]) select.append(new Option(label,value,false,value === alignTo));
+    select.addEventListener('change',() => { state.ui.alignTo = select.value; render(); }); row.append(name,select); host.append(row);
+    if (alignTo === 'key') {
+      const keyRow = document.createElement('label'); keyRow.className = 'draw-field';
+      const keyName = document.createElement('span'); keyName.textContent = 'Key object';
+      const key = document.createElement('select'); key.className = 'draw-select'; key.dataset.drawField = 'key-object'; key.disabled = !ids.length;
+      const current = ids.includes(state.ui.keyObject) ? state.ui.keyObject : ids.at(-1);
+      for (const id of ids) { const node = state.document.getNode(id); key.append(new Option(node.name || `<${node.type}>`,id,false,id === current)); }
+      key.addEventListener('change',() => { state.ui.keyObject = key.value; });
+      keyRow.append(keyName,key); host.append(keyRow);
+      const spaceRow = document.createElement('label'); spaceRow.className = 'draw-field';
+      const spaceName = document.createElement('span'); spaceName.textContent = 'Spacing (mm)';
+      const spacing = document.createElement('input'); spacing.type = 'number'; spacing.step = 'any'; spacing.placeholder = 'Auto'; spacing.dataset.drawField = 'align-spacing';
+      spacing.value = state.ui.alignSpacing ?? '';
+      spacing.addEventListener('change',() => api.run(() => {
+        if (spacing.value === '') { state.ui.alignSpacing = null; return; }
+        if (!Number.isFinite(spacing.valueAsNumber)) throw new Error('Enter a valid spacing.');
+        state.ui.alignSpacing = spacing.valueAsNumber;
+      }));
+      spaceRow.append(spaceName,spacing); host.append(spaceRow);
+    }
+    text(host,!ids.length ? 'Select objects to align or distribute them.' : alignTo === 'key' ? 'The key object stays in place. Enter a spacing to use an exact gap.' : ids.length === 1 && alignTo === 'selection' ? 'A single object aligns to the active artboard.' : 'Distribute Objects needs three objects, or an artboard.');
+  }
   function paint(host, strokeOnly = false) {
     const ids = api.paintIds(), first = state.document.getNode(ids[0]);
     function hex(entry, fallback) {
@@ -283,12 +325,6 @@ export function createPanels(shell, state, api) {
     check.addEventListener('change',()=>{state.ui.moveArtwork=check.checked;});move.append(check,document.createTextNode('Move/copy artwork with artboard'));host.append(move);
     for(const [label,action,disabled] of [['New artboard',()=>api.artboards.add(),false],['Duplicate',()=>api.artboards.duplicate(),false],['Delete',()=>api.artboards.remove(),state.document.data.artboards.length===1],['Move up',()=>api.artboards.order(-1),state.document.data.artboards[0].id===board.id],['Move down',()=>api.artboards.order(1),state.document.data.artboards.at(-1).id===board.id],['Rearrange…',api.rearrange,false]]) {
       const b=button(label,action);b.disabled=disabled || state.document.readOnly;host.append(b);
-    }
-  }
-  function alignPanel(host) {
-    text(host,'Align selected objects to the active artboard.');
-    for (const [label,key] of [['Left','left'],['Center horizontally','centerX'],['Right','right'],['Top','top'],['Center vertically','centerY'],['Bottom','bottom']]) {
-      const b = button(label,() => api.align(key)); b.disabled = !api.bounds() || state.document.readOnly; host.append(b);
     }
   }
   function propertiesPanel(host) {

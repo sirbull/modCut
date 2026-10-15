@@ -1403,7 +1403,7 @@ Oppdateres når oppgaven fullføres. Løpende arbeidslogg: [`draw/WORK_LOG.md`](
 * [x] D1.5 Pen og ankerverktøy
 * [x] D1.6 Former
 * [x] D1.7 Rotate, Reflect, Scale med Copy og Transform Again
-* [ ] D1.8 Grunnpaneler — pågår: Layers, template-lag og Transform ferdig; Align, Color/Stroke og Fill/Stroke-boks gjenstår
+* [ ] D1.8 Grunnpaneler — pågår: Layers, template-lag, Transform og Align ferdig; Color/Stroke, Fill/Stroke-boks og Properties gjenstår
 * [ ] D1.9 Kontrollinje og statuslinje
 * [ ] D1.10 Group, Arrange, Clipboard
 * [ ] D1.11 Place bitmap og template-lag
@@ -1759,3 +1759,16 @@ W/H med lenkede proporsjoner, relative felt for Rotate by og Shear by, samt
 Scale strokes & effects og Scale corners. Avvik fra Illustrator: objektrotasjon
 lagres ikke, så vinkelfeltene er relative og nullstilles. Scale corners gjelder
 direkte valgte live rektangler og paths med `cornerData`, ikke former i grupper.
+
+**Live tilbakemelding og markører (ferdig, eierprioritet).** `tools/cursors.mjs` gir
+Illustrator-lik SVG-markør per verktøy og tilstand med CSS-fallback, også for
+midlertidige verktøy. Redigerings-previews har kontur i lagfarge, og Pen viser
+retningshåndtak live under drag og gummistrikk. Regel for videre arbeid: alle
+tegne-/redigeringsgester skal vise geometri, håndtak og endringer kontinuerlig,
+og canvas skal aldri mangle synlig markør. Verifiser med E2E midt i gesten.
+
+**Del C — Align-panel (ferdig).** Ren matematikk i `geom/align.mjs`. Align To:
+Selection, Key Object og Artboard; ett objekt mot Selection justeres mot artboard.
+Distribute Objects (kanter/sentre) og Distribute Spacing (Auto eller eksakt mm
+rundt nøkkelobjektet). Avvik: nøkkelobjektet velges i en liste i panelet, ikke ved
+å klikke på et valgt objekt. Grensene er geometriske, ikke strekgrenser.

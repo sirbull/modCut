@@ -142,6 +142,42 @@ export async function runDrawPanelWorkflows(client) {
   assert.equal(Number(await evaluate(`document.querySelector('${root} [data-draw-field=rotate]').value`)), 0, 'Relative fields reset');
   await evaluate(`document.querySelector('${root} [data-draw-reference="0.5,0.5"]').click()`);
 
+  // Align panel: Align To selection/artboard/key object, Distribute Objects and Spacing, one undo step each.
+  const boxOf = id => evaluate(`(async()=>{const b=${active}.renderer.bounds('${id}');return{x:b.x,y:b.y,width:b.width,height:b.height}})()`);
+  const alignButton = id => evaluate(`document.querySelector('${root} [data-draw-align="${id}"]').click()`);
+  const chooseSelect = (key, value) => evaluate(`(()=>{const s=document.querySelector('${root} [data-draw-field=${key}]');s.value='${value}';s.dispatchEvent(new Event('change',{bubbles:true}))})()`);
+  await evaluate(`(async()=>(${active}.select(['${rect.id}','${ellipse.id}'])))()`);
+  await command('panel.align');
+  assert.equal(await evaluate(`document.querySelectorAll('${root} [data-draw-align]').length`), 14);
+  const alignShot = await client.command('Page.captureScreenshot', { format: 'png' });
+  await writeFile(join(tmpdir(), 'modcut-draw-align-panel.png'), Buffer.from(alignShot.data, 'base64'));
+  const r0 = await boxOf(rect.id), e0 = await boxOf(ellipse.id);
+  let alignDepth = await evaluate(`(async()=>(${active}.state.history.entries.filter(e=>e.applied).length))()`);
+  await alignButton('align-left');
+  near(await boxOf(ellipse.id), { x: Math.min(r0.x, e0.x) }, 'Align left to selection'); near(await boxOf(rect.id), { x: Math.min(r0.x, e0.x) }, 'Align left to selection');
+  assert.equal(await evaluate(`(async()=>(${active}.state.history.entries.filter(e=>e.applied).length))()`), alignDepth + 1, 'Align is one undo step');
+  await command('undo'); near(await boxOf(ellipse.id), e0, 'Undo align');
+  await chooseSelect('align-to', 'key');
+  await chooseSelect('key-object', rect.id);
+  await alignButton('align-right');
+  near(await boxOf(rect.id), r0, 'The key object stays fixed'); near(await boxOf(ellipse.id), { x: r0.x + r0.width - e0.width }, 'Align right to key object');
+  await command('undo');
+  await evaluate(`(()=>{const i=document.querySelector('${root} [data-draw-field=align-spacing]');i.value='5';i.dispatchEvent(new Event('change',{bubbles:true}))})()`);
+  await alignButton('spacing-x');
+  near(await boxOf(ellipse.id), { x: r0.x + r0.width + 5 }, 'Exact spacing from the key object');
+  await command('undo');
+  await chooseSelect('align-to', 'artboard');
+  const board = await evaluate(`(async()=>(${active}.state.snapshot().artboards[0]))()`);
+  await alignButton('align-centerY');
+  near(await boxOf(rect.id), { y: board.y + (board.height - r0.height) / 2 }, 'Align to artboard');
+  await command('undo');
+  await chooseSelect('align-to', 'selection');
+  await evaluate(`(async()=>(${active}.select(['${rect.id}','${image.id}','${ellipse.id}'])))()`);
+  const before = await Promise.all([rect.id, image.id, ellipse.id].map(boxOf));
+  await alignButton('distribute-centerX');
+  const centers = (await Promise.all([rect.id, image.id, ellipse.id].map(boxOf))).map(b => b.x + b.width / 2).sort((a, b) => a - b);
+  assert.ok(Math.abs((centers[1] - centers[0]) - (centers[2] - centers[1])) < 1e-3, 'Distribute centers evenly');
+  await command('undo'); near(await boxOf(image.id), before[1], 'Undo distribute');
   // Right dock and panel groups: Properties above Layers, rail groups open as tabbed flyouts.
   const dock = () => evaluate(`(()=>{const r=document.querySelector('${root}'),p=r.querySelector('[data-draw-dock=properties]').getBoundingClientRect(),l=r.querySelector('[data-draw-dock=layers]').getBoundingClientRect(),f=r.querySelector('.draw-flyout');
     return{properties:p.height,layers:l.height,stacked:p.bottom<=l.top+1,flyout:f.hidden?null:f.dataset.drawGroup,tab:f.querySelector('[aria-selected=true]')?.dataset.drawPanelTab??null}})()`);
@@ -158,14 +194,14 @@ export async function runDrawPanelWorkflows(client) {
   assert.ok((await model()).layers.length > 0 && (await evaluate(`(async()=>(${active}.state.selection.ids.length))()`)) > 0, 'Closing the flyout keeps the selection');
   await evaluate(`document.querySelector('${root} [data-draw-panel=color]').click()`); assert.equal((await dock()).flyout, 'color');
   await evaluate(`document.querySelector('${root} [data-draw-panel=color]').click()`); assert.equal((await dock()).flyout, null, 'Clicking the rail button again closes');
-  const split = await center(`${root} .draw-dock-splitter`), before = await dock();
+  const split = await center(`${root} .draw-dock-splitter`), docked = await dock();
   await drag(split, { x: split.x, y: split.y - 80 });
   let after = await dock();
-  assert.ok(after.properties < before.properties - 60 && after.layers > before.layers + 60, `Splitter resizes the dock: ${JSON.stringify([before, after])}`);
+  assert.ok(after.properties < docked.properties - 60 && after.layers > docked.layers + 60, `Splitter resizes the dock: ${JSON.stringify([docked, after])}`);
   await evaluate(`document.querySelector('${root} .draw-dock-splitter').dispatchEvent(new MouseEvent('dblclick',{bubbles:true}))`);
   after = await dock(); assert.ok(Math.abs(after.properties - after.layers) < 12, 'Double-click resets the split');
   await evaluate(`document.querySelector('${root} [data-draw-dock-toggle=layers]').click()`);
-  after = await dock(); assert.ok(after.layers < 50 && after.properties > before.properties, 'Collapsing Layers gives Properties the height');
+  after = await dock(); assert.ok(after.layers < 50 && after.properties > docked.properties, 'Collapsing Layers gives Properties the height');
   await evaluate(`document.querySelector('${root} [data-draw-dock-toggle=layers]').click()`);
   await command('panel.layers'); assert.ok((await dock()).layers > 100, 'F7 shows Layers');
 
@@ -174,5 +210,5 @@ export async function runDrawPanelWorkflows(client) {
   await evaluate(`document.querySelector('[data-tab-id="${original.id}"]').click()`);
   if (await evaluate("document.body.dataset.workspace") === 'draw') await evaluate("document.querySelector('#workspaceToggle').click()");
   assert.equal(await evaluate("paper.project.layers[1].exportJSON({asString:true})"), original.cut, 'Draw panels preserve the Cut document');
-  process.stdout.write('PASS Draw panels: Layers tree, Layer Options, template layers, solo/outline, drag, collect/release, delete, rename, Transform panel, dock and panel groups\n');
+  process.stdout.write('PASS Draw panels: Layers tree, Layer Options, template layers, solo/outline, drag, collect/release, delete, rename, Transform and Align panels, dock and panel groups\n');
 }
