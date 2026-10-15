@@ -1759,3 +1759,10 @@ W/H med lenkede proporsjoner, relative felt for Rotate by og Shear by, samt
 Scale strokes & effects og Scale corners. Avvik fra Illustrator: objektrotasjon
 lagres ikke, så vinkelfeltene er relative og nullstilles. Scale corners gjelder
 direkte valgte live rektangler og paths med `cornerData`, ikke former i grupper.
+
+**Live tilbakemelding og markører (ferdig, eierprioritet).** `tools/cursors.mjs` gir
+Illustrator-lik SVG-markør per verktøy og tilstand med CSS-fallback, også for
+midlertidige verktøy. Redigerings-previews har kontur i lagfarge, og Pen viser
+retningshåndtak live under drag og gummistrikk. Regel for videre arbeid: alle
+tegne-/redigeringsgester skal vise geometri, håndtak og endringer kontinuerlig,
+og canvas skal aldri mangle synlig markør. Verifiser med E2E midt i gesten.

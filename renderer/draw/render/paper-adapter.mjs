@@ -299,6 +299,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     editSpaceId(id){return state.document.getNode(id)?.type==='shape'?state.document.locate(id).parentId:id;},
     setEditPreview(nodes=[]){editPreviews.clear();for(const node of nodes)editPreviews.set(node.id,node);updateView();},
     previewTransform,clearTransformPreview,
+    layerColor(id){return records.get(id)?.context.color??'#006B5C';},
     worldMatrix(id){return [...records.get(id).worldMatrix.values];},
     pointToLocal(id,point) {return new scope.Point(point).transform(records.get(id).worldMatrix.inverted());},
     pathHit(point,{handles=true,endpoints=false,shapes=false,logical=false}={}) {
