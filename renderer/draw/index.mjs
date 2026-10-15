@@ -25,7 +25,7 @@ const commands=new Set(['undo','redo','delete','select-all','select-artboard','d
   'paint-focus','paint-swap','paint-none','default-paint','smart-guides','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','toggle-panels','toggle-panels-except-tools',
   ...PANEL_DEFINITIONS.map(p=>`panel.${p.id}`),...['left','right','up','down'].flatMap(d=>[`nudge-${d}`,`nudge-large-${d}`,`duplicate-${d}`])]);
 export function createDrawWorkspace(root,{paper=window.paper,state=createProjectDraw(),onError=console.warn,onImport=()=>{},getPreferences=()=>({}),statusHost=null}={}) {
-  state.ui={tool:'select',panel:'properties',layerId:state.document.data.layers[0]?.id,fill:'#FFFFFF',stroke:'#071411',strokeWidth:.5,paintFocus:'fill',...state.ui};
+  state.ui={tool:'select',flyout:null,layerId:state.document.data.layers[0]?.id,fill:'#FFFFFF',stroke:'#071411',strokeWidth:.5,paintFocus:'fill',...state.ui};
   state.ui.artboardId=activeArtboard(state).id;
   const element=(tag,className,parent)=>{const el=document.createElement(tag);el.className=className;parent?.append(el);return el;};
   const shell=element('div','draw-shell',root),tools=element('nav','draw-tool-rail',shell);tools.setAttribute('aria-label','Draw tools');
@@ -135,7 +135,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     interactions?.cancel();paths?.finish();toolbar?.close();temporary=null;state.ui.tool=id;canvas.dataset.tool=id;canvas.style.cursor='';
     withScope(()=>renderer.select());toolbar?.update();panels?.render();hint.hidden=state.document.data.layers.some(l=>l.children.length)||state.document.readOnly||id!=='select';status();
   }
-  function openPanel(id) {if(!PANEL_DEFINITIONS.some(p=>p.id===id))return;toolbar?.close();state.ui.panel=id;panels.render();}
+  function openPanel(id) {toolbar?.close();panels.open(id);}
   artboards=createArtboardController(state,{refresh,fit,bounds:id=>renderer.bounds(id),localMatrix:(id,m)=>renderer.localMatrix(id,m)});
   panels=createPanels(shell,state,{run,select,selectedIds,paintIds,paint,bounds:()=>renderer.selectionBounds(),fit,artboards,
     cornerInfo:()=>paths?.cornerInfo()??null,setCornerRadius:radius=>paths.setCornerRadius(radius),
@@ -155,6 +155,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   function handle(command) {return run(()=>{
     if(command.startsWith('tool.'))return setTool(command.slice(5));
     if(command.startsWith('panel.'))return openPanel(command.slice(6));
+    if(command==='cancel'&&panels.close())return;
     if(paths?.handle(command)){if(command==='cancel')toolbar.close(true);return;}
     if(command==='cancel'){interactions.cancel();toolbar.close(true);return;}
     if(command==='undo'||command==='redo'){interactions.cancel();paths.finish();state.history[command]();select(state.selection.ids);return;}

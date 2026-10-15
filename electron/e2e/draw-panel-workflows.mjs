@@ -21,7 +21,6 @@ export async function runDrawPanelWorkflows(client) {
   const rowIds = () => evaluate(`[...document.querySelectorAll('${root} .draw-layer-row')].map(r=>r.dataset.drawNode)`);
 
   await tool('rectangle'); await drag(await screen([10, 10]), await screen([30, 20]));
-  await evaluate(`document.querySelector('${root} [data-draw-panel=layers]').click()`);
   let data = await model(); const first = data.layers[0], rect = first.children[0];
   assert.deepEqual(await rowIds(), [first.id, rect.id], 'Layers lists one tree, top of stack first');
   assert.equal(await evaluate(`document.querySelectorAll('${root} .draw-layer-list').length`), 1);
@@ -120,14 +119,15 @@ export async function runDrawPanelWorkflows(client) {
   const bounds = () => evaluate(`(async()=>{const b=${active}.renderer.selectionBounds();return{x:b.x,y:b.y,width:b.width,height:b.height}})()`);
   const setField = (key, value) => evaluate(`(()=>{const i=document.querySelector('${root} [data-draw-field=${key}]');i.value='${value}';i.dispatchEvent(new Event('change',{bubbles:true}))})()`);
   const near = (a, b, message) => Object.keys(b).forEach(k => assert.ok(Math.abs(a[k]-b[k]) < 1e-6, `${message}: ${JSON.stringify(a)} vs ${JSON.stringify(b)}`));
-  await evaluate(`document.querySelector('${root} [data-draw-panel=layers]').click()`);
   await evaluate(`document.querySelector('${row(rect.id)} .draw-layer-name').click()`);
   await evaluate(`document.querySelector('${root} [data-draw-panel=transform]').click()`);
   const start = await bounds();
   assert.equal(await evaluate(`document.querySelectorAll('${root} [data-draw-reference]').length`), 9);
-  assert.equal(Number(await evaluate(`document.querySelector('${root} [data-draw-field=x]').value`)), start.x + start.width / 2, 'X shows the center reference by default');
+  // Fields show three decimals, so compare within display precision.
+  const shows = async (key, value, message) => assert.ok(Math.abs(Number(await evaluate(`document.querySelector('${root} [data-draw-field=${key}]').value`)) - value) < 5e-4, message);
+  await shows('x', start.x + start.width / 2, 'X shows the center reference by default');
   await evaluate(`document.querySelector('${root} [data-draw-reference="1,1"]').click()`);
-  assert.equal(Number(await evaluate(`document.querySelector('${root} [data-draw-field=y]').value`)), start.y + start.height);
+  await shows('y', start.y + start.height, 'Y shows the bottom reference');
   const depth = await evaluate(`(async()=>(${active}.state.history.entries.length))()`);
   await setField('width', start.width * 2);
   near(await bounds(), { x: start.x - start.width, y: start.y, width: start.width * 2, height: start.height }, 'Bottom-right reference stays fixed');
@@ -144,10 +144,37 @@ export async function runDrawPanelWorkflows(client) {
   assert.equal(Number(await evaluate(`document.querySelector('${root} [data-draw-field=rotate]').value`)), 0, 'Relative fields reset');
   await evaluate(`document.querySelector('${root} [data-draw-reference="0.5,0.5"]').click()`);
 
+  // Right dock and panel groups: Properties above Layers, rail groups open as tabbed flyouts.
+  const dock = () => evaluate(`(()=>{const r=document.querySelector('${root}'),p=r.querySelector('[data-draw-dock=properties]').getBoundingClientRect(),l=r.querySelector('[data-draw-dock=layers]').getBoundingClientRect(),f=r.querySelector('.draw-flyout');
+    return{properties:p.height,layers:l.height,stacked:p.bottom<=l.top+1,flyout:f.hidden?null:f.dataset.drawGroup,tab:f.querySelector('[aria-selected=true]')?.dataset.drawPanelTab??null}})()`);
+  let layout = await dock();
+  assert.ok(layout.stacked && layout.properties > 100 && layout.layers > 100, `Properties and Layers are both visible: ${JSON.stringify(layout)}`);
+  assert.equal(layout.flyout, 'transform');
+  await command('panel.align'); layout = await dock();
+  assert.deepEqual([layout.flyout, layout.tab], ['transform', 'align'], 'Shift+F7 opens the Align tab of the Transform group');
+  await evaluate(`document.querySelector('${root} [data-draw-panel-tab=transform]').click()`);
+  assert.equal((await dock()).tab, 'transform');
+  await command('panel.stroke'); assert.equal((await dock()).flyout, 'stroke', 'Only one group is open at a time');
+  await evaluate("window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',code:'Escape',bubbles:true,cancelable:true}))");
+  assert.equal((await dock()).flyout, null, 'Escape closes the flyout');
+  assert.ok((await model()).layers.length > 0 && (await evaluate(`(async()=>(${active}.state.selection.ids.length))()`)) > 0, 'Closing the flyout keeps the selection');
+  await evaluate(`document.querySelector('${root} [data-draw-panel=color]').click()`); assert.equal((await dock()).flyout, 'color');
+  await evaluate(`document.querySelector('${root} [data-draw-panel=color]').click()`); assert.equal((await dock()).flyout, null, 'Clicking the rail button again closes');
+  const split = await center(`${root} .draw-dock-splitter`), before = await dock();
+  await drag(split, { x: split.x, y: split.y - 80 });
+  let after = await dock();
+  assert.ok(after.properties < before.properties - 60 && after.layers > before.layers + 60, `Splitter resizes the dock: ${JSON.stringify([before, after])}`);
+  await evaluate(`document.querySelector('${root} .draw-dock-splitter').dispatchEvent(new MouseEvent('dblclick',{bubbles:true}))`);
+  after = await dock(); assert.ok(Math.abs(after.properties - after.layers) < 12, 'Double-click resets the split');
+  await evaluate(`document.querySelector('${root} [data-draw-dock-toggle=layers]').click()`);
+  after = await dock(); assert.ok(after.layers < 50 && after.properties > before.properties, 'Collapsing Layers gives Properties the height');
+  await evaluate(`document.querySelector('${root} [data-draw-dock-toggle=layers]').click()`);
+  await command('panel.layers'); assert.ok((await dock()).layers > 100, 'F7 shows Layers');
+
   await evaluate(`document.querySelector('[data-close-tab="${scratch}"]').click()`); await wait(100);
   if (await evaluate("!!document.querySelector('[data-x=discard]')")) { await evaluate("document.querySelector('[data-x=discard]').click()"); await wait(100); }
   await evaluate(`document.querySelector('[data-tab-id="${original.id}"]').click()`);
   if (await evaluate("document.body.dataset.workspace") === 'draw') await evaluate("document.querySelector('#workspaceToggle').click()");
   assert.equal(await evaluate("paper.project.layers[1].exportJSON({asString:true})"), original.cut, 'Draw panels preserve the Cut document');
-  process.stdout.write('PASS Draw panels: Layers tree, Layer Options, template layers, solo/outline, drag, collect/release, delete, rename and Transform panel\n');
+  process.stdout.write('PASS Draw panels: Layers tree, Layer Options, template layers, solo/outline, drag, collect/release, delete, rename, Transform panel, dock and panel groups\n');
 }

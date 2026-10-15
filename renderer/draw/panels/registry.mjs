@@ -9,3 +9,22 @@ export function panelIconHref(id) {
   return panelSpriteHref(panel.icon);
 }
 export function panelSpriteHref(icon) { return new URL(`icons/sprite.svg#icon-${icon}`, import.meta.url).href; }
+
+// Properties and Layers live permanently in the right dock. Every other panel belongs to one
+// group in the panel rail; a group opens as a flyout with one tab per panel, as in Illustrator.
+export const DOCK_PANELS = Object.freeze(['properties', 'layers']);
+export const PANEL_GROUPS = Object.freeze([
+  ['color', 'palette', ['color']],
+  ['stroke', 'line-dashed', ['stroke']],
+  ['transform', 'arrows-move', ['transform', 'align']],
+  ['artboards', 'artboard', ['artboards']],
+].map(([id, icon, tabs]) => Object.freeze({ id, icon, tabs: Object.freeze(tabs) })));
+export function groupForPanel(id) { return PANEL_GROUPS.find(group => group.tabs.includes(id)) ?? null; }
+export function panelName(id) { return PANEL_DEFINITIONS.find(panel => panel.id === id)?.name ?? id; }
+export const DOCK_MIN_PX = 120;
+/** Properties' share of the dock height, clamped so both halves keep at least `min` pixels. */
+export function clampDockSplit(fraction, total, min = DOCK_MIN_PX) {
+  const value = Number.isFinite(fraction) ? fraction : .5;
+  if (!(total > min * 2)) return .5;
+  return Math.min(1 - min / total, Math.max(min / total, value));
+}

@@ -381,3 +381,38 @@ Utført på brukerens forespørsel, parallelt med D1.8 del B (egen commit).
 - E2E: `e2eClickMenuItem` (kun i E2E-modus) lar testene klikke menyvalg.
 
 Verifisering: se commit.
+
+## 2026-10-15: Høyrepanel trinn 1, dokk og panelgrupper
+
+Spesifikasjon: [RIGHT_PANELS.md](RIGHT_PANELS.md). Gren: `claude/draw-properties-layers-panels`
+(basert på `feat/vector-draw` `de9ccbb`).
+
+- Høyre dokk viser **Properties øverst og Layers nederst samtidig**. Delelinjen mellom dem kan
+  dras for å gi mer plass til den ene eller den andre; dobbeltklikk gir 50/50. Andelen begrenses
+  slik at begge deler har minst 120 px (`clampDockSplit`), og lagres per bruker i
+  `localStorage` (`modcut_draw_dock_split`), ikke i dokumentet. Hver del kan kollapses fra
+  tittellinjen, og den andre fyller da høyden.
+- Panelstolpen viser **panelgrupper** i stedet for enkeltpaneler: Color, Stroke,
+  Transform (fanene Transform og Align) og Artboards. Klikk åpner gruppen som flyout med faner
+  ved siden av stolpen; samme knapp, lukkeknappen eller Escape lukker. Flyouten blir stående
+  mens man jobber på canvas (ingen auto-collapse, som Illustrators standard). Siste aktive fane
+  per gruppe huskes i `state.ui.groupTabs`.
+- Hurtigtaster for paneler går via `panels.open(id)`: F7 viser Layers i dokken, Shift+F7 åpner
+  Align-fanen i Transform-gruppen osv.
+- Innholdet i panelene er uendret i dette trinnet. Layers-overskriften er flyttet til dokkens
+  tittellinje; verktøyknappene står i en rad under.
+- Nytt rent register i `panels/registry.mjs`: `DOCK_PANELS`, `PANEL_GROUPS`, `groupForPanel`,
+  `clampDockSplit`. Nytt Tabler-ikon `x`, vendret med det nye skriptet
+  `scripts/vendor-tabler-icons.mjs` (oppdaterer `sources.json` med sha256).
+- Dev-hjelper `electron/e2e/draw-screenshot.mjs` lager skjermbilde av Draw med eksempelfigurer.
+
+Verifisering: 119 Draw-enhetstester passerer (ny `panel-groups.test.mjs`). Komplett Draw-E2E
+(`node electron/e2e/run.mjs --draw`) passerer på Linux/Xvfb, med nye kontroller for dokk,
+faner, Escape, delelinje, kollaps og F7. To eksisterende E2E-antagelser er oppdatert: panelinnhold
+har nå tre monterte steder (Properties, Layers, flyout), og Artboards-flyouten lukkes før testen
+tegner der den dekker canvas. Transform-testen sammenlignet tidligere tre-desimalers feltverdier
+eksakt og feilet på Linux også før denne endringen; den bruker nå toleranse. Sidecar-jar kunne
+ikke bygges i skymiljøet (jitpack.io er blokkert), så Cut/sidecar-testene er ikke kjørt her.
+`bed.js`, Cut og sidecar er ikke endret.
+
+**Neste: trinn 2, scrubby labels (dra i tittelen for å endre tallverdier, Shift for raskere).**

@@ -47,7 +47,8 @@ designsystem (`design/tokens.css`, lys og mørk), ikke Illustrators grå tema.
   * Hver del har en tittellinje som kan klikkes for å kollapse delen (den andre fyller da høyden).
 * **Panelstolpen** står mellom canvas og dokken, som Illustrators ikonstolpe. Hver knapp
   representerer en **panelgruppe**. Klikk åpner gruppen som en flyout til venstre for stolpen,
-  over canvas. Klikk på samme knapp, Escape eller klikk på canvas lukker. Bare én flyout om gangen.
+  over canvas. Klikk på samme knapp, lukkeknappen eller Escape lukker. Flyouten forblir åpen mens man
+  jobber på canvas (som Illustrators standard, uten auto-collapse). Bare én flyout om gangen.
 * En flyout har **faner** øverst (som `Stroke | Gradient | Transparency`), en lukkeknapp og
   innholdet til aktiv fane. Siste aktive fane per gruppe huskes.
 * Tastatursnarveier fra hovedplanen åpner riktig gruppe og fane (F6 Color, Mod+F10 Stroke,
@@ -254,7 +255,7 @@ Hvert trinn committes og pushes for seg, med oppdatert `WORK_LOG.md` og `HANDOFF
 
 | Trinn | Innhold | Ferdig når |
 |---|---|---|
-| 1 | Ny layout: dokk med Properties øverst og Layers nederst, dragbar deler, kollapsbare deler, stolpe med panelgrupper og flyout med faner. Eksisterende Color, Stroke, Align, Transform og Artboards flyttes inn uendret. | Enhetstester for gruppe-/faneregister. E2E: Properties og Layers synlige samtidig, flyout åpner/lukker, faner bytter, deler endrer høyde, eksisterende panel-E2E oppdatert og grønn. |
+| 1 (ferdig) | Ny layout: dokk med Properties øverst og Layers nederst, dragbar deler, kollapsbare deler, stolpe med panelgrupper og flyout med faner. Eksisterende Color, Stroke, Align, Transform og Artboards flyttes inn uendret. | Enhetstester for gruppe-/faneregister. E2E: Properties og Layers synlige samtidig, flyout åpner/lukker, faner bytter, deler endrer høyde, eksisterende panel-E2E oppdatert og grønn. |
 | 2 | Scrubby labels: `scrub.mjs` (ren logikk) og `number-field.mjs`, tatt i bruk i alle eksisterende tallfelt. | Enhetstester for steg, Shift/Alt, min/max, avrunding. E2E: drag på tittel endrer verdi, ett angresteg, Escape avbryter. |
 | 3 | Layers-redesign: rad med øye, lås, fargelinje, thumbnail, navn, målsirkel, søppelkasse; søk og filter; bunnlinje med teller og ikoner; Layer Options som bilde 2. | E2E for alle interaksjonene i 3.2 og 3.4, thumbnail-test (piksel i forventet farge). |
 | 4 | Swatches og Color med Recent Colors. | Enhetstester for fargekonvertering. E2E: velg swatch for fill og stroke. |

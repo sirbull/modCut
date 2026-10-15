@@ -15,7 +15,8 @@ export async function runDrawPhaseOneWorkflows(client) {
   const screen=([x,y])=>evaluate(`(async()=>{const w=${active},p=w.scope.view.projectToView(new w.scope.Point(${x},${y})),b=w.scope.view.element.getBoundingClientRect();return{x:b.x+p.x,y:b.y+p.y}})()`);
   const data=()=>evaluate(`(async()=>(${active}.state.snapshot()))()`);
   const bounds=id=>evaluate(`(async()=>{const b=${active}.renderer.bounds(${JSON.stringify(id)});return{x:b.x,y:b.y,width:b.width,height:b.height}})()`);
-  const panel=id=>evaluate(`document.querySelector('.draw-project[style*=block] [data-draw-panel=${id}]').click()`);
+  // Properties and Layers are always docked; other panels open as rail flyouts.
+  const panel=id=>['properties','layers'].includes(id)?null:evaluate(`(()=>{const b=document.querySelector('.draw-project[style*=block] [data-draw-panel=${id}]');if(b.getAttribute('aria-pressed')!=='true')b.click()})()`);
   const undo=()=>shortcut('z','KeyZ',{ctrlKey:process.platform!=='darwin',metaKey:process.platform==='darwin'});
   await evaluate("document.querySelector('#workspaceToggle').click();document.querySelector('#newDoc').click()");
   assert.equal(await evaluate("document.querySelector('.draw-document-dialog [name=preset]').value"),'bed','New starts from the current machine bed');
@@ -53,12 +54,12 @@ export async function runDrawPhaseOneWorkflows(client) {
   assert.equal(await evaluate("JSON.parse(localStorage.getItem('modcut_draw_document_templates')).length"),0);
   await key('Escape');
 
-  const unique=await evaluate("(()=>{const root=document.querySelector('.draw-project[style*=block]'),ids=[...root.querySelectorAll('[data-draw-tool]')].map(b=>b.dataset.drawTool);return ids.length===new Set(ids).size && root.querySelectorAll('.draw-panel').length===1})()");
+  const unique=await evaluate("(()=>{const root=document.querySelector('.draw-project[style*=block]'),ids=[...root.querySelectorAll('[data-draw-tool]')].map(b=>b.dataset.drawTool);return ids.length===new Set(ids).size && root.querySelectorAll('[data-draw-dock=properties]').length===1 && root.querySelectorAll('[data-draw-dock=layers]').length===1 && root.querySelectorAll('.draw-flyout').length===1})()");
   assert.equal(unique,true,'Tools and panel content have one mounted location');
   await shortcut('F7','F7');
-  assert.deepEqual(await evaluate("(()=>{const r=document.querySelector('.draw-project[style*=block]');return{headings:[...r.querySelectorAll('h2')].map(h=>h.textContent),trees:r.querySelectorAll('[role=tree]').length}})()"),{headings:['Layers'],trees:1});
+  assert.deepEqual(await evaluate("(()=>{const r=document.querySelector('.draw-project[style*=block]');return{expanded:r.querySelector('[data-draw-dock-toggle=layers]').getAttribute('aria-expanded'),trees:r.querySelectorAll('[role=tree]').length}})()"),{expanded:'true',trees:1});
   await panel('properties');
-  assert.equal(await evaluate("document.querySelector('.draw-project[style*=block]').querySelectorAll('[role=tree],[data-draw-field=width],[data-draw-field=stroke-width]').length"),0,'Properties does not repeat Layers/Transform/Stroke');
+  assert.equal(await evaluate("document.querySelector('.draw-project[style*=block] [data-draw-dock=properties]').querySelectorAll('[role=tree],[data-draw-field=width],[data-draw-field=stroke-width]').length"),0,'Properties does not repeat Layers/Transform/Stroke');
 
   await shortcut('m','KeyM');await click(await screen([10,10]));
   assert.equal(await evaluate("!!document.querySelector('.draw-shape-dialog')"),true,'Click opens exact dimensions');
@@ -128,9 +129,11 @@ export async function runDrawPhaseOneWorkflows(client) {
   const all=moved.layers[0].children.flatMap(n=>[n.id,...(n.children||[]).map(c=>c.id)]);assert.equal(new Set(all).size,all.length);
   await evaluate("(()=>{const i=document.querySelector('.draw-project[style*=block] [data-draw-field=artboard-name]');i.value='Copied board';i.dispatchEvent(new Event('change',{bubbles:true}))})()");
   assert.equal((await data()).artboards.at(-1).name,'Copied board');await undo();
-  await evaluate("[...document.querySelectorAll('.draw-project[style*=block] .draw-panels button')].find(b=>b.textContent==='Rearrange…').click()");
+  await evaluate("[...document.querySelectorAll('.draw-project[style*=block] .draw-flyout button')].find(b=>b.textContent==='Rearrange…').click()");
   await evaluate("(()=>{const f=document.querySelector('.modal form');f.elements.layout.value='column';f.elements.spacing.value=15;f.requestSubmit()})()");await wait(50);
   assert.equal((await data()).artboards[1].y,95);await undo();
+  // The Artboards flyout overlays the canvas edge; close it before drawing there.
+  await evaluate("document.querySelector('.draw-project[style*=block] .draw-flyout__close').click()");
 
   await evaluate(`(async()=>{const w=${active};w.scope.view.zoom=.8;w.scope.view.center=[250,150];w.renderer.updateView()})()`);
   const newStart=await screen([450,280]),newEnd=await screen([490,320]);

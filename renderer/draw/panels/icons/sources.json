@@ -115,6 +115,11 @@
       "name": "unlink",
       "path": "icons/outline/unlink.svg",
       "sha256": "468977ced647fb5acc651c377817c46e2547549869f8a5d0165b60b176d64e3a"
+    },
+    "x": {
+      "name": "x",
+      "path": "icons/outline/x.svg",
+      "sha256": "445e1b53563ad7e089f94dee923c2ef3444c63d45294a733687471a76a3c3b8d"
     }
   }
 }
