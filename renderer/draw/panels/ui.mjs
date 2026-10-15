@@ -6,6 +6,8 @@ import { ROOT_CONTEXT, collectCommands, deleteLayerCommands, deleteRowCommands, 
 import { shortcutLabel } from '../keymap.mjs';
 import { REFERENCE_POINTS } from '../geom/transforms.mjs';
 import { attachScrub } from '../ui/number-field.mjs';
+import { PATHFINDER_LABELS, PATHFINDERS, SHAPE_MODES } from '../geom/pathfinder.mjs';
+import { pathfinderIcon } from './pathfinder-icons.mjs';
 import { COLOR_MODES, colorFromValues, colorValues, normalizeHex } from '../doc/color.mjs';
 import { ARROW_TYPES, paintHex } from '../doc/paint.mjs';
 
@@ -458,6 +460,20 @@ export function createPanels(shell, state, api) {
     host.append(masks);
     text(host,ids.length ? 'Applies to the whole selected object. Fill and stroke opacity are set per entry in Appearance (coming).' : 'Select artwork to change its blending mode and opacity.');
   }
+  function pathfinderPanel(host) {
+    const count = api.selectedIds().filter(id => state.document.isEditable(id)).length, disabled = count < 2 || state.document.readOnly;
+    for (const [title,ops] of [['Shape Modes',SHAPE_MODES],['Pathfinders',PATHFINDERS]]) {
+      const h = document.createElement('h3'); h.className = 'draw-panel__section'; h.textContent = title; host.append(h);
+      const row = document.createElement('div'); row.className = 'draw-align-row draw-pathfinder-row'; row.setAttribute('role','group'); row.setAttribute('aria-label',title);
+      for (const op of ops) {
+        const b = iconButton(PATHFINDER_LABELS[op],null,() => api.pathfinder(op),'draw-layer-action draw-align-button');
+        b.append(pathfinderIcon(op)); b.dataset.drawPathfinder = op; b.disabled = disabled; row.append(b);
+      }
+      if (title === 'Shape Modes') { const expand = button('Expand',() => {}); expand.disabled = true; expand.dataset.tooltip = 'Compound shapes (Alt-click) arrive later; results are already expanded paths.'; row.append(expand); }
+      host.append(row);
+    }
+    text(host,disabled ? 'Select two or more paths, shapes or groups.' : 'Results keep their curves. Divide, Trim, Merge, Crop and Outline group the pieces. One undo step each.');
+  }
   function colorPanel(host) {
     const target = state.ui.paintFocus === 'stroke' ? 'stroke' : 'fill', mode = state.ui.colorMode ?? 'rgb', hex = currentPaint(target);
     const disabled = state.document.readOnly, shown = hex || '#FFFFFF', live = `color-${target}`;
@@ -593,7 +609,7 @@ export function createPanels(shell, state, api) {
       for(const [key,label,min] of editable)field(host,label,node.params[key]??({sides:6,points:5,endAngle:360}[key] || 0),value=>state.history.execute(updateNode(node.id,{params:{...node.params,[key]:value}})),{min,max:['sides','points'].includes(key)?100:undefined,key:`shape-${key}`});
     }
   }
-  const PANEL_CONTENT = { swatches: swatchesPanel, color: colorPanel, stroke: strokePanel, transparency: transparencyPanel, transform: host => transform(host), align: alignPanel, artboards: artboardPanel };
+  const PANEL_CONTENT = { swatches: swatchesPanel, color: colorPanel, stroke: strokePanel, transparency: transparencyPanel, pathfinder: pathfinderPanel, transform: host => transform(host), align: alignPanel, artboards: artboardPanel };
   function renderFlyout() {
     const group = PANEL_GROUPS.find(g => g.id === state.ui.flyout);
     flyout.hidden = !group; if (!group) { flyoutTabs.replaceChildren(); flyoutBody.replaceChildren(); return; }

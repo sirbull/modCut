@@ -635,3 +635,27 @@ passerer og er med i komplett Draw-E2E, som passerer (16 av 16).
 
 Verifisering: 141 Draw-enhetstester og komplett Draw-E2E (16 av 16) passerer. Swatch-E2E dekker
 fanene, at Gradient er deaktivert, Multiply på canvas, opasitet 40 % og angring.
+
+## 2026-10-15: Høyrepanel trinn 7 del 1, Pathfinder
+
+- Ny fane **Pathfinder** i Transform-gruppen (Transform | Align | Pathfinder), Mod+Shift+F9.
+  Shape Modes: Unite, Minus Front, Intersect, Exclude (Expand vises deaktivert: resultatene er
+  allerede vanlige paths). Pathfinders: Divide, Trim, Merge, Crop, Outline, Minus Back.
+  Hver knapp har eget ikon tegnet for modCut i Tabler-stil (`panels/pathfinder-icons.mjs`).
+- Operasjonene bruker **Paper.js sine Bézier-booleans**, så kurver beholdes (en sirkel minus et
+  kvadrat har fortsatt kurvehåndtak). Geometrikjernens worker har fortsatt bare polygonal union;
+  Pathfinder går derfor via Paper i hovedtråden. Ren logikk i `geom/pathfinder.mjs` (Paper-objekter
+  inn, subpaths ut, ingen DOM) og `doc/pathfinder-commands.mjs` (resultat til dokument-Commands).
+- Regler som i Illustrator: Unite, Intersect og Exclude arver utseendet til det øverste objektet,
+  Minus Front det bakerste, Minus Back det øverste. Divide eier hver region etter det øverste
+  objektet som dekker den. Trim, Merge og Crop fjerner strek; Merge slår sammen synlige biter med
+  samme fyllfarge; Crop beholder det som ligger under det øverste objektet og fjerner det. Outline
+  gir regionene som tynne streker i fyllfargen. Divide, Trim, Merge, Crop og Outline grupperes.
+- Resultatet tar plassen til det øverste objektet i stablingen, originalene fjernes, og alt er
+  **ett angresteg**. Resultatet blir valgt. Grupper behandles som én operand (innholdet slås sammen).
+  Bilder og tekst avvises med en forståelig melding. Tomt resultat endrer ingenting.
+
+Verifisering: 147 Draw-enhetstester passerer (ny `pathfinder.test.mjs` med areal for alle ti
+operasjoner, hull, kurver og kommandoer). Ny E2E `draw-pathfinder-workflows.mjs`
+(`--draw-pathfinder`) dekker panelet, Unite med kurve, Minus Front, Divide og Intersect med
+angring. Komplett Draw-E2E passerer (17 av 17).

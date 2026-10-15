@@ -261,7 +261,7 @@ Hvert trinn committes og pushes for seg, med oppdatert `WORK_LOG.md` og `HANDOFF
 | 4 (ferdig) | Swatches og Color med Recent Colors. | Enhetstester for fargekonvertering. E2E: velg swatch for fill og stroke. |
 | 5 (ferdig; Stroke fra D1.8, Transparency her) | Stroke (full uten profiles/arrowheads) og Transparency. Render-adapteren støtter cap, join, limit, align og dash fullt. | Enhets- og pikseltester for cap/join/dash. |
 | 6 (ferdig i `feat/vector-draw`, D1.8 del C) | Align (alle ikoner, distribute, distribute spacing, key object). Transform-panelet er også ferdig og har scrubby labels fra trinn 2. | Enhetstester for align/distribute-matematikk. E2E for key object. |
-| 7 | Pathfinder og Appearance. | Golden tests for booleans via kernel. E2E for Unite og Minus Front. |
+| 7 (Pathfinder ferdig, Appearance gjenstår) | Pathfinder og Appearance. | Golden tests for booleans via kernel. E2E for Unite og Minus Front. |
 | 8 | Properties-gjennomgang med kontekstuelle seksjoner og quick actions. | E2E for hver seksjon ved ulike utvalg. |
 
 ## 8. Regler

@@ -2,6 +2,8 @@ import { createProjectDraw } from './io/project.mjs';
 import { createDrawRenderer } from './render.mjs';
 import { createPanels } from './panels/ui.mjs';
 import { rememberColor } from './doc/swatches.mjs';
+import { PATHFINDER_LABELS, runPathfinder } from './geom/pathfinder.mjs';
+import { fillHex, pathfinderCommands, stackingOrder } from './doc/pathfinder-commands.mjs';
 import { cancelActiveScrub } from './ui/number-field.mjs';
 import { PANEL_DEFINITIONS } from './panels/registry.mjs';
 import { toolRegistry } from './tools/registry.mjs';
@@ -154,6 +156,12 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       state.history.transaction('Stroke',()=>{for(const id of ids)state.history.execute(updateNode(id,{appearance:changeStroke(state.document.getNode(id).appearance,props,state.ui)}));},{mergeKey});},
     paintFocus(kind){state.ui.paintFocus=kind;toolbar?.update();panels?.render();},
     thumbnail:id=>withScope(()=>renderer.thumbnail(id)),
+    pathfinder(op){if(state.document.readOnly)return;
+      const ids=stackingOrder(state.document,selectedIds().filter(id=>state.document.isEditable(id)));
+      if(ids.length<2)throw new Error('Select at least two objects for Pathfinder.');
+      const outcome=withScope(()=>runPathfinder(ids.map(id=>({id,item:renderer.booleanOperand(id),fill:fillHex(state.document,id)})),op));
+      const label=PATHFINDER_LABELS[op],{commands,ids:created}=pathfinderCommands(state.document,ids,outcome,op,label);
+      state.history.transaction(label,()=>commands.forEach(command=>state.history.execute(command)));select(created);},
     swatchOptions:swatch=>state.document.readOnly?null:swatchOptionsDialog(swatch),
     async layerOptions(id,options={}){const layer=state.document.getNode(id);if(layer?.type!=='layer'||state.document.readOnly)return;
       const values=await layerOptionsDialog(layer,options);if(!values||destroyed)return;

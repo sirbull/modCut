@@ -317,6 +317,22 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
   }
   // Layers panel thumbnails: a clone in world space with model visibility (ignoring viewport culling),
   // rasterized to fit a square. Cached per subtree fingerprint, so unchanged rows cost nothing.
+  // Pathfinder operand: a closed world-space path for a path, shape or group (groups are united).
+  function booleanOperand(id) {
+    const node = state.document.getNode(id), record = records.get(id);
+    if (!node || !record) throw new Error('Pathfinder needs objects that are drawn on the canvas.');
+    if (node.type === 'path' || node.type === 'shape') {
+      const item = make(node); item.applyMatrix = true;
+      if (record.worldMatrix) item.transform(record.worldMatrix);
+      return item;
+    }
+    if (node.type === 'group' || node.type === 'compoundPath') {
+      const parts = state.document.descendants(id).filter(n => n.type === 'path' || n.type === 'shape').map(n => booleanOperand(n.id));
+      if (!parts.length) throw new Error('This group has no paths to combine.');
+      return parts.slice(1).reduce((a, b) => a.unite(b, { insert: false }), parts[0]);
+    }
+    throw new Error(`Pathfinder works on paths, shapes and groups, not ${node.type === 'image' ? 'images' : node.type}.`);
+  }
   function thumbnail(id, size = 56) {
     const item = items.get(id), record = records.get(id); if (!item || !record) return null;
     const subtree = [id, ...state.document.descendants(id).map(n => n.id)];
@@ -353,7 +369,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     } catch { url = null; } finally { clone.remove(); }
     thumbnails.set(id, { key, url }); return url;
   }
-  return { render, select: updateView, updateView, bounds, selectionBounds, hit, items, setOutline, thumbnail, selectionHandle:point=>selection.hit(point),
+  return { render, select: updateView, updateView, bounds, selectionBounds, hit, items, setOutline, thumbnail, booleanOperand, selectionHandle:point=>selection.hit(point),
     setTheme({muted,background=labelBackground}) {labelColor=muted;labelBackground=background;for(const {label,labelRect} of boardItems.values()){label.fillColor=muted;labelRect.fillColor=background;}updateView();},
     shapePreview(node,sourceId=null) { const item=make(node);item.applyMatrix=false;style(item,node,false);item.opacity=.6;
       if(sourceId)item.matrix=records.get(sourceId).worldMatrix.clone();overlay.addChild(item);return item; },
