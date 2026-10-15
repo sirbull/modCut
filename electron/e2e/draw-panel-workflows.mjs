@@ -47,7 +47,8 @@ export async function runDrawPanelWorkflows(client) {
   assert.equal(await evaluate(`(async()=>(${active}.renderer.items.get('${image.id}').opacity))()`), 1);
 
   const undoDepth = await evaluate(`(async()=>(${active}.state.history.entries.length))()`);
-  await evaluate(`document.querySelector('${row(first.id)} .draw-layer-name').dispatchEvent(new MouseEvent('dblclick',{bubbles:true}))`);
+  // Double-clicking the layer's color bar opens Layer Options.
+  await evaluate(`document.querySelector('${row(first.id)} .draw-layer-colorbar').dispatchEvent(new MouseEvent('dblclick',{bubbles:true}))`);
   assert.equal(await evaluate("document.querySelector('.draw-layer-dialog .panel__header').textContent"), 'Layer Options');
   await evaluate("(()=>{const f=document.querySelector('.draw-layer-dialog form');f.elements.name.value='Reference';f.elements.template.checked=true;f.elements.template.dispatchEvent(new Event('input',{bubbles:true}));f.requestSubmit();})()");
   await wait(50);
@@ -104,7 +105,8 @@ export async function runDrawPanelWorkflows(client) {
   assert.deepEqual((await model()).layers[0].children.map(n => n.type), ['layer', 'layer']);
   await command('undo');
 
-  // Delete layer removes the active layer; undo restores it.
+  // Delete selection removes the active layer when no objects are selected; undo restores it.
+  await command('deselect');
   await evaluate(`document.querySelector('${row(second.id)} .draw-layer-name').click()`);
   await evaluate(`document.querySelector('${root} [data-draw-layer-action=trash]').click()`);
   assert.equal((await model()).layers.length, 1); await command('undo');
@@ -114,6 +116,33 @@ export async function runDrawPanelWorkflows(client) {
   await evaluate(`document.querySelector('${row(ellipse.id)} .draw-layer-name').dispatchEvent(new MouseEvent('dblclick',{bubbles:true}))`);
   await evaluate(`(()=>{const i=document.querySelector('${root} .draw-layer-rename');i.value='Badge';i.dispatchEvent(new Event('change',{bubbles:true}));})()`);
   assert.equal((await model()).layers[1].children[0].name, 'Badge');
+
+  // Illustrator-style rows: thumbnail, color bar, inline layer rename, row delete, search, count and Layer Options color names.
+  const thumb = await evaluate(`document.querySelector('${row(ellipse.id)} .draw-layer-thumb').getAttribute('src')||''`);
+  assert.match(thumb, /^data:image\/png/, 'Rows show a thumbnail of their artwork');
+  assert.ok(await evaluate(`(async()=>{const img=new Image();img.src=document.querySelector('${row(second.id)} .draw-layer-thumb').src;await img.decode();const c=document.createElement('canvas');c.width=img.width;c.height=img.height;const x=c.getContext('2d');x.drawImage(img,0,0);const d=x.getImageData(0,0,c.width,c.height).data;for(let i=0;i<d.length;i+=4)if(d[i+3]>0&&d[i]<120&&d[i+1]<120&&d[i+2]<120)return true;return false})()`), 'Layer thumbnail contains the dark ellipse stroke');
+  assert.equal(await evaluate(`getComputedStyle(document.querySelector('${row(second.id)} .draw-layer-colorbar')).backgroundColor`), await evaluate(`(()=>{const d=document.createElement('div');d.style.color='${second.color}';document.body.append(d);const c=getComputedStyle(d).color;d.remove();return c})()`), 'The color bar shows the layer color');
+  assert.equal(await evaluate(`document.querySelector('${root} [data-draw-layer-count]').textContent`), '2 Layers');
+  await evaluate(`document.querySelector('${row(second.id)} .draw-layer-name').dispatchEvent(new MouseEvent('dblclick',{bubbles:true}))`);
+  await evaluate(`(()=>{const i=document.querySelector('${root} .draw-layer-rename');i.value='Artwork';i.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  assert.equal((await model()).layers[1].name, 'Artwork', 'Double-clicking a layer name renames it inline');
+  await evaluate(`document.querySelector('${root} [data-draw-row-delete="${ellipse.id}"]').click()`);
+  assert.equal((await model()).layers[1].children.length, 0, 'The row trash deletes that object');
+  await command('undo'); assert.equal((await model()).layers[1].children.length, 1);
+  assert.equal(await evaluate(`document.querySelector('${root} [data-draw-row-delete="${first.id}"]').disabled`), false);
+  const search = value => evaluate(`(()=>{const i=document.querySelector('${root} [data-draw-field=layer-search]');i.focus();i.value=${JSON.stringify("${value}")};i.dispatchEvent(new Event('input',{bubbles:true}));})()`.replace('${value}', value));
+  await search('badge'); assert.deepEqual(await rowIds(), [second.id, ellipse.id], 'Search keeps matches and their layer');
+  assert.equal(await evaluate(`document.activeElement.dataset.drawField`), 'layer-search', 'Typing keeps focus in the search field');
+  await search('zzz'); assert.equal(await evaluate(`document.querySelector('${root} .draw-layer-list').textContent`), 'No matches');
+  await search('');
+  await evaluate(`(()=>{const s=document.querySelector('${root} [data-draw-field=layer-filter]');s.value='layers';s.dispatchEvent(new Event('change',{bubbles:true}))})()`);
+  assert.ok((await rowIds()).every(id => [first.id, second.id].includes(id)), 'Only layers');
+  await evaluate(`(()=>{const s=document.querySelector('${root} [data-draw-field=layer-filter]');s.value='all';s.dispatchEvent(new Event('change',{bubbles:true}))})()`);
+  await evaluate(`document.querySelector('${row(second.id)} .draw-layer-colorbar').dispatchEvent(new MouseEvent('dblclick',{bubbles:true}))`); await wait(50);
+  assert.equal(await evaluate("document.activeElement.name"), 'colorName', 'The color bar opens Layer Options at Color');
+  assert.equal(await evaluate("document.querySelectorAll('.draw-layer-dialog__options input[type=checkbox]').length"), 6, 'Template, Lock, Show, Print, Preview and Dim Images in two columns');
+  await evaluate("(()=>{const f=document.querySelector('.draw-layer-dialog form'),m=f.elements.colorName;m.value='#FF4F4F';m.dispatchEvent(new Event('change',{bubbles:true}));f.requestSubmit();})()"); await wait(50);
+  assert.equal((await model()).layers[1].color, '#FF4F4F', 'Choosing Red sets the layer color');
   const shot = await client.command('Page.captureScreenshot', { format: 'png' });
   await writeFile(join(tmpdir(), 'modcut-draw-layers-panel.png'), Buffer.from(shot.data, 'base64'));
 
@@ -304,5 +333,5 @@ export async function runDrawPanelWorkflows(client) {
   await evaluate(`document.querySelector('[data-tab-id="${original.id}"]').click()`);
   if (await evaluate("document.body.dataset.workspace") === 'draw') await evaluate("document.querySelector('#workspaceToggle').click()");
   assert.equal(await evaluate("paper.project.layers[1].exportJSON({asString:true})"), original.cut, 'Draw panels preserve the Cut document');
-  process.stdout.write('PASS Draw panels: Layers tree, Layer Options, template layers, solo/outline, drag, collect/release, delete, rename, Transform, Align, Color and Stroke panels, Fill/Stroke box, Properties, dock and panel groups\n');
+  process.stdout.write('PASS Draw panels: Layers tree, Layer Options, template layers, solo/outline, drag, collect/release, delete, rename, Transform, Align, Color and Stroke panels, Fill/Stroke box, Properties, dock, panel groups, Layers rows (thumbnail, color bar, rename, delete, search) and Layer Options\n');
 }

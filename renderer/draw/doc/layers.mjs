@@ -116,3 +116,46 @@ export function releaseCommands(doc, layerId) {
   if (!commands.length) throw new Error('The layer has no objects to release.');
   return { created, commands };
 }
+
+// Named identification colors for Layer Options, as in Illustrator. The first nine are the cycle above.
+export const NAMED_LAYER_COLORS = Object.freeze([
+  ['Light Blue', '#4F80FF'], ['Red', '#FF4F4F'], ['Green', '#4FD24F'], ['Blue', '#4F4FFF'], ['Yellow', '#FFC800'],
+  ['Magenta', '#FF4FFF'], ['Cyan', '#4FD2FF'], ['Gray', '#8C8C8C'], ['Orange', '#FF8000'], ['Black', '#000000'],
+  ['Dark Green', '#006400'], ['Teal', '#008080'], ['Tan', '#CC9966'], ['Brown', '#993300'], ['Violet', '#9933FF'],
+  ['Gold', '#FF9900'], ['Dark Blue', '#000080'], ['Pink', '#FF99CC'], ['Lavender', '#9999FF'], ['Brick Red', '#990000'],
+  ['Olive Green', '#666600'], ['Peach', '#FF9966'], ['Burgundy', '#990033'], ['Grass Green', '#99CC00'],
+  ['Ochre', '#996600'], ['Purple', '#660099'], ['Light Gray', '#CCCCCC'],
+].map(([name, hex]) => Object.freeze({ name, hex })));
+/** The named color for a hex value, or null for a custom ("Other") color. */
+export function layerColorName(hex) {
+  const value = String(hex || '').toUpperCase();
+  return NAMED_LAYER_COLORS.find((c) => c.hex === value)?.name ?? null;
+}
+
+export const LAYER_FILTERS = Object.freeze(['all', 'layers', 'visible', 'locked']);
+/**
+ * Ids to show in the Layers panel for a search text and filter, or null when everything shows.
+ * Matches keep their ancestors so the tree stays readable.
+ */
+export function filterLayerTree(doc, query = '', filter = 'all') {
+  const text = String(query).trim().toLowerCase();
+  if (!text && filter === 'all') return null;
+  const label = (n) => (n.name || (n.type === 'layer' ? 'Layer' : `<${n.type}>`)).toLowerCase();
+  const passes = (n) => (filter === 'layers' ? n.type === 'layer' : filter === 'visible' ? n.visible : filter === 'locked' ? n.locked : true)
+    && (!text || label(n).includes(text));
+  const shown = new Set();
+  for (const node of doc.descendants(null)) {
+    if (!passes(node)) continue;
+    shown.add(node.id);
+    for (const parent of doc.ancestors(node.id)) shown.add(parent.id);
+  }
+  return shown;
+}
+/** Delete one Layers panel row: a layer (with its contents) or a single object. */
+export function deleteRowCommands(doc, id) {
+  const node = doc.getNode(id);
+  if (!node) throw new Error('Nothing to delete.');
+  if (node.type === 'layer') return deleteLayerCommands(doc, id);
+  if (!doc.isEditable(id)) throw new Error('Unlock and show the object first.');
+  return [removeNode(id)];
+}

@@ -150,8 +150,9 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       if(props.width!==undefined)state.ui.strokeWidth=props.width;
       state.history.transaction('Stroke',()=>{for(const id of ids)state.history.execute(updateNode(id,{appearance:changeStroke(state.document.getNode(id).appearance,props,state.ui)}));},{mergeKey});},
     paintFocus(kind){state.ui.paintFocus=kind;toolbar?.update();panels?.render();},
-    async layerOptions(id){const layer=state.document.getNode(id);if(layer?.type!=='layer'||state.document.readOnly)return;
-      const values=await layerOptionsDialog(layer);if(!values||destroyed)return;
+    thumbnail:id=>withScope(()=>renderer.thumbnail(id)),
+    async layerOptions(id,options={}){const layer=state.document.getNode(id);if(layer?.type!=='layer'||state.document.readOnly)return;
+      const values=await layerOptionsDialog(layer,options);if(!values||destroyed)return;
       run(()=>{const current=state.document.getNode(id);if(!current)return;const patch=layerOptionsPatch(current,values);if(Object.keys(patch).length)state.history.execute(updateNode(id,patch,{label:'Layer Options'}));});},
     async rearrange(){const options=await rearrangeDialog();if(options&&!destroyed)run(()=>artboards.rearrange(options));},
     transformPanel(key,value){const b=renderer.selectionBounds();if(!b)return;

@@ -265,3 +265,41 @@ body[data-workspace="draw"] .statusbar .spacer { display: none; }
 .draw-scrub:hover { color: var(--text); }
 body.draw-scrubbing, body.draw-scrubbing * { cursor: ew-resize !important; user-select: none; }
 .draw-field input.is-scrubbing { outline: 2px solid var(--brand-mid); outline-offset: 1px; }
+/* Layers panel (Illustrator-style rows): eye, lock, color bar, indent, twisty, thumbnail, name, target, delete. */
+.draw-layer-search { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; margin-bottom: 8px; }
+.draw-layer-search__input { min-width: 0; box-sizing: border-box; border: 1px solid var(--border); border-radius: 5px; background: var(--bg); color: var(--text); padding: 6px 8px; font: inherit; font-size: var(--fs-sm); }
+.draw-layer-search__input:focus { outline: 2px solid var(--brand-mid); outline-offset: 1px; }
+.draw-layer-search__filter { width: auto; padding: 5px 6px; font-size: var(--fs-xs); }
+.draw-layer-list { gap: 1px; }
+.draw-layer-row { min-height: 32px; gap: 0; padding: 0 2px; border-left: 0; border-radius: 4px; }
+.draw-layer-row.is-layer { min-height: 36px; border-left: 0; }
+.draw-layer-row.is-selected { box-shadow: inset 0 0 0 1px var(--layer-color); }
+.draw-layer-colorbar { flex: 0 0 auto; align-self: stretch; width: 4px; margin: 4px 6px 4px 2px; padding: 0; border: 0; border-radius: 2px; background: var(--layer-color); cursor: pointer; }
+.draw-layer-row:not(.is-layer) .draw-layer-colorbar { opacity: .45; }
+.draw-layer-colorbar:hover:not(:disabled) { box-shadow: 0 0 0 2px var(--surface-2), 0 0 0 3px var(--layer-color); }
+.draw-layer-colorbar:focus-visible { outline: 2px solid var(--brand-mid); outline-offset: 2px; }
+.draw-layer-indent { flex: 0 0 auto; width: calc(var(--depth) * 14px); }
+.draw-layer-twisty { margin-left: 0; }
+.draw-layer-thumb { flex: 0 0 auto; width: 28px; height: 28px; margin: 0 6px 0 2px; box-sizing: border-box; border: 1px solid var(--border); border-radius: 3px; background: #FFFFFF; object-fit: contain; cursor: pointer; }
+.draw-layer-row:not(.is-layer) .draw-layer-thumb { width: 24px; height: 24px; }
+.draw-layer-thumb.is-empty { background: #FFFFFF; }
+.draw-layer-color { display: none; }
+.draw-layer-delete { opacity: 0; color: var(--text-muted); }
+.draw-layer-row:is(:hover, .is-active, .is-selected, :focus-within) .draw-layer-delete { opacity: 1; }
+.draw-layer-delete:hover:not(:disabled) { color: var(--danger); }
+.draw-layer-delete:disabled { opacity: 0 !important; }
+.draw-dock-section[data-draw-dock="layers"]:not(.is-collapsed) .draw-dock-body { display: flex; flex-direction: column; padding-bottom: 0; }
+.draw-dock-section[data-draw-dock="layers"] .draw-layer-list { flex: 1 1 auto; overflow: auto; min-height: 0; }
+.draw-layer-bar { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: 6px -14px 0; padding: 4px 10px 4px 14px; border-top: 1px solid var(--border); background: var(--surface); position: sticky; bottom: 0; }
+.draw-layer-count { font-size: var(--fs-xs); color: var(--text-muted); white-space: nowrap; }
+/* Layer Options dialog (name, named color + swatch, two columns of options). */
+.draw-layer-dialog__color { display: grid; grid-template-columns: minmax(0, 1fr) 44px; gap: 8px; align-items: center; }
+.draw-layer-dialog__color input[type=color] { width: 44px; height: 34px; padding: 2px; border: 1px solid var(--border); border-radius: 5px; background: var(--bg); cursor: pointer; }
+.draw-layer-dialog__options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 18px; margin: 4px 0 16px; }
+.draw-layer-dialog__options > .field { margin: 0; }
+.draw-layer-dialog__options > .field:has(input:disabled) { opacity: .55; }
+.draw-layer-dialog__options > .field:last-child { display: flex; align-items: center; gap: 6px; }
+.draw-layer-dialog__dim { order: 3; display: inline-flex !important; align-items: center; gap: 4px; margin: 0 !important; }
+.draw-layer-dialog__options > .field:last-child > span { white-space: nowrap; }
+.draw-layer-dialog__dim > span { order: 2; color: var(--text-muted); }
+.draw-layer-dialog__options .draw-layer-dialog__dim input { width: 56px; height: auto; }

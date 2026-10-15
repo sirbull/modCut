@@ -141,6 +141,11 @@
       "path": "icons/outline/lock-open.svg",
       "sha256": "681702f968770541c584a4002f800de73b74c625d91442f13b17cb053816d917"
     },
+    "mask": {
+      "name": "mask",
+      "path": "icons/outline/mask.svg",
+      "sha256": "495c7d90c156645a21640703a9beaba4dba0e17537186014e57063f19aac7e25"
+    },
     "palette": {
       "name": "palette",
       "path": "icons/outline/palette.svg",

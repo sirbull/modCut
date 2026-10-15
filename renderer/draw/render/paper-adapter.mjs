@@ -14,7 +14,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
   const artwork = new scope.Layer({ name: 'Draw artwork' });
   const overlay = new scope.Layer({ name: 'Selection' });
   const labels = new scope.Group({insert:false}); overlay.addChild(labels);
-  const items = new Map(), records = new Map(), boardItems = new Map();
+  const items = new Map(), records = new Map(), boardItems = new Map(), thumbnails = new Map();
   const worldBounds = new Map(), paintedBounds = new Map();
   const editPreviews=new Map();
   const transformPreviewIds=new Set();let transformPreview=null,transformPreviewOptions=null;
@@ -245,7 +245,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     for (const [id, record] of boardItems) if (!data.artboards.some(b => b.id === id)) { record.item.remove(); record.label.remove(); record.labelRect.remove(); boardItems.delete(id); }
     reconcile(data.layers, artwork, alive);
     for (const [id, item] of items) if (!alive.has(id)) {
-      item.remove(); records.get(id).frame?.remove(); records.get(id).arrows?.remove(); items.delete(id); records.delete(id);
+      item.remove(); records.get(id).frame?.remove(); records.get(id).arrows?.remove(); items.delete(id); records.delete(id); thumbnails.delete(id);
     }
     updateBounds(); updateView();
   }
@@ -315,7 +315,45 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
       };prepare(clone);clone.applyMatrix=false;clone.matrix=new scope.Matrix(...matrix).append(records.get(id).worldMatrix);transformPreview.addChild(clone);transformPreviewIds.add(id);
     }updateView();
   }
-  return { render, select: updateView, updateView, bounds, selectionBounds, hit, items, setOutline, selectionHandle:point=>selection.hit(point),
+  // Layers panel thumbnails: a clone in world space with model visibility (ignoring viewport culling),
+  // rasterized to fit a square. Cached per subtree fingerprint, so unchanged rows cost nothing.
+  function thumbnail(id, size = 56) {
+    const item = items.get(id), record = records.get(id); if (!item || !record) return null;
+    const subtree = [id, ...state.document.descendants(id).map(n => n.id)];
+    const key = subtree.map(n => { const r = records.get(n); return r ? r.fingerprint + r.geometry : ''; }).join('|') + size;
+    const cached = thumbnails.get(id); if (cached?.key === key) return cached.url;
+    let url = null;
+    const clone = item.clone({ insert: false, deep: true });
+    try {
+      if (record.worldMatrix) clone.matrix = record.worldMatrix.clone();
+      const show = target => { const nodeId = target.data?.nodeId; target.visible = nodeId ? records.get(nodeId)?.node.visible !== false : true; target.children?.forEach(show); };
+      show(clone); clone.visible = true;
+      const box = clone.bounds;
+      if (box.width > 0 || box.height > 0) {
+        const extent = Math.max(box.width, box.height, 1e-6), inner = size - 4;
+        // Hairlines vanish at thumbnail scale: give every stroke at least about 1.5 thumbnail pixels.
+        const minimum = 1.5 * extent / inner;
+        const thicken = target => {
+          if (target.strokeColor && target.strokeWidth > 0) {
+            const width = target.strokeScaling === false ? target.strokeWidth / scope.view.zoom : target.strokeWidth;
+            target.strokeScaling = true; target.strokeWidth = Math.max(width, minimum);
+          }
+          target.children?.forEach(thicken);
+        };
+        thicken(clone);
+        const raster = clone.rasterize({ resolution: 72 * inner / extent, insert: false });
+        const canvas = document.createElement('canvas'); canvas.width = canvas.height = size;
+        const context = canvas.getContext('2d'), source = raster.canvas || raster.getSubCanvas?.(raster.bounds);
+        if (source?.width && source?.height) {
+          const scale = Math.min(inner / source.width, inner / source.height), w = source.width * scale, h = source.height * scale;
+          context.drawImage(source, (size - w) / 2, (size - h) / 2, w, h); url = canvas.toDataURL('image/png');
+        }
+        raster.remove();
+      }
+    } catch { url = null; } finally { clone.remove(); }
+    thumbnails.set(id, { key, url }); return url;
+  }
+  return { render, select: updateView, updateView, bounds, selectionBounds, hit, items, setOutline, thumbnail, selectionHandle:point=>selection.hit(point),
     setTheme({muted,background=labelBackground}) {labelColor=muted;labelBackground=background;for(const {label,labelRect} of boardItems.values()){label.fillColor=muted;labelRect.fillColor=background;}updateView();},
     shapePreview(node,sourceId=null) { const item=make(node);item.applyMatrix=false;style(item,node,false);item.opacity=.6;
       if(sourceId)item.matrix=records.get(sourceId).worldMatrix.clone();overlay.addChild(item);return item; },
@@ -370,7 +408,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
       destroyed = true; selection.destroy();anchors.destroy();clearTransformPreview();
       for (const record of records.values()) if (record.node.type === 'image') items.get(record.node.id).onLoad = null;
       boards.remove(); artwork.remove(); overlay.remove();
-      items.clear(); records.clear(); boardItems.clear(); worldBounds.clear(); paintedBounds.clear();
+      items.clear(); records.clear(); boardItems.clear(); thumbnails.clear(); worldBounds.clear(); paintedBounds.clear();
     },
   };
 }

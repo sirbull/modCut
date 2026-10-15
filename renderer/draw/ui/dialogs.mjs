@@ -3,6 +3,7 @@ import { MAX_ARTBOARDS, newDrawDocument } from '../doc/artboards.mjs';
 import { DOCUMENT_PRESETS, PRESET_CATEGORIES, UNIT_LABELS, RESOLUTIONS, RECENT_KEY, TEMPLATES_KEY, toMm, fromMm, formatSize, normalizeSetup,
   rememberRecent, removeTemplate, loadStoredList, storeList } from '../doc/presets.mjs';
 import { dialogOperation } from '../geom/transforms.mjs';
+import { NAMED_LAYER_COLORS, layerColorName } from '../doc/layers.mjs';
 import { enhanceNumberFields } from './number-field.mjs';
 
 let dialogId=0;
@@ -204,17 +205,41 @@ export function transformDialog(tool,origin,defaults={},onPreview=()=>{}) {
   form.addEventListener('input',preview);form.addEventListener('change',preview);preview();
   return result.finally(()=>{form.removeEventListener('input',preview);form.removeEventListener('change',preview);});
 }
-export function layerOptionsDialog(layer) {
-  return openDrawModal({title:'Layer Options',submitLabel:'OK',className:'draw-layer-dialog',fields:[
+/** Layer Options laid out like Illustrator: name, named color with a swatch, then two columns of options. */
+export function layerOptionsDialog(layer,{focus='name'}={}) {
+  const result=openDrawModal({title:'Layer Options',submitLabel:'OK',className:'draw-layer-dialog',fields:[
     {key:'name',label:'Name',value:layer.name,required:true},
     {key:'color',label:'Color',type:'color',value:layer.color.toLowerCase()},
-    {key:'template',label:'Template',type:'checkbox',value:layer.template,description:'A locked, dimmed reference layer. It is never printed, exported or sent to Cut.',
-      onChange:on=>{const dim=document.querySelector('.draw-layer-dialog form')?.elements.dimImages;if(on&&dim&&!dim.checked){dim.checked=true;dim.dispatchEvent(new Event('input',{bubbles:true}));}}},
+    {key:'template',label:'Template',type:'checkbox',value:layer.template},
+    {key:'locked',label:'Lock',type:'checkbox',value:layer.template||layer.locked},
     {key:'visible',label:'Show',type:'checkbox',value:layer.visible},
-    {key:'preview',label:'Preview',type:'checkbox',value:layer.preview!==false,showIf:v=>!v.template},
-    {key:'locked',label:'Lock',type:'checkbox',value:layer.locked,showIf:v=>!v.template},
-    {key:'printable',label:'Print',type:'checkbox',value:layer.printable,showIf:v=>!v.template},
-    {key:'dimImages',label:'Dim images',type:'checkbox',value:layer.template||!!layer.dimImages},
-    {key:'dimImagesTo',label:'Dim images to (%)',type:'number',value:layer.dimImagesTo??50,min:0,max:100,step:1,required:true,showIf:v=>v.dimImages},
+    {key:'printable',label:'Print',type:'checkbox',value:!layer.template&&layer.printable},
+    {key:'preview',label:'Preview',type:'checkbox',value:layer.template||layer.preview!==false},
+    {key:'dimImages',label:'Dim Images to:',type:'checkbox',value:layer.template||!!layer.dimImages},
+    {key:'dimImagesTo',label:'Dim images to (%)',type:'number',value:layer.dimImagesTo??50,min:0,max:100,step:1,required:true},
   ]});
+  const modal=document.querySelector('.draw-layer-dialog'),form=modal.querySelector('form'),el=form.elements;
+  // Color: a named-color menu beside the swatch; the swatch (and "Other...") picks any color.
+  const colorLabel=el.color.closest('label'),row=document.createElement('div');row.className='draw-layer-dialog__color';
+  const menu=document.createElement('select');menu.className='select';menu.name='colorName';menu.setAttribute('aria-label','Layer color');
+  for(const {name,hex} of NAMED_LAYER_COLORS){const o=new Option(name,hex);o.style.setProperty('--swatch',hex);menu.append(o);}
+  menu.append(new Option('Other…','other'));
+  const sync=()=>{menu.value=layerColorName(el.color.value)?el.color.value.toUpperCase():'other';menu.style.setProperty('--swatch',el.color.value);};
+  menu.addEventListener('change',()=>{if(menu.value==='other'){el.color.click();sync();return;}el.color.value=menu.value.toLowerCase();sync();});
+  el.color.addEventListener('input',sync);el.color.title='Choose any color';
+  el.color.parentNode.insertBefore(row,el.color);row.append(menu,el.color);sync();
+  // Options in two columns: Template | Lock, Show | Print, Preview | Dim Images to [50] %.
+  // The grid joins the form first, so the moved checkboxes stay form controls for submit.
+  const grid=document.createElement('div');grid.className='draw-layer-dialog__options';colorLabel.after(grid);
+  for(const key of ['template','locked','visible','printable','preview','dimImages'])grid.append(el[key].closest('label'));
+  const dim=el.dimImages.closest('label'),amount=el.dimImagesTo.closest('label');
+  amount.classList.add('draw-layer-dialog__dim');dim.append(amount);amount.querySelector('span').textContent='%';amount.append(amount.querySelector('span'));
+  el.dimImagesTo.setAttribute('aria-label','Dim images to percent');
+  // Template locks, never prints and always previews; dimming the amount follows its checkbox.
+  const update=()=>{const t=el.template.checked;for(const key of ['locked','printable','preview'])el[key].disabled=t;
+    if(t){el.locked.checked=true;el.printable.checked=false;el.preview.checked=true;}el.dimImagesTo.disabled=!el.dimImages.checked;};
+  const onTemplate=()=>{if(el.template.checked)el.dimImages.checked=true;update();};
+  for(const type of ['change','input']){el.template.addEventListener(type,onTemplate);el.dimImages.addEventListener(type,update);}update();
+  const target=focus==='color'?menu:el.name;setTimeout(()=>{target.focus();if(target===el.name)el.name.select();});
+  return result.then(values=>values&&({...values,locked:el.template.checked||values.locked,printable:!el.template.checked&&values.printable,preview:el.template.checked||values.preview}));
 }

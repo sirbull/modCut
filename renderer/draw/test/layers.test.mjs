@@ -5,7 +5,7 @@ import { DrawDocument } from '../doc/document.mjs';
 import { History } from '../doc/history.mjs';
 import { updateNode } from '../doc/commands.mjs';
 import { LAYER_COLORS, ROOT_CONTEXT, collectCommands, deleteLayerCommands, dropTarget, isOutputNode, layerContext, layerOptionsPatch,
-  moveCommand, newLayer, nodeContext, releaseCommands, soloUpdates } from '../doc/layers.mjs';
+  moveCommand, newLayer, nodeContext, releaseCommands, soloUpdates, NAMED_LAYER_COLORS, layerColorName, filterLayerTree, deleteRowCommands } from '../doc/layers.mjs';
 
 function setup() {
   const a = createNode('path', { id: 'a' }), b = createNode('path', { id: 'b' }), c = createNode('path', { id: 'c' });
@@ -116,4 +116,36 @@ test('delete, collect and release are single undoable transactions', () => {
   assert.throws(() => releaseCommands(doc, 'sub2'), /Choose a layer/);
   run(history, 'Release', releaseCommands(doc, 'sub').commands);
   assert.throws(() => releaseCommands(doc, 'sub'), /no objects/);
+});
+
+test('named layer colors cover the cycle and map back from hex', () => {
+  for (const hex of LAYER_COLORS) assert.ok(layerColorName(hex), `${hex} has a name`);
+  assert.equal(layerColorName('#4f80ff'), 'Light Blue');
+  assert.equal(layerColorName('#123456'), null);
+  assert.equal(new Set(NAMED_LAYER_COLORS.map((c) => c.hex)).size, NAMED_LAYER_COLORS.length);
+});
+
+test('Layers search keeps matches and their ancestors; filters narrow by type and state', () => {
+  const { doc, history } = setup();
+  assert.equal(filterLayerTree(doc, '', 'all'), null);
+  assert.deepEqual([...filterLayerTree(doc, 'sub')].sort(), ['bottom', 'sub']);
+  history.execute(updateNode('c', { name: 'Logo outline' }));
+  assert.deepEqual([...filterLayerTree(doc, 'LOGO')].sort(), ['bottom', 'c', 'sub'], 'case-insensitive, with parents');
+  assert.deepEqual([...filterLayerTree(doc, '', 'layers')].sort(), ['bottom', 'sub', 'top']);
+  history.execute(updateNode('a', { locked: true }));
+  assert.deepEqual([...filterLayerTree(doc, '', 'locked')].sort(), ['a', 'bottom']);
+  assert.equal(filterLayerTree(doc, 'nothing here').size, 0);
+});
+
+test('row delete removes an object or a whole layer in one step', () => {
+  const { doc, history } = setup();
+  run(history, 'Delete', deleteRowCommands(doc, 'a'));
+  assert.equal(doc.getNode('a'), null);
+  run(history, 'Delete', deleteRowCommands(doc, 'sub'));
+  assert.equal(doc.getNode('c'), null, 'sublayer contents go with it');
+  history.undo(); assert.ok(doc.getNode('c'));
+  history.execute(updateNode('b', { locked: true }));
+  assert.throws(() => deleteRowCommands(doc, 'b'), /Unlock/);
+  run(history, 'Delete', deleteRowCommands(doc, 'top'));
+  assert.throws(() => deleteRowCommands(doc, 'bottom'), /at least one layer/);
 });

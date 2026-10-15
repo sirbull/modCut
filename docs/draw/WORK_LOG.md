@@ -568,3 +568,33 @@ Properties fra D1.8) ligger Color- og Stroke-panelene i panelgruppene, og Proper
 sammendraget av utseende (klikk åpner riktig gruppe). Panel-E2E åpner paneler med en hjelper som
 ikke lukker en allerede åpen gruppe. 134 Draw-enhetstester og komplett Draw-E2E (15 av 15)
 passerer, også autolagringstesten.
+
+## 2026-10-15: Høyrepanel trinn 3, Layers-panelet
+
+- Hver rad har nå, fra venstre: **øye** (Alt: vis bare dette laget, Ctrl/Cmd: Outline/Preview),
+  **lås**, **fargelinje** i lagets markeringsfarge (objekter arver den, dempet), innrykk og pil,
+  **thumbnail**, **navn**, **målsirkel** og **søppelkasse**. Søppelkassen vises ved hover og på
+  aktiv/valgt rad, og sletter laget med innhold eller objektet i ett angresteg. Siste lag kan ikke slettes.
+- **Dobbeltklikk på navnet** gir omdøping direkte i raden, også for lag.
+  **Dobbeltklikk på fargelinjen** åpner Layer Options med fokus på Color. Alt-klikk på pilen
+  folder ut eller inn alle nivåer under.
+- **Thumbnails** lages i render-adapteren (`thumbnail(id)`): en klon i verdenskoordinater med
+  modellens synlighet (uavhengig av viewport culling), streker på minst ca. 1,5 px, rasterisert
+  til 56 px og cachet per fingerprint for noden og alle etterkommere. Maks 200 per oppdatering.
+- **Søk** («Search all») og **filter** (Show all, Only layers, Only visible, Only locked) øverst.
+  Treff beholder foreldrene sine; tomt resultat viser «No matches». Skriving bygger bare treet på
+  nytt, så søkefeltet beholder fokus. Ren logikk i `filterLayerTree`.
+- **Bunnlinje** med «N Layers» og ikonene Collect in new layer, Release to layers, Locate object,
+  Make/Release clipping mask (deaktivert til Pathfinder), Create new sublayer, Create new layer
+  (Alt-klikk åpner Layer Options for det nye laget) og Delete selection (valgte objekter, ellers
+  aktivt lag). Locate fungerer nå også i dokken.
+- **Layer Options** som i Illustrator: Name, Color med nedtrekk av 27 navngitte farger
+  (Light Blue, Red, Green, …, «Other…») og fargerute ved siden av, og to kolonner med Template | Lock,
+  Show | Print, Preview | Dim Images to [50] %. Template låser, slår av Print og tvinger Preview
+  (feltene vises deaktivert i stedet for å skjules). Nye rene hjelpere: `NAMED_LAYER_COLORS`,
+  `layerColorName`, `deleteRowCommands`.
+- Nytt Tabler-ikon `mask`.
+
+Verifisering: 137 Draw-enhetstester passerer (nye tester i `layers.test.mjs`). Panel-E2E dekker
+thumbnail (mørke piksler fra ellipsen), fargelinje, omdøping av lag, radsletting, søk med fokus,
+filter, teller, Layer Options via fargelinjen og valg av «Red». Komplett Draw-E2E passerer (15 av 15).
