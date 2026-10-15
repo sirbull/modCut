@@ -6,6 +6,8 @@ import { createArtboard, createDocument, createNode } from '../doc/schema.mjs';
 import { insertNode, moveNode, removeNode, updateNode, updateArtboard, insertArtboard } from '../doc/commands.mjs';
 import { appearance } from '../geometry.mjs';
 import { createDrawRenderer } from '../render.mjs';
+import { shapeSelectionKey } from '../doc/selection.mjs';
+import { roundCorners } from '../geom/corners.mjs';
 
 const rectangle = (properties = {}) => createNode('shape', { appearance: appearance('#FF0000', '#071411', 2), ...properties });
 function setup(t, children = [], options = {}) {
@@ -19,6 +21,45 @@ function setup(t, children = [], options = {}) {
   return { state, scope, renderer, layer };
 }
 const rect = b => [b.x, b.y, b.width, b.height].map(n => Math.round(n * 1e6) / 1e6);
+
+test('Direct Selection inspects transformed live shapes without mutating their model or view',t=>{
+  const shape=rectangle({params:{x:10,y:5,width:20,height:10},transform:[1.2,.3,0,.8,4,2]}),parent=createNode('group',{transform:[0,1,-1,0,60,10],children:[shape]});
+  const {state,scope,renderer}=setup(t,[parent]);state.ui={tool:'direct-selection'};const saved=JSON.stringify(state.snapshot()),item=renderer.items.get(shape.id);
+  const node=renderer.editingNode(shape.id),p=renderer.editPointToWorld(shape.id,node.subpaths[0].segments[1].p),hit=renderer.pathHit(p,{shapes:true,logical:true});
+  assert.equal(hit.nodeId,shape.id);assert.equal(hit.segment,1);assert.equal(hit.shapeKey,shapeSelectionKey(shape));
+  state.selection.setAnchors([hit]);renderer.select();assert.equal(state.selection.anchors.length,1);assert.equal(renderer.cornerWidgets().length,1);
+  const local=renderer.editPointToLocal(shape.id,p);assert.ok(local.getDistance(new scope.Point(...node.subpaths[0].segments[1].p))<1e-9);
+  node.subpaths[0].segments[1].p[0]+=5;
+  renderer.setEditPreview([node]);assert.equal(item.visible,false);
+  assert.deepEqual(renderer.pathHit(p,{shapes:true,logical:true}),hit,'Hit tests use committed anchors, never preview or Pen rubber-band points');
+  renderer.setEditPreview();assert.equal(item.visible,true);
+  assert.equal(JSON.stringify(state.snapshot()),saved);assert.equal(state.dirty,false);assert.equal(renderer.items.get(shape.id),item);
+});
+
+test('corner widgets remain screen sized, use source anchors and respect locked ancestors',t=>{
+  const plain={closed:true,segments:[[0,0],[20,0],[20,20],[0,20]].map(p=>({p,in:[0,0],out:[0,0]}))},rounded=roundCorners(plain,[1],3),node=createNode('path',{subpaths:[rounded]}),parent=createNode('group',{transform:[0,2,-1,0,100,20],children:[node]});
+  const {state,scope,renderer}=setup(t,[parent]);state.ui={tool:'direct-selection'};state.selection.set([node.id]);renderer.updateView();
+  const widget=renderer.cornerWidgets()[0],p=renderer.editPointToWorld(node.id,plain.segments[0].p);assert.ok(widget.point.getDistance(p)*scope.view.zoom<=16+1e-8,'Widget stays within sixteen screen pixels and clear of short edges');
+  assert.equal(renderer.cornerHandle(widget.point).segment,0);scope.view.zoom=3;renderer.updateView();assert.ok(Math.abs(renderer.cornerWidgets()[0].point.getDistance(p)*scope.view.zoom-16)<1e-8);
+  const hit=renderer.pathHit(renderer.editPointToWorld(node.id,[20,0]),{logical:true});assert.equal(hit.segment,1);assert.equal(hit.logical,true);
+  state.history.execute(updateNode(parent.id,{locked:true}));assert.equal(renderer.cornerWidgets().length,0);assert.equal(renderer.cornerHandle(widget.point),null);
+});
+
+test('every live shape expands to equivalent world curves including large and elliptical corner radii',t=>{
+  const shapes=[
+    rectangle({params:{x:5,y:7,width:30,height:10,cornerRadius:3}}),
+    rectangle({params:{x:5,y:7,width:30,height:10,cornerRadius:50}}),
+    rectangle({shape:'ellipse',params:{x:5,y:7,width:30,height:10,startAngle:20,endAngle:210}}),
+    rectangle({shape:'line',params:{x1:5,y1:7,x2:30,y2:10}}),
+    rectangle({shape:'polygon',params:{x:15,y:17,radius:10,sides:7}}),
+    rectangle({shape:'star',params:{x:15,y:17,outerRadius:10,innerRadius:5,points:7}}),
+  ];
+  const {renderer,scope}=setup(t,shapes);
+  for(const shape of shapes){const expanded=renderer.expandedShape(shape.id),view=new scope.Path({insert:false,closed:expanded.subpaths[0].closed,segments:expanded.subpaths[0].segments.map(s=>new scope.Segment(s.p,s.in,s.out))}),original=renderer.items.get(shape.id);
+    assert.deepEqual(rect(view.bounds),rect(original.bounds));assert.ok(Math.abs(view.length-original.length)<1e-6);
+    for(let i=0;i<10;i++){const point=original.getPointAt(original.length*i/10);assert.ok(view.getNearestPoint(point).getDistance(point)<1e-6,shape.shape+' retains its geometry');}view.remove();
+  }
+});
 
 test('anchor hits, curve splitting locations and local coordinates follow transformed parents',t=>{
   const node=createNode('path',{appearance:appearance(null,'#071411'),subpaths:[{closed:false,segments:[{p:[0,0],in:[0,0],out:[10,10]},{p:[30,0],in:[-10,10],out:[0,0]}]}]});

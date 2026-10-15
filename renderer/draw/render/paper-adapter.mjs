@@ -3,6 +3,9 @@ import { createSelectionOverlay } from './overlays.mjs';
 import { activeArtboard } from '../doc/artboards.mjs';
 import { createAnchorOverlay } from './anchors.mjs';
 import { transformProperties } from '../geometry.mjs';
+import { editablePath,cornerGeometry,roundCorners } from '../geom/corners.mjs';
+import { shapeSelectionKey } from '../doc/selection.mjs';
+import { scaledStrokeProperties } from '../geom/transforms.mjs';
 
 export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withScope = fn => fn() } = {}) {
   const boards = new scope.Layer({ name: 'Artboards' });
@@ -11,11 +14,37 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
   const labels = new scope.Group({insert:false}); overlay.addChild(labels);
   const items = new Map(), records = new Map(), boardItems = new Map();
   const worldBounds = new Map(), paintedBounds = new Map();
+  const editPreviews=new Map();
+  const transformPreviewIds=new Set();let transformPreview=null,transformPreviewOptions=null;
   let destroyed = false, outline = !!state.ui?.outline;
   let labelColor='#435A50',labelBackground='#E7F5EF';
   const selection = createSelectionOverlay(scope, overlay, state, id => bounds(id));
   const pointToWorld=(id,point)=>new scope.Point(...point).transform(records.get(id).worldMatrix);
-  const anchors=createAnchorOverlay(scope,overlay,state,pointToWorld);
+  const editingMatrix=id=>{
+    const node=state.document.getNode(id),parentId=node?.type==='shape'?state.document.locate(id).parentId:id;
+    return records.get(parentId)?.worldMatrix??new scope.Matrix();
+  };
+  const editPointToWorld=(id,p)=>new scope.Point(...p).transform(editingMatrix(id));
+  const editPointToLocal=(id,p)=>new scope.Point(p).transform(editingMatrix(id).inverted());
+  function editingNode(id,{logical=true,preview=true}={}){
+    const original=state.document.getNode(id),node=(preview?editPreviews.get(id):null)??(original?.type==='shape'?expandedShape(id):original);
+    return node?.type==='path'&&logical?{...node,subpaths:node.subpaths.map(editablePath)}:node;
+  }
+  function cornerWidgets(){
+    if(state.ui?.tool!=='direct-selection'||state.document.readOnly)return [];
+    const result=[],selected=state.selection.anchors;
+    for(const id of state.selection.ids){const node=editingNode(id);if(node?.type!=='path'||!state.document.isEditable(id))continue;
+      node.subpaths.forEach((path,subpath)=>path.segments.forEach((s,segment)=>{
+        if(selected.length&&!selected.some(a=>a.nodeId===id&&a.subpath===subpath&&a.segment===segment))return;
+        const corner=cornerGeometry(path,segment);if(!corner)return;
+        const p=editPointToWorld(id,s.p),unit=editPointToWorld(id,s.p.map((n,i)=>n+corner.bisector[i])).subtract(p).length;
+        const distance=corner.radius>0?corner.radius/corner.sin:Math.min(16/scope.view.zoom/(unit||1),corner.maxRadius/corner.sin*.65);
+        const point=editPointToWorld(id,s.p.map((n,i)=>n+corner.bisector[i]*distance));
+        result.push({nodeId:id,subpath,segment,kind:'corner',logical:true,shapeKey:state.document.getNode(id).type==='shape'?shapeSelectionKey(state.document.getNode(id)):undefined,point,corner});
+      }));
+    }return result;
+  }
+  const anchors=createAnchorOverlay(scope,overlay,state,editPointToWorld,id=>editingNode(id,{logical:['direct-selection','anchor-point','delete-anchor'].includes(state.ui?.tool)}),cornerWidgets);
 
   function color(paint) {
     if (!paint || paint.type !== 'solid') return null;
@@ -97,13 +126,14 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     item.strokeColor = asOutline ? '#071411' : color(stroke?.paint);
     if (item.fillColor) item.fillColor.alpha = fill?.opacity ?? 1;
     if (item.strokeColor && !asOutline) item.strokeColor.alpha = stroke?.opacity ?? 1;
-    item.strokeWidth = asOutline ? 1 / scope.view.zoom : stroke?.width ?? 0;
-    item.strokeScaling = !asOutline;
+    const strokeZoom=!asOutline&&node.strokeScaling===false?scope.view.zoom:1;
+    item.strokeWidth = asOutline ? 1 / scope.view.zoom : (stroke?.width ?? 0)*strokeZoom;
+    item.strokeScaling = !asOutline && node.strokeScaling!==false;
     item.strokeCap = asOutline ? 'butt' : stroke?.cap ?? 'butt';
     item.strokeJoin = asOutline ? 'miter' : stroke?.join ?? 'miter';
     item.miterLimit = stroke?.miterLimit ?? 4;
-    item.dashArray = asOutline ? [] : stroke?.dash?.array ?? [];
-    item.dashOffset = asOutline ? 0 : stroke?.dash?.offset ?? 0;
+    item.dashArray = asOutline ? [] : (stroke?.dash?.array ?? []).map(n=>n*strokeZoom);
+    item.dashOffset = asOutline ? 0 : (stroke?.dash?.offset ?? 0)*strokeZoom;
     if (node.type === 'path') item.fillRule = node.fillRule;
   }
   function place(parent, item, index) {
@@ -201,9 +231,10 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     const viewport = scope.view.bounds.expand(16 / scope.view.zoom);
     for (const [id, record] of records) {
       const item = items.get(id), node = record.node;
+      if(node.strokeScaling===false)style(item,node);
       const b = paintedBounds.get(id);
       const visible = node.visible && (!!node.children || !!b?.intersects(viewport));
-      item.visible = visible && !(outline && node.type === 'image');
+      item.visible = visible && !(outline && node.type === 'image') && !editPreviews.has(id) && !transformPreviewIds.has(id);
       if (outline && !node.children && node.type !== 'image') item.strokeWidth = 1 / scope.view.zoom;
       if (record.frame) { record.frame.visible = visible && outline; record.frame.strokeWidth = 1 / scope.view.zoom; }
     }
@@ -212,6 +243,11 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
       label.point=item.bounds.topLeft.add([0,-8/scope.view.zoom]);label.fontSize=12/scope.view.zoom;label.visible=item.visible;
       labelRect.bounds=label.bounds.expand(6/scope.view.zoom,4/scope.view.zoom);labelRect.visible=label.visible;
     }
+    if(transformPreview)transformPreview.getItems({match:item=>!!item.data.nodeId}).forEach(item=>{
+      const record=records.get(item.data.nodeId);if(!record)return;
+      const {matrix,scaleStrokes}=transformPreviewOptions,properties=scaleStrokes===null?{}:scaledStrokeProperties(record.node,record.worldMatrix.values,matrix,scaleStrokes);
+      if(properties.appearance||record.node.strokeScaling===false)style(item,{...record.node,...properties});
+    });
     selection.update(); anchors.update(); scope.view.update();
   }
   function setOutline(value) {
@@ -227,42 +263,65 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     }
     return null;
   }
+  function expandedShape(id) {
+    const node=state.document.getNode(id);if(node?.type!=='shape')return null;
+    const item=make(node),parts=item.children||[item];
+    let subpaths=parts.map(p=>({closed:p.closed,segments:p.segments.map(s=>({p:[s.point.x,s.point.y],in:[s.handleIn.x,s.handleIn.y],out:[s.handleOut.x,s.handleOut.y]}))}));item.remove();
+    if(node.shape==='rect'&&(node.params.cornerRadius??0)<=Math.min(node.params.width??0,node.params.height??0)/2){
+      const {x=0,y=0,width=0,height=0,cornerRadius=0}=node.params;
+      const source={closed:true,segments:[[x,y+height],[x,y],[x+width,y],[x+width,y+height]].map(p=>({p,in:[0,0],out:[0,0]}))};
+      subpaths=[roundCorners(source,[0,1,2,3],cornerRadius)];
+    }
+    const {shape,params,...base}=structuredClone(node),result={...base,type:'path',subpaths,fillRule:'nonzero',transform:[1,0,0,1,0,0]};
+    return {...result,...transformProperties(result,node.transform)};
+  }
+  function clearTransformPreview(){transformPreview?.remove();transformPreview=null;transformPreviewOptions=null;transformPreviewIds.clear();}
+  function previewTransform(ids,matrix,{scaleStrokes=null}={}){
+    clearTransformPreview();transformPreviewOptions={matrix,scaleStrokes};transformPreview=new scope.Group({insert:false});overlay.addChild(transformPreview);
+    for(const id of ids){const original=items.get(id);if(!original)continue;const clone=original.clone({insert:false});
+      const prepare=item=>{const record=records.get(item.data.nodeId);if(record){item.visible=record.node.visible;
+        if(scaleStrokes!==null&&!outline){const properties=scaledStrokeProperties(record.node,record.worldMatrix.values,matrix,scaleStrokes);if(properties.appearance)style(item,{...record.node,...properties},false);}}
+        item.children?.forEach(prepare);
+      };prepare(clone);clone.applyMatrix=false;clone.matrix=new scope.Matrix(...matrix).append(records.get(id).worldMatrix);transformPreview.addChild(clone);transformPreviewIds.add(id);
+    }updateView();
+  }
   return { render, select: updateView, updateView, bounds, selectionBounds, hit, items, setOutline, selectionHandle:point=>selection.hit(point),
     setTheme({muted,background=labelBackground}) {labelColor=muted;labelBackground=background;for(const {label,labelRect} of boardItems.values()){label.fillColor=muted;labelRect.fillColor=background;}updateView();},
     shapePreview(node,sourceId=null) { const item=make(node);item.applyMatrix=false;style(item,node,false);item.opacity=.6;
       if(sourceId)item.matrix=records.get(sourceId).worldMatrix.clone();overlay.addChild(item);return item; },
     pointToWorld,
+    editingNode,editPointToWorld,editPointToLocal,cornerWidgets,
+    cornerHandle(point){return cornerWidgets().find(c=>c.point.getDistance(point)<=7/scope.view.zoom)??null;},
+    editSpaceId(id){return state.document.getNode(id)?.type==='shape'?state.document.locate(id).parentId:id;},
+    setEditPreview(nodes=[]){editPreviews.clear();for(const node of nodes)editPreviews.set(node.id,node);updateView();},
+    previewTransform,clearTransformPreview,
+    worldMatrix(id){return [...records.get(id).worldMatrix.values];},
     pointToLocal(id,point) {return new scope.Point(point).transform(records.get(id).worldMatrix.inverted());},
-    pathHit(point,{handles=true,endpoints=false}={}) {
+    pathHit(point,{handles=true,endpoints=false,shapes=false,logical=false}={}) {
       const tolerance=7/scope.view.zoom,selected=state.selection.anchors;
       const nodes=[...state.selection.ids,...[...items.keys()].reverse()].filter((id,i,a)=>a.indexOf(id)===i);
-      for(const id of nodes){const node=state.document.getNode(id);if(node?.type!=='path'||!state.document.isEditable(id))continue;
+      for(const id of nodes){const original=state.document.getNode(id);if(!original||!['path',...(shapes?['shape']:[])].includes(original.type)||!state.document.isEditable(id))continue;
+        const node=editingNode(id,{logical,preview:false}),extra={...(logical?{logical:true}:{}),...(original.type==='shape'?{shapeKey:shapeSelectionKey(original)}:{})};
         for(const [subpath,path] of node.subpaths.entries())for(const [segment,s] of path.segments.entries()) {
           if(endpoints&&(path.closed||segment!==0&&segment!==path.segments.length-1))continue;
           if(handles&&selected.some(a=>a.nodeId===id&&a.subpath===subpath&&a.segment===segment))for(const kind of ['in','out']) {
-            if(Math.hypot(...s[kind])&&pointToWorld(id,s.p.map((n,i)=>n+s[kind][i])).getDistance(point)<=tolerance)return {nodeId:id,subpath,segment,kind};
+            if(Math.hypot(...s[kind])&&editPointToWorld(id,s.p.map((n,i)=>n+s[kind][i])).getDistance(point)<=tolerance)return {nodeId:id,subpath,segment,kind,...extra};
           }
-          if(pointToWorld(id,s.p).getDistance(point)<=tolerance)return {nodeId:id,subpath,segment,kind:'point'};
+          if(editPointToWorld(id,s.p).getDistance(point)<=tolerance)return {nodeId:id,subpath,segment,kind:'point',...extra};
         }
       }
       return null;
     },
-    curveHit(point) {
+    curveHit(point,{shapes=false}={}) {
       let best=null;
       for(const [id,record] of [...records].reverse()) {
-        if(record.node.type!=='path'||!state.document.isEditable(id))continue;
+        if(!['path',...(shapes?['shape']:[])].includes(record.node.type)||!state.document.isEditable(id))continue;
         // Measure in world space so tolerance remains consistent under parent transforms.
-        record.node.subpaths.forEach((data,subpath)=>{const item=path(data);item.transform(record.worldMatrix);
+        editingNode(id,{logical:false,preview:false}).subpaths.forEach((data,subpath)=>{const item=path(data);item.transform(editingMatrix(id));
           const location=item.getNearestLocation(point);if(location&&location.distance<=7/scope.view.zoom&&(!best||location.distance<best.distance))best={nodeId:id,subpath,segment:location.index,t:location.time,distance:location.distance};item.remove();});
       }return best;
     },
-    expandedShape(id) {
-      const node=state.document.getNode(id);if(node?.type!=='shape')return null;
-      const item=make(node),parts=item.children||[item];
-      const subpaths=parts.map(p=>({closed:p.closed,segments:p.segments.map(s=>({p:[s.point.x,s.point.y],in:[s.handleIn.x,s.handleIn.y],out:[s.handleOut.x,s.handleOut.y]}))}));item.remove();
-      const {shape,params,...base}=structuredClone(node),result={...base,type:'path',subpaths,fillRule:'nonzero',transform:[1,0,0,1,0,0]};
-      return {...result,...transformProperties(result,node.transform)};
-    },
+    expandedShape,
     get outline() { return outline; },
     localMatrix(id, matrix) {
       const parentId = state.document.locate(id)?.parentId;
@@ -277,7 +336,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
       scope.view.center = b.center; updateView();
     },
     destroy() {
-      destroyed = true; selection.destroy();anchors.destroy();
+      destroyed = true; selection.destroy();anchors.destroy();clearTransformPreview();
       for (const record of records.values()) if (record.node.type === 'image') items.get(record.node.id).onLoad = null;
       boards.remove(); artwork.remove(); overlay.remove();
       items.clear(); records.clear(); boardItems.clear(); worldBounds.clear(); paintedBounds.clear();

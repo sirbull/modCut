@@ -10,6 +10,8 @@ import { runProjectWorkflows, verifyProjectRecovery } from "./project-workflows.
 import { runDrawUIWorkflows } from "./draw-ui-workflows.mjs";
 import { runDrawPhaseOneWorkflows } from './draw-phase1-workflows.mjs';
 import { runDrawPathWorkflows } from './draw-path-workflows.mjs';
+import { runDrawCornerWorkflows } from './draw-corner-workflows.mjs';
+import { runDrawTransformWorkflows } from './draw-transform-workflows.mjs';
 import { runWorkflows, verifyRecoveredSession } from "./workflows.mjs";
 import { runThemeWorkflows } from "./theme-workflows.mjs";
 
@@ -58,6 +60,12 @@ try {
   if (process.argv.includes("--theme")) {
     await runThemeWorkflows(first, port);
     first.socket.close();
+  } else if (process.argv.includes('--draw-transforms')) {
+    for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
+    await runDrawTransformWorkflows(first);first.socket.close();
+  } else if (process.argv.includes('--draw-corners')) {
+    for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
+    await runDrawCornerWorkflows(first);first.socket.close();
   } else if (process.argv.includes('--draw-paths')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawPathWorkflows(first);first.socket.close();
@@ -81,6 +89,8 @@ try {
     await runDrawUIWorkflows(first);
     await runDrawPhaseOneWorkflows(first);
     await runDrawPathWorkflows(first);
+    await runDrawCornerWorkflows(first);
+    await runDrawTransformWorkflows(first);
     const expected = await runProjectWorkflows(first, profile);
     first.socket.close();
     await stop("SIGKILL");

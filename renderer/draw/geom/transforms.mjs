@@ -1,0 +1,37 @@
+/** World-space transforms. Positive UI angles are counterclockwise in a y-down canvas. */
+export const TRANSFORM_TOOLS=['rotate','reflect','scale'];
+export const isIdentity=m=>m.every((v,i)=>Math.abs(v-[1,0,0,1,0,0][i])<1e-10);
+export const strokeScale=m=>Math.sqrt(Math.abs(m[0]*m[3]-m[1]*m[2]));
+export function dialogOperation(tool,values){
+  if(tool==='scale')return {tool,x:Number(values.mode==='nonuniform'?values.x:values.uniform)/100,y:Number(values.mode==='nonuniform'?values.y:values.uniform)/100};
+  return {tool,angle:tool==='reflect'&&values.axis!=='angle'?(values.axis==='vertical'?90:0):Number(values.angle)};
+}
+export function operationMatrix(operation,origin) {
+  const [x,y]=origin;let a,b,c,d;
+  if(operation.tool==='rotate'){
+    const radians=-operation.angle*Math.PI/180;a=d=Math.cos(radians);b=Math.sin(radians);c=-b;
+  }else if(operation.tool==='reflect'){
+    const radians=-operation.angle*Math.PI/180;a=Math.cos(2*radians);b=c=Math.sin(2*radians);d=-a;
+  }else if(operation.tool==='scale'){a=operation.x;b=c=0;d=operation.y;}
+  else throw new Error('Unknown transform');
+  const result=[a,b,c,d,x-a*x-c*y,y-b*x-d*y];
+  if(!result.every(Number.isFinite)||Math.abs(a*d-b*c)<1e-12)throw new RangeError('Transform must be finite and nonzero');
+  return result;
+}
+export function dragTransform(tool,origin,start,end,constrain=false) {
+  const [x,y]=origin,a=[start[0]-x,start[1]-y],b=[end[0]-x,end[1]-y],snap=v=>constrain?Math.round(v/45)*45:v;
+  if(tool==='rotate')return {tool,angle:snap(-(Math.atan2(b[1],b[0])-Math.atan2(a[1],a[0]))*180/Math.PI)};
+  if(tool==='reflect')return {tool,angle:snap(-(Math.atan2(b[1],b[0])+Math.atan2(a[1],a[0]))*90/Math.PI)};
+  if(tool!=='scale')throw new Error('Unknown transform');
+  const limit=v=>Math.abs(v)<.0001?(v<0?-.0001:.0001):Math.max(-1000,Math.min(1000,v));
+  const ratio=(n,d)=>Math.abs(d)<1e-8?1:n/d;
+  if(constrain){const r=limit(Math.hypot(...b)/(Math.hypot(...a)||1)*(a[0]*b[0]+a[1]*b[1]<0?-1:1));return{tool,x:r,y:r};}
+  return {tool,x:limit(ratio(b[0],a[0])),y:limit(ratio(b[1],a[1]))};
+}
+/** Stroke widths become world-mm values on explicit Scale. Opaque effects survive unchanged. */
+export function scaledStrokeProperties(node,worldMatrix,matrix,scaleStrokes) {
+  if(!['path','shape'].includes(node.type))return {};
+  const factor=(node.strokeScaling===false?1:strokeScale(worldMatrix))*(scaleStrokes?strokeScale(matrix):1),appearance=structuredClone(node.appearance);
+  appearance.strokes=appearance.strokes.map(s=>({...s,width:s.width*factor,...(s.dash?{dash:{...s.dash,array:(s.dash.array??[]).map(n=>n*factor),offset:(s.dash.offset??0)*factor}}:{})}));
+  return {appearance,strokeScaling:false};
+}

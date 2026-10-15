@@ -61,6 +61,7 @@ export function createToolbar(host, state, { available, setTool, command, openPa
         if (choices.length) setTool(choices[(current+1)%choices.length]);
       } else setTool(button.dataset.drawTool);
     });
+    button.addEventListener('dblclick',()=>{if(['rotate','reflect','scale'].includes(button.dataset.drawTool))command('tool-dialog');});
   }
   const paint = document.createElement('div'); paint.className = 'draw-paint-box'; paint.setAttribute('aria-label','Fill and stroke'); host.append(paint);
   for (const kind of ['fill','stroke']) {

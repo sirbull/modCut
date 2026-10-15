@@ -234,6 +234,10 @@ function buildMenu(mode = "cut") {
     template.splice(editIndex + 1, 0, ...["Object", "Type", "Select", "Effect"].map((label) => ({
       label, submenu: [{ label: "No commands available", enabled: false }],
     })));
+    template.find(item=>item.label==='Object').submenu=[{label:'Transform',submenu:[
+      ...['Rotate','Reflect','Scale'].map(label=>({label:`${label}…`,click:()=>send(`${label.toLowerCase()}-dialog`)})),
+      {type:'separator'},{label:'Transform Again',accelerator:acceleratorFor('transform-again',{isMac}),click:()=>send('transform-again')},
+    ]}];
   }
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
@@ -362,6 +366,7 @@ app.whenReady().then(() => {
       edit: Menu.getApplicationMenu()?.items.find((item) => item.label === "Edit")?.submenu.items.map((item) => item.accelerator || null),
       file: Menu.getApplicationMenu()?.items.find((item) => item.label === "File")?.submenu.items.map((item) => ({ label: item.label, accelerator: item.accelerator || null })),
       view: Menu.getApplicationMenu()?.items.find((item) => item.label === "View")?.submenu.items.map((item) => ({ label: item.label, accelerator: item.accelerator || null })),
+      transform: Menu.getApplicationMenu()?.items.find(item=>item.label==='Object')?.submenu.items.find(item=>item.label==='Transform')?.submenu.items.map(item=>({label:item.label,accelerator:item.accelerator||null})),
     }));
     ipcMain.handle("e2eRequestQuit", () => { requestQuit(); return true; });
   }

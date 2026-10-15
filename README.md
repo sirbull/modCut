@@ -119,8 +119,17 @@ Add/Delete/Anchor Point tools split curves and convert corner/smooth anchors.
 Shift constrains angles, Alt separates handles and Space moves a Pen anchor
 during dragging. Enter/Escape finishes an open path; Escape during a drag cancels
 the preview. Anchor Point can expand a live shape into an editable path, with undo.
-Grey tools are reserved for the later implementation steps. Live corner widgets
-and automatic shape expansion with Direct Selection are still pending.
+Direct Selection shows live-shape anchors without changing the document;
+editing an anchor expands the shape, and one undo restores the original shape.
+Dotted corner handles round straight corners, individually or together, with
+an exact radius field in Properties. Setting the radius to zero restores sharp
+corners. Grey tools are reserved for the later implementation steps.
+Rotate (R), Reflect (O) and Scale (S) use a movable reference point. Click to
+place it, drag to transform, hold Shift to constrain and Alt to copy. Enter or
+double-click the toolbar tool for an exact dialog with Preview, Apply and Copy.
+Object → Transform offers the same dialogs. Ctrl/Cmd+D repeats the last
+transformation, including Copy. Scale can retain stroke widths or scale them
+with the artwork; effect rendering remains planned for a later phase.
 The renderer retains unchanged objects, skips artwork outside the viewport and
 offers **Outline / Preview** with **Ctrl/Cmd+Y** or the Outline button. Outline
 shows vector hairlines and image frames without changing the saved artwork.

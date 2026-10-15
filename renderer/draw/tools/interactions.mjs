@@ -1,13 +1,14 @@
 import { shapeFromDrag, SHAPE_TOOLS } from './shapes.mjs';
 import { resizeMatrix, rotationMatrix, transformedBox, snapTranslation } from './selection.mjs';
 import { activeArtboard } from '../doc/artboards.mjs';
+import { TRANSFORM_TOOLS,dragTransform,operationMatrix } from '../geom/transforms.mjs';
 
 export function createInteractions(canvas, state, api) {
   const {scope,renderer,withScope,run}=api, controller=new AbortController(), events={signal:controller.signal};
   let gesture=null,preview=null;
   const point=event=>{const b=canvas.getBoundingClientRect();return scope.view.viewToProject(new scope.Point(event.clientX-b.left,event.clientY-b.top));};
-  function clearPreview() {preview?.remove();preview=null;}
-  function cancel() {gesture=null;clearPreview();withScope(()=>scope.view.update());api.status();}
+  function clearPreview() {preview?.remove();preview=null;renderer.clearTransformPreview();state.ui.transformPreviewBox=null;}
+  function cancel() {const previous=gesture;gesture=null;withScope(()=>{clearPreview();if(TRANSFORM_TOOLS.includes(previous?.tool))api.transforms.setOrigin(previous.originBefore);renderer.updateView();});api.status();}
   function targetId(id) {
     const groups=state.document.ancestors(id).filter(n=>n.type==='group'); return groups.at(-1)?.id || id;
   }
@@ -59,7 +60,13 @@ export function createInteractions(canvas, state, api) {
     }
     withScope(()=>{
       clearPreview();
-      if (SHAPE_TOOLS.includes(gesture.tool)) {
+      if(TRANSFORM_TOOLS.includes(gesture.tool)){
+        if(gesture.originDrag){api.transforms.setOrigin([p.x,p.y]);return;}
+        gesture.operation=dragTransform(gesture.tool,gesture.origin,[gesture.start.x,gesture.start.y],[p.x,p.y],event.shiftKey);
+        gesture.matrix=operationMatrix(gesture.operation,gesture.origin);state.ui.transformOrigin=gesture.origin;
+        state.ui.transformPreviewBox=transformedBox(gesture.box,gesture.matrix);
+        renderer.previewTransform(gesture.ids,gesture.matrix,{scaleStrokes:gesture.tool==='scale'?(state.ui.transformDefaults?.scale?.scaleStrokes??true):null});
+      }else if (SHAPE_TOOLS.includes(gesture.tool)) {
         gesture.node=shapeFromDrag(gesture.tool,[gesture.start.x,gesture.start.y],[p.x,p.y],{...api.shapeOptions(),...gesture.modifiers});
         if(gesture.tool==='star' && gesture.node.params.outerRadius>0 && (event.ctrlKey || event.metaKey)) {
           gesture.innerControl ||= {x:event.clientX,radius:gesture.node.params.outerRadius,ratio:gesture.node.params.innerRadius/gesture.node.params.outerRadius};
@@ -93,7 +100,12 @@ export function createInteractions(canvas, state, api) {
     if (state.document.readOnly) {
       if (tool==='select') {const id=renderer.hit(p);api.select(id ? [targetId(id)] : []);} return;
     }
-    if (tool==='artboard') {
+    if(TRANSFORM_TOOLS.includes(tool)){
+      if(!api.selectedIds().length){const hit=renderer.hit(p);if(hit)api.select([targetId(hit)]);}
+      const origin=api.transforms.origin(),box=renderer.selectionBounds();if(!origin||!box)return;
+      const originBefore=state.ui.transformOrigin&&[...state.ui.transformOrigin];
+      gesture={...base,origin,originBefore,originDrag:p.getDistance(new scope.Point(...origin))<=8/scope.view.zoom,ids:api.selectedIds(),box};
+    }else if (tool==='artboard') {
       const handle=renderer.selectionHandle(p);
       const board=handle ? activeArtboard(state) : [...state.document.data.artboards].reverse().find(a=>p.x>=a.x && p.x<=a.x+a.width && p.y>=a.y && p.y<=a.y+a.height);
       if (board) {api.artboards.choose(board.id);gesture={...base,handle,boardId:board.id,box:{x:board.x,y:board.y,width:board.width,height:board.height}};}
@@ -123,7 +135,12 @@ export function createInteractions(canvas, state, api) {
     if (drag.tool==='zoom') {if(!drag.scrubbed)api.zoomAt(drag.start,event.altKey || api.zoomOut() ? .8 : 1.25);return;}
     run(()=>{
       if (state.document.readOnly)return;
-      if (SHAPE_TOOLS.includes(drag.tool)) {
+      if(TRANSFORM_TOOLS.includes(drag.tool)){
+        if(drag.originDrag){if(moved)api.transforms.setOrigin([end.x,end.y]);else api.transforms.setOrigin([drag.start.x,drag.start.y]);}
+        else if(moved&&drag.matrix)api.transform(drag.matrix,drag.tool[0].toUpperCase()+drag.tool.slice(1),{ids:drag.ids,copy:drag.modifiers.alt,scaleStrokes:drag.tool==='scale'?(state.ui.transformDefaults?.scale?.scaleStrokes??true):null});
+        else api.transforms.setOrigin([end.x,end.y]);
+        if(!moved&&event.altKey)void api.transformDialog(drag.tool);
+      }else if (SHAPE_TOOLS.includes(drag.tool)) {
         if (moved && drag.node) api.insertShape(drag.node); else void api.shapeDialog(drag.tool,drag.start);
       } else if (drag.mode==='new-artboard' && moved && drag.rectangle.width>0 && drag.rectangle.height>0) {
         api.artboards.add({x:drag.rectangle.x,y:drag.rectangle.y,width:drag.rectangle.width,height:drag.rectangle.height});
@@ -137,6 +154,7 @@ export function createInteractions(canvas, state, api) {
     });
   },events);
   canvas.addEventListener('pointercancel',cancel,events);canvas.addEventListener('lostpointercapture',cancel,events);
+  canvas.addEventListener('dblclick',event=>{if(TRANSFORM_TOOLS.includes(api.tool())){event.preventDefault();cancel();void api.transformDialog(api.tool());}},events);
   canvas.addEventListener('wheel',event=>{
     event.preventDefault();
     if(event.ctrlKey || event.metaKey) api.zoomAt(point(event),Math.exp(-event.deltaY*.001*(api.preferences().invertZoom ? -1 : 1)));

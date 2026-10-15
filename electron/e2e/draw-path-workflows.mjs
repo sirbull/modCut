@@ -5,7 +5,7 @@ import {writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 export async function runDrawPathWorkflows(client){
-  const {evaluate}=client,{click,drag,key}=inputHelpers(client);
+  const {evaluate}=client,{click,drag,key,mouse}=inputHelpers(client);
   const original=await evaluate("({id:document.querySelector('.doc-tab.is-active').dataset.tabId,cut:paper.project.layers[1].exportJSON({asString:true})})");
   await evaluate("document.querySelector('#workspaceToggle').click();document.querySelector('#newDoc').click()");
   await submitNewDrawDialog(evaluate,{preset:'custom',width:120,height:80,name:'Path editing proof'});
@@ -18,8 +18,8 @@ export async function runDrawPathWorkflows(client){
   await shortcut('p','KeyP');assert.equal(await evaluate(`(async()=>(${active}.state.ui.tool))()`),'pen');
   await click(await screen([10,10]));await drag(await screen([40,10]),await screen([45,20]));await click(await screen([50,40]));
   let node=(await nodes())[0];assert.equal(node.subpaths[0].segments.length,3);assert.ok(Math.hypot(...node.subpaths[0].segments[1].out)>5,'Dragging creates Bézier handles');
-  await client.command('Input.dispatchMouseEvent',{type:'mouseMoved',...(await screen([10,10])),buttons:0});
-  assert.equal(await evaluate("document.querySelector('.draw-project[style*=block] canvas').dataset.pathAction"),'close');
+  await mouse('mouseMoved',await screen([10,10]));
+  assert.equal(await evaluate("document.querySelector('.draw-project[style*=block] canvas').dataset.pathAction"),'close',JSON.stringify(await nodes()));
   await click(await screen([10,10]));node=(await nodes())[0];assert.equal(node.subpaths[0].closed,true);assert.equal(node.subpaths[0].segments.length,3,'Closing reuses the first anchor');
   await command('undo');assert.equal((await nodes())[0].subpaths[0].closed,false);await command('redo');assert.equal((await nodes())[0].subpaths[0].closed,true);
   await shortcut('a','KeyA');assert.equal(await evaluate(`(async()=>(${active}.state.ui.tool))()`),'direct-selection');
@@ -31,7 +31,7 @@ export async function runDrawPathWorkflows(client){
   const midpoint=await evaluate(`(async()=>{const w=${active},p=w.renderer.items.get('${node.id}').curves[0].getPointAtTime(.5);return[p.x,p.y]})()`);
   await tool('add-anchor');await click(await screen(midpoint));assert.equal((await nodes())[0].subpaths[0].segments.length,4,'Add Anchor splits the cubic');
   await tool('delete-anchor');await click(await screen(midpoint));assert.equal((await nodes())[0].subpaths[0].segments.length,3);await command('undo');await command('undo');
-  await tool('pen');await client.command('Input.dispatchMouseEvent',{type:'mouseMoved',...(await screen(midpoint)),buttons:0});
+  await tool('pen');await mouse('mouseMoved',await screen(midpoint));
   assert.equal(await evaluate("document.querySelector('.draw-project[style*=block] canvas').dataset.pathAction"),'add-anchor');
   await click(await screen(midpoint));assert.equal((await nodes())[0].subpaths[0].segments.length,4,'Pen context adds an anchor without starting another path');await command('undo');
   // Escape cancels an in-flight preview without adding history or geometry.

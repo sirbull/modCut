@@ -1,4 +1,5 @@
 /** Versioned JSON data in millimetres. No renderer or Paper.js dependencies. */
+import { resolveCorners } from '../geom/corners.mjs';
 export const DOCUMENT_VERSION = 1;
 export const IDENTITY = Object.freeze([1, 0, 0, 1, 0, 0]);
 export const NODE_TYPES = Object.freeze(['layer', 'group', 'path', 'shape', 'text', 'image', 'trace', 'blend', 'compoundPath']);
@@ -123,6 +124,7 @@ export function validateDocument(doc) {
     bool(value.visible, `${path}.visible`); bool(value.locked, `${path}.locked`);
     number(value.opacity, `${path}.opacity`, 0, 1); string(value.blendMode, `${path}.blendMode`);
     vector(value.transform, 6, `${path}.transform`); appearance(value.appearance, `${path}.appearance`);
+    if(value.strokeScaling!==undefined)bool(value.strokeScaling,`${path}.strokeScaling`);
     if (CONTAINERS.includes(value.type)) array(value.children, `${path}.children`).forEach((child, i) => node(child, `${path}.children.${i}`, value.type));
     else if ('children' in value) fail(`${path}.children`, 'Only containers have children');
     if (value.type === 'layer') {
@@ -135,11 +137,26 @@ export function validateDocument(doc) {
       array(value.subpaths, `${path}.subpaths`).forEach((subpath, i) => {
         const p = `${path}.subpaths.${i}`;
         if (!object(subpath)) { fail(p, 'Expected a subpath'); return; }
+        const pathErrors=errors.length;
         bool(subpath.closed, `${p}.closed`);
         array(subpath.segments, `${p}.segments`).forEach((segment, j) => {
           if (!object(segment)) { fail(`${p}.segments.${j}`, 'Expected a segment'); return; }
           for (const key of ['p', 'in', 'out']) vector(segment[key], 2, `${p}.segments.${j}.${key}`);
         });
+        if(subpath.cornerData!==undefined){
+          const c=subpath.cornerData,cp=`${p}.cornerData`,beforeErrors=pathErrors;
+          if(!object(c)){fail(cp,'Expected live corner data');return;}
+          array(c.segments,`${cp}.segments`).forEach((s,j)=>{
+            if(!object(s)){fail(`${cp}.segments.${j}`,'Expected a segment');return;}
+            for(const key of ['p','in','out'])vector(s[key],2,`${cp}.segments.${j}.${key}`);
+          });
+          array(c.radii,`${cp}.radii`).forEach((r,j)=>number(r,`${cp}.radii.${j}`,0));
+          if(c.segments?.length!==c.radii?.length)fail(cp,'Corner radii must match source anchors');
+          if(errors.length===beforeErrors){
+            const resolved=resolveCorners(subpath).segments;
+            if(resolved.length!==subpath.segments.length||resolved.some((s,j)=>['p','in','out'].some(key=>s[key].some((v,k)=>!Number.isFinite(v)||Math.abs(v-subpath.segments[j][key][k])>1e-8*Math.max(1,Math.abs(v))))))fail(cp,'Resolved live corners must match path geometry');
+          }
+        }
       });
     }
     if (value.type === 'shape') {

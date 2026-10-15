@@ -136,7 +136,12 @@ export function createPanels(shell, state, api) {
         field(primary,'Opacity (%)',opacity*100,value => state.history.transaction('Opacity',() => {
           for (const id of api.selectedIds()) state.history.execute(updateNode(id,{opacity:value/100}));
         }),{min:0,max:100,disabled:!api.selectedIds().length,key:'opacity'});
-        if(node?.type==='shape') {
+        const corners=api.cornerInfo?.();
+        if(corners){
+          const input=field(primary,'Corner radius (mm)',corners.radius??0,value=>api.setCornerRadius(value),{min:0,key:'corner-radius'});
+          if(corners.radius===null){input.value='';input.placeholder='Mixed';}
+          text(primary,`${corners.count} editable corner${corners.count===1?'':'s'}. Drag the dotted circles, or enter a radius. Alt-drag edits one corner.`);
+        }else if(node?.type==='shape') {
           const editable=node.shape==='rect' ? [['cornerRadius','Corner radius (mm)',0]] : node.shape==='polygon' ? [['sides','Sides',3]] : node.shape==='star' ? [['points','Points',2],['innerRadius','Inner radius (mm)',0],['outerRadius','Outer radius (mm)',0]] : node.shape==='ellipse' ? [['startAngle','Pie start (°)',-360],['endAngle','Pie end (°)',-360]] : [];
           for(const [key,label,min] of editable)field(primary,label,node.params[key]??({sides:6,points:5,endAngle:360}[key] || 0),value=>state.history.execute(updateNode(node.id,{params:{...node.params,[key]:value}})),{min,max:['sides','points'].includes(key)?100:undefined,key:`shape-${key}`});
         }

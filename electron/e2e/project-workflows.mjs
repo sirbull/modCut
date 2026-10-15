@@ -65,7 +65,11 @@ export async function runProjectWorkflows({ evaluate }, directory) {
   // Model commands exercise the IO boundary before visible drawing tools exist.
   await evaluate(`(async()=>{
     const state=${activeState}, {createNode}=await import('./draw/doc/schema.mjs'), {insertNode}=await import('./draw/doc/commands.mjs');
-    state.history.execute(insertNode(state.document.data.layers[0].id,createNode('shape',{id:'persisted-shape',name:'Roundtrip shape',params:{width:25,height:12}})));
+    const {roundCorners}=await import('./draw/geom/corners.mjs'),source={closed:true,segments:[[30,5],[50,5],[50,25],[30,25]].map(p=>({p,in:[0,0],out:[0,0]}))};
+    state.history.transaction('Roundtrip artwork',()=>{
+      state.history.execute(insertNode(state.document.data.layers[0].id,createNode('shape',{id:'persisted-shape',name:'Roundtrip shape',params:{width:25,height:12}})));
+      state.history.execute(insertNode(state.document.data.layers[0].id,createNode('path',{id:'persisted-corners',name:'Live corners',strokeScaling:false,subpaths:[roundCorners(source,[0,1,2,3],2)]})));
+    });
   })()`);
   assert.equal(await dirty(evaluate), true, 'Draw-only edits mark the project dirty');
   await evaluate('window.close()');
@@ -75,6 +79,8 @@ export async function runProjectWorkflows({ evaluate }, directory) {
   assert.equal(await dirty(evaluate), false, 'Draw undo reaches the saved boundary');
   await evaluate(`(async()=>{${activeState}.history.redo()})()`);
   const savedShape = await save(evaluate, path);
+  assert.deepEqual(savedShape.draw.layers[0].children[1].subpaths[0].cornerData.radii,[2,2,2,2],'Real project saving retains editable live corner data');
+  assert.equal(savedShape.draw.layers[0].children[1].strokeScaling,false,'The explicit world-mm stroke policy survives file IO and recovery');
   await openProject(evaluate, path, savedShape);
   assert.deepEqual(await snapshot(evaluate), savedShape.draw, 'nonempty Draw roundtrip preserves its model');
   assert.equal(await evaluate("paper.project.layers[1].exportJSON({asString:true})"), savedShape.design);

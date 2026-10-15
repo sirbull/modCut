@@ -13,6 +13,7 @@ export function createSelectionOverlay(scope, layer, state, bounds) {
         if (b) rectangle = rectangle ? rectangle.unite(b) : b.clone();
       }
       if (state.ui?.tool === 'artboard') { const a=activeArtboard(state); rectangle=new scope.Rectangle(a.x,a.y,a.width,a.height); }
+      if(state.ui?.transformPreviewBox){const b=state.ui.transformPreviewBox;rectangle=new scope.Rectangle(b.x,b.y,b.width,b.height);}
       handles.removeChildren(); hitPoints=[];
       if(['direct-selection','pen','add-anchor','delete-anchor','anchor-point'].includes(state.ui?.tool))rectangle=null;
       if (!rectangle) { outline?.remove(); outline = null; return; }
@@ -23,6 +24,11 @@ export function createSelectionOverlay(scope, layer, state, bounds) {
         layer.addChild(outline);
       }
       outline.strokeWidth = 1.5 / scope.view.zoom;
+      if(['rotate','reflect','scale'].includes(state.ui?.tool)&&!state.document.readOnly){
+        const p=state.ui.transformOrigin?new scope.Point(...state.ui.transformOrigin):rectangle.center,r=5/scope.view.zoom;
+        const mark=new scope.Path.Circle({center:p,radius:r,strokeColor:'#006B5C',fillColor:'#FFFFFF',strokeWidth:1/scope.view.zoom,insert:false});handles.addChild(mark);
+        for(const [a,b] of [[[p.x-r*1.6,p.y],[p.x+r*1.6,p.y]],[[p.x,p.y-r*1.6],[p.x,p.y+r*1.6]]])handles.addChild(new scope.Path.Line({from:a,to:b,strokeColor:'#006B5C',strokeWidth:1/scope.view.zoom,insert:false}));
+      }
       if (!state.document.readOnly && (!state.ui?.tool || ['select','artboard'].includes(state.ui.tool))) {
         for (const [id,u,v] of BOX_HANDLES) {
           const point=new scope.Point(rectangle.x+rectangle.width*u,rectangle.y+rectangle.height*v), size=7/scope.view.zoom;

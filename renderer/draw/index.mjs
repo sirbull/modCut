@@ -7,20 +7,21 @@ import { createToolbar } from './tools/toolbar.mjs';
 import { createInteractions } from './tools/interactions.mjs';
 import { createPathInteractions, PATH_TOOLS } from './tools/paths.mjs';
 import { createArtboardController } from './tools/artboards.mjs';
+import { createTransformController } from './tools/transforms.mjs';
+import { TRANSFORM_TOOLS, operationMatrix, dialogOperation } from './geom/transforms.mjs';
+import { transformedBox } from './tools/selection.mjs';
 import { SHAPE_TOOLS, shapeFromDrag } from './tools/shapes.mjs';
 import { insertNode, removeNode, updateNode, updateDocument } from './doc/commands.mjs';
-import { createId } from './doc/schema.mjs';
 import { activeArtboard } from './doc/artboards.mjs';
 import { changePaint, paintHex } from './doc/paint.mjs';
-import { transformProperties } from './geometry.mjs';
 import { importArtwork } from './import-artwork.mjs';
-import { shapeSizeDialog, rearrangeDialog } from './ui/dialogs.mjs';
+import { shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog } from './ui/dialogs.mjs';
 
 const workspaces=new WeakMap();
 export function getDrawWorkspace(root) {return workspaces.get(root) || null;}
-const implementedTools=new Set(['select','hand','zoom','artboard',...SHAPE_TOOLS,...PATH_TOOLS]);
+const implementedTools=new Set(['select','hand','zoom','artboard',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
 const commands=new Set(['undo','redo','delete','select-all','select-artboard','deselect','cancel','fit-artboard','fit-all','actual-size','zoom-in','zoom-out','outline',
-  'paint-focus','paint-swap','paint-none','default-paint','smart-guides','tool-dialog','toggle-panels','toggle-panels-except-tools',
+  'paint-focus','paint-swap','paint-none','default-paint','smart-guides','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','toggle-panels','toggle-panels-except-tools',
   ...PANEL_DEFINITIONS.map(p=>`panel.${p.id}`),...['left','right','up','down'].flatMap(d=>[`nudge-${d}`,`nudge-large-${d}`,`duplicate-${d}`])]);
 export function createDrawWorkspace(root,{paper=window.paper,state=createProjectDraw(),onError=console.warn,onImport=()=>{},getPreferences=()=>({})}={}) {
   state.ui={tool:'select',panel:'properties',layerId:state.document.data.layers[0]?.id,fill:'#FFFFFF',stroke:'#071411',strokeWidth:.5,paintFocus:'fill',...state.ui};
@@ -41,12 +42,13 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   const scope=new paper.PaperScope();try {scope.setup(canvas);} finally {paper.activate();}scope.view.autoUpdate=false;
   function withScope(fn) {try {scope.activate();return fn();} finally {paper.activate();}}
   function run(fn) {try {return withScope(fn);}catch(error){onError(error.message);}}
-  let panels,toolbar,interactions,paths,artboards,temporary=null,destroyed=false,fitted=false,lastPoint=null;
+  let panels,toolbar,interactions,paths,artboards,temporary=null,destroyed=false,fitted=false,lastPoint=null,ownedTransformModal=null;
   const renderer=withScope(()=>createDrawRenderer(scope,state,{withScope,onImageLoad:()=>panels?.render()}));
   const selectedIds=()=>state.selection.ids.filter(id=>!state.document.ancestors(id).some(n=>state.selection.ids.includes(n.id)));
   const paintIds=()=>[...new Set(selectedIds().flatMap(id=>{
     const node=state.document.getNode(id);return node.children ? state.document.descendants(id).map(n=>n.id) : [id];
   }))].filter(id=>['path','shape'].includes(state.document.getNode(id)?.type) && state.document.isEditable(id));
+  const transforms=createTransformController(state,{selectedIds,bounds:()=>renderer.selectionBounds(),localMatrix:(id,m)=>renderer.localMatrix(id,m),worldMatrix:id=>renderer.worldMatrix(id),select,update:()=>withScope(()=>renderer.select())});
   function syncPaint() {
     const node=state.document.getNode(paintIds()[0]);if(!node)return;
     state.ui.fill=paintHex(node.appearance.fills[0]);state.ui.stroke=paintHex(node.appearance.strokes[0]);state.ui.strokeWidth=node.appearance.strokes[0]?.width ?? state.ui.strokeWidth;
@@ -58,25 +60,35 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     const percent=scope.view.zoom/(96/25.4)*100;zoomInput.value=String(percent<1 ? Number(percent.toFixed(4)) : Math.round(percent));
     statusLine.textContent=`${tool.name} · ${state.selection.ids.length} selected · `+(
       SHAPE_TOOLS.includes(tool.id) ? 'Shift: constrain · Alt: from center · Space: move · Click: exact size' :
+      TRANSFORM_TOOLS.includes(tool.id) ? 'Click: reference point · Drag: transform · Shift: constrain · Alt: copy · Enter: dialog' :
       tool.id==='pen' ? 'Click: corner · Drag: curve · Alt: break handles · Space: move anchor · Enter/Esc: finish' :
-      tool.id==='direct-selection' ? 'Shift: add anchors/constrain · Alt: break handles · Drag empty area: select anchors' :
+      tool.id==='direct-selection' ? 'Drag dots: round corners · Alt: one corner / break handles · Shift: add anchors/constrain' :
       tool.id==='anchor-point' ? 'Click anchor: corner/smooth · Drag: handles · Click shape: expand to path' :
       tool.id==='artboard' ? 'Drag: create/move · Edges: resize · Alt+drag: duplicate' :
       tool.id==='select' ? 'Shift: add to selection · Alt+drag: copy · Space: Hand' : 'Space: Hand · Ctrl/Cmd+Space: Zoom');
   }
-  function select(ids) {state.selection.set(ids);syncPaint();withScope(()=>renderer.select());panels?.render();toolbar?.update();status();}
-  function selectionChanged(){syncPaint();withScope(()=>renderer.select());panels?.render();toolbar?.update();status();}
-  function transform(matrix,label='Transform',{copy=false,ids=selectedIds(),mergeKey=null}={}) {
-    const result=[];
-    state.history.transaction(copy ? `Copy ${label}` : label,()=>{
-      for(const id of ids) {
-        const node=state.document.getNode(id),properties=transformProperties(node,renderer.localMatrix(id,matrix));
-        if(copy) {
-          const clone=structuredClone({...node,...properties}),reid=n=>{n.id=createId();n.children?.forEach(reid);};reid(clone);
-          state.history.execute(insertNode(state.document.locate(id).parentId,clone));result.push(clone.id);
-        }else {state.history.execute(updateNode(id,properties,{label,mergeKey}));result.push(id);}
-      }
-    });select(result);
+  function select(ids) {state.selection.set(ids);transforms.selectionChanged();syncPaint();withScope(()=>renderer.select());panels?.render();toolbar?.update();status();}
+  function selectionChanged(){transforms.selectionChanged();syncPaint();withScope(()=>renderer.select());panels?.render();toolbar?.update();status();}
+  function transform(matrix,label='Transform',options={}) {return transforms.apply(matrix,label,options);}
+  async function transformToolDialog(tool) {
+    if(destroyed||state.document.readOnly||document.querySelector('.modal-overlay')||!selectedIds().length)return;
+    interactions.cancel();paths.finish();const before=state.document.data,ids=selectedIds(),box=renderer.selectionBounds(),previousOrigin=state.ui.transformOrigin&&[...state.ui.transformOrigin];
+    if(!box)return;
+    try{
+      const pending=openTransformDialog(tool,transforms.origin(),state.ui.transformDefaults?.[tool],preview=>run(()=>{
+        renderer.clearTransformPreview();state.ui.transformPreviewBox=null;state.ui.transformOrigin=preview?.origin??previousOrigin;
+        if(preview&&state.document.data===before){const matrix=operationMatrix(preview.operation,preview.origin);state.ui.transformPreviewBox=transformedBox(box,matrix);renderer.previewTransform(ids,matrix,{scaleStrokes:preview.scaleStrokes});}
+        else renderer.updateView();
+      }));
+      ownedTransformModal=document.querySelector('.draw-transform-dialog');
+      const values=await pending;ownedTransformModal=null;if(destroyed)return;
+      run(()=>{renderer.clearTransformPreview();state.ui.transformPreviewBox=null;state.ui.transformOrigin=previousOrigin;renderer.updateView();
+        if(!values||destroyed||state.document.readOnly)return;
+        if(state.document.data!==before)throw new Error('The artwork changed while the dialog was open. Open the dialog again.');
+        const origin=[values.originX,values.originY];transforms.setOrigin(origin);state.ui.transformDefaults={...state.ui.transformDefaults,[tool]:values};
+        transform(operationMatrix(dialogOperation(tool,values),origin),tool[0].toUpperCase()+tool.slice(1),{ids,copy:values.copy,scaleStrokes:tool==='scale'?values.scaleStrokes:null});
+      });
+    }catch(error){ownedTransformModal=null;onError(error.message);}
   }
   function zoomAt(point,factor) {
     withScope(()=>{const anchor=scope.view.projectToView(point);scope.view.zoom=Math.max(.00001,Math.min(100*(96/25.4),scope.view.zoom*factor));
@@ -118,12 +130,14 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   }
   function setTool(id) {
     if(!implementedTools.has(id) || state.document.readOnly && !['select','hand','zoom'].includes(id))return;
+    if(id!==state.ui.tool&&['direct-selection','anchor-point','delete-anchor'].some(tool=>tool===id||tool===state.ui.tool))state.selection.set(state.selection.ids);
     interactions?.cancel();paths?.finish();toolbar?.close();temporary=null;state.ui.tool=id;canvas.dataset.tool=id;canvas.style.cursor='';
     withScope(()=>renderer.select());toolbar?.update();panels?.render();hint.hidden=state.document.data.layers.some(l=>l.children.length)||state.document.readOnly||id!=='select';status();
   }
   function openPanel(id) {if(!PANEL_DEFINITIONS.some(p=>p.id===id))return;toolbar?.close();state.ui.panel=id;panels.render();}
   artboards=createArtboardController(state,{refresh,fit,bounds:id=>renderer.bounds(id),localMatrix:(id,m)=>renderer.localMatrix(id,m)});
   panels=createPanels(shell,state,{run,select,selectedIds,paintIds,paint,bounds:()=>renderer.selectionBounds(),fit,artboards,
+    cornerInfo:()=>paths?.cornerInfo()??null,setCornerRadius:radius=>paths.setCornerRadius(radius),
     async rearrange(){const options=await rearrangeDialog();if(options&&!destroyed)run(()=>artboards.rearrange(options));},
     resize(key,value){const b=renderer.selectionBounds();if(!b)return;
       if(key==='x'||key==='y')transform([1,0,0,1,key==='x'?value-b.x:0,key==='y'?value-b.y:0],'Move');
@@ -149,6 +163,8 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     if(command==='select-artboard'){const a=activeArtboard(state),rect=new scope.Rectangle(a.x,a.y,a.width,a.height);return select(state.document.data.layers.flatMap(l=>l.children).filter(n=>renderer.bounds(n.id)?.intersects(rect)).map(n=>n.id));}
       if(command==='toggle-panels'||command==='toggle-panels-except-tools'){shell.classList.toggle('draw-shell--panels-hidden');shell.classList.toggle('draw-shell--all-hidden',command==='toggle-panels' && shell.classList.contains('draw-shell--panels-hidden'));return;}
     if(state.document.readOnly)return;
+    if(command==='transform-again')return transforms.again();
+    if(['rotate-dialog','reflect-dialog','scale-dialog'].includes(command))return void transformToolDialog(command.split('-')[0]);
     if(command==='delete') {
       if(state.ui.tool==='artboard')return artboards.remove();
       state.history.transaction('Delete',()=>{for(const id of selectedIds())state.history.execute(removeNode(id));});return;
@@ -169,6 +185,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       });state.ui.fill=fill;state.ui.stroke=stroke;toolbar.update();panels.render();return;
     }
     if(command==='tool-dialog'&&SHAPE_TOOLS.includes(state.ui.tool))return void shapeDialog(state.ui.tool);
+    if(command==='tool-dialog'&&TRANSFORM_TOOLS.includes(state.ui.tool))return void transformToolDialog(state.ui.tool);
     const match=command.match(/^(nudge-large|nudge|duplicate)-(left|right|up|down)$/);
     if(match){const [,kind,direction]=match;if(interactions.adjust(direction==='up'?1:direction==='down'?-1:0))return;
       const amount=state.document.data.settings.keyboardIncrement*(kind==='nudge-large'?10:1),x=direction==='left'?-amount:direction==='right'?amount:0,y=direction==='up'?-amount:direction==='down'?amount:0;
@@ -181,6 +198,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   paths=createPathInteractions(canvas,state,{scope,renderer,withScope,run,select,selectionChanged,layerId,status,
     tool:()=>temporary?.id || state.ui.tool,closeMenus:()=>toolbar.close()});
   interactions=createInteractions(canvas,state,{scope,renderer,withScope,run,select,selectedIds,transform,artboards,status,shapeOptions,insertShape,shapeDialog,zoomAt,
+    transforms,transformDialog:transformToolDialog,
     tool:()=>temporary?.id || state.ui.tool,zoomOut:()=>!!temporary?.zoomOut,preferences:getPreferences,closeMenus:()=>toolbar.close()});
   const unsubscribe=state.subscribe(()=>{interactions.cancel();paths.documentChanged();refresh();});
   function resize(){const {width,height}=stage.getBoundingClientRect();if(width<=0||height<=0)return;
@@ -191,10 +209,10 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   boardSelect.addEventListener('change',()=>artboards.choose(boardSelect.value,true));
   zoomInput.addEventListener('change',()=>{if(Number.isFinite(zoomInput.valueAsNumber)&&zoomInput.valueAsNumber>=.0001&&zoomInput.valueAsNumber<=10000)zoomAt(scope.view.center,zoomInput.valueAsNumber/100*(96/25.4)/scope.view.zoom);else status();});
   outlineButton.addEventListener('click',()=>handle('outline'));fitButton.addEventListener('click',()=>fit());
-  const workspace={state,scope,renderer,artboards,resize,select,setTool,handle,availableTool:id=>implementedTools.has(id),canHandle:command=>commands.has(command),
+  const workspace={state,scope,renderer,artboards,transforms,resize,select,setTool,handle,availableTool:id=>implementedTools.has(id),canHandle:command=>commands.has(command),
     setTemporaryTool(value){temporary=value;canvas.dataset.tool=temporary?.id || state.ui.tool;status();},
     async import(prepared,name,options={}){const result=await importArtwork(scope,state,prepared,name,layerId(),{...options,alive:()=>!destroyed});select(result.ids);if(options.fitArtboard)fit();return result;},
-    destroy(){destroyed=true;paths.destroy();interactions.destroy();toolbar.destroy();unsubscribe();observer.disconnect();window.removeEventListener('modcut-theme-change',syncTheme);workspaces.delete(root);withScope(()=>{renderer.destroy();scope.remove();});root.replaceChildren();},
+    destroy(){destroyed=true;ownedTransformModal?.querySelector('[data-x=cancel]').click();paths.destroy();interactions.destroy();toolbar.destroy();unsubscribe();observer.disconnect();window.removeEventListener('modcut-theme-change',syncTheme);workspaces.delete(root);withScope(()=>{renderer.destroy();scope.remove();});root.replaceChildren();},
   };
   workspaces.set(root,workspace);refresh();syncTheme();setTool(state.ui.tool);resize();return workspace;
 }

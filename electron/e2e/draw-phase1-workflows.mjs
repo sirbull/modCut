@@ -40,7 +40,7 @@ export async function runDrawPhaseOneWorkflows(client) {
   await shortcut('m','KeyM');await click(await screen([10,10]));
   assert.equal(await evaluate("!!document.querySelector('.draw-shape-dialog')"),true,'Click opens exact dimensions');
   await evaluate("(()=>{const f=document.querySelector('.draw-shape-dialog form');f.elements.width.value=20;f.elements.height.value=10;f.requestSubmit()})()");await wait(50);
-  const node=(await data()).layers[0].children[0];assert.ok(node,await evaluate("JSON.stringify({toast:document.querySelector('#toasts').textContent,form:[...document.querySelectorAll('.modal input')].map(i=>({name:i.name,value:i.value,valid:i.checkValidity(),message:i.validationMessage})),html:document.querySelector('.modal')?.outerHTML})"));assert.equal(node.params.width,20);assert.equal(node.params.height,10);
+  const node=(await data()).layers[0].children[0];assert.ok(node,await evaluate("JSON.stringify({toast:document.querySelector('#toasts').textContent,form:[...document.querySelectorAll('.modal input')].map(i=>({name:i.name,value:i.value,valid:i.checkValidity(),message:i.validationMessage})),html:document.querySelector('.modal')?.outerHTML})"));assert.ok(Math.abs(node.params.width-20)<1e-8);assert.ok(Math.abs(node.params.height-10)<1e-8);
   await drag(await screen([60,20]),await screen([70,30]),9);
   let second=(await data()).layers[0].children[1];assert.ok(Math.abs(second.params.width-20)<.02);assert.ok(Math.abs(second.params.x-50)<.02);
   await evaluate("document.querySelector('.draw-project[style*=block] [aria-label=\"Shape tools\"]').click();document.querySelector('.draw-tool-flyout [data-draw-tool=rounded-rectangle]').click()");

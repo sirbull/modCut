@@ -211,3 +211,94 @@ ren geometrikontroll bekrefter at ankersletting bevarer også uvalgte subpaths
 med bare ett punkt.
 
 **Neste: fullfør D1.4 (live corners og automatisk shape-expansion), så D1.7–D1.11.**
+
+## 2026-10-15 — D1.4: live corners og automatisk ekspandering
+
+- Direct Selection viser og velger ankre på live former uten modellendring.
+  Formgeometrien ekspanderes først ved anker-/håndtaksredigering, nudge, sletting
+  eller avrunding. Konvertering og redigering er ett angresteg, med samme id,
+  stil, forelder og plassering. Undo gjenoppretter hele den opprinnelige formen.
+- Rette hjørner har prikkede sirkelhåndtak. Flere valgte hjørner kan avrundes
+  sammen, Alt-drag tar ett. Ett kontekstuelt radiusfelt i Properties viser
+  eventuell blandet verdi. Radius null gjenoppretter skarpe kildeankre; radius
+  klemmes mot halvparten av nabokantene slik at avrundinger ikke overlapper.
+- `geom/corners.mjs` er ren JS. Vanlige `segments` inneholder ferdige kubiske
+  kurver; valgfri `cornerData` beholder kildeankre og radier. Modellvalideringen
+  krever at kilde og ferdig geometri stemmer. Lagring/lasting og geometrikjernen
+  bruker faktiske kurver, mens logiske ankre gjør radiene redigerbare igjen.
+- Flytting, rotasjon, refleksjon og jevn skalering beholder live-data. Ujevn
+  skalering/skjæring av selve banen baker avrundingen og beholder kurvene eksakt.
+  Kurvedeling/Pen baker berørt subpath. Endepunkter, degenererte vinkler og
+  hjørner med tilstøtende kurvehåndtak får ikke avrundings-widgets.
+- Transformerte former/foreldre bruker riktig redigeringsrom. Overlays og
+  previews er separate fra modellen. Escape/avbrutt drag endrer ikke dirty.
+  Originaltegningen skjules under redigerings-preview; trefftesting leser alltid
+  faktisk modellgeometri slik at Pen sine foreslåtte punkter ikke blir ankre.
+- Verktøylinje, panelstruktur og Cut er bevart. Ingen nye avhengigheter.
+
+Verifisering underveis: 94 Draw-enhetstester passerer. Nye tester dekker
+avrundingsgeometri, klamping, degenererte/konkave hjørner, reversering,
+ankeroperasjoner, transformasjoner, ugyldig metadata, filmodell og utvalg.
+Alle formfamilier beholder geometrien ved ekspandering, også store/elliptiske
+rektangelradier. Dedikert Electron-test passerer for widgets, radiusfelt,
+utsatt ekspandering, ett angresteg, Escape og transformerte foreldre. Begge
+temaer er visuelt kontrollert og har pikselkontroll av faktisk artwork.
+
+E2E-stabilisering: hover-kontroller venter på vanlig inputbehandling; en test
+for eksakte mål bruker numerisk toleranse på 1e-8 mm (10 kunne bli
+9.999999999999998 ved konvertering fra muse-/visningskoordinater).
+
+Komplett Draw-E2E passerer, inkludert Pen-regresjoner, live corners, begge
+arbeidsområder, faktisk prosjektlagring/gjenåpning med live corner-data,
+kontinuerlig autosave og krasj/gjenstart. `git diff --check` er uten feil.
+
+Full `npm test` passerer sidecar, bridge, main, renderer, 94 Draw-tester og
+kontrast. Den stopper fortsatt i den tidligere dokumenterte Cut crop-E2E-feilen
+(`workflows.mjs:369`, «dragging a crop edge must update the crop», uendret
+«100 × 100%»). Ingen endring er gjort i Cut-beskjæring eller sidecar.
+
+**Neste: D1.7 — Rotate, Reflect, Scale med dialoger/Copy og Transform Again.**
+
+## 2026-10-15 — D1.7: transformverktøy
+
+- Rotate (R), Reflect (O) og Scale (S) er aktivert i sine eksisterende grupper.
+  Klikk/flyttbart kryss setter referansepunkt uten modellendring. Dra utfører
+  transformasjon med faktisk artwork-preview; Shift begrenser, Alt lager kopi.
+- Enter, dobbeltklikk på verktøyikon, Alt-klikk og Object > Transform åpner
+  dialoger med eksakte verdier/referansekoordinater, Preview, Apply og Copy.
+  Cancel/Escape er uten modellendring. Positive vinkler er mot klokken.
+- Felles transformkontroller bruker eksisterende Commands/History. Gruppekopier
+  får nye id-er på alle nivåer og beholder forelder/stil. Ett drag/dialogresultat
+  er ett angresteg; feil med låste etterkommere ruller tilbake hele operasjonen.
+- Mod+D / Transform Again bruker siste vellykkede verdensmatrise på aktuelt
+  utvalg, inkludert Copy og strekvalg. Minne/referansepunkt er midlertidig og
+  separat per fane. Identitet uten Copy overskriver ikke tidligere operasjon.
+- Scale håndterer strekbredde/dash konsistent for baner, live former og grupper.
+  Et valgfritt `strokeScaling:false` lagrer verdens-mm etter eksplisitt Scale.
+  Valget av bruker betyr at bredden beholdes eller skaleres arealekvivalent.
+  Uimplementerte effektdata er urørt; dialogen forklarer at effektrendering kommer
+  senere. Live corner-geometri følger den eksisterende transformregelen.
+- Ingen nye verktøykopier eller paneler. `bed.js`, Cut og sidecar er urørt.
+
+102 Draw-enhetstester passerer. Ny Electron-arbeidsflyt passerer for dialoger,
+preview/Cancel, Copy/Mod+D, referansepunkter, Shift/Alt, strekvalget, filmodell
+og atomisk undo/redo. Rotate-dialogen er visuelt kontrollert.
+
+Komplett Draw-E2E passerer også for alle tidligere tegneverktøy, faktisk
+prosjektlagring, normalisert strekmodell, kontinuerlig autosave og krasj/restart.
+Første kjøring fant ikke DevTools-target ved omstart; ny komplett kjøring
+passerte uten endringer i testens gjenstartslogikk. `git diff --check` er grønn.
+
+En ekstra kontroll av Paper-koden viste at `strokeScaling:false` bruker
+skjermpiksler. Adapteren konverterer derfor lagrede verdens-mm til pikselbredde
+og dash-lengder ved gjeldende zoom, også i preview. Enhetstesten kontrollerer
+fysiske strekgrenser ved flere zoomnivåer; Electron-testen måler faktiske mørke
+piksler før og etter dobling av zoom. Begge passerer uten modellendring.
+
+Sluttkontroll: 102 Draw-tester og komplett Draw-E2E passerer etter zoomrettelsen,
+inkludert prosjektlagring, autosave og faktisk krasj/gjenstart. Full `npm test`
+er kjørt og stopper fortsatt i den kjente Cut crop-E2E-testen
+(`workflows.mjs:369`, «dragging a crop edge must update the crop», uendret
+«100 × 100%»), etter grønne sidecar/bridge/main/renderer/Draw/kontrast-tester.
+
+**Neste: D1.8 — fullfør grunnpanelene og template-lag.**

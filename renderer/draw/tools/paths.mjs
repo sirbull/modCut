@@ -2,6 +2,8 @@ import { createNode } from '../doc/schema.mjs';
 import { insertNode,updateNode,removeNode,replaceLeaf } from '../doc/commands.mjs';
 import { appearance } from '../geometry.mjs';
 import { anchor,reversePath,splitCurve,moveAnchors,deleteAnchors,convertAnchor,constrain } from '../geom/path-editing.mjs';
+import { editablePath,editCornerSource,bakeCorners,roundCorners } from '../geom/corners.mjs';
+import { shapeSelectionKey } from '../doc/selection.mjs';
 
 export const PATH_TOOLS=['direct-selection','pen','add-anchor','delete-anchor','anchor-point'];
 const same=(a,b)=>a.nodeId===b.nodeId&&a.subpath===b.subpath&&a.segment===b.segment;
@@ -10,37 +12,55 @@ export function createPathInteractions(canvas,state,api) {
   const {scope,renderer,run,withScope}=api,controller=new AbortController(),events={signal:controller.signal};
   let gesture=null,session=null,previews=[];
   const point=e=>{const b=canvas.getBoundingClientRect();return scope.view.viewToProject(new scope.Point(e.clientX-b.left,e.clientY-b.top));};
-  function clear(){for(const item of previews)item.remove();previews=[];}
+  function clear(){for(const item of previews)item.remove();previews=[];renderer.setEditPreview();}
   function cancelDrag(){gesture=null;withScope(()=>{clear();scope.view.update();});}
   function finish(){cancelDrag();session=null;}
   function selectAnchors(anchors){state.selection.setAnchors(anchors);api.selectionChanged();}
-  const spaceId=node=>state.document.getNode(node.id)?node.id:api.layerId();
+  const spaceId=node=>state.document.getNode(node.id)?renderer.editSpaceId(node.id):api.layerId();
   const localPoint=(node,p)=>renderer.pointToLocal(spaceId(node),p);
-  function commit(node,label='Edit Path') {state.history.execute(updateNode(node.id,{subpaths:node.subpaths},{label}));}
+  const editNode=id=>structuredClone(renderer.editingNode(id,{logical:false}));
+  const descriptor=(id,subpath,segment)=>({nodeId:id,subpath,segment,logical:true,...(state.document.getNode(id).type==='shape'?{shapeKey:shapeSelectionKey(state.document.getNode(id))}:{})});
+  function commit(node,label='Edit Path',mergeKey=null) {
+    if(state.document.getNode(node.id).type==='shape')state.history.execute(replaceLeaf(node.id,node));
+    else state.history.execute(updateNode(node.id,{subpaths:node.subpaths},{label,mergeKey}));
+  }
   function addAt(curve){
     if(!curve||curve.t<=1e-6||curve.t>=1-1e-6)return;
     const node=structuredClone(state.document.getNode(curve.nodeId));node.subpaths[curve.subpath]=splitCurve(node.subpaths[curve.subpath],curve.segment,curve.t);commit(node,'Add Anchor');
     selectAnchors([{...curve,segment:curve.segment+1}]);
   }
   function validSession(){if(session){const node=state.document.getNode(session.id);if(!state.document.isEditable(session.id)||!node?.subpaths[session.subpath]||node.subpaths[session.subpath].closed)session=null;}return session;}
-  function preview(nodes){withScope(()=>{clear();for(const node of nodes)previews.push(renderer.shapePreview(node,spaceId(node)));scope.view.update();});}
+  function preview(nodes){withScope(()=>{clear();for(const node of nodes){const item=renderer.shapePreview(node,spaceId(node));item.opacity=node.opacity;previews.push(item);}renderer.setEditPreview(nodes);scope.view.update();});}
+  function cornerSelection(){return renderer.cornerWidgets().map(({nodeId,subpath,segment})=>descriptor(nodeId,subpath,segment));}
+  function roundedNodes(anchors,radius){
+    return [...new Set(anchors.map(a=>a.nodeId))].map(id=>{const node=editNode(id);
+      for(const subpath of new Set(anchors.filter(a=>a.nodeId===id).map(a=>a.subpath)))node.subpaths[subpath]=roundCorners(node.subpaths[subpath],anchors.filter(a=>a.nodeId===id&&a.subpath===subpath).map(a=>a.segment),radius);
+      return node;
+    });
+  }
   function deleteSelected(anchors=state.selection.anchors){
     if(!anchors.length)return false;
     finish();state.history.transaction('Delete Anchors',()=>{
-      for(const id of new Set(anchors.map(a=>a.nodeId))){const node=state.document.getNode(id),subpaths=deleteAnchors(node.subpaths,anchors.filter(a=>a.nodeId===id));
-        state.history.execute(subpaths.length?updateNode(id,{subpaths},{label:'Delete Anchors'}):removeNode(id));}
+      for(const id of new Set(anchors.map(a=>a.nodeId))){const node=editNode(id),subpaths=deleteAnchors(node.subpaths,anchors.filter(a=>a.nodeId===id));
+        if(subpaths.length)commit({...node,subpaths},'Delete Anchors');else state.history.execute(removeNode(id));}
     });api.select(state.selection.ids);return true;
   }
   function down(e){
     if(e.button!==0||!PATH_TOOLS.includes(api.tool())||state.document.readOnly)return;
     e.stopImmediatePropagation();canvas.focus();api.closeMenus();canvas.setPointerCapture(e.pointerId);
-    const p=point(e),tool=api.tool(),hit=withScope(()=>renderer.pathHit(p,{handles:tool==='direct-selection'||tool==='pen'}));
+    const p=point(e),tool=api.tool();
+    clear();
+    if(tool==='direct-selection'){
+      const corner=renderer.cornerHandle(p);if(corner){const anchors=e.altKey?[descriptor(corner.nodeId,corner.subpath,corner.segment)]:cornerSelection();
+        selectAnchors(anchors);gesture={mode:'corner',hit:corner,anchors,start:p,last:p,radius:corner.corner.radius,before:[...new Set(anchors.map(a=>a.nodeId))].map(editNode)};return;}
+    }
+    const hit=withScope(()=>renderer.pathHit(p,{handles:tool==='direct-selection'||tool==='pen',shapes:tool==='direct-selection',logical:tool!=='pen'}));
     if(tool==='add-anchor') {
       addAt(renderer.curveHit(p));return;
     }
     if(tool==='delete-anchor'){if(hit)run(()=>deleteSelected([hit]));return;}
     if(tool==='anchor-point') {
-      if(hit){const node=structuredClone(state.document.getNode(hit.nodeId)),path=node.subpaths[hit.subpath],s=path.segments[hit.segment];
+      if(hit){const node=editNode(hit.nodeId),path=node.subpaths[hit.subpath],s=editablePath(path).segments[hit.segment];
         node.subpaths[hit.subpath]=convertAnchor(path,hit.segment,!Math.hypot(...s.in,...s.out));
         gesture={mode:'convert',hit,node,subpath:hit.subpath,index:hit.segment,start:p,last:p};selectAnchors([hit]);
       }else {const id=withScope(()=>renderer.hit(p));if(state.document.getNode(id)?.type==='shape')run(()=>{state.history.execute(replaceLeaf(id,renderer.expandedShape(id)));api.select([id]);});}
@@ -50,12 +70,12 @@ export function createPathInteractions(canvas,state,api) {
       if(hit){const existing=state.selection.anchors,has=existing.some(a=>same(a,hit));
         if(hit.kind==='point')selectAnchors(e.shiftKey?(has?existing.filter(a=>!same(a,hit)):[...existing,hit]):has?existing:[hit]);
         if(!state.selection.anchors.some(a=>same(a,hit)))return;
-        gesture={mode:'direct',hit,start:p,last:p,nodes:[...new Set(state.selection.anchors.map(a=>a.nodeId))].map(id=>structuredClone(state.document.getNode(id))),anchors:state.selection.anchors};
+        gesture={mode:'direct',hit,start:p,last:p,nodes:[...new Set(state.selection.anchors.map(a=>a.nodeId))].map(editNode),anchors:state.selection.anchors};
       } else {
-        const curve=withScope(()=>renderer.curveHit(p));
-        if(curve){const path=state.document.getNode(curve.nodeId).subpaths[curve.subpath];
-          const anchors=path.segments.map((_,segment)=>({nodeId:curve.nodeId,subpath:curve.subpath,segment}));selectAnchors(e.shiftKey?[...state.selection.anchors.filter(a=>a.nodeId!==curve.nodeId||a.subpath!==curve.subpath),...anchors]:anchors);
-          gesture={mode:'direct',hit:{...curve,kind:'point'},start:p,last:p,nodes:[...new Set(state.selection.anchors.map(a=>a.nodeId))].map(id=>structuredClone(state.document.getNode(id))),anchors:state.selection.anchors};
+        const curve=withScope(()=>renderer.curveHit(p,{shapes:true})),filledId=curve?null:renderer.hit(p),id=curve?.nodeId??filledId,subpath=curve?.subpath??0,node=id&&renderer.editingNode(id);
+        if(node?.type==='path'){const path=node.subpaths[subpath];
+          const anchors=path.segments.map((_,segment)=>descriptor(id,subpath,segment));selectAnchors(e.shiftKey?[...state.selection.anchors.filter(a=>a.nodeId!==id||a.subpath!==subpath),...anchors]:anchors);
+          gesture={mode:'direct',hit:{nodeId:id,subpath,kind:'point',logical:true},start:p,last:p,nodes:[...new Set(state.selection.anchors.map(a=>a.nodeId))].map(editNode),anchors:state.selection.anchors};
         }else {if(!e.shiftKey)api.select([]);gesture={mode:'marquee',start:p,last:p,initial:state.selection.anchors,shift:e.shiftKey};}
       }return;
     }
@@ -65,6 +85,7 @@ export function createPathInteractions(canvas,state,api) {
     }
     validSession();let node,subpath,closing=false;
     if(session){node=structuredClone(state.document.getNode(session.id));subpath=session.subpath;
+      node.subpaths[subpath]=bakeCorners(node.subpaths[subpath]);
       if(session.reverse)node.subpaths[subpath]=reversePath(node.subpaths[subpath]);
       const index=session.reverse&&hit?.nodeId===node.id&&hit.subpath===subpath?node.subpaths[subpath].segments.length-1-hit.segment:hit?.segment;
       closing=hit?.nodeId===node.id&&hit.subpath===subpath&&index===0&&node.subpaths[subpath].segments.length>=2;
@@ -74,6 +95,7 @@ export function createPathInteractions(canvas,state,api) {
     }else {
       const endpoint=withScope(()=>renderer.pathHit(p,{handles:false,endpoints:true}));
       if(endpoint){node=structuredClone(state.document.getNode(endpoint.nodeId));subpath=endpoint.subpath;
+        node.subpaths[subpath]=bakeCorners(node.subpaths[subpath]);
         if(endpoint.segment===0)node.subpaths[subpath]=reversePath(node.subpaths[subpath]);
         session={id:node.id,subpath,reverse:endpoint.segment===0};gesture={mode:'pen-handle',node,subpath,index:node.subpaths[subpath].segments.length-1,start:p,last:p,resume:true};api.select([node.id]);return;
       }
@@ -94,8 +116,8 @@ export function createPathInteractions(canvas,state,api) {
     if(!gesture){
       if(!PATH_TOOLS.includes(api.tool())||state.document.readOnly)return;
       e.stopImmediatePropagation();const p=point(e);api.status(p);clear();
-      const hit=renderer.pathHit(p,{handles:['direct-selection','pen'].includes(api.tool())});
-      canvas.style.cursor=hit?'pointer':'crosshair';
+      const tool=api.tool(),corner=tool==='direct-selection'&&renderer.cornerHandle(p),hit=renderer.pathHit(p,{handles:['direct-selection','pen'].includes(tool),shapes:tool==='direct-selection',logical:tool!=='pen'});
+      canvas.style.cursor=corner?'nwse-resize':hit?'pointer':'crosshair';
       if(api.tool()==='pen') {
         const current=validSession(),node=current&&state.document.getNode(current.id),first=current?.reverse?node.subpaths[current.subpath].segments.length-1:0;
         const closing=current&&hit?.nodeId===current.id&&hit.subpath===current.subpath&&hit.segment===first&&node.subpaths[current.subpath].segments.length>1;
@@ -115,24 +137,31 @@ export function createPathInteractions(canvas,state,api) {
       if(g.mode==='marquee') {
         clear();const item=new scope.Path.Rectangle({rectangle:new scope.Rectangle(g.start,p),insert:false,strokeColor:'#006B5C',strokeWidth:1/scope.view.zoom});
         scope.project.layers.at(-1).addChild(item);previews=[item];scope.view.update();
+      }else if(g.mode==='corner') {
+        const delta=renderer.editPointToLocal(g.hit.nodeId,p).subtract(renderer.editPointToLocal(g.hit.nodeId,g.start)),c=g.hit.corner;
+        g.radius=Math.max(0,c.radius+(delta.x*c.bisector[0]+delta.y*c.bisector[1])*c.sin);
+        g.result=roundedNodes(g.anchors,g.radius);preview(g.result);
       }else if(g.mode==='direct') {
         let delta=p.subtract(g.start);if(e.shiftKey&&g.hit.kind==='point'){if(Math.abs(delta.x)>Math.abs(delta.y))delta.y=0;else delta.x=0;}
-        g.result=g.nodes.map(original=>{const node=structuredClone(original),local=renderer.pointToLocal(node.id,g.start.add(delta)).subtract(renderer.pointToLocal(node.id,g.start));
+        g.result=g.nodes.map(original=>{const node=structuredClone(original),local=renderer.editPointToLocal(node.id,g.start.add(delta)).subtract(renderer.editPointToLocal(node.id,g.start));
           if(g.hit.kind==='point')node.subpaths=moveAnchors(node.subpaths,g.anchors.filter(a=>a.nodeId===node.id),xy(local));
-          else if(node.id===g.hit.nodeId){const s=node.subpaths[g.hit.subpath].segments[g.hit.segment],kind=g.hit.kind;
-            const origin=renderer.pointToWorld(node.id,s.p);let end=renderer.pointToWorld(node.id,s.p.map((n,i)=>n+s[kind][i])).add(delta);
+          else if(node.id===g.hit.nodeId){const data=node.subpaths[g.hit.subpath],path=g.hit.logical?editablePath(data):bakeCorners(data),s=path.segments[g.hit.segment],kind=g.hit.kind;
+            const origin=renderer.editPointToWorld(node.id,s.p);let end=renderer.editPointToWorld(node.id,s.p.map((n,i)=>n+s[kind][i])).add(delta);
             if(e.shiftKey)end=new scope.Point(...constrain(xy(end),xy(origin)));
-            const v=xy(renderer.pointToLocal(node.id,end)).map((n,i)=>n-s.p[i]);s[kind]=v;
-            if(!e.altKey){const other=kind==='in'?'out':'in',length=Math.hypot(...s[other]),r=Math.hypot(...v);if(r&&length)s[other]=v.map(n=>-n/r*length);}
+            const v=xy(renderer.editPointToLocal(node.id,end)).map((n,i)=>n-s.p[i]);
+            const edit=logical=>{const s=logical.segments[g.hit.segment];s[kind]=v;
+              if(!e.altKey){const other=kind==='in'?'out':'in',length=Math.hypot(...s[other]),r=Math.hypot(...v);if(r&&length)s[other]=v.map(n=>-n/r*length);}};
+            if(g.hit.logical)node.subpaths[g.hit.subpath]=editCornerSource(data,edit);else {edit(path);node.subpaths[g.hit.subpath]=path;}
           }return node;
         });preview(g.result);
       }else {
-        const s=g.node.subpaths[g.subpath].segments[g.index];
+        const data=g.node.subpaths[g.subpath],s=(g.mode==='convert'?editablePath(data):data).segments[g.index];
         if(api.tool()==='hand'){const delta=p.subtract(g.last),a=localPoint(g.node,g.last),b=localPoint(g.node,p);s.p=s.p.map((v,i)=>v+xy(b.subtract(a))[i]);g.start=g.start.add(delta);}
         else {let end=xy(p);if(e.shiftKey)end=constrain(end,xy(g.start));
           const at=localPoint(g.node,new scope.Point(...end)),v=xy(at).map((n,i)=>n-s.p[i]);
           if(p.getDistance(g.start)>2/scope.view.zoom||g.dragged){s.out=v;if(!e.altKey)s.in=v.map(n=>-n);g.dragged=true;}
         }
+        if(g.mode==='convert')g.node.subpaths[g.subpath]=editCornerSource(data,path=>{path.segments[g.index]=structuredClone(s);});
         preview([g.node]);
       }
     });g.last=p;
@@ -142,11 +171,14 @@ export function createPathInteractions(canvas,state,api) {
     const g=gesture;cancelDrag();run(()=>{
       if(g.mode==='marquee') {
         const rectangle=new scope.Rectangle(g.start,point(e)),anchors=[];
-        for(const node of state.document.descendants(null)){if(node.type!=='path'||!state.document.isEditable(node.id))continue;
-          node.subpaths.forEach((path,subpath)=>path.segments.forEach((s,segment)=>{if(rectangle.contains(renderer.pointToWorld(node.id,s.p)))anchors.push({nodeId:node.id,subpath,segment});}));}
+        for(const original of state.document.descendants(null)){if(!['path','shape'].includes(original.type)||!state.document.isEditable(original.id))continue;
+          const node=renderer.editingNode(original.id);node.subpaths.forEach((path,subpath)=>path.segments.forEach((s,segment)=>{if(rectangle.contains(renderer.editPointToWorld(node.id,s.p)))anchors.push(descriptor(node.id,subpath,segment));}));}
         selectAnchors([...g.initial,...anchors.filter(a=>!g.initial.some(b=>same(a,b)))]);return;
       }
-      if(g.mode==='direct'){if(g.result&&g.last.getDistance(g.start)>1e-8)state.history.transaction('Move Anchors',()=>g.result.forEach(node=>commit(node,'Move Anchors')));api.selectionChanged();return;}
+      if(g.mode==='direct'||g.mode==='corner'){
+        const before=g.before??g.nodes,changed=g.result?.filter(node=>JSON.stringify(node.subpaths)!==JSON.stringify(before.find(n=>n.id===node.id).subpaths));
+        if(changed?.length&&g.last.getDistance(g.start)>2/scope.view.zoom){const label=g.mode==='corner'?'Round Corners':'Move Anchors';state.history.transaction(label,()=>changed.forEach(node=>commit(node,label)));}api.selectionChanged();return;
+      }
       if(g.mode==='pen-handle'&&!g.dragged){selectAnchors([{nodeId:g.node.id,subpath:g.subpath,segment:g.index}]);return;}
       if(state.document.getNode(g.node.id))commit(g.node,g.mode==='convert'?'Convert Anchor':'Pen');
       else state.history.execute(insertNode(api.layerId(),g.node));
@@ -158,6 +190,11 @@ export function createPathInteractions(canvas,state,api) {
   canvas.addEventListener('pointercancel',cancelDrag,events);canvas.addEventListener('lostpointercapture',cancelDrag,events);window.addEventListener('blur',cancelDrag,events);
   return {
     finish,
+    cornerInfo(){const anchors=cornerSelection();if(!anchors.length)return null;const values=renderer.cornerWidgets().map(c=>c.corner.radius);return {count:anchors.length,radius:values.every(r=>Math.abs(r-values[0])<1e-9)?values[0]:null};},
+    setCornerRadius(radius){if(state.document.readOnly)return;const anchors=cornerSelection();if(!anchors.length)return;
+      const nodes=roundedNodes(anchors,radius);if(nodes.every(n=>JSON.stringify(n.subpaths)===JSON.stringify(editNode(n.id).subpaths)))return;
+      state.history.transaction('Round Corners',()=>nodes.forEach(node=>commit(node,'Round Corners')));selectAnchors(anchors);
+    },
     documentChanged(){cancelDrag();validSession();},
     handle(command){
       if(command==='cancel'){if(gesture)cancelDrag();else finish();return PATH_TOOLS.includes(state.ui.tool);}
@@ -166,7 +203,7 @@ export function createPathInteractions(canvas,state,api) {
       return false;
     },
     nudge(x,y){const anchors=state.selection.anchors;if(state.ui.tool!=='direct-selection'||!anchors.length)return false;
-      state.history.transaction('Nudge Anchors',()=>{for(const id of new Set(anchors.map(a=>a.nodeId))){const node=state.document.getNode(id),a=renderer.pointToLocal(id,new scope.Point(0,0)),b=renderer.pointToLocal(id,new scope.Point(x,y));state.history.execute(updateNode(id,{subpaths:moveAnchors(node.subpaths,anchors.filter(a=>a.nodeId===id),xy(b.subtract(a)))},{label:'Nudge Anchors',mergeKey:'anchor-nudge'}));}});api.selectionChanged();return true;
+      state.history.transaction('Nudge Anchors',()=>{for(const id of new Set(anchors.map(a=>a.nodeId))){const node=editNode(id),a=renderer.editPointToLocal(id,new scope.Point(0,0)),b=renderer.editPointToLocal(id,new scope.Point(x,y));commit({...node,subpaths:moveAnchors(node.subpaths,anchors.filter(a=>a.nodeId===id),xy(b.subtract(a)))},'Nudge Anchors','anchor-nudge');}});api.selectionChanged();return true;
     },
     destroy(){finish();controller.abort();},
   };

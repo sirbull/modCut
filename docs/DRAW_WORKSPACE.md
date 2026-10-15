@@ -1,6 +1,6 @@
 # modCut Draw: vektoreditor i modCut
 
-> Status: Fase 0, D1.1–D1.3, D1.5 og D1.6 er fullført. Direct Selection redigerer ankre og håndtak; live corners og automatisk ekspandering av former i D1.4 gjenstår. Verktøylinje/paneler er ryddet.
+> Status: Fase 0 og D1.1–D1.7 er fullført. Rotate, Reflect og Scale har dialoger, Copy, referansepunkt og Transform Again. Neste oppgave er D1.8: resten av grunnpanelene og template-lag. Fase 1 er fortsatt under arbeid.
 > Sist oppdatert: 2026-10-15.
 > Målgruppe: utviklere og kodeagenter (Claude Code og Codex) som skal bygge løsningen.
 
@@ -1191,7 +1191,7 @@ av forskjellige agenter fordi de eier ulike filer.
 | Fase | Leveranse | Status |
 |---|---|---|
 | 0 — Fundament | Workspace-bytte, dokumentmodell, geometri-kjerne, keymap og lagring. | Fullført: D0.1–D0.6. Draw-data lagres i `.modcut` v4 og krasjgjenopprettes per fane. |
-| 1 — Grunnleggende tegning | Artboards, markering, Pen, former, lag, bitmap-referanser og Send til Cut v1. | Påbegynt: D1.1–D1.3, D1.5 og D1.6 fullført; resten av D1.4 er neste. |
+| 1 — Grunnleggende tegning | Artboards, markering, Pen, former, lag, bitmap-referanser og Send til Cut v1. | Påbegynt: D1.1–D1.7 fullført; D1.8 er neste. |
 | 2 — Illustrator-kjernen | Tekst, Pathfinder, gradienter, import/eksport og Send til Cut v2. | Ikke startet. |
 | 3 — Avansert redigering og trace | Outline Stroke, effekter, Image Trace, flere redigeringsverktøy og AI/DXF-eksport. | Ikke startet. |
 | 4 — Fullpakke | Width, Blend, brushes, flere effekter/eksportformater og ytelsespass. | Ikke startet. |
@@ -1397,10 +1397,10 @@ Oppdateres når oppgaven fullføres. Løpende arbeidslogg: [`draw/WORK_LOG.md`](
 * [x] D1.1 Render-adapter
 * [x] D1.2 Artboards
 * [x] D1.3 Selection, Hand, Zoom
-* [ ] D1.4 Direct Selection — ankre/håndtak ferdig; live corners og automatisk shape-expansion gjenstår
+* [x] D1.4 Direct Selection — ankre/håndtak, live corners og automatisk shape-expansion
 * [x] D1.5 Pen og ankerverktøy
 * [x] D1.6 Former
-* [ ] D1.7 Rotate, Reflect, Scale
+* [x] D1.7 Rotate, Reflect, Scale med Copy og Transform Again
 * [ ] D1.8 Grunnpaneler
 * [ ] D1.9 Kontrollinje og statuslinje
 * [ ] D1.10 Group, Arrange, Clipboard
@@ -1654,5 +1654,86 @@ Verifisering: 85 Draw-enhetstester og komplett Draw-E2E passerer, inkludert
 prosjektlagring, kontinuerlig autosave og faktisk krasj/gjenstart. Den dedikerte
 Pen-testen bruker ekte muse-/tastaturhendelser og kontrollerer også Space-flytting
 i et transformert layer, kontekstuell kurvedeling og Cut-isolasjon.
+Full `npm test` stopper fortsatt i den tidligere dokumenterte Cut crop-E2E-testen
+etter grønne sidecar/bridge/main/renderer/Draw/kontrast-tester.
+
+### Implementasjonsnotater — D1.4 fullført
+
+Direct Selection viser også ankre på live former. Klikk, Shift-valg og marquee
+er midlertidige valg og endrer ikke dokumentet. Flytting, håndtaksredigering,
+nudge, ankersletting eller hjørneavrunding ekspanderer berørte former ved commit.
+Samme id, utseende, forelder og tegnerekkefølge beholdes. Ekspandering og redigering
+er én transaksjon; Undo gjenoppretter formen med dens opprinnelige parametre.
+Escape, mistet pekerfangst og vindusbytte forkaster bare forhåndsvisningen.
+
+Rette hjørner mellom rette segmenter har prikkede sirkelhåndtak. Valgte hjørner
+kan avrundes sammen; Alt-drag tar bare ett hjørne. Properties har ett kontekstuelt
+radiusfelt med blandet verdi når hjørnene er forskjellige. Radius begrenses av
+nabokantenes lengde for å unngå overlapp. Endepunkter, degenererte vinkler og
+overganger med Bézier-håndtak får ikke slike hjørne-widgets.
+
+PathData beholder ferdige kubiske kurver i `segments`. Valgfri
+`cornerData: { segments: originalankre, radii: radiusPerOriginalanker }` på en
+subpath gjør avrundingen redigerbar etter lagring og gjenåpning. Radius null
+gjenoppretter skarpe hjørner uten ekstra ankre. Modellvalideringen kontrollerer
+at kilde/radier faktisk gir den lagrede kurven. Geometrikjernen bruker allerede
+de ferdige kurvene, så avrundingen er ikke bare en visningseffekt.
+
+Flytting, rotasjon, refleksjon og jevn skalering beholder live-data. Ujevn
+skalering/skjæring av selve banen baker avrundingen inn i kurvene for å bevare
+eksakt geometri. Kurvedeling og Pen-redigering baker live-data på berørt subpath.
+Transformerte foreldre støttes uten å endre koordinatsystemet til kildeankrene.
+Trefftesting bruker alltid dokumentgeometrien, ikke Pen sin hover-preview.
+
+Verktøylinje og panelstruktur er uendret: ett sted per verktøygruppe og ett
+aktivt sidepanel. Neste oppgave er D1.7. Resten av fase 1 er fortsatt uferdig.
+
+Verifisering: 94 Draw-enhetstester og komplett Draw-E2E passerer. Den nye
+arbeidsflyten dekker utsatt formkonvertering, reversibel avrunding, radiusfelt,
+transformerte foreldre, Escape og ett angresteg. Prosjekt-IO-testen lagrer og
+gjenåpner faktiske live corner-data og tar dem gjennom autosave/krasj/gjenstart.
+Begge temaer har visuell kontroll og pikselkontroll av artwork. Cut er urørt.
+Full `npm test` har grønne sidecar/bridge/main/renderer/Draw/kontrast-tester,
+men stopper fortsatt i den kjente Cut crop-E2E-feilen ved `workflows.mjs:369`.
+
+### Implementasjonsnotater — D1.7
+
+Rotate (R), Reflect (O) og Scale (S) bruker eksisterende verktøygrupper.
+Klikk på canvas setter referansepunkt; dra selve punktet for å flytte det.
+Vanlig drag transformerer rundt referansepunktet, Shift begrenser og Alt lager
+en kopi. Rotate bruker 45-graders steg med Shift. Reflect-drag bruker aksen
+mellom start- og sluttradius, slik at startretningen speiles mot sluttretningen.
+Scale skalerer aksene separat; Shift gir jevn skalering. Kryssing av
+referansepunktet kan speile, og nullskala forhindres.
+
+Enter, dobbeltklikk på verktøyikonet, Alt-klikk på canvas og Object > Transform
+åpner dialoger med eksakte verdier, referansekoordinater, Preview, Apply og Copy.
+Positive vinkler er mot klokken. Preview er separat Paper-geometri og endrer
+ikke modell eller dirty-status. Escape/Cancel gjenoppretter visningen. Hver
+operasjon og alle dens kopier er én historikktransaksjon. Nye gruppekopier får
+nye id-er for alle etterkommere og settes rett etter originalen i samme forelder.
+
+Transform Again (Mod+D) gjentar siste vellykkede transformasjon i verdensrommet
+på det nåværende utvalget, inkludert Copy og stroke-valget. Referansepunkt og
+gjenta-minne er per arbeidsområde/fane og lagres ikke i prosjektet. Identitet
+uten Copy og et tomt utvalg lager ikke historikk eller overskriver gjenta-minnet.
+
+Eksplisitt Scale normaliserer berørte vektorstreker til verdens-mm med valgfritt
+`strokeScaling:false` på noden. Uten avkryssing beholdes synlig strektykkelse;
+med avkryssing skaleres bredde og dash-lengder med arealekvivalent faktor
+`sqrt(abs(det(matrix)))`. Dette gjelder også former og gruppebarn. Eldre noder
+beholder sin opprinnelige strekmodell til en eksplisitt Scale-operasjon utføres.
+Effektmetadata bevares uendret; faktisk effektrendering og effektskalering kommer
+i effektfasen, slik dialogen forklarer. Låste/skjulte gruppebarn som krever en
+stilendring avviser hele operasjonen atomisk gjennom modellens eksisterende vern.
+
+Neste oppgave er D1.8. Verktøylinjens og panelenes ene plassering er bevart.
+
+Verifisering: 102 Draw-enhetstester og komplett Draw-E2E passerer, med ekte
+muse-/tastaturhandlinger, filrundtur, autosave og faktisk krasj/gjenstart.
+Transformdialogen er visuelt kontrollert. Stroke-policy er med i prosjekt-IO
+og recovery-testene. Ingen endring i Cut eller sidecar.
+Adapteren konverterer verdens-mm-streker til Paper sin skjermpikselbredde ved
+hvert zoomnivå; en pikseltest ved dobbel zoom verifiserer den fysiske tykkelsen.
 Full `npm test` stopper fortsatt i den tidligere dokumenterte Cut crop-E2E-testen
 etter grønne sidecar/bridge/main/renderer/Draw/kontrast-tester.

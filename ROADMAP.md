@@ -87,9 +87,13 @@ the same commit that completes an item.
   the complete Draw Electron workflow pass; both themes were visually checked.
 - [x] D1.5: Bézier Pen, open/closed paths, endpoint continuation, modifier
   drawing, curve-preserving insertion and Add/Delete/Convert Anchor tools.
-- [ ] D1.4: Direct Selection now edits anchors/handles, supports anchor marquee,
-  Shift selection, nudge and undo. Live corner widgets and automatic live-shape
-  expansion with Direct Selection remain. Anchor Point already expands shapes.
+- [x] D1.4: Direct Selection edits anchors/handles, with marquee, Shift selection,
+  nudging, live corner widgets and exact corner radii. Shapes expand only on an
+  actual anchor edit; conversion and editing undo together. Rounded source
+  corners remain editable and persist with ordinary resolved Bézier geometry.
+- [x] D1.7: Rotate, Reflect and Scale with reference points, constrained dragging,
+  exact dialogs, transient previews, Copy and Transform Again (Ctrl/Cmd+D).
+  Explicit Scale supports fixed or scaled world-mm strokes and dash lengths.
 
 - [ ] Build the Draw workspace described in
   [`docs/DRAW_WORKSPACE.md`](docs/DRAW_WORKSPACE.md). Task status is tracked in
@@ -98,8 +102,8 @@ the same commit that completes an item.
 - [x] Phase 0 — Foundation: workspace, document model/history, geometry kernel,
   keymap and `.modcut` v4 persistence. D0.1–D0.6 complete.
 - [ ] Phase 1 — Basic drawing MVP: artboards, Pen, shapes, layers, bitmap
-  references and Send to Cut v1. D1.1–D1.3, D1.5 and D1.6 complete; finish D1.4
-  (live corners / Direct Selection shape expansion) next. The phase remains in progress.
+  references and Send to Cut v1. D1.1–D1.7 complete; D1.8 (remaining panel
+  functionality and template layers) is next. The phase remains in progress.
 - [ ] Phase 2 — Core vector editing: text, Pathfinder, gradients, import/export
   and Send to Cut v2.
 - [ ] Phase 3 — Advanced editing: stroke expansion, effects, Image Trace,
