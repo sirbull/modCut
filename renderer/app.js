@@ -2179,6 +2179,8 @@ const drawKeyContext = (event) => ({ workspace: "draw",
 window.addEventListener("keydown", (event) => {
   if (document.body.dataset.workspace !== "draw") return;
   if (document.querySelector('.modal-overlay')) {drawKeymap.reset();return;}
+  // Number fields with scrubby titles step their own value with the arrow keys.
+  if ((event.key === "ArrowUp" || event.key === "ArrowDown") && event.target.closest?.("[data-draw-scrub-input]")) return;
   event.stopImmediatePropagation();
   drawKeymap.keydown(event, drawKeyContext(event));
 }, true);

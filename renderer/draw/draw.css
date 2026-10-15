@@ -234,3 +234,8 @@ body[data-workspace="draw"] .statusbar .spacer { display: none; }
 .draw-align-button svg { width: 18px; height: 18px; }
 .draw-select { box-sizing: border-box; width: 100%; border: 1px solid var(--border); border-radius: 5px; background: var(--bg); color: var(--text); padding: 7px 8px; font: inherit; font-size: var(--fs-sm); }
 .draw-field input[data-draw-field=align-spacing]::placeholder { color: var(--text-muted); }
+/* Scrubby labels: drag a number field's title to change its value (Shift faster, Alt finer). */
+.draw-scrub { cursor: ew-resize; user-select: none; touch-action: none; }
+.draw-scrub:hover { color: var(--text); }
+body.draw-scrubbing, body.draw-scrubbing * { cursor: ew-resize !important; user-select: none; }
+.draw-field input.is-scrubbing { outline: 2px solid var(--brand-mid); outline-offset: 1px; }

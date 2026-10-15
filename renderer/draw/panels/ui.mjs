@@ -3,6 +3,7 @@ import { insertNode, updateNode } from '../doc/commands.mjs';
 import { ROOT_CONTEXT, collectCommands, deleteLayerCommands, layerContext, moveCommand, newLayer, releaseCommands, soloUpdates } from '../doc/layers.mjs';
 import { shortcutLabel } from '../keymap.mjs';
 import { REFERENCE_POINTS } from '../geom/transforms.mjs';
+import { attachScrub } from '../ui/number-field.mjs';
 
 export function icon(href) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
@@ -96,7 +97,22 @@ export function createPanels(shell, state, api) {
     const b = document.createElement('button'); b.type = 'button'; b.className = 'btn btn--ghost btn--sm'; b.textContent = label;
     b.addEventListener('click',() => api.run(action)); return b;
   }
-  function field(host, label, value, action, { type = 'number', disabled = false, min, max, key = label } = {}) {
+  // A scrub previews by applying the field's normal action, undoing the previous preview first, so the
+  // drag ends as exactly one undo step. Panels re-render while dragging; `scrub` keeps the live value shown.
+  let scrub = null;
+  const appliedDepth = () => state.history.entries.filter(entry => entry.applied).length;
+  function scrubField(key, action) {
+    return (phase, value) => {
+      if (phase === 'start') { scrub = { key, depth: appliedDepth(), applied: false, value }; return; }
+      if (!scrub || scrub.key !== key) return;
+      if (phase === 'end') { scrub = null; render(); return; }
+      if (scrub.applied) { api.run(() => { while (appliedDepth() > scrub.depth && state.history.undo()); }); scrub.applied = false; }
+      if (phase === 'cancel') { scrub = null; render(); return; }
+      scrub.value = value; api.run(() => action(value)); scrub.applied = appliedDepth() > scrub.depth;
+      if (scrub) render();
+    };
+  }
+  function field(host, label, value, action, { type = 'number', disabled = false, min, max, key = label, step } = {}) {
     const row = document.createElement('label'); row.className = 'draw-field';
     const name = document.createElement('span'); name.textContent = label;
     const input = document.createElement('input'); input.type = type; input.value = type === 'color' ? value || '#FFFFFF' : type==='number' ? Number(Number(value).toFixed(3)) : value; input.dataset.drawField = key;
@@ -107,6 +123,10 @@ export function createPanels(shell, state, api) {
       if (type === 'number' && (!Number.isFinite(next) || (min !== undefined && next < min) || (max !== undefined && next > max))) throw new Error(`Enter a valid ${label.toLowerCase()}.`);
       action(next);
     }));
+    if (type === 'number') {
+      attachScrub(name,input,{ step, min, max, onScrub: scrubField(key,action) });
+      if (scrub?.key === key) { input.value = String(scrub.value); input.classList.add('is-scrubbing'); }
+    }
     row.append(name,input); host.append(row); return input;
   }
   function iconButton(label, iconId, action, className = 'draw-layer-action') {
@@ -287,7 +307,7 @@ export function createPanels(shell, state, api) {
         if (!Number.isFinite(spacing.valueAsNumber)) throw new Error('Enter a valid spacing.');
         state.ui.alignSpacing = spacing.valueAsNumber;
       }));
-      spaceRow.append(spaceName,spacing); host.append(spaceRow);
+      attachScrub(spaceName,spacing,{ step: .1, min: 0 }); spaceRow.append(spaceName,spacing); host.append(spaceRow);
     }
     text(host,!ids.length ? 'Select objects to align or distribute them.' : alignTo === 'key' ? 'The key object stays in place. Enter a spacing to use an exact gap.' : ids.length === 1 && alignTo === 'selection' ? 'A single object aligns to the active artboard.' : 'Distribute Objects needs three objects, or an artboard.');
   }

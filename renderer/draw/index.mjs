@@ -1,6 +1,7 @@
 import { createProjectDraw } from './io/project.mjs';
 import { createDrawRenderer } from './render.mjs';
 import { createPanels } from './panels/ui.mjs';
+import { cancelActiveScrub } from './ui/number-field.mjs';
 import { PANEL_DEFINITIONS } from './panels/registry.mjs';
 import { toolRegistry } from './tools/registry.mjs';
 import { createToolbar } from './tools/toolbar.mjs';
@@ -166,7 +167,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   function handle(command) {return run(()=>{
     if(command.startsWith('tool.'))return setTool(command.slice(5));
     if(command.startsWith('panel.'))return openPanel(command.slice(6));
-    if(command==='cancel'&&panels.close())return;
+    if(command==='cancel'&&(cancelActiveScrub()||panels.close()))return;
     if(paths?.handle(command)){if(command==='cancel')toolbar.close(true);return;}
     if(command==='cancel'){interactions.cancel();toolbar.close(true);return;}
     if(command==='undo'||command==='redo'){interactions.cancel();paths.finish();state.history[command]();select(state.selection.ids);return;}

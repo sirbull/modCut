@@ -67,7 +67,7 @@ Rekkefølge ovenfra, med Tabler-ikon i parentes:
 | Color | Color | enkel | 4 |
 | Stroke | Stroke, Gradient, Transparency | Stroke enkel, resten finnes ikke | 5 (Gradient vises som "kommer i D2.3") |
 | Appearance | Appearance | finnes ikke | 7 |
-| Transform | Transform, Align, Pathfinder | Transform ferdig, Align enkel | 6 og 7 |
+| Transform | Transform, Align, Pathfinder | Transform og Align ferdige (D1.8 B og C) | 7 |
 | Artboards | Artboards | finnes | 1 (flyttes uendret) |
 
 Faner som ikke er implementert ennå vises ikke. Ingen tomme "kommer snart"-faner bortsett fra
@@ -256,11 +256,11 @@ Hvert trinn committes og pushes for seg, med oppdatert `WORK_LOG.md` og `HANDOFF
 | Trinn | Innhold | Ferdig når |
 |---|---|---|
 | 1 (ferdig) | Ny layout: dokk med Properties øverst og Layers nederst, dragbar deler, kollapsbare deler, stolpe med panelgrupper og flyout med faner. Eksisterende Color, Stroke, Align, Transform og Artboards flyttes inn uendret. | Enhetstester for gruppe-/faneregister. E2E: Properties og Layers synlige samtidig, flyout åpner/lukker, faner bytter, deler endrer høyde, eksisterende panel-E2E oppdatert og grønn. |
-| 2 | Scrubby labels: `scrub.mjs` (ren logikk) og `number-field.mjs`, tatt i bruk i alle eksisterende tallfelt. | Enhetstester for steg, Shift/Alt, min/max, avrunding. E2E: drag på tittel endrer verdi, ett angresteg, Escape avbryter. |
+| 2 (ferdig) | Scrubby labels: `scrub.mjs` (ren logikk) og `number-field.mjs`, tatt i bruk i alle eksisterende tallfelt. | Enhetstester for steg, Shift/Alt, min/max, avrunding. E2E: drag på tittel endrer verdi, ett angresteg, Escape avbryter. |
 | 3 | Layers-redesign: rad med øye, lås, fargelinje, thumbnail, navn, målsirkel, søppelkasse; søk og filter; bunnlinje med teller og ikoner; Layer Options som bilde 2. | E2E for alle interaksjonene i 3.2 og 3.4, thumbnail-test (piksel i forventet farge). |
 | 4 | Swatches og Color med Recent Colors. | Enhetstester for fargekonvertering. E2E: velg swatch for fill og stroke. |
 | 5 | Stroke (full uten profiles/arrowheads) og Transparency. Render-adapteren støtter cap, join, limit, align og dash fullt. | Enhets- og pikseltester for cap/join/dash. |
-| 6 | Align (alle ikoner, distribute, distribute spacing, key object). Transform-panelet er allerede ferdig og får bare scrubby labels i trinn 2. | Enhetstester for align/distribute-matematikk. E2E for key object. |
+| 6 (ferdig i `feat/vector-draw`, D1.8 del C) | Align (alle ikoner, distribute, distribute spacing, key object). Transform-panelet er også ferdig og har scrubby labels fra trinn 2. | Enhetstester for align/distribute-matematikk. E2E for key object. |
 | 7 | Pathfinder og Appearance. | Golden tests for booleans via kernel. E2E for Unite og Minus Front. |
 | 8 | Properties-gjennomgang med kontekstuelle seksjoner og quick actions. | E2E for hver seksjon ved ulike utvalg. |
 

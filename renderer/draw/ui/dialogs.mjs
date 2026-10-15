@@ -3,11 +3,12 @@ import { MAX_ARTBOARDS, newDrawDocument } from '../doc/artboards.mjs';
 import { DOCUMENT_PRESETS, PRESET_CATEGORIES, UNIT_LABELS, RESOLUTIONS, RECENT_KEY, TEMPLATES_KEY, toMm, fromMm, formatSize, normalizeSetup,
   rememberRecent, removeTemplate, loadStoredList, storeList } from '../doc/presets.mjs';
 import { dialogOperation } from '../geom/transforms.mjs';
+import { enhanceNumberFields } from './number-field.mjs';
 
 let dialogId=0;
 function openDrawModal(options) {
   const previous=document.activeElement, result=openModal(options), overlay=document.querySelector('.modal-overlay:last-of-type'),modal=overlay.querySelector('.modal');
-  modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');
+  modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');enhanceNumberFields(modal);
   const title=modal.querySelector('.panel__header');title.id=`draw-dialog-${++dialogId}`;modal.setAttribute('aria-labelledby',title.id);
   const keyboard=trapDialogKeys(modal,()=>modal.querySelector('[data-x=cancel]').click());
   modal.addEventListener('keydown',keyboard);
@@ -135,7 +136,7 @@ export function newDocumentDialog(bed,{machines=[],storage=globalThis.localStora
   unitSelect.addEventListener('change',showUnits);
   apply(machineEntries[0]??presets.find(p=>p.id==='a4'),machineEntries[0]?'bed':'a4');
   renderGrid();
-  overlay.append(modal);document.body.append(overlay);nameInput.focus();nameInput.select();
+  enhanceNumberFields(modal);overlay.append(modal);document.body.append(overlay);nameInput.focus();nameInput.select();
   return new Promise(resolve=>{
     const close=value=>{modal.removeEventListener('keydown',keyboard);overlay.remove();if(previous?.isConnected)previous.focus();resolve(value);};
     const keyboard=trapDialogKeys(modal,()=>close(null));modal.addEventListener('keydown',keyboard);

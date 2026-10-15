@@ -468,3 +468,30 @@ ikke bygges i skymiljøet (jitpack.io er blokkert), så Cut/sidecar-testene er i
 `bed.js`, Cut og sidecar er ikke endret.
 
 **Neste: trinn 2, scrubby labels (dra i tittelen for å endre tallverdier, Shift for raskere).**
+
+## 2026-10-15: Høyrepanel trinn 2, scrubby labels
+
+- Alle tallfelt med tittel i Properties, panelgruppene (Transform, Artboards, Align spacing,
+  Stroke osv.) og Draw-dialogene (Rotate/Reflect/Scale, New document, Layer Options,
+  formdialoger) kan endres ved å **dra i tittelen**. Pekeren viser `ew-resize`.
+- 2 px per steg. Steget er feltets `step`, ellers 0,1 for mm-felt og 1 for andre enheter.
+  **Shift** gir 10 x raskere, **Alt/Option** 10 x finere, og kan byttes midt i draget uten hopp.
+  Verdien begrenses av min/max og beholder startverdiens presisjon.
+- I panelene vises endringen live på tegningen. Hver ny forhåndsvisning angrer den forrige,
+  så ett drag blir **ett angresteg**. **Escape** avbryter og setter tilbake verdien uten historikk,
+  uten å lukke panelet. I dialoger oppfører draget seg som inntasting (input-hendelser driver
+  dialogens Preview) og Escape stopper bare draget, ikke dialogen.
+- Pekerlås (`requestPointerLock`) brukes når den er tilgjengelig, slik at man kan dra langt.
+  En lås som innvilges etter at et kort drag er ferdig, slippes automatisk.
+- Klikk uten å dra fokuserer feltet. **Pil opp/ned** i feltet endrer med ett steg, Shift ti steg,
+  og fokus blir i feltet selv om panelet tegnes på nytt. `renderer/app.js` slipper derfor
+  pil opp/ned gjennom til felt merket `data-draw-scrub-input`.
+- Ny ren logikk i `ui/scrub.mjs` (testet i Node) og DOM-komponent i `ui/number-field.mjs`
+  (`attachScrub`, `enhanceNumberFields`, `cancelActiveScrub`).
+
+Verifisering: 129 Draw-enhetstester passerer (ny `scrub.test.mjs`). Ny E2E
+`electron/e2e/draw-scrub-workflows.mjs` (`--draw-scrub`) passerer og er med i komplett Draw-E2E.
+Komplett Draw-E2E passerer frem til `project-workflows.mjs:113` («recovery runs while edits
+continue»). Den feiler også på `feat/vector-draw` `1020cbc` uten disse endringene (to av to
+kjøringer på Linux/Xvfb): intervallet som redigerer hvert 100. ms rekker bare rundt 12
+redigeringer på 5 s, så autolagringen kommer ikke innen 2,4 s. Den er ikke rettet her.

@@ -3,8 +3,9 @@
 Oppdatert 2026-10-15. Arbeidsgren: `claude/draw-properties-layers-panels` (bygger på `feat/vector-draw`).
 
 **Høyrepanelet følger nå [RIGHT_PANELS.md](RIGHT_PANELS.md).** Trinn 1 (dokk med Properties over
-Layers, dragbar delelinje, panelgrupper som flyout med faner) er ferdig. Neste er trinn 2,
-scrubby labels. D1.8 del C og D gjøres som trinn 3 til 8 i den planen.
+Layers, dragbar delelinje, panelgrupper som flyout med faner) og trinn 2 (scrubby labels) er
+ferdige. Neste er trinn 3, Layers-redesign. Kjent feil fra `feat/vector-draw`: autolagringstesten
+`project-workflows.mjs:113` feiler på Linux, se arbeidsloggen. D1.8 del C og D gjøres som trinn 3 til 8 i den planen.
 
 ## Status og neste oppgave
 
