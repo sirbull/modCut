@@ -46,10 +46,20 @@
       "path": "icons/outline/artboard.svg",
       "sha256": "a2659ef614767a30364b8b3fe902f4622e8167889a71fb8b390c1c95ff422006"
     },
+    "ban": {
+      "name": "ban",
+      "path": "icons/outline/ban.svg",
+      "sha256": "6397bee6c13fc647fa58eb4767318d695cc15c96dcadb978e99446b1cd5ac06c"
+    },
     "blend-mode": {
       "name": "blend-mode",
       "path": "icons/outline/blend-mode.svg",
       "sha256": "17a8f5f6361b1b959c5158ce2884b53eeb7e81469d18c4b12814adfcab0a999f"
+    },
+    "border-outer": {
+      "name": "border-outer",
+      "path": "icons/outline/border-outer.svg",
+      "sha256": "713fadfdd1fa071de0e98d7815969c34b61c3a3c463744fd676c708d4765eb74"
     },
     "chevron-down": {
       "name": "chevron-down",
@@ -70,6 +80,11 @@
       "name": "contrast-2",
       "path": "icons/outline/contrast-2.svg",
       "sha256": "32ad24d1cd03ed2974602f7d51a2d5c3567a85ee9713abb5b1de4a67513697e2"
+    },
+    "copy": {
+      "name": "copy",
+      "path": "icons/outline/copy.svg",
+      "sha256": "01da13d33d6163f37ee81f397e567832068d836af0307118156370716357be07"
     },
     "eye": {
       "name": "eye",
@@ -176,6 +191,11 @@
       "path": "icons/outline/mask.svg",
       "sha256": "495c7d90c156645a21640703a9beaba4dba0e17537186014e57063f19aac7e25"
     },
+    "math-function": {
+      "name": "math-function",
+      "path": "icons/outline/math-function.svg",
+      "sha256": "4e7b2efdcffa74f0d29f4f90e712f99466c75e4b0fe156657c899b363e1d9347"
+    },
     "palette": {
       "name": "palette",
       "path": "icons/outline/palette.svg",
@@ -200,6 +220,16 @@
       "name": "square-plus",
       "path": "icons/outline/square-plus.svg",
       "sha256": "dcf1a26d76bd90aaa677b83a76eed9b0b345ff692a3d4e867a6d4d621718daf8"
+    },
+    "square-rounded-plus": {
+      "name": "square-rounded-plus",
+      "path": "icons/outline/square-rounded-plus.svg",
+      "sha256": "dc4f66e56c33e28ff5f1746c903972ee8ea571824de3f482a3e8ef1bb8d40fc2"
+    },
+    "stack-2": {
+      "name": "stack-2",
+      "path": "icons/outline/stack-2.svg",
+      "sha256": "729d3e264f4e2e9670cd86f4531141baa78eb94e975198228a8167c8a1eb0572"
     },
     "stack-pop": {
       "name": "stack-pop",

@@ -121,11 +121,18 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     if (node.type === 'image') return JSON.stringify([node.assetId, state.document.data.assets[node.assetId]]);
     return node.type;
   }
-  function style(item, node, asOutline = outlineFor(node.id)) {
+  // Appearance entries can be hidden from the Appearance panel; hidden ones never draw.
+  const shown = list => (list || []).filter(entry => !entry.hidden);
+  // More than one visible fill or stroke: a paint stack draws every entry, the item itself only holds geometry.
+  function stacked(node) {
+    return !node.children && node.type !== 'image' && (shown(node.appearance?.fills).length > 1 || shown(node.appearance?.strokes).length > 1);
+  }
+  function style(item, node, asOutline = outlineFor(node.id), stackOwned = false) {
     item.opacity = asOutline ? 1 : node.opacity * (node.type === 'image' ? records.get(node.id)?.context.dim ?? 1 : 1);
     item.blendMode = asOutline ? 'normal' : node.blendMode;
     if (node.children || node.type === 'image') return;
-    const fill = node.appearance.fills[0], stroke = node.appearance.strokes[0];
+    const bare = stackOwned && !asOutline && stacked(node);
+    const fill = bare ? null : shown(node.appearance.fills)[0], stroke = bare ? null : shown(node.appearance.strokes)[0];
     item.fillColor = asOutline ? null : color(fill?.paint);
     item.strokeColor = asOutline ? '#071411' : color(stroke?.paint);
     if (item.fillColor) item.fillColor.alpha = fill?.opacity ?? 1;
@@ -139,6 +146,21 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     item.dashArray = asOutline ? [] : (stroke?.dash?.array ?? []).map(n=>n*strokeZoom);
     item.dashOffset = asOutline ? 0 : (stroke?.dash?.offset ?? 0)*strokeZoom;
     if (node.type === 'path') item.fillRule = node.fillRule;
+  }
+  // Paint stack: one geometry clone per visible fill, then per visible stroke, drawn in that order
+  // (later entries on top). It shares the node's transform and id, so hit-testing finds the node.
+  function paintStack(item, node) {
+    if (!stacked(node) || outlineFor(node.id)) return null;
+    const group = new scope.Group({ insert: false });
+    group.applyMatrix = false; group.matrix = new scope.Matrix(...node.transform); group.data.nodeId = node.id; group.data.stack = true;
+    group.opacity = node.opacity; group.blendMode = node.blendMode;
+    const entries = [...shown(node.appearance.fills).map(e => ['fills', e]), ...shown(node.appearance.strokes).map(e => ['strokes', e])];
+    for (const [kind, entry] of entries) {
+      const piece = item.clone({ insert: false }); piece.matrix = new scope.Matrix();
+      style(piece, { ...node, opacity: 1, blendMode: 'normal', appearance: { ...node.appearance, fills: kind === 'fills' ? [entry] : [], strokes: kind === 'strokes' ? [entry] : [] } }, false);
+      piece.blendMode = entry.blendMode ?? 'normal'; group.addChild(piece);
+    }
+    return group;
   }
   // Arrowheads are view items beside the path, sharing its transform and node id for hit-testing.
   function arrowGroup(item, node) {
@@ -190,14 +212,16 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
           record.frame.applyMatrix = false; record.frame.matrix = new scope.Matrix(...node.transform);
           record.frame.data.nodeId = node.id; record.frame.strokeColor = '#071411'; record.frame.strokeScaling = false;
         }
-        style(item, node);
+        style(item, node, outlineFor(node.id), true);
         record.arrows?.remove(); record.arrows = arrowGroup(item, node);
+        record.stack?.remove(); record.stack = paintStack(item, node);
       }
       // Bounds must be measured before viewport visibility is applied.
       item.visible = node.visible;
       place(parent, item, index++);
       if (record.frame) { record.frame.visible = false; place(parent, record.frame, index++); }
       if (record.arrows) place(parent, record.arrows, index++);
+      if (record.stack) place(parent, record.stack, index++);
       if (node.children) reconcile(node.children, item, alive, context);
     }
   }
@@ -245,7 +269,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     for (const [id, record] of boardItems) if (!data.artboards.some(b => b.id === id)) { record.item.remove(); record.label.remove(); record.labelRect.remove(); boardItems.delete(id); }
     reconcile(data.layers, artwork, alive);
     for (const [id, item] of items) if (!alive.has(id)) {
-      item.remove(); records.get(id).frame?.remove(); records.get(id).arrows?.remove(); items.delete(id); records.delete(id); thumbnails.delete(id);
+      item.remove(); records.get(id).frame?.remove(); records.get(id).arrows?.remove(); records.get(id).stack?.remove(); items.delete(id); records.delete(id); thumbnails.delete(id);
     }
     updateBounds(); updateView();
   }
@@ -259,7 +283,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     const viewport = scope.view.bounds.expand(16 / scope.view.zoom);
     for (const [id, record] of records) {
       const item = items.get(id), node = record.node;
-      if(node.strokeScaling===false)style(item,node);
+      if(node.strokeScaling===false){style(item,node,outlineFor(id),true);if(record.stack){const next=paintStack(item,node);record.stack.replaceWith(next);record.stack=next;}}
       const b = paintedBounds.get(id);
       const visible = node.visible && (!!node.children || !!b?.intersects(viewport));
       const asOutline = outlineFor(id);
@@ -267,6 +291,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
       if (asOutline && !node.children && node.type !== 'image') item.strokeWidth = 1 / scope.view.zoom;
       if (record.frame) { record.frame.visible = visible && asOutline; record.frame.strokeWidth = 1 / scope.view.zoom; }
       if (record.arrows) record.arrows.visible = item.visible && !asOutline;
+      if (record.stack) record.stack.visible = item.visible && !asOutline;
     }
     for (const [id,{item,label,labelRect}] of boardItems) {
       item.strokeWidth=(id===activeArtboard(state).id ? 2 : 1)/scope.view.zoom; item.visible=item.bounds.intersects(viewport);
@@ -282,7 +307,12 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
   }
   function setOutline(value) {
     outline = !!value;
-    for (const [id, record] of records) style(items.get(id), record.node);
+    for (const [id, record] of records) {
+      const item = items.get(id); style(item, record.node, outlineFor(id), true);
+      const next = paintStack(item, record.node);
+      if (record.stack && next) record.stack.replaceWith(next); else if (record.stack) record.stack.remove(); else if (next) next.insertAbove(record.arrows ?? item);
+      record.stack = next;
+    }
     updateView();
   }
   function hit(point) {
@@ -313,6 +343,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
         if(scaleStrokes!==null&&!outlineFor(item.data.nodeId)){const properties=scaledStrokeProperties(record.node,record.worldMatrix.values,matrix,scaleStrokes);if(properties.appearance)style(item,{...record.node,...properties},false);}}
         item.children?.forEach(prepare);
       };prepare(clone);clone.applyMatrix=false;clone.matrix=new scope.Matrix(...matrix).append(records.get(id).worldMatrix);transformPreview.addChild(clone);transformPreviewIds.add(id);
+      const stack=records.get(id)?.stack;if(stack){const copy=stack.clone({insert:false});copy.matrix=clone.matrix.clone();copy.visible=true;transformPreview.addChild(copy);}
     }updateView();
   }
   // Layers panel thumbnails: a clone in world space with model visibility (ignoring viewport culling),
@@ -339,7 +370,8 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     const key = subtree.map(n => { const r = records.get(n); return r ? r.fingerprint + r.geometry : ''; }).join('|') + size;
     const cached = thumbnails.get(id); if (cached?.key === key) return cached.url;
     let url = null;
-    const clone = item.clone({ insert: false, deep: true });
+    // A stacked object draws through its paint stack; its own item only holds geometry.
+    const clone = (record.stack ?? item).clone({ insert: false, deep: true });
     try {
       if (record.worldMatrix) clone.matrix = record.worldMatrix.clone();
       const show = target => { const nodeId = target.data?.nodeId; target.visible = nodeId ? records.get(nodeId)?.node.visible !== false : true; target.children?.forEach(show); };

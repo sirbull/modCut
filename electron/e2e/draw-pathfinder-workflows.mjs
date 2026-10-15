@@ -50,6 +50,32 @@ export async function runDrawPathfinderWorkflows(client) {
   assert.deepEqual(await bounds((await kids())[0].id), { x: 25, y: 25, width: 15, height: 15 }, 'Intersect keeps the overlap');
   await command('undo');
 
+  // Appearance: a stack of fills and strokes per object, drawn in order, each entry editable and hideable.
+  await evaluate(`(async()=>(${active}.select(['${ellipse.id}'])))()`);
+  await command('panel.appearance');
+  const rows = () => evaluate(`[...document.querySelectorAll('${root} [data-draw-appearance]')].map(r=>r.dataset.drawAppearance)`);
+  const look = async () => (await kids()).find(n => n.id === ellipse.id).appearance;
+  const stack = () => evaluate(`(async()=>{const w=${active},g=w.scope.project.getItems({match:i=>i.data.stack&&i.data.nodeId==='${ellipse.id}'});return g.length?g[0].children.length:0})()`);
+  const act = key => evaluate(`document.querySelector('${root} [data-draw-appearance-action=${key}]').click()`);
+  assert.deepEqual(await rows(), ['strokes-0', 'fills-0'], 'Stroke row above Fill row');
+  assert.equal(await stack(), 0, 'A single fill and stroke draws without a stack');
+  await act('add-stroke');
+  assert.equal((await look()).strokes.length, 2); assert.deepEqual(await rows(), ['strokes-1', 'strokes-0', 'fills-0']);
+  assert.equal(await stack(), 3, 'Two strokes and a fill draw as a three-piece stack');
+  await evaluate(`(()=>{const i=document.querySelector('${root} [data-draw-field="appearance-strokes-1-width"]');i.value='3';i.dispatchEvent(new Event('change',{bubbles:true}))})()`);
+  assert.equal((await look()).strokes[1].width, 3);
+  const edge = await screen([55, 40]);
+  assert.equal(await evaluate(`(async()=>{const w=${active},b=w.scope.view.element.getBoundingClientRect();return w.renderer.hit(w.scope.view.viewToProject(new w.scope.Point(${edge.x}-b.x,${edge.y}-b.y)))})()`), ellipse.id, 'Hit-testing finds the object through its stack');
+  await evaluate(`document.querySelector('${root} [data-draw-appearance=strokes-0] [data-draw-appearance-toggle]').click()`);
+  assert.equal((await look()).strokes[0].hidden, true); assert.equal(await stack(), 0, 'Hiding a stroke leaves one stroke: back to a plain item');
+  await evaluate(`document.querySelector('${root} [data-draw-appearance=strokes-1] .draw-appearance-name').click()`);
+  await act('duplicate'); assert.equal((await look()).strokes.length, 3);
+  await act('delete'); assert.equal((await look()).strokes.length, 2);
+  await act('clear'); assert.deepEqual([(await look()).fills.length, (await look()).strokes.length], [0, 0], 'Clear Appearance');
+  for (let i = 0; i < 6; i++) await command('undo');
+  assert.deepEqual([(await look()).fills.length, (await look()).strokes.length], [1, 1], 'Each Appearance edit is one undo step');
+  assert.equal(await evaluate(`document.querySelector('${root} [data-draw-appearance-action=add-effect]').disabled`), true);
+
   await evaluate(`document.querySelector('[data-close-tab="${scratch}"]').click()`);
   for (let i = 0; i < 40; i++) {
     if (await evaluate("!!document.querySelector('[data-x=discard]')")) await evaluate("document.querySelector('[data-x=discard]').click()");
@@ -57,5 +83,5 @@ export async function runDrawPathfinderWorkflows(client) {
     await wait(50);
   }
   if (await evaluate("document.body.dataset.workspace") === 'draw') await evaluate("document.querySelector('#workspaceToggle').click()");
-  process.stdout.write('PASS Draw Pathfinder: panel, Unite with curves, Minus Front, Divide, Intersect, one undo step each\n');
+  process.stdout.write('PASS Draw Pathfinder: panel, Unite with curves, Minus Front, Divide, Intersect, one undo step each; Appearance stack with add/hide/duplicate/delete/clear\n');
 }

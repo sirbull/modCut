@@ -8,6 +8,7 @@ import { REFERENCE_POINTS } from '../geom/transforms.mjs';
 import { attachScrub } from '../ui/number-field.mjs';
 import { PATHFINDER_LABELS, PATHFINDERS, SHAPE_MODES } from '../geom/pathfinder.mjs';
 import { pathfinderIcon } from './pathfinder-icons.mjs';
+import { addEntry, appearanceRows, clearAppearance, duplicateEntry, moveEntry, patchEntry, removeEntry, toggleEntry } from '../doc/appearance.mjs';
 import { COLOR_MODES, colorFromValues, colorValues, normalizeHex } from '../doc/color.mjs';
 import { ARROW_TYPES, paintHex } from '../doc/paint.mjs';
 
@@ -474,6 +475,76 @@ export function createPanels(shell, state, api) {
     }
     text(host,disabled ? 'Select two or more paths, shapes or groups.' : 'Results keep their curves. Divide, Trim, Merge, Crop and Outline group the pieces. One undo step each.');
   }
+  function appearancePanel(host) {
+    const ids = api.paintIds(), node = state.document.getNode(ids[0]), readOnly = state.document.readOnly;
+    const head = document.createElement('div'); head.className = 'draw-appearance-head';
+    head.textContent = !node ? 'No Selection' : ids.length > 1 ? `${ids.length} objects` : (node.name || (node.type === 'shape' ? `<${node.shape}>` : '<Path>'));
+    host.append(head);
+    if (!node) { text(host,'Select a path or shape to see and edit its fills and strokes. New shapes use the Fill and Stroke boxes.'); return; }
+    if (ids.length > 1) { text(host,'Select a single object to edit its appearance stack.'); return; }
+    const look = node.appearance, chosen = state.ui.appearanceEntry?.id === node.id ? state.ui.appearanceEntry : null;
+    const commit = (label, next, select) => {
+      state.history.execute(updateNode(node.id,{ appearance: next },{ label }));
+      state.ui.appearanceEntry = select ? { id: node.id, ...select } : null; render();
+    };
+    const list = document.createElement('div'); list.className = 'draw-appearance-list'; list.setAttribute('role','list'); list.setAttribute('aria-label','Appearance');
+    for (const { kind, index, entry } of appearanceRows(look)) {
+      const isStroke = kind === 'strokes', label = isStroke ? 'Stroke' : 'Fill';
+      const row = document.createElement('div'); row.className = 'draw-appearance-row'; row.setAttribute('role','listitem');
+      row.dataset.drawAppearance = `${kind}-${index}`; row.classList.toggle('is-hidden',!!entry.hidden);
+      row.classList.toggle('is-chosen',chosen?.kind === kind && chosen?.index === index);
+      const eye = iconButton(`${entry.hidden ? 'Show' : 'Hide'} ${label.toLowerCase()}`,entry.hidden ? 'eye-off' : 'eye',() => commit(entry.hidden ? `Show ${label}` : `Hide ${label}`,toggleEntry(look,kind,index),{ kind, index }),'draw-layer-toggle');
+      eye.dataset.drawAppearanceToggle = ''; eye.disabled = readOnly;
+      const name = document.createElement('button'); name.type = 'button'; name.className = 'draw-appearance-name'; name.textContent = `${label}:`;
+      name.addEventListener('click',() => { state.ui.appearanceEntry = { id: node.id, kind, index }; render(); });
+      const swatch = document.createElement('input'); swatch.type = 'color'; swatch.className = 'draw-appearance-color'; swatch.value = (paintHex(entry) ?? '#ffffff').toLowerCase();
+      swatch.setAttribute('aria-label',`${label} color`); swatch.dataset.drawField = `appearance-${kind}-${index}-color`; swatch.disabled = readOnly;
+      swatch.addEventListener('change',() => api.run(() => commit(`${label} Color`,patchEntry(look,kind,index,{ paint: { type: 'solid', color: { space: 'rgb', values: [1,3,5].map(i => parseInt(swatch.value.slice(i,i+2),16)/255) } } }),{ kind, index })));
+      row.append(eye,name,swatch);
+      if (isStroke) {
+        const width = document.createElement('label'); width.className = 'draw-appearance-width';
+        const unit = document.createElement('span'); unit.textContent = 'mm';
+        const input = document.createElement('input'); input.type = 'number'; input.min = '0'; input.step = 'any'; input.value = String(Number((entry.width ?? 0).toFixed(3)));
+        input.dataset.drawField = `appearance-strokes-${index}-width`; input.setAttribute('aria-label','Stroke weight (mm)'); input.disabled = readOnly;
+        const apply = value => commit('Stroke Weight',patchEntry(look,kind,index,{ width: value }),{ kind, index });
+        input.addEventListener('change',() => api.run(() => { if (!(input.valueAsNumber >= 0)) throw new Error('Enter a valid stroke weight.'); apply(input.valueAsNumber); }));
+        attachScrub(unit,input,{ step: .05, min: 0, onScrub: scrubField(`appearance-strokes-${index}-width`,apply) });
+        width.append(input,unit); row.append(width);
+      }
+      if (entry.opacity !== undefined && entry.opacity < 1) { const o = document.createElement('span'); o.className = 'draw-appearance-opacity'; o.textContent = `${Math.round(entry.opacity*100)}%`; row.append(o); }
+      if (!readOnly) {
+        row.draggable = true;
+        row.addEventListener('dragstart',event => { event.dataTransfer.setData('application/x-modcut-appearance',`${kind}:${index}`); event.dataTransfer.effectAllowed = 'move'; });
+        row.addEventListener('dragover',event => { if (event.dataTransfer.types.includes('application/x-modcut-appearance')) { event.preventDefault(); row.dataset.drop = 'true'; } });
+        row.addEventListener('dragleave',() => delete row.dataset.drop);
+        row.addEventListener('drop',event => {
+          event.preventDefault(); delete row.dataset.drop;
+          const [fromKind,from] = event.dataTransfer.getData('application/x-modcut-appearance').split(':');
+          if (fromKind !== kind) return api.run(() => { throw new Error('Fills and strokes reorder within their own kind.'); });
+          api.run(() => { const moved = moveEntry(look,kind,Number(from),index); commit('Reorder Appearance',moved.appearance,{ kind, index: moved.index }); });
+        });
+      }
+      list.append(row);
+    }
+    if (!list.children.length) { const empty = document.createElement('p'); empty.className = 'draw-panel__hint'; empty.textContent = 'No fill and no stroke.'; list.append(empty); }
+    host.append(list);
+    const opacity = document.createElement('button'); opacity.type = 'button'; opacity.className = 'draw-appearance-name draw-appearance-opacity-row';
+    opacity.textContent = `Opacity: ${node.opacity === 1 ? 'Default' : `${Math.round(node.opacity*100)}%`}${node.blendMode !== 'normal' ? ` ${node.blendMode}` : ''}`;
+    opacity.dataset.drawOpen = 'transparency'; opacity.addEventListener('click',() => open('transparency')); host.append(opacity);
+    const bar = document.createElement('div'); bar.className = 'draw-layer-bar draw-swatch-bar';
+    const actions = document.createElement('div'); actions.className = 'draw-layer-actions';
+    const pick = chosen && look[chosen.kind]?.[chosen.index] ? chosen : null;
+    for (const [label,iconId,action,disabled,key] of [
+      ['Add New Stroke','border-outer',() => { const r = addEntry(look,'strokes',{ color: state.ui.stroke || '#071411', width: state.ui.strokeWidth }); commit('Add New Stroke',r.appearance,{ kind:'strokes', index:r.index }); },readOnly,'add-stroke'],
+      ['Add New Fill','square-rounded-plus',() => { const r = addEntry(look,'fills',{ color: state.ui.fill || '#FFFFFF' }); commit('Add New Fill',r.appearance,{ kind:'fills', index:r.index }); },readOnly,'add-fill'],
+      ['Add New Effect (coming with live effects)','math-function',null,true,'add-effect'],
+      ['Clear Appearance','ban',() => commit('Clear Appearance',clearAppearance(look),null),readOnly || !(look.fills.length || look.strokes.length),'clear'],
+      ['Duplicate Selected Item','copy',() => { const r = duplicateEntry(look,pick.kind,pick.index); commit('Duplicate Appearance',r.appearance,{ kind:pick.kind, index:r.index }); },readOnly || !pick,'duplicate'],
+      ['Delete Selected Item','trash',() => commit('Delete Appearance',removeEntry(look,pick.kind,pick.index),null),readOnly || !pick,'delete'],
+    ]) { const b = iconButton(label,iconId,action); b.disabled = disabled; b.dataset.drawAppearanceAction = key; actions.append(b); }
+    bar.append(document.createElement('span'),actions); host.append(bar);
+    text(host,'The top row draws on top. Drag rows to reorder fills or strokes. Click a row name to choose it for Duplicate and Delete.');
+  }
   function colorPanel(host) {
     const target = state.ui.paintFocus === 'stroke' ? 'stroke' : 'fill', mode = state.ui.colorMode ?? 'rgb', hex = currentPaint(target);
     const disabled = state.document.readOnly, shown = hex || '#FFFFFF', live = `color-${target}`;
@@ -609,7 +680,7 @@ export function createPanels(shell, state, api) {
       for(const [key,label,min] of editable)field(host,label,node.params[key]??({sides:6,points:5,endAngle:360}[key] || 0),value=>state.history.execute(updateNode(node.id,{params:{...node.params,[key]:value}})),{min,max:['sides','points'].includes(key)?100:undefined,key:`shape-${key}`});
     }
   }
-  const PANEL_CONTENT = { swatches: swatchesPanel, color: colorPanel, stroke: strokePanel, transparency: transparencyPanel, pathfinder: pathfinderPanel, transform: host => transform(host), align: alignPanel, artboards: artboardPanel };
+  const PANEL_CONTENT = { swatches: swatchesPanel, color: colorPanel, stroke: strokePanel, transparency: transparencyPanel, pathfinder: pathfinderPanel, appearance: appearancePanel, transform: host => transform(host), align: alignPanel, artboards: artboardPanel };
   function renderFlyout() {
     const group = PANEL_GROUPS.find(g => g.id === state.ui.flyout);
     flyout.hidden = !group; if (!group) { flyoutTabs.replaceChildren(); flyoutBody.replaceChildren(); return; }

@@ -659,3 +659,27 @@ Verifisering: 147 Draw-enhetstester passerer (ny `pathfinder.test.mjs` med areal
 operasjoner, hull, kurver og kommandoer). Ny E2E `draw-pathfinder-workflows.mjs`
 (`--draw-pathfinder`) dekker panelet, Unite med kurve, Minus Front, Divide og Intersect med
 angring. Komplett Draw-E2E passerer (17 av 17).
+
+## 2026-10-15: Høyrepanel trinn 7 del 2, Appearance
+
+- Ny panelgruppe **Appearance** (Shift+F6). Viser det valgte objektets stabel: én rad per strek og
+  per fyll, øverste rad tegnes øverst (streker over fyll, nyeste først), og «Opacity: Default/40 %»
+  nederst som åpner Transparency. «No Selection» uten utvalg; ved flere objekter bes man velge ett.
+- Hver rad: øye (skjul/vis oppføringen), navn (velger raden for Duplicate/Delete), fargerute, og
+  for streker strekbredde i mm med scrubby label. Rader kan dras for å endre rekkefølge innen
+  fyll eller innen streker.
+- Bunnlinje: Add New Stroke, Add New Fill (kopi av øverste oppføring, ellers standardfarge),
+  Add New Effect (deaktivert til live effekter), Clear Appearance, Duplicate Selected Item og
+  Delete Selected Item. Hver endring er ett angresteg.
+- **Rendering:** Objekter med mer enn ett synlig fyll eller én synlig strek tegnes med en
+  «paint stack» i render-adapteren: én geometrikopi per oppføring, fyll først og så streker, med
+  samme transform og node-id (trefftest, transform-forhåndsvisning, Outline-visning, viewport
+  culling og zoom-avhengig strek er dekket). Objekter med én av hver tegnes som før. Skjulte
+  oppføringer (`hidden: true`, validert i skjemaet) tegnes aldri. Thumbnails bruker stabelen.
+- Ren logikk i `doc/appearance.mjs` med enhetstester.
+- Kjent begrensning: Color-, Stroke- og Swatches-panelene redigerer fortsatt første fyll og første
+  strek. Eksport og Send til Cut (ikke bygget ennå) må ta hensyn til flere oppføringer og `hidden`.
+
+Verifisering: 150 Draw-enhetstester passerer. Pathfinder-E2E er utvidet med Appearance (stabel med
+tre deler, bredde, trefftest gjennom stabelen, skjul, dupliser, slett, tøm og seks angresteg).
+Komplett Draw-E2E passerer (17 av 17). UI-testen teller nå panelgruppene fra registeret.

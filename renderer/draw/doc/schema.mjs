@@ -107,6 +107,7 @@ export function validateDocument(doc) {
       if (!object(entry)) { fail(p, 'Expected an appearance entry'); return; }
       paint(entry.paint, `${p}.paint`); number(entry.opacity, `${p}.opacity`, 0, 1);
       string(entry.blendMode, `${p}.blendMode`); array(entry.effects, `${p}.effects`);
+      if (entry.hidden !== undefined) bool(entry.hidden, `${p}.hidden`);
       if (kind === 'strokes') {
         number(entry.width, `${p}.width`, 0); number(entry.miterLimit, `${p}.miterLimit`, 1);
         enumeration(entry.cap, ['butt', 'round', 'square'], `${p}.cap`);
