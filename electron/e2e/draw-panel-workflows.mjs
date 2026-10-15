@@ -18,6 +18,8 @@ export async function runDrawPanelWorkflows(client) {
   const screen = p => evaluate(`(async()=>{const w=${active},p=w.scope.view.projectToView(new w.scope.Point(${p})),b=w.scope.view.element.getBoundingClientRect();return{x:p.x+b.x,y:p.y+b.y}})()`);
   const center = selector => evaluate(`(()=>{const b=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return{x:b.x+b.width/2,y:b.y+b.height/2}})()`);
   const row = id => `${root} [data-draw-node="${id}"]`;
+  // Rail buttons toggle their group; open (never close) a panel, and treat docked Properties as always shown.
+  const showPanel = id => id === 'properties' ? null : evaluate(`(()=>{const b=document.querySelector('${root} [data-draw-panel=${id}]');if(b.getAttribute('aria-pressed')!=='true')b.click()})()`);
   const rowIds = () => evaluate(`[...document.querySelectorAll('${root} .draw-layer-row')].map(r=>r.dataset.drawNode)`);
 
   await tool('rectangle'); await drag(await screen([10, 10]), await screen([30, 20]));
@@ -205,10 +207,102 @@ export async function runDrawPanelWorkflows(client) {
   await evaluate(`document.querySelector('${root} [data-draw-dock-toggle=layers]').click()`);
   await command('panel.layers'); assert.ok((await dock()).layers > 100, 'F7 shows Layers');
 
+  // Color panel: Fill/Stroke target, RGB/HSB/CMYK/Grayscale/Hex, live slider (one undo step) and None.
+  const fillHex = id => evaluate(`(async()=>{const n=${active}.state.document.getNode('${id}'),c=n.appearance.fills[0]?.paint.color.values;return c?c.map(v=>Math.round(v*255)):null})()`);
+  const strokeHex = id => evaluate(`(async()=>{const n=${active}.state.document.getNode('${id}'),c=n.appearance.strokes[0]?.paint.color.values;return c?c.map(v=>Math.round(v*255)):null})()`);
+  const applied = () => evaluate(`(async()=>(${active}.state.history.entries.filter(e=>e.applied).length))()`);
+  await evaluate(`(async()=>(${active}.select(['${rect.id}'])))()`);
+  const fill0 = await fillHex(rect.id), stroke0 = await strokeHex(rect.id);
+  await showPanel('color');
+  await evaluate(`document.querySelector('${root} [data-draw-paint-target=fill]').click()`);
+  await chooseSelect('color-mode', 'rgb');
+  for (const [i, v] of [[0, 255], [1, 0], [2, 0]]) await setField(`color-rgb-${i}`, v);
+  assert.deepEqual(await fillHex(rect.id), [255, 0, 0], 'RGB fields set the fill');
+  const colorDepth = await applied();
+  const sliderLive = await evaluate(`(async()=>{const r=document.querySelector('${root} [data-draw-field=color-rgb-1-range]');r.focus();r.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));
+    for(const v of [40,80,120]){r.value=String(v);r.dispatchEvent(new Event('input',{bubbles:true}));}const connected=r.isConnected,g=${active}.state.document.getNode('${rect.id}').appearance.fills[0].paint.color.values[1];
+    r.dispatchEvent(new Event('change',{bubbles:true}));return{connected,g:Math.round(g*255)}})()`);
+  assert.deepEqual(sliderLive, { connected: true, g: 120 }, 'The slider updates artwork live without rebuilding mid-drag');
+  assert.equal(await applied(), colorDepth + 1, 'A slider drag is one undo step');
+  await chooseSelect('color-mode', 'hsb');
+  await setField('color-hsb-0', 120); await setField('color-hsb-1', 100); await setField('color-hsb-2', 100);
+  assert.deepEqual(await fillHex(rect.id), [0, 255, 0], 'HSB sets the fill');
+  await chooseSelect('color-mode', 'cmyk');
+  assert.deepEqual(await evaluate(`[0,1,2,3].map(i=>+document.querySelector('${root} [data-draw-field=color-cmyk-'+i+']').value)`), [100, 0, 100, 0]);
+  const colorShot = await client.command('Page.captureScreenshot', { format: 'png' });
+  await writeFile(join(tmpdir(), 'modcut-draw-color-panel.png'), Buffer.from(colorShot.data, 'base64'));
+  await evaluate(`document.querySelector('${root} [data-draw-paint-target=stroke]').click()`);
+  assert.equal(await evaluate(`document.querySelector('${root} [data-paint=stroke]').getAttribute('aria-pressed')`), 'true', 'Toolbar focus follows the panel target');
+  await setField('color-hex', '0000ff');
+  assert.deepEqual(await strokeHex(rect.id), [0, 0, 255], 'Hex sets the stroke');
+  await evaluate(`document.querySelector('${root} [data-draw-field=color-none]').click()`);
+  assert.equal(await strokeHex(rect.id), null, 'None removes the stroke');
+  for (let i = 0; i < 12 && JSON.stringify([await fillHex(rect.id), await strokeHex(rect.id)]) !== JSON.stringify([fill0, stroke0]); i++) await command('undo');
+  assert.deepEqual([await fillHex(rect.id), await strokeHex(rect.id)], [fill0, stroke0], 'Undo restores the original paint');
+  await evaluate(`document.querySelector('${root} [data-draw-paint-target=fill]').click()`);
+
+  // Stroke panel: weight, cap, corner/limit, unavailable inside/outside, dashes and rendered arrowheads.
+  const strokeOf = id => evaluate(`(async()=>(${active}.state.document.getNode('${id}').appearance.strokes[0]))()`);
+  const strokeButton = id => evaluate(`document.querySelector('${root} [data-draw-stroke="${id}"]').click()`);
+  const strokeBefore = await strokeOf(rect.id);
+  await evaluate(`(async()=>(${active}.select(['${rect.id}'])))()`);
+  await showPanel('stroke');
+  await setField('stroke-weight', 2); await strokeButton('cap-square'); await strokeButton('join-bevel');
+  let st = await strokeOf(rect.id);
+  assert.deepEqual([st.width, st.cap, st.join], [2, 'square', 'bevel']);
+  assert.equal(await evaluate(`document.querySelector('${root} [data-draw-field=stroke-limit]').disabled`), true, 'Limit only applies to miter corners');
+  assert.deepEqual(await evaluate(`['inside','outside'].map(a=>document.querySelector('${root} [data-draw-stroke="align-'+a+'"]').disabled)`), [true, true]);
+  await evaluate(`(()=>{const c=document.querySelector('${root} [data-draw-field=stroke-dashed]');c.checked=true;c.dispatchEvent(new Event('change',{bubbles:true}))})()`);
+  assert.deepEqual((await strokeOf(rect.id)).dash.array, [2, 1]);
+  await setField('dash-2', 3);
+  assert.deepEqual((await strokeOf(rect.id)).dash.array, [2, 1, 3]);
+  assert.deepEqual(await evaluate(`(async()=>{const it=${active}.renderer.items.get('${rect.id}');return [...it.dashArray].map(v=>Math.round(v*1000)/1000)})()`), [2, 1, 3], 'Dashes render');
+  for (let i = 0; i < 12 && JSON.stringify(await strokeOf(rect.id)) !== JSON.stringify(strokeBefore); i++) await command('undo');
+  assert.deepEqual(await strokeOf(rect.id), strokeBefore, 'Undo restores the stroke');
+  await tool('line'); await drag(await screen([20, 60]), await screen([60, 60]));
+  const flat = nodes => nodes.flatMap(n => [n, ...flat(n.children ?? [])]);
+  const line = flat((await model()).layers).find(n => n.shape === 'line');
+  assert.ok(line, 'The Line tool drew a line');
+  await showPanel('stroke');
+  await chooseSelect('stroke-endArrow', 'triangle');
+  assert.deepEqual((await strokeOf(line.id)).endArrow, { type: 'triangle', scale: 1 });
+  const arrowBox = () => evaluate(`(async()=>{const w=${active},g=w.scope.project.getItems({match:i=>i.data.arrows&&i.data.nodeId==='${line.id}'});return g.length===1&&g[0].visible?Math.round(g[0].bounds.width*1000)/1000:null})()`);
+  const small = await arrowBox();
+  assert.ok(small > 0, 'The arrowhead renders');
+  await setField('stroke-endArrow-scale', 200);
+  assert.ok(await arrowBox() > small * 1.9, 'Arrowhead scale renders');
+  await chooseSelect('stroke-startArrow', 'bar');
+  assert.equal((await strokeOf(line.id)).startArrow.type, 'bar');
+  const arrowShot = await client.command('Page.captureScreenshot', { format: 'png' });
+  await writeFile(join(tmpdir(), 'modcut-draw-stroke-panel.png'), Buffer.from(arrowShot.data, 'base64'));
+  await tool('select');
+
+  // Fill/Stroke box: Color (Comma), None (Slash), disabled Gradient; Properties summary opens Color/Stroke.
+  await evaluate(`(async()=>(${active}.select(['${rect.id}'])))()`);
+  const fillBefore = await fillHex(rect.id);
+  await evaluate(`document.querySelector('${root} [data-paint=fill]').click()`);
+  assert.equal(await evaluate(`document.querySelector('${root} [data-draw-panel=color]').getAttribute('aria-pressed')`), 'true', 'Fill swatch opens Color');
+  assert.equal(await evaluate(`document.querySelector('${root} [data-paint-action=paint-gradient]').disabled`), true);
+  await evaluate(`document.querySelector('${root} [data-paint-action=paint-none]').click()`);
+  assert.equal(await fillHex(rect.id), null, 'None removes the focused fill');
+  await evaluate(`document.querySelector('${root} [data-paint-action=paint-solid]').click()`);
+  assert.notEqual(await fillHex(rect.id), null, 'Color reapplies the last solid fill');
+  await command('undo'); await command('undo');
+  await showPanel('properties');
+  assert.deepEqual(await evaluate(`[...document.querySelectorAll('${root} [data-draw-open]')].map(b=>b.dataset.drawOpen)`), ['fill', 'stroke', 'weight']);
+  await evaluate(`document.querySelector('${root} [data-draw-open=stroke]').click()`);
+  assert.equal(await evaluate(`document.querySelector('${root} [data-draw-paint-target=stroke]').getAttribute('aria-pressed')`), 'true', 'Stroke summary opens Color for the stroke');
+  await showPanel('properties');
+  await evaluate(`document.querySelector('${root} [data-draw-open=weight]').click()`);
+  assert.equal(await evaluate(`!!document.querySelector('${root} [data-draw-field=stroke-weight]')`), true, 'Weight summary opens Stroke');
+  await evaluate(`document.querySelector('${root} [data-draw-paint-target=fill]')?.click()`);
+  const toolShot = await client.command('Page.captureScreenshot', { format: 'png' });
+  await writeFile(join(tmpdir(), 'modcut-draw-fill-stroke-box.png'), Buffer.from(toolShot.data, 'base64'));
+
   await evaluate(`document.querySelector('[data-close-tab="${scratch}"]').click()`); await wait(100);
   if (await evaluate("!!document.querySelector('[data-x=discard]')")) { await evaluate("document.querySelector('[data-x=discard]').click()"); await wait(100); }
   await evaluate(`document.querySelector('[data-tab-id="${original.id}"]').click()`);
   if (await evaluate("document.body.dataset.workspace") === 'draw') await evaluate("document.querySelector('#workspaceToggle').click()");
   assert.equal(await evaluate("paper.project.layers[1].exportJSON({asString:true})"), original.cut, 'Draw panels preserve the Cut document');
-  process.stdout.write('PASS Draw panels: Layers tree, Layer Options, template layers, solo/outline, drag, collect/release, delete, rename, Transform and Align panels, dock and panel groups\n');
+  process.stdout.write('PASS Draw panels: Layers tree, Layer Options, template layers, solo/outline, drag, collect/release, delete, rename, Transform, Align, Color and Stroke panels, Fill/Stroke box, Properties, dock and panel groups\n');
 }

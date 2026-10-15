@@ -94,6 +94,10 @@ the same commit that completes an item.
 - [x] D1.7: Rotate, Reflect and Scale with reference points, constrained dragging,
   exact dialogs, transient previews, Copy and Transform Again (Ctrl/Cmd+D).
   Explicit Scale supports fixed or scaled world-mm strokes and dash lengths.
+- [x] D1.8: Basic panels: Layers with template layers and Layer Options,
+  Transform, Align, Color (RGB/HSB/CMYK/Gray/Hex, live sliders), Stroke with
+  dashes and arrowheads, Fill/Stroke box and Properties. Also Illustrator-style
+  cursors and live Pen handle feedback.
 
 - [ ] Build the Draw workspace described in
   [`docs/DRAW_WORKSPACE.md`](docs/DRAW_WORKSPACE.md). Task status is tracked in
@@ -102,9 +106,8 @@ the same commit that completes an item.
 - [x] Phase 0 — Foundation: workspace, document model/history, geometry kernel,
   keymap and `.modcut` v4 persistence. D0.1–D0.6 complete.
 - [ ] Phase 1 — Basic drawing MVP: artboards, Pen, shapes, layers, bitmap
-  references and Send to Cut v1. D1.1–D1.7 complete. D1.8 in progress: Layers
-  panel, template layers, Transform and Align panels done; Color/Stroke, the
-  Fill/Stroke box and Properties remain. The phase remains in progress.
+  references and Send to Cut v1. D1.1–D1.8 complete; D1.9 (control bar and
+  status bar) is next. The phase remains in progress.
 - [ ] Phase 2 — Core vector editing: text, Pathfinder, gradients, import/export
   and Send to Cut v2.
 - [ ] Phase 3 — Advanced editing: stroke expansion, effects, Image Trace,

@@ -2,7 +2,7 @@
 
 **Ny agent:** Start med [overleveringen](draw/HANDOFF.md) for gjeldende stoppunkt, teststatus og lokale kjøreinstruksjoner.
 
-> Status: Fase 0 og D1.1–D1.7 er fullført. Rotate, Reflect og Scale har dialoger, Copy, referansepunkt og Transform Again. Neste oppgave er D1.8: resten av grunnpanelene og template-lag. Fase 1 er fortsatt under arbeid.
+> Status: Fase 0 og D1.1–D1.8 er fullført. Grunnpanelene (Layers med template-lag, Transform, Align, Color, Stroke, Fill/Stroke-boks og Properties) er ferdige, sammen med Illustrator-markører og live Pen-håndtak. Neste oppgave er D1.9: kontrollinje og statuslinje. Fase 1 er fortsatt under arbeid.
 > Sist oppdatert: 2026-10-15.
 > Målgruppe: utviklere og kodeagenter (Claude Code og Codex) som skal bygge løsningen.
 
@@ -1403,7 +1403,7 @@ Oppdateres når oppgaven fullføres. Løpende arbeidslogg: [`draw/WORK_LOG.md`](
 * [x] D1.5 Pen og ankerverktøy
 * [x] D1.6 Former
 * [x] D1.7 Rotate, Reflect, Scale med Copy og Transform Again
-* [ ] D1.8 Grunnpaneler — pågår: Layers, template-lag, Transform og Align ferdig; Color/Stroke, Fill/Stroke-boks og Properties gjenstår
+* [x] D1.8 Grunnpaneler — Properties, Layers/template-lag, Transform, Align, Color, Stroke og Fill/Stroke-boks
 * [ ] D1.9 Kontrollinje og statuslinje
 * [ ] D1.10 Group, Arrange, Clipboard
 * [ ] D1.11 Place bitmap og template-lag
@@ -1740,7 +1740,7 @@ hvert zoomnivå; en pikseltest ved dobbel zoom verifiserer den fysiske tykkelsen
 Full `npm test` stopper fortsatt i den tidligere dokumenterte Cut crop-E2E-testen
 etter grønne sidecar/bridge/main/renderer/Draw/kontrast-tester.
 
-### Implementasjonsnotater — D1.8 (pågår)
+### Implementasjonsnotater — D1.8 (ferdig)
 
 **Del A — Layers og template-lag (ferdig).** Ren lagmodell i `doc/layers.mjs`.
 Lag arver kontekst nedover: Template (låst, ikke Print, alltid Preview, bilder
@@ -1772,3 +1772,22 @@ Selection, Key Object og Artboard; ett objekt mot Selection justeres mot artboar
 Distribute Objects (kanter/sentre) og Distribute Spacing (Auto eller eksakt mm
 rundt nøkkelobjektet). Avvik: nøkkelobjektet velges i en liste i panelet, ikke ved
 å klikke på et valgt objekt. Grensene er geometriske, ikke strekgrenser.
+
+**Del D1 — Color-panel (ferdig).** RGB, HSB, CMYK, Grayscale og Hex med glider og
+tallfelt, Fill/Stroke-mål og None. Maling lagres som RGB (CMYK/Grayscale er
+visninger uten fargeprofil). Glidere oppdaterer canvas live; et drag er ett
+angresteg via `History.transaction(..., {mergeKey})`. Fargespekter/ramp er ikke laget.
+
+**Del D2 — Stroke-panel (ferdig).** Weight, Cap, Corner, Limit, Dashed line (3 par)
+og pilspisser (arrow, triangle, circle, square, bar med skala) som rendres. Align
+Stroke: bare Center; Inside/Outside er synlige, men deaktivert til Outline Stroke
+(fase 3). Ikke laget: «align dashes to corners» og width profiles (fase 4).
+
+**Del D3 — Fill/Stroke-boks og Properties (ferdig).** Swap/Default og
+Color/Gradient/None (Gradient deaktivert til fase 2). Color (`,`) gjenbruker siste
+heldekkende farge. Fyll-/strekrutene åpner Color-panelet. Properties har en
+utseende-oppsummering som lenker til Color og Stroke uten egne redigeringsfelt.
+
+D1.8 er ferdig. Fase 1 er ikke ferdig: D1.9–D1.12 gjenstår. Kjente begrensninger:
+lagliste ikke virtualisert (AK 500 objekter), objekter uten fyll og strek kan ikke
+treffes på canvas, Inside/Outside-strek og fargespekter mangler.

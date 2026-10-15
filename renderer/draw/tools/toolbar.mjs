@@ -67,13 +67,17 @@ export function createToolbar(host, state, { available, setTool, command, openPa
   for (const kind of ['fill','stroke']) {
     const button = document.createElement('button'); button.type = 'button'; button.className = `draw-paint-swatch draw-paint-swatch--${kind}`;
     button.setAttribute('aria-label',kind === 'fill' ? 'Edit fill color' : 'Edit stroke color'); button.dataset.paint = kind;
-    button.addEventListener('click',() => { state.ui.paintFocus = kind; openPanel(kind === 'fill' ? 'color' : 'stroke'); }); paint.append(button);
+    button.dataset.tooltip = `${kind === 'fill' ? 'Fill' : 'Stroke'} (${shortcutLabel('paint-focus',{isMac})} toggles)`;
+    // Fill and stroke colors are both edited in the Color panel, as in Illustrator.
+    button.addEventListener('click',() => { state.ui.paintFocus = kind; openPanel('color'); update(); }); paint.append(button);
   }
   const actions = document.createElement('div'); actions.className = 'draw-paint-actions'; paint.append(actions);
-  for (const [id,label,glyph] of [['paint-swap','Swap fill and stroke','⇄'],['default-paint','Default fill and stroke','◩'],['paint-none','No paint','∅']]) {
-    const button = document.createElement('button'); button.type = 'button'; button.textContent = glyph; button.setAttribute('aria-label',label);
-    button.dataset.tooltip = `${label} (${shortcutLabel(id,{isMac})})`; button.disabled = state.document.readOnly;
-    button.addEventListener('click',() => run(() => command(id))); actions.append(button);
+  const modes = document.createElement('div'); modes.className = 'draw-paint-actions draw-paint-modes'; paint.append(modes);
+  for (const [id,label,glyph,host,later] of [['paint-swap','Swap fill and stroke','⇄',actions],['default-paint','Default fill and stroke','◩',actions],
+    ['paint-solid','Color','■',modes],['paint-gradient','Gradient','▤',modes,'Gradients arrive in phase 2.'],['paint-none','None','∅',modes]]) {
+    const button = document.createElement('button'); button.type = 'button'; button.textContent = glyph; button.setAttribute('aria-label',label); button.dataset.paintAction = id;
+    button.dataset.tooltip = later ? `${label} · ${later}` : `${label} (${shortcutLabel(id,{isMac})})`; button.disabled = state.document.readOnly || !!later;
+    button.addEventListener('click',() => run(() => command(id))); host.append(button);
   }
   function update() {
     const active = toolRegistry.get(state.ui.tool);

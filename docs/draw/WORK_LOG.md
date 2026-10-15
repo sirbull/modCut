@@ -434,6 +434,73 @@ Kjent begrensning: objekter uten både fyll og strek kan ikke treffes på canvas
 Verifisering: 121 Draw-enhetstester (inkl. ny `align.test.mjs`). Panel-E2E dekker
 justering mot utvalg, nøkkelobjekt, artboard, eksakt avstand, sentrumsfordeling
 og ett angresteg. Skjermbilde: `%TEMP%\modcut-draw-align-panel.png`.
+
+## 2026-10-15 — D1.8 del D1: Color-panel
+
+- Ren `doc/color.mjs`: hex-normalisering og RGB/HSB/CMYK (enhets-CMYK uten
+  profil, samme som rendererens forhåndsvisning)/Grayscale (K = dekning) til og
+  fra hex, med validering per kanal. Maling lagres fortsatt som RGB; andre modi
+  er visninger. Dokumentets `colorMode` er uendret.
+- `History.transaction(label, fn, {mergeKey})` slår sammen påfølgende
+  transaksjoner med samme nøkkel og noder. Brukes for live glidere/fargevelger:
+  canvas oppdateres for hvert steg, men ett drag blir ett angresteg.
+- Color-panelet: Fill/Stroke-mål (synket med verktøylinjens fokus), fargevelger,
+  modus, glider + tallfelt per kanal, Hex og None. Panelet bygges ikke om under
+  en aktiv glider-/velgerøkt (`liveEdit`), så draget ikke avbrytes.
+
+Verifisering: 124 Draw-enhetstester (ny `color.test.mjs`, inkl. sammenslåtte
+transaksjoner). Panel-E2E dekker RGB, live glider (ett steg, uten ombygging),
+HSB, CMYK-visning, Stroke-mål, Hex, None og full angring. Skjermbilde:
+`%TEMP%\modcut-draw-color-panel.png`.
+
+Harness: Draw-grenen i `electron/e2e/run.mjs` prøver nå gjenstart én gang til hvis
+DevTools-målet ikke dukker opp etter simulert krasj (samme mønster som Cut-grenen).
+Den forbigående feilen traff 2 av 4 fulle kjøringer før endringen.
+
+## 2026-10-15 — D1.8 del D2: Stroke-panel og pilspisser
+
+- `doc/paint.mjs`: `changeStroke` validerer og endrer første strek (vekt 0–352,8
+  mm, cap, corner, limit 1–500, dash med opptil 6 verdier, start-/sluttpil).
+  Mangler objektet strek, lages en i gjeldende strekfarge.
+- Skjemaet validerer `dash` og `startArrow`/`endArrow` (`type` arrow, triangle,
+  circle, square, bar; `scale` 0–10).
+- Ren `geom/arrows.mjs` beregner pilgeometri langs utovervendt tangent. Adapteren
+  tegner pilene som egne visningsobjekter ved siden av banen, med samme transform
+  og node-id (klikk velger banen). Kun åpne baner får piler; skjult i Outline.
+- Stroke-panelet: Weight, Cap, Corner, Limit (kun miter), Align stroke (bare
+  Center aktiv; Inside/Outside er deaktivert med forklaring til Outline Stroke i
+  fase 3), Dashed line med 3 dash/gap-par, pilspiss-type og -skala.
+- Fjernet den gamle felles `paint()`-panelfunksjonen; Color og Stroke har egne paneler.
+
+Verifisering: 126 Draw-enhetstester (ny `stroke.test.mjs`). Panel-E2E dekker
+vekt/cap/corner, deaktivert limit og Inside/Outside, dash i modell og rendering,
+angring, og rendrede pilspisser med skala. Skjermbilde:
+`%TEMP%\modcut-draw-stroke-panel.png`.
+Kjent: pilstørrelse for `strokeScaling:false` under skalerte foreldre er omtrentlig;
+«align dashes to corners» og profiler er ikke laget. Send til Cut må håndtere piler.
+
+## 2026-10-15 — D1.8 del D3: Fill/Stroke-boks og Properties. D1.8 ferdig
+
+- Fill/Stroke-boksen har to rader som i Illustrator: Swap (Shift+X) og Default
+  (D), deretter Color (`,`), Gradient (`.`, deaktivert til fase 2) og None (`/`).
+  `paint-solid` fantes i keymap uten håndtering; den gjenbruker nå siste
+  heldekkende farge for fokusert fyll/strek. Klikk på fyll- eller strekruten
+  setter fokus og åpner Color-panelet (strekfarge redigeres der, ikke i Stroke).
+- Properties viser utvalg, navn, opacity, formparametre/hjørneradius og en kort
+  utseende-oppsummering (Fill, Stroke, Weight) som åpner Color/Stroke uten å
+  duplisere redigeringsfeltene. Phase 1-testen sjekker fortsatt at Properties
+  ikke gjentar Layers/Transform/Stroke/Color/Align.
+- Ingen nye farger: «ingen maling»-markeringen bruker `--danger`.
+
+**D1.8 er ferdig:** Properties, Layers (inkl. template-lag), Transform, Align,
+Color, Stroke uten profiles og Fill/Stroke-boks. **Neste: D1.9 kontrollinje og
+statuslinje.** Merk at commit d337a8f (annen agent) allerede flyttet
+visningskontrollene til appens statuslinje; sammenlign med 3.2 før D1.9 startes.
+
+Full `npm test` etter D1.8 (commit c93383b): sidecar, bridge, main, renderer, 126 Draw-
+tester og kontrast passerer. Den stopper deretter i den kjente Cut-testen
+`electron/e2e/workflows.mjs` «dragging a crop edge must update the crop», uendret fra
+før Draw-arbeidet. Komplett Draw-E2E (`--draw`) passerer separat.
 ## 2026-10-15: Høyrepanel trinn 1, dokk og panelgrupper
 
 Spesifikasjon: [RIGHT_PANELS.md](RIGHT_PANELS.md). Gren: `claude/draw-properties-layers-panels`
@@ -495,3 +562,9 @@ Komplett Draw-E2E passerer frem til `project-workflows.mjs:113` («recovery runs
 continue»). Den feiler også på `feat/vector-draw` `1020cbc` uten disse endringene (to av to
 kjøringer på Linux/Xvfb): intervallet som redigerer hvert 100. ms rekker bare rundt 12
 redigeringer på 5 s, så autolagringen kommer ikke innen 2,4 s. Den er ikke rettet her.
+
+Etter sammenslåing med `feat/vector-draw` `6125663` (Color, Stroke, Fill/Stroke-boks og
+Properties fra D1.8) ligger Color- og Stroke-panelene i panelgruppene, og Properties har fått
+sammendraget av utseende (klikk åpner riktig gruppe). Panel-E2E åpner paneler med en hjelper som
+ikke lukker en allerede åpen gruppe. 134 Draw-enhetstester og komplett Draw-E2E (15 av 15)
+passerer, også autolagringstesten.

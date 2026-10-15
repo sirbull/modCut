@@ -234,6 +234,32 @@ body[data-workspace="draw"] .statusbar .spacer { display: none; }
 .draw-align-button svg { width: 18px; height: 18px; }
 .draw-select { box-sizing: border-box; width: 100%; border: 1px solid var(--border); border-radius: 5px; background: var(--bg); color: var(--text); padding: 7px 8px; font: inherit; font-size: var(--fs-sm); }
 .draw-field input[data-draw-field=align-spacing]::placeholder { color: var(--text-muted); }
+.draw-segmented { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; padding: 2px; margin-bottom: 12px; border: 1px solid var(--border); border-radius: 6px; }
+.draw-segmented__option { border: 0; border-radius: 4px; padding: 5px 8px; background: transparent; color: var(--text-muted); font: 600 var(--fs-xs) var(--font-sans); cursor: pointer; }
+.draw-segmented__option[aria-pressed=true] { background: var(--surface-2); color: var(--text); }
+.draw-segmented__option:focus-visible { outline: 2px solid var(--brand-mid); outline-offset: 1px; }
+.draw-color-top { display: grid; grid-template-columns: 44px 1fr auto; gap: 8px; align-items: center; margin-bottom: 12px; }
+.draw-color-top .btn { margin: 0; }
+.draw-color-swatch { width: 44px; height: 32px; padding: 2px; border: 1px solid var(--border); border-radius: 5px; background: var(--bg); cursor: pointer; }
+.draw-color-swatch.is-none { background: linear-gradient(to top right, transparent calc(50% - 1px), var(--danger) calc(50% - 1px), var(--danger) calc(50% + 1px), transparent calc(50% + 1px)), var(--bg); }
+.draw-color-swatch.is-none::-webkit-color-swatch { opacity: 0; }
+.draw-color-channel { display: grid; grid-template-columns: 18px 1fr 64px; gap: 8px; align-items: center; margin-bottom: 8px; font-size: var(--fs-xs); color: var(--text-muted); }
+.draw-color-channel input[type=range] { width: 100%; accent-color: var(--brand-fill); }
+.draw-color-channel input[type=number] { box-sizing: border-box; width: 100%; border: 1px solid var(--border); border-radius: 5px; background: var(--bg); color: var(--text); padding: 5px 6px; font: inherit; font-size: var(--fs-sm); }
+.draw-dash-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.draw-dash-grid .draw-field { margin-bottom: 8px; }
+.draw-segmented__option:disabled { opacity: .4; cursor: default; }
+/* Fill/Stroke box: swatches, swap/default, then Color/Gradient/None as in Illustrator. */
+.draw-paint-box { flex-basis: 112px; }
+.draw-paint-box > .draw-paint-actions:not(.draw-paint-modes) { bottom: 28px; }
+.draw-paint-modes { bottom: 0; }
+.draw-appearance { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
+.draw-appearance__item { display: flex; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 5px; background: transparent; color: var(--text); padding: 5px 8px; font: inherit; font-size: var(--fs-sm); text-align: left; cursor: pointer; }
+.draw-appearance__item:hover { background: var(--surface-2); }
+.draw-appearance__item:focus-visible { outline: 2px solid var(--brand-mid); outline-offset: 1px; }
+.draw-appearance__chip { width: 16px; height: 16px; border: 1px solid var(--text-muted); border-radius: 3px; background: var(--paint-color); }
+.draw-appearance__chip.is-none { background: linear-gradient(to top right, transparent calc(50% - 1px), var(--danger) calc(50% - 1px), var(--danger) calc(50% + 1px), transparent calc(50% + 1px)); }
+.draw-appearance__chip.is-weight { border: 0; height: 3px; background: var(--text); }
 /* Scrubby labels: drag a number field's title to change its value (Shift faster, Alt finer). */
 .draw-scrub { cursor: ew-resize; user-select: none; touch-action: none; }
 .draw-scrub:hover { color: var(--text); }

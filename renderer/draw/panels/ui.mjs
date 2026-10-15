@@ -4,6 +4,8 @@ import { ROOT_CONTEXT, collectCommands, deleteLayerCommands, layerContext, moveC
 import { shortcutLabel } from '../keymap.mjs';
 import { REFERENCE_POINTS } from '../geom/transforms.mjs';
 import { attachScrub } from '../ui/number-field.mjs';
+import { COLOR_MODES, colorFromValues, colorValues, normalizeHex } from '../doc/color.mjs';
+import { ARROW_TYPES, paintHex } from '../doc/paint.mjs';
 
 export function icon(href) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
@@ -21,6 +23,7 @@ export function createPanels(shell, state, api) {
   if (state.ui.flyout && !PANEL_GROUPS.some(group => group.id === state.ui.flyout)) state.ui.flyout = null;
   const rail = document.createElement('nav'); rail.className = 'draw-panel-rail'; rail.setAttribute('aria-label','Draw panels');
   // Right dock: Properties on top, Layers below, separated by a draggable splitter.
+  let liveEdit = false;
   const panels = document.createElement('aside'); panels.className = 'draw-panels'; panels.setAttribute('aria-label','Draw options');
   const dock = {};
   for (const id of DOCK_PANELS) {
@@ -311,24 +314,97 @@ export function createPanels(shell, state, api) {
     }
     text(host,!ids.length ? 'Select objects to align or distribute them.' : alignTo === 'key' ? 'The key object stays in place. Enter a spacing to use an exact gap.' : ids.length === 1 && alignTo === 'selection' ? 'A single object aligns to the active artboard.' : 'Distribute Objects needs three objects, or an artboard.');
   }
-  function paint(host, strokeOnly = false) {
-    const ids = api.paintIds(), first = state.document.getNode(ids[0]);
-    function hex(entry, fallback) {
-      const color = entry?.paint?.color;
-      return color?.space === 'rgb' ? '#'+color.values.map(v => Math.round(v*255).toString(16).padStart(2,'0')).join('') : fallback;
+  function currentPaint(kind) {
+    const node = state.document.getNode(api.paintIds()[0]);
+    if (!node) return state.ui[kind];
+    return paintHex(kind === 'fill' ? node.appearance.fills[0] : node.appearance.strokes[0]);
+  }
+  function colorPanel(host) {
+    const target = state.ui.paintFocus === 'stroke' ? 'stroke' : 'fill', mode = state.ui.colorMode ?? 'rgb', hex = currentPaint(target);
+    const disabled = state.document.readOnly, shown = hex || '#FFFFFF', live = `color-${target}`;
+    const targets = document.createElement('div'); targets.className = 'draw-segmented'; targets.setAttribute('role','group'); targets.setAttribute('aria-label','Color target');
+    for (const kind of ['fill','stroke']) {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'draw-segmented__option'; b.textContent = kind === 'fill' ? 'Fill' : 'Stroke';
+      b.dataset.drawPaintTarget = kind; b.setAttribute('aria-pressed',String(kind === target));
+      b.addEventListener('click',() => api.paintFocus(kind)); targets.append(b);
     }
-    const fill = first ? hex(first.appearance.fills[0],state.ui.fill) : state.ui.fill;
-    const stroke = first ? hex(first.appearance.strokes[0],state.ui.stroke) : state.ui.stroke;
-    const width = first?.appearance.strokes[0]?.width ?? state.ui.strokeWidth;
-    if (!strokeOnly) {
-      field(host,'Fill',fill,v => api.paint('fill',v),{type:'color'});
-      host.append(button('No fill',() => api.paint('fill',null)));
-    } else {
-      field(host,'Stroke',stroke,v => api.paint('stroke',v),{type:'color'});
-      field(host,'Width (mm)',width,v => api.paint('width',v),{min:0,key:'stroke-width'});
-      host.append(button('No stroke',() => api.paint('stroke',null)));
+    host.append(targets);
+    const top = document.createElement('div'); top.className = 'draw-color-top'; host.append(top);
+    const swatch = document.createElement('input'); swatch.type = 'color'; swatch.className = 'draw-color-swatch'; swatch.value = shown.toLowerCase();
+    swatch.setAttribute('aria-label',`${target === 'fill' ? 'Fill' : 'Stroke'} color picker`); swatch.dataset.drawField = 'color-picker'; swatch.dataset.live = 'true'; swatch.disabled = disabled;
+    swatch.classList.toggle('is-none',!hex);
+    swatch.addEventListener('input',() => { liveEdit = true; }); swatch.addEventListener('input',() => api.run(() => api.paint(target,swatch.value.toUpperCase(),{ mergeKey: live })));
+    swatch.addEventListener('change',() => { liveEdit = false; render(); });
+    const none = button('None',() => api.paint(target,null)); none.dataset.drawField = 'color-none'; none.disabled = disabled; none.setAttribute('aria-pressed',String(!hex));
+    const modeSelect = document.createElement('select'); modeSelect.className = 'draw-select'; modeSelect.dataset.drawField = 'color-mode'; modeSelect.setAttribute('aria-label','Color mode');
+    for (const [value,spec] of Object.entries(COLOR_MODES)) modeSelect.append(new Option(spec.name,value,false,value === mode));
+    modeSelect.addEventListener('change',() => { state.ui.colorMode = modeSelect.value; render(); });
+    top.append(swatch,modeSelect,none);
+    const values = colorValues(mode,shown), inputs = [];
+    const apply = (mergeKey) => api.run(() => api.paint(target,colorFromValues(mode,inputs.map(i => i.number.valueAsNumber)),{ mergeKey }));
+    COLOR_MODES[mode].channels.forEach(([label,max],i) => {
+      const row = document.createElement('label'); row.className = 'draw-color-channel';
+      const name = document.createElement('span'); name.textContent = label;
+      const range = document.createElement('input'); range.type = 'range'; range.min = '0'; range.max = String(max); range.step = mode === 'rgb' ? '1' : '0.1'; range.value = String(values[i]);
+      range.dataset.drawField = `color-${mode}-${i}-range`; range.dataset.live = 'true'; range.setAttribute('aria-label',`${label} slider`); range.disabled = disabled;
+      const number = document.createElement('input'); number.type = 'number'; number.min = '0'; number.max = String(max); number.step = 'any'; number.value = String(values[i]);
+      number.dataset.drawField = `color-${mode}-${i}`; number.setAttribute('aria-label',label); number.disabled = disabled;
+      range.addEventListener('pointerdown',() => { liveEdit = true; });
+      range.addEventListener('input',() => { number.value = range.value; apply(live); });
+      range.addEventListener('change',() => { liveEdit = false; render(); });
+      number.addEventListener('change',() => { range.value = number.value; apply(null); });
+      inputs.push({ range, number }); row.append(name,range,number); host.append(row);
+    });
+    const hexInput = field(host,'Hex',hex ? hex.slice(1).toUpperCase() : '',value => api.paint(target,normalizeHex(value)),{ type:'text', key:'color-hex', disabled });
+    hexInput.maxLength = 7; hexInput.spellcheck = false;
+    text(host,api.paintIds().length ? 'Changes apply live to the selected artwork; a slider drag is one undo step.' : 'No artwork selected: these colors apply to new shapes.');
+  }
+  function segmented(host, label, key, options, value, onPick, { disabled = false, unavailable = {} } = {}) {
+    const wrap = document.createElement('div'); wrap.className = 'draw-field';
+    const name = document.createElement('span'); name.textContent = label; wrap.append(name);
+    const group = document.createElement('div'); group.className = 'draw-segmented'; group.setAttribute('role','group'); group.setAttribute('aria-label',label);
+    for (const [id,text] of options) {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'draw-segmented__option'; b.textContent = text;
+      b.dataset.drawStroke = `${key}-${id}`; b.setAttribute('aria-pressed',String(id === value)); b.disabled = disabled || !!unavailable[id];
+      if (unavailable[id]) b.dataset.tooltip = unavailable[id];
+      b.addEventListener('click',() => api.run(() => onPick(id))); group.append(b);
     }
-    if (!ids.length) text(host,'These colors apply to new shapes. Select artwork to change its appearance.');
+    wrap.append(group); host.append(wrap);
+  }
+  function strokePanel(host) {
+    const node = state.document.getNode(api.paintIds()[0]), stroke = node?.appearance.strokes[0] ?? null, readOnly = state.document.readOnly;
+    const s = stroke ?? { width: state.ui.strokeWidth, cap: 'round', join: 'round', miterLimit: 4, align: 'center' }, disabled = readOnly || !node;
+    const apply = props => api.strokeProps(props);
+    field(host,'Weight (mm)',s.width,value => node ? apply({ width: value }) : api.paint('width',value),{ min:0, max:352.8, key:'stroke-weight', disabled: readOnly });
+    segmented(host,'Cap','cap',[['butt','Butt'],['round','Round'],['square','Projecting']],s.cap,cap => apply({ cap }),{ disabled });
+    segmented(host,'Corner','join',[['miter','Miter'],['round','Round'],['bevel','Bevel']],s.join,join => apply({ join }),{ disabled });
+    field(host,'Limit (×)',s.miterLimit ?? 4,value => apply({ miterLimit: value }),{ min:1, max:500, key:'stroke-limit', disabled: disabled || s.join !== 'miter' });
+    const later = 'Inside and Outside alignment come with Outline Stroke (phase 3).';
+    segmented(host,'Align stroke','align',[['center','Center'],['inside','Inside'],['outside','Outside']],s.align ?? 'center',() => {},{ disabled, unavailable: { inside: later, outside: later } });
+    check(host,'Dashed line','stroke-dashed',!!s.dash?.array?.length,on => api.run(() => apply({ dash: on ? [2,1] : null }))).disabled = disabled;
+    if (s.dash?.array?.length) {
+      const grid = document.createElement('div'); grid.className = 'draw-dash-grid'; host.append(grid);
+      const inputs = [];
+      for (let i = 0; i < 6; i++) {
+        const input = field(grid,`${i % 2 ? 'Gap' : 'Dash'} (mm)`,s.dash.array[i] ?? '',() => apply({ dash: inputs.map(x => x.value === '' ? null : x.valueAsNumber) }),{ min:0, key:`dash-${i}`, disabled });
+        if (s.dash.array[i] === undefined) input.value = '';
+        inputs.push(input);
+      }
+    }
+    const arrows = document.createElement('div'); arrows.className = 'draw-fields'; host.append(arrows);
+    for (const [key,label] of [['startArrow','Start arrowhead'],['endArrow','End arrowhead']]) {
+      const row = document.createElement('label'); row.className = 'draw-field';
+      const name = document.createElement('span'); name.textContent = label;
+      const select = document.createElement('select'); select.className = 'draw-select'; select.dataset.drawField = `stroke-${key}`; select.disabled = disabled;
+      select.append(new Option('None','none',false,!s[key]));
+      for (const type of ARROW_TYPES) select.append(new Option(type[0].toUpperCase()+type.slice(1),type,false,s[key]?.type === type));
+      select.addEventListener('change',() => api.run(() => apply({ [key]: select.value === 'none' ? null : { type: select.value, scale: s[key]?.scale ?? 1 } })));
+      row.append(name,select); arrows.append(row);
+    }
+    for (const [key,label] of [['startArrow','Start scale (%)'],['endArrow','End scale (%)']]) {
+      field(arrows,label,(s[key]?.scale ?? 1)*100,value => apply({ [key]: { type: s[key].type, scale: value/100 } }),{ min:1, max:1000, key:`stroke-${key}-scale`, disabled: disabled || !s[key] });
+    }
+    text(host,node ? (stroke ? 'Stroke color is set in the Color panel.' : 'This artwork has no stroke; editing an option adds one in the current stroke color.') : 'Select artwork to edit stroke options. Weight applies to new shapes.');
   }
   function artboardPanel(host) {
     const list=document.createElement('div');list.className='draw-artboard-list';list.setAttribute('aria-label','Artboards');
@@ -356,6 +432,22 @@ export function createPanels(shell, state, api) {
     field(host,'Opacity (%)',opacity*100,value => state.history.transaction('Opacity',() => {
       for (const id of api.selectedIds()) state.history.execute(updateNode(id,{opacity:value/100}));
     }),{min:0,max:100,disabled:!api.selectedIds().length,key:'opacity'});
+    // Appearance summary: shortcuts to Color and Stroke, without repeating their editors.
+    const painted = state.document.getNode(api.paintIds()[0]);
+    if (painted) {
+      const summary = document.createElement('div'); summary.className = 'draw-appearance'; summary.setAttribute('aria-label','Appearance');
+      const fill = paintHex(painted.appearance.fills[0]), stroke = paintHex(painted.appearance.strokes[0]), weight = painted.appearance.strokes[0]?.width;
+      for (const [kind,label,value,panel] of [['fill','Fill',fill,'color'],['stroke','Stroke',stroke,'color'],['weight','Weight',stroke ? `${Number(weight.toFixed(3))} mm` : '—','stroke']]) {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'draw-appearance__item'; b.dataset.drawOpen = kind;
+        const chip = document.createElement('span'); chip.className = 'draw-appearance__chip'; chip.setAttribute('aria-hidden','true');
+        if (kind !== 'weight') { chip.style.setProperty('--paint-color',value || 'transparent'); chip.classList.toggle('is-none',!value); } else chip.classList.add('is-weight');
+        const name = document.createElement('span'); name.textContent = kind === 'weight' ? `${label} ${value}` : `${label} ${value ?? 'none'}`;
+        b.setAttribute('aria-label',`${name.textContent}: open ${panel === 'color' ? 'Color' : 'Stroke'} panel`);
+        b.addEventListener('click',() => { if (kind !== 'weight') state.ui.paintFocus = kind; open(panel); if (kind !== 'weight') api.paintFocus(kind); });
+        b.append(chip,name); summary.append(b);
+      }
+      host.append(summary);
+    }
     const corners=api.cornerInfo?.();
     if(corners){
       const input=field(host,'Corner radius (mm)',corners.radius??0,value=>api.setCornerRadius(value),{min:0,key:'corner-radius'});
@@ -366,7 +458,7 @@ export function createPanels(shell, state, api) {
       for(const [key,label,min] of editable)field(host,label,node.params[key]??({sides:6,points:5,endAngle:360}[key] || 0),value=>state.history.execute(updateNode(node.id,{params:{...node.params,[key]:value}})),{min,max:['sides','points'].includes(key)?100:undefined,key:`shape-${key}`});
     }
   }
-  const PANEL_CONTENT = { color: host => paint(host), stroke: host => paint(host,true), transform: host => transform(host), align: alignPanel, artboards: artboardPanel };
+  const PANEL_CONTENT = { color: colorPanel, stroke: strokePanel, transform: host => transform(host), align: alignPanel, artboards: artboardPanel };
   function renderFlyout() {
     const group = PANEL_GROUPS.find(g => g.id === state.ui.flyout);
     flyout.hidden = !group; if (!group) { flyoutTabs.replaceChildren(); flyoutBody.replaceChildren(); return; }
@@ -384,6 +476,9 @@ export function createPanels(shell, state, api) {
     placeFlyout();
   }
   function render() {
+    // A slider drag or color-picker session updates the canvas live; rebuilding would interrupt it.
+    if (liveEdit && (flyoutBody.contains(document.activeElement) || primary.contains(document.activeElement))) return;
+    liveEdit = false;
     for (const button of rail.children) button.setAttribute('aria-pressed',String(button.dataset.drawPanel === state.ui.flyout));
     primary.replaceChildren(); dock.layers.body.replaceChildren();
     if (state.document.readOnly) text(primary,state.warning || 'Read-only document');

@@ -14,7 +14,7 @@ import { transformedBox } from './tools/selection.mjs';
 import { SHAPE_TOOLS, shapeFromDrag } from './tools/shapes.mjs';
 import { insertNode, removeNode, updateNode, updateDocument } from './doc/commands.mjs';
 import { activeArtboard } from './doc/artboards.mjs';
-import { changePaint, paintHex } from './doc/paint.mjs';
+import { changePaint, changeStroke, paintHex } from './doc/paint.mjs';
 import { importArtwork } from './import-artwork.mjs';
 import { shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog,layerOptionsDialog } from './ui/dialogs.mjs';
 import { layerOptionsPatch } from './doc/layers.mjs';
@@ -25,7 +25,7 @@ const workspaces=new WeakMap();
 export function getDrawWorkspace(root) {return workspaces.get(root) || null;}
 const implementedTools=new Set(['select','hand','zoom','artboard',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
 const commands=new Set(['undo','redo','delete','select-all','select-artboard','deselect','cancel','fit-artboard','fit-all','actual-size','zoom-in','zoom-out','outline',
-  'paint-focus','paint-swap','paint-none','default-paint','smart-guides','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','toggle-panels','toggle-panels-except-tools',
+  'paint-focus','paint-swap','paint-none','paint-solid','default-paint','smart-guides','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','toggle-panels','toggle-panels-except-tools',
   ...PANEL_DEFINITIONS.map(p=>`panel.${p.id}`),...['left','right','up','down'].flatMap(d=>[`nudge-${d}`,`nudge-large-${d}`,`duplicate-${d}`])]);
 export function createDrawWorkspace(root,{paper=window.paper,state=createProjectDraw(),onError=console.warn,onImport=()=>{},getPreferences=()=>({}),statusHost=null}={}) {
   state.ui={tool:'select',flyout:null,layerId:state.document.data.layers[0]?.id,fill:'#FFFFFF',stroke:'#071411',strokeWidth:.5,paintFocus:'fill',...state.ui};
@@ -111,11 +111,13 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     hint.hidden=state.document.data.layers.some(layer=>layer.children.length) || state.document.readOnly || state.ui.tool!=='select';
     outlineButton.setAttribute('aria-pressed',String(renderer.outline));status();
   }
-  function paint(kind,value) {
+  function paint(kind,value,{mergeKey=null}={}) {
     if(state.document.readOnly)return;
     if(kind==='width')state.ui.strokeWidth=value;else state.ui[kind]=value;
+    // Remember the last solid color per kind for the Color button / Comma shortcut.
+    if(kind!=='width'&&value)state.ui.lastSolid={...state.ui.lastSolid,[kind]:value};
     const ids=paintIds();
-    if(ids.length)state.history.transaction('Appearance',()=>{for(const id of ids)state.history.execute(updateNode(id,{appearance:changePaint(state.document.getNode(id).appearance,kind,value,state.ui)}));});
+    if(ids.length)state.history.transaction('Appearance',()=>{for(const id of ids)state.history.execute(updateNode(id,{appearance:changePaint(state.document.getNode(id).appearance,kind,value,state.ui)}));},{mergeKey});
     else {panels?.render();toolbar?.update();}
   }
   function layerId() {
@@ -144,6 +146,10 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   artboards=createArtboardController(state,{refresh,fit,bounds:id=>renderer.bounds(id),localMatrix:(id,m)=>renderer.localMatrix(id,m)});
   panels=createPanels(shell,state,{run,select,selectedIds,paintIds,paint,bounds:()=>renderer.selectionBounds(),fit,artboards,
     cornerInfo:()=>paths?.cornerInfo()??null,setCornerRadius:radius=>paths.setCornerRadius(radius),
+    strokeProps(props,{mergeKey=null}={}){const ids=paintIds();if(!ids.length||state.document.readOnly)return;
+      if(props.width!==undefined)state.ui.strokeWidth=props.width;
+      state.history.transaction('Stroke',()=>{for(const id of ids)state.history.execute(updateNode(id,{appearance:changeStroke(state.document.getNode(id).appearance,props,state.ui)}));},{mergeKey});},
+    paintFocus(kind){state.ui.paintFocus=kind;toolbar?.update();panels?.render();},
     async layerOptions(id){const layer=state.document.getNode(id);if(layer?.type!=='layer'||state.document.readOnly)return;
       const values=await layerOptionsDialog(layer);if(!values||destroyed)return;
       run(()=>{const current=state.document.getNode(id);if(!current)return;const patch=layerOptionsPatch(current,values);if(Object.keys(patch).length)state.history.execute(updateNode(id,patch,{label:'Layer Options'}));});},
@@ -189,6 +195,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     if(command==='smart-guides'){const settings=state.document.data.settings;state.history.execute(updateDocument({settings:{...settings,smartGuides:!settings.smartGuides}}));return;}
     if(command==='paint-focus'){state.ui.paintFocus=state.ui.paintFocus==='fill'?'stroke':'fill';toolbar.update();return;}
     if(command==='paint-none')return paint(state.ui.paintFocus,null);
+    if(command==='paint-solid'){const kind=state.ui.paintFocus==='stroke'?'stroke':'fill';return paint(kind,state.ui.lastSolid?.[kind]??(kind==='fill'?'#FFFFFF':'#071411'));}
     if(command==='default-paint'||command==='paint-swap') {
       const ids=paintIds(),swapped=command==='paint-swap';
       const fill=swapped?state.ui.stroke:'#FFFFFF',stroke=swapped?state.ui.fill:'#071411';

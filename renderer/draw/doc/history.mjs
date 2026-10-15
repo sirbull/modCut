@@ -1,4 +1,16 @@
 /** Synchronous atomic Commands, nested transactions, coalescing and clean-state tracking. */
+function composite(label, batch, mergeKey) {
+  const nodeIds = [...new Set(batch.flatMap((item) => item.nodeIds || []))];
+  return {
+    label, nodeIds, mergeKey, batch,
+    do: (doc) => { for (const item of batch) item.do(doc); },
+    undo: (doc) => { for (const item of [...batch].reverse()) item.undo(doc); },
+    merge(next) {
+      if (!mergeKey || next.mergeKey !== mergeKey || !next.batch || JSON.stringify([...next.nodeIds].sort()) !== JSON.stringify([...nodeIds].sort())) return null;
+      return composite(next.label, [...batch, ...next.batch], mergeKey);
+    },
+  };
+}
 export class History {
   #doc;
   #entries = [];
@@ -69,7 +81,8 @@ export class History {
     this.#cursor++; this.#state = entry.after; this.#notify([entry.command]);
     return true;
   }
-  transaction(label, fn) {
+  /** Optional mergeKey coalesces consecutive transactions on the same nodes, e.g. a live slider drag. */
+  transaction(label, fn, { mergeKey = null } = {}) {
     if (fn.constructor.name === 'AsyncFunction') throw new TypeError('Transactions must be synchronous');
     const outer = this.#transaction, batch = [], before = this.#doc.data;
     this.#transaction = batch;
@@ -79,11 +92,7 @@ export class History {
     } catch (error) { this.#doc._restore(before); throw error; }
     finally { this.#transaction = outer; }
     if (!batch.length) return;
-    const command = {
-      label, nodeIds: [...new Set(batch.flatMap((item) => item.nodeIds || []))],
-      do: (doc) => { for (const item of batch) item.do(doc); },
-      undo: (doc) => { for (const item of [...batch].reverse()) item.undo(doc); },
-    };
+    const command = composite(label, batch, mergeKey);
     if (outer) outer.push(command);
     else this.#record(command);
   }

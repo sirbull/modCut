@@ -59,7 +59,7 @@ export async function runDrawPhaseOneWorkflows(client) {
   await shortcut('F7','F7');
   assert.deepEqual(await evaluate("(()=>{const r=document.querySelector('.draw-project[style*=block]');return{expanded:r.querySelector('[data-draw-dock-toggle=layers]').getAttribute('aria-expanded'),trees:r.querySelectorAll('[role=tree]').length}})()"),{expanded:'true',trees:1});
   await panel('properties');
-  assert.equal(await evaluate("document.querySelector('.draw-project[style*=block] [data-draw-dock=properties]').querySelectorAll('[role=tree],[data-draw-field=width],[data-draw-field=stroke-width]').length"),0,'Properties does not repeat Layers/Transform/Stroke');
+  assert.equal(await evaluate("document.querySelector('.draw-project[style*=block] [data-draw-dock=properties]').querySelectorAll('[role=tree],[data-draw-field=width],[data-draw-field=stroke-weight],[data-draw-field=color-hex],[data-draw-align]').length"),0,'Properties does not repeat Layers/Transform/Stroke');
 
   await shortcut('m','KeyM');await click(await screen([10,10]));
   assert.equal(await evaluate("!!document.querySelector('.draw-shape-dialog')"),true,'Click opens exact dimensions');
