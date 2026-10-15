@@ -1,5 +1,7 @@
 # Draw: overlevering til neste agent
 
+**Start med [STATUS.md](STATUS.md)**: én side med hva som er gjort og hva som gjenstår.
+
 Oppdatert 2026-10-15. Arbeidsgren: `claude/draw-properties-layers-panels` (bygger på `feat/vector-draw`).
 
 **Høyrepanelet følger nå [RIGHT_PANELS.md](RIGHT_PANELS.md).** Trinn 1 (dokk med Properties over

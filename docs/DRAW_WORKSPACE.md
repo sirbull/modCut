@@ -1389,6 +1389,7 @@ Arbeid videre på fellesgrenen feat/vector-draw; ikke opprett en ny gren for opp
 ## 23. Statussjekkliste
 
 Oppdateres når oppgaven fullføres. Løpende arbeidslogg: [`draw/WORK_LOG.md`](draw/WORK_LOG.md).
+Oversikt over hva som er gjort og gjenstår, inkludert delvis ferdige oppgaver: [`draw/STATUS.md`](draw/STATUS.md).
 
 * [x] D0.1 Workspace-bytte
 * [x] D0.2 Dokumentmodell og historikk
