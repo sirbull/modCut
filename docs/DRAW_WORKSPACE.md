@@ -1,7 +1,7 @@
 # modCut Draw: vektoreditor i modCut
 
-> Status: Fase 0 (D0.1–D0.6) er fullført. Neste oppgave er D1.1: render-adapter fra modellen til Paper.js.
-> Sist oppdatert: 2026-10-14.
+> Status: Fase 0, D1.1–D1.3, D1.5 og D1.6 er fullført. Direct Selection redigerer ankre og håndtak; live corners og automatisk ekspandering av former i D1.4 gjenstår. Verktøylinje/paneler er ryddet.
+> Sist oppdatert: 2026-10-15.
 > Målgruppe: utviklere og kodeagenter (Claude Code og Codex) som skal bygge løsningen.
 
 Dette dokumentet er den autoritative planen for Draw, en egen tegneseksjon i modCut.
@@ -151,10 +151,18 @@ To MCP-servere er **valgfrie** hjelpemidler under utviklingen. Ingen av dem er e
   eller høyreklikk åpner en flyout, Alt+klikk sykler gjennom variantene.
   Nederst: Fill/Stroke-boks med swap (Shift+X), default (D), og Color/Gradient/None (`<`, `>`, `/`).
   Deretter Draw Normal/Behind/Inside og Screen Mode.
+  Nåværende layout har ett synlig valg per verktøygruppe; aktiv variant utelates fra
+  flyouten. På korte vinduer brukes to kompakte kolonner. Uimplementerte verktøy
+  vises deaktivert med fasen i tooltip; de kjører ingen plassholderlogikk.
 * **Kontrollinje** (Illustrators Control bar / Properties): viser kontekstuelle felt: fill,
   stroke, vekt, opacity, X/Y/B/H, og knapper som Image Trace, Expand, Create Outlines,
   Align. Ingen knapp her skal finnes kun her; alt finnes også i meny eller panel.
-* **Paneler til høyre**: dokkbare, kollapsbare, rekkefølge kan dras. Hvert panel kan åpnes fra
+* **Paneler til høyre**: ett valgt panel vises om gangen, med én knapp per panel i
+  ikonrekken. Layers skal ikke samtidig være et permanent ekstra panel.
+  Properties viser utvalg/navn, opacity og formparametre; posisjon/størrelse,
+  fill og stroke redigeres i henholdsvis Transform, Color og Stroke. Dette
+  erstatter gjentatte redigeringsfelt i Properties etter eierens ønske.
+  Senere: dokkbare, kollapsbare paneler der rekkefølge kan dras. Hvert panel kan åpnes fra
   `Window`-menyen og med Illustrator-tasten (F7 Layers, osv.). Tab skjuler alle paneler,
   Shift+Tab skjuler alle unntatt verktøylinjen.
 * **Statuslinje**: zoomprosent (redigerbar), aktivt artboard (nedtrekk og pil), verktøyhint
@@ -609,7 +617,7 @@ Paneler leser modell og utvalg, og skriver kun via Commands.
 
 | Panel | Tast | Innhold | Fase |
 |---|---|---|---|
-| Properties | (alltid) | Kontekstuelt: Transform, Appearance-sammendrag, Quick Actions (Image Trace, Expand, Outline Stroke, Create Outlines, Send til Cut). | 1 |
+| Properties | (panelvalg) | Utvalg/navn, opacity og live formparametre. Redigeringsfeltene fra Transform, Color og Stroke gjentas ikke her. Senere: kontekstuelle Quick Actions uten ekstra kopier av paneler. | 1 |
 | Layers | F7 | Tre med lag, underlag og objekter. Øye (synlighet), lås, valgsirkel, dra for å flytte, Alt+klikk øye = solo. Dobbeltklikk lag = Layer Options (navn, farge, Template, Lock, Show, Print, Preview, Dim Images to %). Lag nytt lag, nytt underlag, slett, Collect in New Layer, Release to Layers, Locate Object. | 1 |
 | Artboards | (i Window) | Liste, rekkefølge, navn, Rearrange All, Fit to Artwork Bounds, Fit to Selected Art, Duplicate, Delete, og **Send til Cut** per artboard. | 1 |
 | Color | F6 | RGB, HSB, CMYK, Grayscale, Hex. Fargespekter. | 1 |
@@ -692,8 +700,10 @@ Hver underseksjon har **akseptkriterier** (AK). En oppgave er ikke ferdig før A
   innhold hvis "Move/Copy Artwork with Artboard" er på (standard på), Delete sletter.
 * Artboard-navn vises over hvert artboard. Aktivt artboard har tykkere ramme.
 * Maks 1 000 artboards (som Illustrator). Maks størrelse 5 779 x 5 779 mm (227 x 227 in).
-* AK: 3 artboards kan lages, omdøpes, flyttes med innhold, omorganiseres og angres. Eksport
-  av "artboard 2" gir nøyaktig dette artboardets mål.
+* AK i D1.2: 3 artboards kan lages, omdøpes, flyttes med innhold, omorganiseres og angres.
+  Valgt artboard beholder egne mål og verdenskoordinater gjennom rendering og lagring.
+* Oppfølging i eksportoppgavene D2.5–D2.7: eksport av "artboard 2" skal gi nøyaktig
+  dette artboardets mål. Dette krever eksportfunksjonene som etter planen kommer i fase 2.
 
 ### 10.2 Utvalg og transformasjon
 
@@ -1181,7 +1191,7 @@ av forskjellige agenter fordi de eier ulike filer.
 | Fase | Leveranse | Status |
 |---|---|---|
 | 0 — Fundament | Workspace-bytte, dokumentmodell, geometri-kjerne, keymap og lagring. | Fullført: D0.1–D0.6. Draw-data lagres i `.modcut` v4 og krasjgjenopprettes per fane. |
-| 1 — Grunnleggende tegning | Artboards, markering, Pen, former, lag, bitmap-referanser og Send til Cut v1. | Ikke startet. |
+| 1 — Grunnleggende tegning | Artboards, markering, Pen, former, lag, bitmap-referanser og Send til Cut v1. | Påbegynt: D1.1–D1.3, D1.5 og D1.6 fullført; resten av D1.4 er neste. |
 | 2 — Illustrator-kjernen | Tekst, Pathfinder, gradienter, import/eksport og Send til Cut v2. | Ikke startet. |
 | 3 — Avansert redigering og trace | Outline Stroke, effekter, Image Trace, flere redigeringsverktøy og AI/DXF-eksport. | Ikke startet. |
 | 4 — Fullpakke | Width, Blend, brushes, flere effekter/eksportformater og ytelsespass. | Ikke startet. |
@@ -1384,12 +1394,12 @@ Oppdateres når oppgaven fullføres. Løpende arbeidslogg: [`draw/WORK_LOG.md`](
 * [x] D0.4 GeometryKernel og worker
 * [x] D0.5 Keymap og verktøyregister
 * [x] D0.6 `.modcut` v4
-* [ ] D1.1 Render-adapter
-* [ ] D1.2 Artboards
-* [ ] D1.3 Selection, Hand, Zoom
-* [ ] D1.4 Direct Selection
-* [ ] D1.5 Pen og ankerverktøy
-* [ ] D1.6 Former
+* [x] D1.1 Render-adapter
+* [x] D1.2 Artboards
+* [x] D1.3 Selection, Hand, Zoom
+* [ ] D1.4 Direct Selection — ankre/håndtak ferdig; live corners og automatisk shape-expansion gjenstår
+* [x] D1.5 Pen og ankerverktøy
+* [x] D1.6 Former
 * [ ] D1.7 Rotate, Reflect, Scale
 * [ ] D1.8 Grunnpaneler
 * [ ] D1.9 Kontrollinje og statuslinje
@@ -1561,3 +1571,88 @@ ukjent Draw-versjon uten datatap, dirty-grenser, native Close/Quit, kontinuerlig
 og to faner gjennom faktisk SIGKILL/restart. Hele `npm test` passerte denne gangen,
 inkludert eksisterende Cut-E2E og krasjgjenoppretting. Tidligere crop-feil er historiske
 observasjoner, ikke rettelser i D0.6. Fase 0 er ferdig; neste oppgave er D1.1.
+
+### Implementasjonsnotater D1.1
+
+Render-adapteren i `renderer/draw/render/paper-adapter.mjs` beholder uendret
+geometri og gruppebarn, differensierer artboards og oppdaterer utseende og
+transformasjoner separat. Culling følger alle eksisterende visningskontroller;
+modellbaserte verdensrammer beholder korrekt utvalgsstørrelse utenfor skjermen.
+Outline / Preview nås med Ctrl/Cmd+Y, View-menyen og Outline-knappen. Bilder vises
+som rammer i Outline og beholder kildepikslene i Preview. Markerings-overlayet
+ligger separat i `render/overlays.mjs`.
+
+67 Draw-enhetstester og komplett Draw-E2E passerer på Windows, inkludert sen
+bildeinnlasting, Cut-scope, prosjektlagring og faktisk krasjgjenoppretting.
+Full `npm test` passerer sidecar, bridge, main, renderer, Draw og kontrast, men
+stopper på den tidligere dokumenterte crop-E2E-feilen. Windows-tilpasninger for
+ikonlinjeskift og testens fillesing er dokumentert i
+[`draw/WORK_LOG.md`](draw/WORK_LOG.md). Ytelsesmålet i 4.4 er fortsatt umålt og
+følges opp i D4.6. Neste oppgave er D1.2.
+
+### Implementasjonsnotater — verktøylinje, D1.2, D1.3 og D1.6
+
+Alle 49 verktøydefinisjoner tilhører én gruppe hver. Verktøylinjen viser ett ikon
+per gruppe og flyouten viser de øvrige variantene. Fill/Stroke-boksen bruker de
+samme Commands som farge-/strekpanelene og hurtigtastene. Høyresiden monterer
+ett panel; Layers-tre og overskrift finnes bare én gang. Properties gjentar
+ikke Transform-, Color- eller Stroke-editoren. Full D1.8/D1.9 med blant annet
+template-lag og kontekstuell kontrollinje gjenstår.
+
+Artboards har aktivt valg, navn og ramme, modellgrenser på 1 000 artboards og
+5 779 mm per side, størrelsespresets og en New Document-dialog. Artboard-verktøyet
+(Shift+O) oppretter, flytter, skalerer og dupliserer med Alt. Panel og statusvalg
+navigerer mellom dem. Flytting/kopiering av redigerbart innhold, rekkefølge,
+omorganisering og sletting går gjennom atomisk historikk. Første åpning av en
+eksisterende Draw-tilstand bruker det eksisterende dokumentet; New åpner dialogen.
+Eksport-AK er presisert som oppfølging i D2.5–D2.7, der eksport implementeres.
+
+Selection har åtte håndtak, Shift/Alt-regler, rotasjon, marquee, Shift-valg,
+Alt-kopi, piltaster og smart guides med fire skjermpikslers toleranse. Hand og
+Zoom kan holdes midlertidig med Space og Mod+Space. Vanlig rulling panorerer,
+Mod+rulling zoomer rundt pekeren og følger innstillingen for motsatt zoomretning.
+
+Former har faktisk form-preview, Shift/Alt/Space under tegning og klikk-dialog
+for eksakte mål. Piltaster justerer polygon-/stjernepunkter og hjørneradius;
+Mod under stjernetegning justerer indre radius. Properties redigerer levende
+hjørneradius, sider, stjerneparametre og ellipse-pievinkler.
+
+79 Draw-tester og komplett Draw-E2E er grønne, med faktiske muse-/tastaturhandlinger,
+prosjektlagring, krasj/restart og visuell kontroll i lyst/mørkt tema. Temabytte
+setter riktig Cut-scope før eksisterende bed-redraw, slik at Cut-geometri ikke
+havner over Draw. `bed.js` og sidecar er uendret. Full `npm test` stopper fortsatt
+ved den tidligere dokumenterte crop-E2E-testen etter grønne øvrige tester.
+Neste oppgave er D1.4, deretter D1.5. Fase 1 er fortsatt ikke ferdig.
+
+### Implementasjonsnotater — Pen og Direct Selection
+
+Pen (P) oppretter rette og kubiske Bézier-baner. Klikk lager hjørner, drag lager
+håndtak, Shift låser vinkler, Alt bryter håndtak og Space flytter ankeret under
+drag. Startankeret lukker uten et ekstra punkt. Begge ender kan fortsettes;
+reversering skjer først ved en faktisk endring. Hover viser neste segment og
+kontekstuell peker. Enter/Escape avslutter åpen bane, mens Escape under drag
+forkaster bare den midlertidige redigeringen. Pen kan også dele en eksisterende
+kurve og redigere synlige håndtak.
+
+Direct Selection (A) velger ankre/håndtak på baner, med Shift-valg, marquee,
+segmentvalg og piltastflytting. Alt frikobler håndtak, Shift begrenser bevegelse.
+Skjermstore ankre og håndtak ligger utenfor dokumentmodellen. Transformerte
+foreldre bruker eksplisitt konvertering mellom lokale og globale koordinater.
+Add Anchor (+) deler kubiske kurver med De Casteljau uten formendring. Delete
+Anchor (-) og Delete på valgte ankre bevarer øvrige subpaths; tomme/for korte
+subpaths fjernes. Anchor Point (Shift+C) veksler hjørne/glatt og trekker ut håndtak.
+Klikk på en live form med Anchor Point ekspanderer den med samme identitet,
+utseende og plassering; Undo gjenoppretter den eksakte formen.
+
+Alle redigeringer går gjennom Commands/History; previews endrer ikke modell,
+dirty-status eller Cut. Ett drag gir ett angresteg. Verktøyene bruker de
+eksisterende gruppene i verktøylinjen. D1.4 er fortsatt delvis: live corner
+widgets og automatisk ekspandering direkte med Direct Selection gjenstår.
+Neste oppgave er å fullføre disse før D1.7–D1.11.
+
+Verifisering: 85 Draw-enhetstester og komplett Draw-E2E passerer, inkludert
+prosjektlagring, kontinuerlig autosave og faktisk krasj/gjenstart. Den dedikerte
+Pen-testen bruker ekte muse-/tastaturhendelser og kontrollerer også Space-flytting
+i et transformert layer, kontekstuell kurvedeling og Cut-isolasjon.
+Full `npm test` stopper fortsatt i den tidligere dokumenterte Cut crop-E2E-testen
+etter grønne sidecar/bridge/main/renderer/Draw/kontrast-tester.

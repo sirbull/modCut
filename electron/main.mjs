@@ -224,6 +224,7 @@ function buildMenu(mode = "cut") {
       ...(isMac ? [] : [{ type: "separator" }, { label: "Preferences…", accelerator: acceleratorFor("preferences", { isMac }), click: () => send("preferences") }]),
     ];
     viewMenu.submenu = [viewMenu.submenu[0], { type: "separator" },
+      { label: "Outline / Preview", accelerator: acceleratorFor("outline", { isMac }), click: () => send("outline") },
       { role: "togglefullscreen", label: "Full screen" },
       { role: "toggleDevTools", label: "Developer Tools" }];
     for (const label of ["Machine", "Materials"]) {
@@ -360,6 +361,7 @@ app.whenReady().then(() => {
       label: Menu.getApplicationMenu()?.getMenuItemById("workspace-toggle")?.label,
       edit: Menu.getApplicationMenu()?.items.find((item) => item.label === "Edit")?.submenu.items.map((item) => item.accelerator || null),
       file: Menu.getApplicationMenu()?.items.find((item) => item.label === "File")?.submenu.items.map((item) => ({ label: item.label, accelerator: item.accelerator || null })),
+      view: Menu.getApplicationMenu()?.items.find((item) => item.label === "View")?.submenu.items.map((item) => ({ label: item.label, accelerator: item.accelerator || null })),
     }));
     ipcMain.handle("e2eRequestQuit", () => { requestQuit(); return true; });
   }

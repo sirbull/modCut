@@ -1,6 +1,8 @@
 import { createKeymap, shortcutLabel } from "./draw/keymap.mjs";
 import { createDrawWorkspace } from "./draw/index.mjs";
 import { PROJECT_VERSION, validateProject, createProjectDraw } from "./draw/io/project.mjs";
+import { newDrawDocument } from "./draw/doc/artboards.mjs";
+import { newDocumentDialog } from "./draw/ui/dialogs.mjs";
 import { createBed } from "./bed.js";
 import { prepareSVG } from "./svgimport.js";
 import { dxfToSvg } from "./dxfimport.js";
@@ -260,6 +262,9 @@ function initCollapsibleSections() {
 
 // --- bed --------------------------------------------------------------------
 const bed = createBed($("stage"), { bedWmm: 600, bedHmm: 400 });
+// Native Paper canvas events can activate Draw's scope. Cut's theme redraw must
+// start in its own scope before its existing theme listener creates the bed.
+window.addEventListener('modcut-theme-change',()=>window.paper.activate(),true);
 bed.onCoords((x, y) => ($("coords").textContent = `X ${dispNum(x)}  Y ${dispNum(y)} ${state.units}`));
 let selectedCount = 0;
 let activeTool = "select";
@@ -316,7 +321,7 @@ function setWorkspace(mode) {
     tab.drawRoot.className = "draw-project";
     tab.drawRoot.dataset.tabId = tab.id;
     $("drawWorkspace").append(tab.drawRoot);
-    tab.draw = createDrawWorkspace(tab.drawRoot, { state: drawState, onError: message => toast(message,"err"), onImport: () => importDrawFiles() });
+    tab.draw = createDrawWorkspace(tab.drawRoot, { state: drawState, onError: message => toast(message,"err"), onImport: () => importDrawFiles(), getPreferences:()=>preferences });
   }
   drawKeymap.reset();
   tab.workspace = mode;
@@ -1139,13 +1144,29 @@ function initFileDrop() {
   });
 }
 
-function newDocument(mode = document.body.dataset.workspace === "draw" ? "draw" : "cut") {
+let creatingDrawDocument = false;
+async function requestNewDocument() {
+  if (document.body.dataset.workspace !== "draw") return newDocument("cut");
+  if (creatingDrawDocument) return;
+  creatingDrawDocument = true;
+  try {
+    const m=machine(), data=await newDocumentDialog({name:m.name,width:m.bedW || 600,height:m.bedH || 400});
+    if(data) return newDocument("draw",data);
+  } catch(error) {toast(error.message,"err");}
+  finally {creatingDrawDocument=false;}
+}
+function newDocument(mode = document.body.dataset.workspace === "draw" ? "draw" : "cut", drawData = null) {
   captureActiveTab();
   const tab = { id: String(nextTabId++), title: "Untitled", dirty: false, session: null };
   documentTabs.push(tab);
   activeTabId = tab.id;
   resetWorkspace();
-  if (mode === "draw") setWorkspace("draw");
+  if (mode === "draw") {
+    const m=machine();
+    attachDrawState(tab,createProjectDraw(drawData || newDrawDocument({}, {width:m.bedW || 600,height:m.bedH || 400})));
+    setWorkspace("draw");
+    if(drawData) {$("filename").value=drawData.name;setFileLabel(drawData.name);}
+  }
   captureActiveTab();
   renderTabs();
   scheduleRecovery();
@@ -2050,8 +2071,8 @@ function togglePanel() {
 }
 
 // --- wire UI ----------------------------------------------------------------
-$("newDoc").addEventListener("click", () => newDocument());
-$("addTab").addEventListener("click", () => newDocument());
+$("newDoc").addEventListener("click", () => requestNewDocument());
+$("addTab").addEventListener("click", () => requestNewDocument());
 $("import").addEventListener("click", doImport);
 $("add").addEventListener("click", addFiles);
 $("zoomIn").addEventListener("click", bed.zoomIn);
@@ -2126,24 +2147,24 @@ function editAction(action) {
 // Capture before Cut's window handlers; Draw shortcuts come only from keymap.mjs.
 const drawIsMac = /Mac|iPhone|iPad/.test(navigator.platform);
 const drawActions = {
-  new: newDocument, import: doImport, add: addFiles, "close-tab": closeDocumentTab,
+  new: requestNewDocument, import: doImport, add: addFiles, "close-tab": closeDocumentTab,
   "save-document": () => saveDocument(false), "save-document-as": () => saveDocument(true),
   "next-tab": () => switchRelativeTab(1), "previous-tab": () => switchRelativeTab(-1),
   preferences: openSettings,
   place: importDrawFiles,
 };
-const drawWorkspaceCommands = new Set(["undo","redo","delete","select-all","deselect","cancel","fit-artboard","fit-all","zoom-in","zoom-out",
-  "panel.layers","panel.color","panel.stroke","panel.align","panel.transform"]);
 const drawKeymap = createKeymap({
   isMac: drawIsMac,
-  isEnabled: (entry) => !!entry && (Object.hasOwn(drawActions,entry.command) || drawWorkspaceCommands.has(entry.command)
+  isEnabled: (entry) => !!entry && (entry.temporary || Object.hasOwn(drawActions,entry.command) || activeTab()?.draw?.canHandle(entry.command)
     || entry.command.startsWith("tool.") && activeTab()?.draw?.availableTool(entry.command.slice(5))),
+  onTemporaryToolChange: value => activeTab()?.draw?.setTemporaryTool(value),
   dispatch: (command) => Object.hasOwn(drawActions,command) ? drawActions[command]() : activeTab()?.draw?.handle(command),
 });
 const drawKeyContext = (event) => ({ workspace: "draw",
   editable: !!event.target.closest?.("input, select, textarea, [contenteditable]:not([contenteditable=false]), [role=textbox]") });
 window.addEventListener("keydown", (event) => {
   if (document.body.dataset.workspace !== "draw") return;
+  if (document.querySelector('.modal-overlay')) {drawKeymap.reset();return;}
   event.stopImmediatePropagation();
   drawKeymap.keydown(event, drawKeyContext(event));
 }, true);
@@ -2154,6 +2175,7 @@ window.addEventListener("blur", () => drawKeymap.reset());
 
 // keyboard shortcuts (ignore while typing in a field)
 window.addEventListener("keydown", (e) => {
+  if (document.body.dataset.workspace === "draw") return;
   const t = document.activeElement && document.activeElement.tagName;
   if (t === "INPUT" || t === "SELECT" || t === "TEXTAREA") return;
   const key = e.key.toLowerCase();
@@ -2204,7 +2226,7 @@ window.addEventListener("keydown", (e) => {
       e.preventDefault();
       if (command === "import") doImport();
       else if (command === "add") addFiles();
-      else if (command === "new") newDocument();
+      else if (command === "new") requestNewDocument();
       else if (command === "close-tab") closeDocumentTab();
       else if (command === "save-document") saveDocument(false);
       else if (command === "save-document-as") saveDocument(true);
@@ -2459,13 +2481,14 @@ $("mapmode").addEventListener("click", (e) => {
 });
 
 window.modcut.onMenu((cmd) => {
+  if(document.body.dataset.workspace==='draw' && document.querySelector('.modal-overlay')) return;
   if (cmd === "workspace-cut" || cmd === "workspace-draw") return setWorkspace(cmd.slice(10));
-  if (document.body.dataset.workspace === "draw" && drawWorkspaceCommands.has(cmd)) return activeTab()?.draw?.handle(cmd);
+  if (document.body.dataset.workspace === "draw" && activeTab()?.draw?.canHandle(cmd)) return activeTab()?.draw?.handle(cmd);
   if (document.body.dataset.workspace === "draw" && ![
     "new", "import", "add", "close-tab", "save-document", "save-document-as", "docs", "about", "preferences",
   ].includes(cmd)) return;
   return ({
-  new: newDocument, import: doImport, add: addFiles, "close-tab": closeDocumentTab,
+  new: requestNewDocument, import: doImport, add: addFiles, "close-tab": closeDocumentTab,
   "zoom-in": bed.zoomIn, "zoom-out": bed.zoomOut, "zoom-fit": bed.fit,
   "toggle-panel": togglePanel, frame, simulate: startSimulate, connect,
   undo: () => editAction("undo"), redo: () => editAction("redo"),

@@ -148,6 +148,7 @@ export function validateDocument(doc) {
       else for (const [key, v] of Object.entries(value.params)) {
         const dimension = /^(width|height|radius|rx|ry|cornerRadius|innerRadius|outerRadius)$/.test(key);
         if (dimension || /^(x|y|x1|y1|x2|y2|angle|rotation|sides|points|turns|length|startAngle|endAngle)$/.test(key) || typeof v === 'number') number(v, `${path}.params.${key}`, dimension ? 0 : -Infinity);
+        if ((key==='sides' || key==='points') && (!Number.isInteger(v) || v<(key==='sides'?3:2))) fail(`${path}.params.${key}`,'Expected a whole number of vertices');
       }
     }
     if (value.type === 'text') { enumeration(value.kind, ['point', 'area', 'onPath'], `${path}.kind`); if (!object(value.content)) fail(`${path}.content`, 'Expected rich text'); }
@@ -167,11 +168,12 @@ export function validateDocument(doc) {
   if (!object(doc.assets)) { fail('$.assets', 'Expected an asset map'); return errors; }
   const artboards = array(doc.artboards, '$.artboards');
   if (!artboards.length) fail('$.artboards', 'At least one artboard is required');
+  if (artboards.length > 1000) fail('$.artboards', 'At most 1,000 artboards are supported');
   artboards.forEach((board, i) => {
     const p = `$.artboards.${i}`;
     if (!object(board)) { fail(p, 'Expected an artboard'); return; }
     id(board.id, `${p}.id`); string(board.name, `${p}.name`); string(board.background, `${p}.background`);
-    for (const key of ['x', 'y', 'width', 'height']) number(board[key], `${p}.${key}`, ['width', 'height'].includes(key) ? Number.MIN_VALUE : -Infinity);
+    for (const key of ['x', 'y', 'width', 'height']) number(board[key], `${p}.${key}`, ['width', 'height'].includes(key) ? Number.MIN_VALUE : -Infinity, ['width', 'height'].includes(key) ? 5779 : Infinity);
   });
   array(doc.layers, '$.layers').forEach((layer, i) => node(layer, `$.layers.${i}`, 'document'));
   for (const key of ['swatches', 'swatchGroups', 'graphicStyles', 'guides', 'cutLinks']) array(doc[key], `$.${key}`);

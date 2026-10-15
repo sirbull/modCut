@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { wait, inputHelpers } from './cdp.mjs';
+import { runDrawRenderWorkflows } from './draw-render-workflows.mjs';
+import { submitNewDrawDialog } from './draw-test-helpers.mjs';
 
 const active = `(await import('./draw/index.mjs')).getDrawWorkspace(document.querySelector('.draw-project[data-tab-id="'+document.querySelector('.doc-tab.is-active').dataset.tabId+'"]'))`;
 const model = evaluate => evaluate(`(async()=>(${active}.state.snapshot()))()`);
@@ -11,6 +13,7 @@ export async function runDrawUIWorkflows(client) {
   await evaluate("document.querySelector('#workspaceToggle').click()");
   assert.deepEqual(await evaluate("['newDoc','import','add'].map(id=>document.getElementById(id).textContent)"),['New','Open','Import']);
   await evaluate("document.querySelector('#newDoc').click()");
+  await submitNewDrawDialog(evaluate);
   const blankId = await evaluate("document.querySelector('.doc-tab.is-active').dataset.tabId");
   assert.equal(await evaluate('document.body.dataset.workspace'),'draw');
   assert.equal((await model(evaluate)).layers[0].children.length,0);
@@ -46,8 +49,9 @@ export async function runDrawUIWorkflows(client) {
   assert.deepEqual(layout,{left:true,right:true,options:true,icons:7});
   await evaluate("document.querySelector('.draw-project[style*=block] [data-draw-panel=artboards]').click()");
   assert.ok(await evaluate("!!document.querySelector('.draw-project[style*=block] [data-draw-field=artboard-width]')"));
-  await evaluate("document.querySelector('.draw-project[style*=block] [data-draw-panel=properties]').click()");
+  await evaluate("document.querySelector('.draw-project[style*=block] [data-draw-panel=layers]').click()");
   await evaluate(`document.querySelector('.draw-project[style*=block] [data-draw-node="${path.id}"] .draw-layer-name').click()`);
+  await evaluate("document.querySelector('.draw-project[style*=block] [data-draw-panel=transform]').click()");
   await evaluate("(()=>{const i=document.querySelector('.draw-project[style*=block] [data-draw-field=width]');i.value='20';i.dispatchEvent(new Event('change',{bubbles:true}))})()");
   assert.ok(Math.abs(await evaluate(`(async()=>(${active}.renderer.bounds(${JSON.stringify(path.id)}).width))()`)-20)<.001,'Properties resizes selected vector geometry');
   await evaluate("window.dispatchEvent(new KeyboardEvent('keydown',{key:'z',code:'KeyZ',metaKey:/Mac/.test(navigator.platform),ctrlKey:!/Mac/.test(navigator.platform),bubbles:true,cancelable:true}))");
@@ -58,8 +62,9 @@ export async function runDrawUIWorkflows(client) {
   await drag({x:c.x+c.w*.65,y:c.y+c.h*.6},{x:c.x+c.w*.8,y:c.y+c.h*.75});
   assert.equal((await model(evaluate)).layers[0].children.at(-1).type,'shape','Left toolbar draws into the model');
   await evaluate("document.querySelector('.draw-project[style*=block] [aria-label=\"Shape tools\"]').click()");
-  assert.equal(await evaluate("document.querySelector('.draw-project[style*=block] .draw-tool-flyout').querySelectorAll('button').length"),5);
+  assert.equal(await evaluate("document.querySelector('.draw-tool-flyout').querySelectorAll('button').length"),4);
   await evaluate("window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}))");
+  await runDrawRenderWorkflows(client,image.id);
   await evaluate(`document.querySelector('[data-tab-id="${original.id}"]').click()`);
   assert.equal(await evaluate("paper.project.layers[1].exportJSON({asString:true})"),original.design,'Draw IO and tools preserve the original Cut document');
   await evaluate("document.querySelector('#workspaceToggle').click()");

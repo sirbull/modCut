@@ -1,7 +1,7 @@
 import { PANEL_DEFINITIONS, panelIconHref } from './registry.mjs';
 import { createNode } from '../doc/schema.mjs';
-import { insertNode, updateNode, updateArtboard } from '../doc/commands.mjs';
-import { appearance } from '../geometry.mjs';
+import { insertNode, updateNode } from '../doc/commands.mjs';
+import { shortcutLabel } from '../keymap.mjs';
 
 export function icon(href) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
@@ -12,12 +12,12 @@ export function icon(href) {
 export function createPanels(shell, state, api) {
   const rail = document.createElement('nav'); rail.className = 'draw-panel-rail'; rail.setAttribute('aria-label','Draw panels');
   const panels = document.createElement('aside'); panels.className = 'draw-panels'; panels.setAttribute('aria-label','Draw options');
-  const primary = document.createElement('section'), layers = document.createElement('section');
-  primary.className = 'draw-panel draw-panel--primary'; layers.className = 'draw-panel draw-panel--layers';
-  panels.append(primary,layers); shell.append(rail,panels);
+  const primary = document.createElement('section'); primary.className = 'draw-panel draw-panel--primary';
+  panels.append(primary); shell.append(rail,panels);
   for (const panel of PANEL_DEFINITIONS) {
     const button = document.createElement('button'); button.type = 'button'; button.className = 'draw-icon-button';
-    button.dataset.drawPanel = panel.id; button.dataset.tooltip = panel.name; button.setAttribute('aria-label',panel.name);
+    const shortcut = shortcutLabel(`panel.${panel.id}`,{isMac:/Mac/.test(navigator.platform)});
+    button.dataset.drawPanel = panel.id; button.dataset.tooltip = panel.name+(shortcut ? ` (${shortcut})` : ''); button.setAttribute('aria-label',panel.name);
     button.append(icon(panelIconHref(panel.id)));
     button.addEventListener('click',() => { state.ui.panel = panel.id; render(); }); rail.append(button);
   }
@@ -33,9 +33,9 @@ export function createPanels(shell, state, api) {
   function field(host, label, value, action, { type = 'number', disabled = false, min, max, key = label } = {}) {
     const row = document.createElement('label'); row.className = 'draw-field';
     const name = document.createElement('span'); name.textContent = label;
-    const input = document.createElement('input'); input.type = type; input.value = type === 'color' ? value || '#FFFFFF' : value; input.dataset.drawField = key;
+    const input = document.createElement('input'); input.type = type; input.value = type === 'color' ? value || '#FFFFFF' : type==='number' ? Number(Number(value).toFixed(3)) : value; input.dataset.drawField = key;
     input.disabled = disabled || state.document.readOnly; if (min !== undefined) input.min = min; if (max !== undefined) input.max = max;
-    if (type === 'number') input.step = '.01';
+    if (type === 'number') input.step = 'any';
     input.addEventListener('change',() => api.run(() => {
       const next = type === 'number' ? input.valueAsNumber : input.value;
       if (type === 'number' && (!Number.isFinite(next) || (min !== undefined && next < min) || (max !== undefined && next > max))) throw new Error(`Enter a valid ${label.toLowerCase()}.`);
@@ -70,8 +70,7 @@ export function createPanels(shell, state, api) {
     state.document.data.layers.forEach(node => row(node,0)); host.append(list);
   }
   function transform(host) {
-    const ids = api.selectedIds(), box = api.bounds(), node = ids.length === 1 ? state.document.getNode(ids[0]) : null;
-    if (node) field(host,'Name',node.name,value => state.history.execute(updateNode(node.id,{name:value})),{type:'text'});
+    const box = api.bounds();
     const grid = document.createElement('div'); grid.className = 'draw-fields'; host.append(grid);
     for (const [label,key] of [['X (mm)','x'],['Y (mm)','y'],['W (mm)','width'],['H (mm)','height']]) {
       field(grid,label,box ? Number(box[key].toFixed(2)) : 0,value => api.resize(key,value),
@@ -88,40 +87,37 @@ export function createPanels(shell, state, api) {
     const fill = first ? hex(first.appearance.fills[0],state.ui.fill) : state.ui.fill;
     const stroke = first ? hex(first.appearance.strokes[0],state.ui.stroke) : state.ui.stroke;
     const width = first?.appearance.strokes[0]?.width ?? state.ui.strokeWidth;
-    function apply(kind,value) {
-      if (kind === 'fill') state.ui.fill = value;
-      if (kind === 'stroke') state.ui.stroke = value;
-      if (kind === 'width') state.ui.strokeWidth = value;
-      state.history.transaction('Appearance',() => {
-        for (const id of ids) {
-          const original = state.document.getNode(id).appearance;
-          const next = appearance(kind === 'fill' ? value : fill, kind === 'stroke' ? value : stroke,kind === 'width' ? value : width);
-          state.history.execute(updateNode(id,{ appearance: { ...original,
-            fills: kind === 'fill' ? next.fills : original.fills,
-            strokes: ['stroke','width'].includes(kind) ? next.strokes : original.strokes } }));
-        }
-      });
-    }
     if (!strokeOnly) {
-      field(host,'Fill',fill,v => apply('fill',v),{type:'color'});
-      host.append(button('No fill',() => apply('fill',null)));
+      field(host,'Fill',fill,v => api.paint('fill',v),{type:'color'});
+      host.append(button('No fill',() => api.paint('fill',null)));
+    } else {
+      field(host,'Stroke',stroke,v => api.paint('stroke',v),{type:'color'});
+      field(host,'Width (mm)',width,v => api.paint('width',v),{min:0,key:'stroke-width'});
+      host.append(button('No stroke',() => api.paint('stroke',null)));
     }
-    field(host,'Stroke',stroke,v => apply('stroke',v),{type:'color'});
-    field(host,'Width (mm)',width,v => apply('width',v),{min:0,key:'stroke-width'});
-    host.append(button('No stroke',() => apply('stroke',null)));
     if (!ids.length) text(host,'These colors apply to new shapes. Select artwork to change its appearance.');
   }
   function render() {
     for (const button of rail.children) button.setAttribute('aria-pressed',String(button.dataset.drawPanel === state.ui.panel));
-    primary.replaceChildren(); layers.replaceChildren(); layers.hidden = state.ui.panel === 'layers';
-    heading(primary,PANEL_DEFINITIONS.find(p => p.id === state.ui.panel)?.name || 'Properties');
+    primary.replaceChildren();
+    if (state.ui.panel !== 'layers') heading(primary,PANEL_DEFINITIONS.find(p => p.id === state.ui.panel)?.name || 'Properties');
     if (state.document.readOnly) text(primary,state.warning || 'Read-only document');
     if (state.ui.panel === 'layers') layerPanel(primary);
     else if (state.ui.panel === 'artboards') {
-      for (const board of state.document.data.artboards) {
-        field(primary,'Name',board.name,v => state.history.execute(updateArtboard(board.id,{name:v})),{type:'text',key:'artboard-name'});
-        for (const key of ['width','height']) field(primary,`${key === 'width' ? 'Width' : 'Height'} (mm)`,board[key],v => state.history.execute(updateArtboard(board.id,{[key]:v})),{min:.001,key:`artboard-${key}`});
-        primary.append(button('Fit artboards',api.fit));
+      const list=document.createElement('div');list.className='draw-artboard-list';list.setAttribute('aria-label','Artboards');
+      for (const [i,board] of state.document.data.artboards.entries()) {
+        const b=button(`${i+1}. ${board.name}`,()=>api.artboards.choose(board.id));b.dataset.drawArtboard=board.id;
+        b.setAttribute('aria-pressed',String(board.id===api.artboards.active().id));
+        b.addEventListener('dblclick',()=>api.artboards.choose(board.id,true));list.append(b);
+      } primary.append(list);
+      const board=api.artboards.active();
+      field(primary,'Name',board.name,v=>api.artboards.edit(board.id,{name:v},{artwork:false}),{type:'text',key:'artboard-name'});
+      const grid=document.createElement('div');grid.className='draw-fields';primary.append(grid);
+      for(const [key,label] of [['x','X'],['y','Y'],['width','Width'],['height','Height']])field(grid,`${label} (mm)`,board[key],v=>api.artboards.edit(board.id,{[key]:v}),{min:['width','height'].includes(key) ? .001 : undefined,max:['width','height'].includes(key) ? 5779 : undefined,key:`artboard-${key}`});
+      const move=document.createElement('label');move.className='draw-check';const check=document.createElement('input');check.type='checkbox';check.checked=state.ui.moveArtwork!==false;
+      check.addEventListener('change',()=>{state.ui.moveArtwork=check.checked;});move.append(check,document.createTextNode('Move/copy artwork with artboard'));primary.append(move);
+      for(const [label,action,disabled] of [['New artboard',()=>api.artboards.add(),false],['Duplicate',()=>api.artboards.duplicate(),false],['Delete',()=>api.artboards.remove(),state.document.data.artboards.length===1],['Move up',()=>api.artboards.order(-1),state.document.data.artboards[0].id===board.id],['Move down',()=>api.artboards.order(1),state.document.data.artboards.at(-1).id===board.id],['Rearrange…',api.rearrange,false]]) {
+        const b=button(label,action);b.disabled=disabled || state.document.readOnly;primary.append(b);
       }
     } else if (state.ui.panel === 'color') paint(primary);
     else if (state.ui.panel === 'stroke') paint(primary,true);
@@ -130,17 +126,21 @@ export function createPanels(shell, state, api) {
       for (const [label,key] of [['Left','left'],['Center horizontally','centerX'],['Right','right'],['Top','top'],['Center vertically','centerY'],['Bottom','bottom']]) {
         const b = button(label,() => api.align(key)); b.disabled = !api.bounds() || state.document.readOnly; primary.append(b);
       }
-    } else {
-      text(primary,state.selection.ids.length ? `${state.selection.ids.length} selected` : 'No selection'); transform(primary);
-      if (state.ui.panel === 'properties') {
-        const h = document.createElement('h3'); h.textContent = 'Appearance'; primary.append(h); paint(primary);
+    } else if (state.ui.panel === 'transform') transform(primary);
+    else {
+        text(primary,state.selection.ids.length ? `${state.selection.ids.length} selected` : 'Select artwork or choose a drawing tool.');
+        const node = state.document.getNode(api.selectedIds()[0]);
+        if (node) field(primary,'Name',node.name,value => state.history.execute(updateNode(node.id,{name:value})),{type:'text'});
+        else text(primary,'Fill and Stroke are set with the swatches below the drawing tools.');
         const opacity = state.document.getNode(api.selectedIds()[0])?.opacity ?? 1;
         field(primary,'Opacity (%)',opacity*100,value => state.history.transaction('Opacity',() => {
           for (const id of api.selectedIds()) state.history.execute(updateNode(id,{opacity:value/100}));
         }),{min:0,max:100,disabled:!api.selectedIds().length,key:'opacity'});
-      }
+        if(node?.type==='shape') {
+          const editable=node.shape==='rect' ? [['cornerRadius','Corner radius (mm)',0]] : node.shape==='polygon' ? [['sides','Sides',3]] : node.shape==='star' ? [['points','Points',2],['innerRadius','Inner radius (mm)',0],['outerRadius','Outer radius (mm)',0]] : node.shape==='ellipse' ? [['startAngle','Pie start (°)',-360],['endAngle','Pie end (°)',-360]] : [];
+          for(const [key,label,min] of editable)field(primary,label,node.params[key]??({sides:6,points:5,endAngle:360}[key] || 0),value=>state.history.execute(updateNode(node.id,{params:{...node.params,[key]:value}})),{min,max:['sides','points'].includes(key)?100:undefined,key:`shape-${key}`});
+        }
     }
-    if (!layers.hidden) layerPanel(layers);
   }
   render(); return { render };
 }

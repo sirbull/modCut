@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { wait } from "./cdp.mjs";
+import { submitNewDrawDialog } from './draw-test-helpers.mjs';
 
 export async function runDrawWorkflows({ evaluate }) {
   const before = await evaluate(`(() => {
@@ -46,6 +47,7 @@ export async function runDrawTabWorkflows({ evaluate }) {
     const isMac=/Mac/.test(navigator.platform);
     window.dispatchEvent(new KeyboardEvent('keydown',{key:'n',code:'KeyN',metaKey:isMac,ctrlKey:!isMac,bubbles:true,cancelable:true}));
   })()`);
+  await submitNewDrawDialog(evaluate);
   assert.equal(await evaluate("document.body.dataset.workspace"), "draw");
   const newTab = await evaluate("document.querySelector('.doc-tab.is-active').dataset.tabId");
   await evaluate(`document.querySelector('[data-tab-id="${originalTab}"]').click()`);

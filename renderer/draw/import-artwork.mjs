@@ -2,6 +2,7 @@ import { parseSVG } from '../svgimport.js';
 import { createNode } from './doc/schema.mjs';
 import { insertNode, updateDocument, updateArtboard } from './doc/commands.mjs';
 import { appearance } from './geometry.mjs';
+import { activeArtboard } from './doc/artboards.mjs';
 
 async function imageFrom(source) {
   const image = new Image();
@@ -62,7 +63,7 @@ async function rasterize(vector) {
 /** Prepare everything before committing one atomic command per imported file. */
 export async function importArtwork(scope, state, prepared, name, layerId, { fitArtboard = false, alive = () => true } = {}) {
   if (state.document.readOnly) throw new Error('This Draw document is read-only. Create a new document to import artwork.');
-  const board = state.document.data.artboards[0], offset = fitArtboard ? [board.x,board.y] : [board.x+10,board.y+10];
+  const board = activeArtboard(state), offset = fitArtboard ? [board.x,board.y] : [board.x+10,board.y+10];
   const nodes = [], assets = {};
   let dimensions = null;
   let warning = prepared.warning;

@@ -1,6 +1,6 @@
 # modCut roadmap
 
-Last updated: 2026-10-14
+Last updated: 2026-10-15
 
 This is the living engineering checklist for the work required before modCut is
 ready for routine workshop use. Update the checkbox and the short result note in
@@ -68,14 +68,38 @@ the same commit that completes an item.
   guards. Atomic project writes and queued recovery writes. 58 Draw tests,
   11 main tests, Draw crash/relaunch E2E and the full `npm test` pass.
 
+- [x] D1.1: Retained Paper render adapter with per-node/board diff, viewport
+  culling, stable world bounds and reversible Outline view (Ctrl/Cmd+Y).
+  Raster transforms retain full source resolution and handle late loads safely.
+  67 Draw tests and the complete Draw Electron suite pass on Windows. Full
+  `npm test` reaches the previously documented engraving crop E2E failure.
+
+- [x] Draw toolbar cleanup: one entry per tool group, flyouts without repeated
+  variants, fill/stroke swatches and one active panel. Layers has one tree and
+  heading; Properties no longer repeats Transform, Color and Stroke editors.
+- [x] D1.2: Artboards, machine/paper/screen presets, New Document dialog,
+  active-board navigation, move/copy artwork, resize, rename, order and rearrange.
+  The actual export acceptance check belongs to the later export implementation.
+- [x] D1.3: Selection handles, modifier scaling, rotation, smart guides,
+  marquee/additive selection, nudging and temporary Hand/Zoom.
+- [x] D1.6: Rectangle, rounded rectangle, ellipse/pie, polygon, star and line,
+  live parameters, modifier drawing and exact-size dialogs. 79 Draw tests and
+  the complete Draw Electron workflow pass; both themes were visually checked.
+- [x] D1.5: Bézier Pen, open/closed paths, endpoint continuation, modifier
+  drawing, curve-preserving insertion and Add/Delete/Convert Anchor tools.
+- [ ] D1.4: Direct Selection now edits anchors/handles, supports anchor marquee,
+  Shift selection, nudge and undo. Live corner widgets and automatic live-shape
+  expansion with Direct Selection remain. Anchor Point already expands shapes.
+
 - [ ] Build the Draw workspace described in
   [`docs/DRAW_WORKSPACE.md`](docs/DRAW_WORKSPACE.md). Task status is tracked in
   chapter 23 of that document.
 
 - [x] Phase 0 — Foundation: workspace, document model/history, geometry kernel,
-  keymap and `.modcut` v4 persistence. D0.1–D0.6 complete; D1.1 is next.
+  keymap and `.modcut` v4 persistence. D0.1–D0.6 complete.
 - [ ] Phase 1 — Basic drawing MVP: artboards, Pen, shapes, layers, bitmap
-  references and Send to Cut v1.
+  references and Send to Cut v1. D1.1–D1.3, D1.5 and D1.6 complete; finish D1.4
+  (live corners / Direct Selection shape expansion) next. The phase remains in progress.
 - [ ] Phase 2 — Core vector editing: text, Pathfinder, gradients, import/export
   and Send to Cut v2.
 - [ ] Phase 3 — Advanced editing: stroke expansion, effects, Image Trace,

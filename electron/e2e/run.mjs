@@ -8,6 +8,8 @@ import { connectToApp, wait } from "./cdp.mjs";
 import { runDrawWorkflows, runDrawTabWorkflows } from "./draw-workflows.mjs";
 import { runProjectWorkflows, verifyProjectRecovery } from "./project-workflows.mjs";
 import { runDrawUIWorkflows } from "./draw-ui-workflows.mjs";
+import { runDrawPhaseOneWorkflows } from './draw-phase1-workflows.mjs';
+import { runDrawPathWorkflows } from './draw-path-workflows.mjs';
 import { runWorkflows, verifyRecoveredSession } from "./workflows.mjs";
 import { runThemeWorkflows } from "./theme-workflows.mjs";
 
@@ -56,6 +58,12 @@ try {
   if (process.argv.includes("--theme")) {
     await runThemeWorkflows(first, port);
     first.socket.close();
+  } else if (process.argv.includes('--draw-paths')) {
+    for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
+    await runDrawPathWorkflows(first);first.socket.close();
+  } else if (process.argv.includes('--draw-tools')) {
+    for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
+    await runDrawPhaseOneWorkflows(first);first.socket.close();
   } else if (process.argv.includes("--draw")) {
     let ready = false;
     for (let attempt = 0; attempt < 100 && !ready; attempt++) {
@@ -71,6 +79,8 @@ try {
     })()`);
     await runDrawWorkflows(first);
     await runDrawUIWorkflows(first);
+    await runDrawPhaseOneWorkflows(first);
+    await runDrawPathWorkflows(first);
     const expected = await runProjectWorkflows(first, profile);
     first.socket.close();
     await stop("SIGKILL");

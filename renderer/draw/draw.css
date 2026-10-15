@@ -8,7 +8,8 @@ body[data-workspace="draw"] .draw-workspace {
 body[data-workspace="draw"] :is(#stage, #side, .actionbar, #tools, #zoomOut, #zoomFit, #zoomIn, #selMode, #togglePanel) {
   visibility: hidden; pointer-events: none;
 }
-body[data-workspace="draw"] .statusbar > :is(#coords, #sel, .sep) { visibility: hidden; }
+body[data-workspace="draw"] .statusbar > :is(#coords, #sel, .sep) { display:none; }
+body[data-workspace="draw"] .actionbar {display:none;}
 .draw-canvas { display: block; width: 100%; height: 100%; }
 .draw-workspace__hint {
   position: absolute; inset: 0; display: flex; flex-direction: column;
@@ -19,10 +20,20 @@ body[data-workspace="draw"] .statusbar > :is(#coords, #sel, .sep) { visibility: 
 .draw-workspace__hint button { pointer-events: auto; }
 .draw-workspace__hint h1 { color: var(--text); margin: 0; font-size: var(--fs-lg); }
 .draw-project { position: absolute; inset: 0; }
-.draw-shell { display: grid; grid-template-columns: 52px minmax(0, 1fr) 48px 286px; height: 100%; min-height: 0; }
+.draw-shell { display: grid; grid-template-columns: 52px minmax(0, 1fr) 48px 286px; grid-template-rows:minmax(0,1fr) 28px; height: 100%; min-height: 0; }
+.draw-tool-rail { grid-column:1;grid-row:1 / -1; }
+.draw-stage {grid-column:2;grid-row:1;}
+.draw-panel-rail {grid-column:3;grid-row:1 / -1;overflow-y:auto;}
+.draw-panels {grid-column:4;grid-row:1 / -1;}
+.draw-tool-hint {grid-column:2;grid-row:2;display:flex;align-items:center;padding:0 12px;background:var(--surface);border-top:1px solid var(--border);font-size:var(--fs-xs);color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.draw-tool-grid {display:grid;grid-template-columns:38px;gap:5px;flex:0 0 auto;}
+.draw-shell--panels-hidden {grid-template-columns:52px minmax(0,1fr);}
+.draw-shell--panels-hidden :is(.draw-panel-rail,.draw-panels) {display:none;}
+.draw-shell.draw-shell--all-hidden {grid-template-columns:0 minmax(0,1fr);}
+.draw-shell--all-hidden .draw-tool-rail {display:none;}
 .draw-stage { position: relative; overflow: hidden; min-width: 0; min-height: 0; background: var(--surface-2); }
 .draw-tool-rail, .draw-panel-rail { display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 10px 4px; background: var(--surface); min-height: 0; }
-.draw-tool-rail { border-right: 1px solid var(--border); overflow-y: auto; overflow-x: visible; }
+.draw-tool-rail { border-right: 1px solid var(--border); overflow-y: auto; overflow-x:hidden;scrollbar-width:thin; }
 .draw-panel-rail { border-left: 1px solid var(--border); border-right: 1px solid var(--border); }
 .draw-icon-button { width: 38px; height: 38px; flex: 0 0 38px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid transparent; border-radius: var(--rad-2, 6px); background: transparent; color: var(--text-muted); cursor: pointer; }
 .draw-icon-button svg { width: 22px; height: 22px; flex-shrink: 0; }
@@ -37,7 +48,6 @@ body[data-workspace="draw"] .statusbar > :is(#coords, #sel, .sep) { visibility: 
 .draw-panels { background: var(--surface); min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; color: var(--text); }
 .draw-panel { padding: 14px; min-height: 0; overflow: auto; }
 .draw-panel--primary { flex: 1 1 60%; }
-.draw-panel--layers { flex: 1 1 40%; border-top: 1px solid var(--border); }
 .draw-panel[hidden] { display: none; }
 .draw-panel__header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .draw-panel h2 { font-size: var(--fs-md); margin: 0; }
@@ -57,12 +67,32 @@ body[data-workspace="draw"] .statusbar > :is(#coords, #sel, .sep) { visibility: 
 .draw-layer-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 0; text-align: left; background: transparent; color: var(--text); font: inherit; font-size: var(--fs-sm); padding: 4px 0; cursor: pointer; }
 .draw-view-controls { position: absolute; left: 16px; right: 16px; bottom: 12px; display: flex; align-items: center; justify-content: space-between; color: var(--text-muted); font-size: var(--fs-xs); pointer-events: none; }
 .draw-view-controls button { pointer-events: auto; background: var(--surface); }
+.draw-view-buttons { display: flex; align-items:center;gap:var(--sp-2); }
+.draw-view-controls :is(select,input) {pointer-events:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-input);padding:5px;color:var(--text);font-size:var(--fs-xs);}
+.draw-board-select {max-width:140px;}
+.draw-zoom-input {width:64px;}
+.draw-position {padding:5px;background:var(--surface);border-radius:var(--r-input);}
+.draw-paint-box {position:relative;flex:0 0 86px;width:44px;margin-top:auto;}
+.draw-paint-swatch {position:absolute;left:0;top:8px;width:29px;height:29px;border:2px solid var(--text-muted);border-radius:3px;background:var(--paint-color);cursor:pointer;}
+.draw-paint-swatch--stroke {left:13px;top:22px;box-shadow:inset 0 0 0 6px var(--surface);}
+.draw-paint-swatch[aria-pressed="true"] {z-index:1;border-color:var(--brand-deep);}
+.draw-paint-swatch.is-none {background:linear-gradient(135deg,transparent 46%,var(--danger) 47%,var(--danger) 53%,transparent 54%),var(--bg);}
+.draw-paint-actions {display:flex;position:absolute;bottom:0;left:-2px;gap:0;}
+.draw-paint-actions button {width:17px;height:25px;padding:0;border:0;color:var(--text);background:transparent;cursor:pointer;}
+.draw-paint-actions button:disabled {opacity:.35;cursor:default;}
+.draw-artboard-list {display:flex;flex-direction:column;gap:5px;margin-bottom:15px;}
+.draw-artboard-list .btn {text-align:left;overflow:hidden;text-overflow:ellipsis;}
+.draw-artboard-list [aria-pressed="true"] {box-shadow:inset 3px 0 var(--brand-fill);}
+.draw-check {display:flex;align-items:center;gap:6px;font-size:var(--fs-xs);margin-bottom:14px;}
+.draw-view-buttons [aria-pressed="true"] { color: var(--brand-deep); box-shadow: inset 0 0 0 1px var(--brand-deep); }
 .draw-canvas[data-tool="hand"] { cursor: grab; }
 .draw-canvas[data-tool="zoom"] { cursor: zoom-in; }
-.draw-canvas:is([data-tool="rectangle"],[data-tool="ellipse"],[data-tool="line"],[data-tool="polygon"],[data-tool="star"]) { cursor: crosshair; }
+.draw-canvas:is([data-tool="rectangle"],[data-tool="rounded-rectangle"],[data-tool="ellipse"],[data-tool="line"],[data-tool="polygon"],[data-tool="star"],[data-tool="artboard"]) { cursor: crosshair; }
 body[data-workspace="draw"] :is(#tools,#zoomOut,#zoomFit,#zoomIn,#selMode,#togglePanel,.toolbar .tb-sep) { display: none; }
 @media (max-width: 960px) { .draw-shell { grid-template-columns: 48px minmax(0,1fr) 44px 240px; } }
 @media (max-width: 700px) { .draw-shell { grid-template-columns: 44px minmax(0,1fr) 40px 200px; } .draw-panel { padding: 10px; } }
+@media (max-height:1000px) { .draw-shell {grid-template-columns:90px minmax(0,1fr) 48px 286px;} .draw-tool-grid {grid-template-columns:repeat(2,34px);gap:3px;} .draw-tool-grid .draw-icon-button {width:34px;height:34px;flex-basis:34px;} .draw-shell--panels-hidden {grid-template-columns:90px minmax(0,1fr);} }
+@media (max-width:960px) { .draw-shell {grid-template-columns:90px minmax(0,1fr) 44px 240px;} .draw-shell--panels-hidden {grid-template-columns:90px minmax(0,1fr);} .draw-position {display:none;} }
 
 #workspaceToggle {
   box-sizing: border-box;

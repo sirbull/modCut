@@ -165,7 +165,7 @@ test('every tool in specification chapter 6 has its SVG and a sprite symbol', ()
   const sources = readdirSync(dir).filter((name) => name.endsWith('.svg') && name !== 'sprite.svg');
   assert.equal(sources.length, 49);
   for (const tool of TOOL_DEFINITIONS) {
-    const source = readFileSync(new URL(`${tool.icon}.svg`, dir), 'utf8');
+    const source = readFileSync(new URL(`${tool.icon}.svg`, dir), 'utf8').replace(/\r\n/g, '\n');
     assert.match(source, /viewBox="0 0 24 24"/); assert.match(source, /stroke="currentColor"/); assert.match(source, /stroke-width="2"/);
     const provenance = manifest.icons[tool.icon];
     assert.ok(source.includes(`icon-tabler-${provenance.name}"`));

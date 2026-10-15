@@ -9,7 +9,8 @@ const names = readdirSync(directory).filter((name) => name.endsWith('.svg') && n
 const manifest = JSON.parse(readFileSync(new URL('sources.json', directory), 'utf8'));
 if (JSON.stringify(Object.keys(manifest.icons).sort()) !== JSON.stringify(names.map((name) => name.slice(0, -4)).sort())) throw new Error('Draw icon sources do not match the Tabler manifest.');
 const symbols = names.map((name) => {
-  const bytes = readFileSync(new URL(name, directory));
+  // Git's Windows checkout may use CRLF. Verify canonical source text, not platform line endings.
+  const bytes = Buffer.from(readFileSync(new URL(name, directory), 'utf8').replace(/\r\n/g, '\n'));
   const provenance = manifest.icons[name.slice(0, -4)];
   if (createHash('sha256').update(bytes).digest('hex') !== provenance.sha256) throw new Error(`Modified Tabler source: ${name}`);
   const source = bytes.toString('utf8').trim();
@@ -23,7 +24,7 @@ for (const tool of definitions) if (!names.includes(`${tool.icon}.svg`)) throw n
 const sprite = `<svg xmlns="http://www.w3.org/2000/svg">\n${symbols.join('\n')}\n</svg>\n`;
 const target = new URL('sprite.svg', directory);
 if (process.argv.includes('--check')) {
-  if (!existsSync(target) || readFileSync(target, 'utf8') !== sprite) throw new Error('Draw sprite is stale. Run npm run build:icons.');
+  if (!existsSync(target) || readFileSync(target, 'utf8').replace(/\r\n/g, '\n') !== sprite) throw new Error('Draw sprite is stale. Run npm run build:icons.');
 } else writeFileSync(target, sprite);
 console.log(`Draw icons: ${symbols.length} symbols${process.argv.includes('--check') ? ' verified' : ` written to ${fileURLToPath(target)}`}`);
 }

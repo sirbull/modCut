@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { wait } from './cdp.mjs';
+import { submitNewDrawDialog } from './draw-test-helpers.mjs';
 
 const activeState = `(await import('./draw/index.mjs')).getDrawWorkspace(document.querySelector('.draw-project[data-tab-id="'+document.querySelector('.doc-tab.is-active').dataset.tabId+'"]')).state`;
 const snapshot = (evaluate) => evaluate(`(async()=>(${activeState}.snapshot()))()`);
@@ -20,12 +21,27 @@ async function openProject(evaluate, path, project) {
 }
 
 async function save(evaluate, path) {
-  await evaluate(`window.dispatchEvent(new KeyboardEvent('keydown',{key:'s',code:'KeyS',metaKey:/Mac/.test(navigator.platform),ctrlKey:!/Mac/.test(navigator.platform),bubbles:true,cancelable:true}))`);
-  await until(async () => {
-    const data = JSON.parse(await readFile(path, 'utf8'));
-    return data.version === 4 && !(await dirty(evaluate));
-  }, 'Project save did not complete through the renderer/IPC path');
-  return JSON.parse(await readFile(path, 'utf8'));
+  // Wait for the completed IPC save before reading. Polling readFile can hold a
+  // Windows file handle open during the atomic rename and cause EPERM.
+  await evaluate(`new Promise((resolve,reject) => {
+    const timer=setTimeout(()=>{observer.disconnect();reject(new Error('Project save did not complete'));},10000);
+    const observer=new MutationObserver(records=>{
+      for(const record of records) for(const node of record.addedNodes) {
+        const text=node.textContent||'';
+        if(text.includes('Document saved.')||text.includes('Save failed:')) {
+          clearTimeout(timer);observer.disconnect();
+          if(text.includes('Save failed:')) reject(new Error(text)); else resolve(true);
+          return;
+        }
+      }
+    });
+    observer.observe(document.querySelector('#toasts'),{childList:true,subtree:true});
+    window.dispatchEvent(new KeyboardEvent('keydown',{key:'s',code:'KeyS',metaKey:/Mac/.test(navigator.platform),ctrlKey:!/Mac/.test(navigator.platform),bubbles:true,cancelable:true}));
+  })`);
+  const data = JSON.parse(await readFile(path, 'utf8'));
+  assert.equal(data.version, 4);
+  assert.equal(await dirty(evaluate), false);
+  return data;
 }
 
 export async function runProjectWorkflows({ evaluate }, directory) {
@@ -34,6 +50,7 @@ export async function runProjectWorkflows({ evaluate }, directory) {
   const legacy = { app: 'modCut', version: 3, design, filename: 'roundtrip', mappingMode: 'color', layers: [], units: 'cm' };
   await writeFile(path, JSON.stringify(legacy));
   await evaluate("document.querySelector('#newDoc').click()");
+  await submitNewDrawDialog(evaluate);
   await openProject(evaluate, path, legacy);
   assert.equal(await evaluate("paper.project.layers[1].exportJSON({asString:true})"), design, 'v3 Cut geometry survives opening');
   await evaluate("document.querySelector('#workspaceToggle').click()");
@@ -93,6 +110,7 @@ export async function runProjectWorkflows({ evaluate }, directory) {
   const firstTabId = await evaluate("document.querySelector('.doc-tab.is-active').dataset.tabId");
   const firstDraw = await snapshot(evaluate);
   await evaluate("document.querySelector('#newDoc').click();if(document.body.dataset.workspace==='cut')document.querySelector('#workspaceToggle').click()");
+  await submitNewDrawDialog(evaluate);
   await evaluate(`(async()=>{
     const state=${activeState}, {updateNode}=await import('./draw/doc/commands.mjs');
     state.history.execute(updateNode(state.document.data.layers[0].id,{name:'Recovered inactive document'}));

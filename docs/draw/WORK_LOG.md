@@ -100,3 +100,114 @@ prosjektversjoner avvises før arbeidsflaten endres. Recovery lagres fortsatt so
 et komplett atomisk JSON-snapshot, med gjenbruk av uendrede Draw-modellsnapshots.
 
 Arbeidsgren: `feat/vector-draw`. **Neste: D1.1**, render-adapter modell → Paper.js.
+
+## 2026-10-15 — D1.1 fullført
+
+Utgangspunktet hadde allerede enkel rendering, import, former og paneler fra de
+to siste committene. D1.1 fullfører render-adapteren uten å erklære de senere
+verktøy- og paneloppgavene ferdige.
+
+- [x] Render-adapter i `render/paper-adapter.mjs`, med kompatibel eksport fra
+  `render.mjs`. Geometri, utseende og artboards diffes per id; uendrede objekter
+  og gruppebarn beholdes gjennom stilendringer, transformering og omorganisering.
+- [x] Viewport culling ved pan, zoom, Fit og resize. Strekbredde og skjermmargin
+  tas med. Skjulte lag forblir skjult. Verdenskoordinater og utvalgsrammer beregnes
+  fra modellen og krymper ikke når gruppebarn ligger utenfor skjermen.
+- [x] Outline / Preview via sentralt tastekart (Ctrl/Cmd+Y), native View-meny
+  og tilgjengelig knapp. Hele piksellinjer uten fill, dash eller blending;
+  bilder vises som rammer. View-endringer lager ikke undo-steg eller dirty-data.
+- [x] Separat, gjenbrukt markerings-overlay med konstant skjermbredde.
+- [x] Bilder skaleres med matriser uten å resample kildepikslene. Sen innlasting
+  bruker siste modelltransform og ignorerer slettede/erstattede rasterobjekter.
+  Callbacken gjenoppretter Cut sitt aktive PaperScope.
+- [x] Sju nye render-enhetstester og Electron-scenario for Outline-hurtigtast,
+  meny, originale bildepiksler, bilderedigering før onload, culling og Hand/Fit.
+- [x] Windows-kontroller: SVG-integritet og sprite-sammenligning normaliserer
+  CRLF til original LF. Prosjekt-E2E venter på fullført IPC-save før fillesing,
+  slik at testens åpne filhåndtak ikke blokkerer atomisk rename på Windows.
+
+Verifisert på Windows: `npm run test:draw` (67 tester), komplett
+`npm run test:e2e:draw` (inkludert faktisk krasj/restart) og `git diff --check`.
+Hele `npm test` er kjørt: sidecar, bridge, main (11), renderer (56), Draw og
+kontrast passerer; Cut-E2E stopper på den allerede dokumenterte testen
+«dragging a crop edge must update the crop» med uendret «100 × 100%».
+Ingen endring i `bed.js`, bildeeditoren eller `sidecar/` er gjort.
+50-fps-målet for 5 000 paths / 200 000 ankre er ikke målt i dette trinnet;
+det samlede ytelsespasset står fortsatt som D4.6.
+
+Arbeidsgren: `feat/vector-draw`. **Neste: D1.2**, artboards og New Document-dialog.
+
+## 2026-10-15 — verktøylinjen ryddet, D1.2/D1.3/D1.6 implementert
+
+- Ett ikon per verktøygruppe, flyout uten gjentatt aktiv variant, langtrykk,
+  høyreklikk og Alt-sykling. Kompakt oppsett uten vannrett rulling. Alle 49
+  metadataoppføringer er med; senere faseverktøy er fortsatt deaktivert.
+- Ett panel om gangen. Layers har ett tre og én overskrift. Properties viser
+  navn, opacity og formparametre; Transform, Color og Stroke eier sine felt.
+  Ingen permanent Layers-kopi under Properties. Fill/Stroke-boks og sentrale
+  malingskommandoer for swap/default/none er koblet til reell geometri.
+- D1.2: New Document med Bed/A4/A3/A5/Letter/Tabloid/skjerm/custom, antall,
+  layout og avstand. Aktivt artboard, navn, mål, panelnavigasjon, oppretting,
+  flytting, skalering, duplisering med nye id-er, sletting, rekkefølge og
+  omorganisering. Innhold følger med når valget er på; låste/skjulte objekter
+  flyttes ikke. Én transaksjon per operasjon. Grensene 1 000 / 5 779 mm valideres.
+- D1.3: åtte skaleringshåndtak, Shift-proporsjon, Alt-senter, rotasjon, marquee,
+  Shift-valg, Alt-kopi, nudge og smart guides. Space/Mod+Space er midlertidige
+  verktøy og beholder permanent verktøy ved slipp. Normal rulling panorerer;
+  Mod+rulling zoomer rundt pekeren. Aktivt artboard brukes til Align og import.
+- D1.6: rektangel, avrundet rektangel, ellipse/pie, polygon, stjerne og linje.
+  Korrekte previews, eksakte mål, live parametre og Shift/Alt/Space-regler.
+  Antall sider/punkter og hjørneradius kan justeres under drag. Stjernens
+  indre radius kan styres med Mod. Pievinkler beholder Bézier-geometri.
+- Tema og layout kontrollert med skjermbilder i begge temaer. Capture-listener
+  i app-integrasjonen aktiverer Cut sitt scope før bed sin eksisterende tema-
+  handler. Draw oppdaterer navn/farger etterpå. Ingen endring i `bed.js`.
+
+Verifisering: 79 Draw-enhetstester (12 nye siden D1.1), komplett Draw-E2E med
+arbeidsflytene over og faktisk prosjektlagring/krasj/restart. Full `npm test`
+passerer sidecar, bridge, main, renderer, Draw og kontrast, men stopper fortsatt
+i kjent crop-E2E med «100 × 100%». Ingen ny avhengighet eller sidecar-endring.
+
+Planpresisering: eksportverifiseringen av artboard 2 flyttes til D2.5–D2.7,
+som implementerer eksporten. Første Draw-åpning beholder eksisterende dokument;
+New åpner størrelsesdialogen. Fase 1 er fortsatt under arbeid: D1.4/D1.5,
+selvstendige transformverktøy, resten av panelene og Send til Cut gjenstår.
+
+Arbeidsgren: `feat/vector-draw`. **Neste: D1.4 (Direct Selection), deretter D1.5 (Pen).**
+
+## 2026-10-15 — Pen og ankerredigering
+
+- D1.5 implementert i Draw-modellen: Pen med rette/Bézier-segmenter, lukking,
+  fortsettelse fra begge ender og hover-preview. Endepunktreversering lagres først
+  ved en faktisk endring. Shift begrenser vinkler, Alt frikobler håndtak, Space
+  flytter ankeret under drag. Enter/Escape avslutter; Escape under drag forkaster
+  preview. Pen kan dele kurver og redigere synlige håndtak.
+- Add Anchor bruker eksakt De Casteljau-deling. Delete Anchor og Delete på valgte
+  ankre bevarer andre subpaths. Anchor Point konverterer hjørne/glatt og trekker
+  ut håndtak. Strukturell shape-expansion beholder id, utseende og plassering;
+  Undo gjenoppretter live form med opprinnelige parametre.
+- D1.4 delvis: Direct Selection, ankre/håndtak, Shift-valg, marquee, segmentvalg,
+  nudge og separate håndtak med Alt. Live corner widgets og automatisk ekspandering
+  med Direct Selection gjenstår; Anchor Point kan allerede ekspandere former.
+- Ankre/håndtak tegnes i separat overlay med fast skjermstørrelse. Innsetting,
+  videre tegning, håndtak, nudge og previews følger transformerte foreldre/layers.
+  Alle dokumentendringer bruker Commands/History; ett drag gir ett angresteg.
+- Verktøy aktiveres i eksisterende grupper. Ingen ekstra Layers-paneler eller
+  verktøykopier. Ingen endring i `bed.js`, sidecar eller avhengigheter.
+
+Verifisering: 85 Draw-enhetstester passerer, inkludert kubisk formbevaring og
+transformerte foreldre. Komplett Draw-E2E passerer med filrundtur, kontinuerlig
+autosave og faktisk krasj/restart. Den nye muse-/tastaturtesten dekker Pen,
+lukking, ankre/håndtak, deling/sletting/konvertering, reversering, Escape,
+Shift/Alt/Space, shape-expansion og at Cut bevares. Skjermbildet med valgte
+ankre/håndtak er visuelt kontrollert. En samtidig kjøring med to Electron-vinduer
+traff tidsgrensen i autosave-testen; isolert komplett kjøring passerer.
+
+Full `npm test` passerer sidecar, bridge, main, renderer, alle 85 Draw-tester og
+kontrast. Den stopper deretter i den tidligere dokumenterte Cut crop-E2E-testen
+(`workflows.mjs:369`, «dragging a crop edge must update the crop», uendret
+«100 × 100%»). Cut-beskjæring er ikke endret som del av dette trinnet. En ekstra
+ren geometrikontroll bekrefter at ankersletting bevarer også uvalgte subpaths
+med bare ett punkt.
+
+**Neste: fullfør D1.4 (live corners og automatisk shape-expansion), så D1.7–D1.11.**

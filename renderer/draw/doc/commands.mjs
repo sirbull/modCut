@@ -129,6 +129,23 @@ export function removeArtboard(id) {
     data.artboards.splice(index, 1);
   }, { nodeIds: [id] });
 }
+/** Expand a leaf while retaining its identity, stacking position and undo data. */
+export function replaceLeaf(id, replacement) {
+  const copy=structuredClone(replacement);
+  if(copy.id!==id || copy.children)throw new Error('Replacement must retain leaf identity');
+  return new EditCommand('Expand Shape',data=>{
+    editable(data,id);const entry=requireNode(data,id);
+    if(entry.node.children)throw new Error('Cannot replace a container');
+    entry.siblings[entry.index]=structuredClone(copy);
+  },{nodeIds:[id]});
+}
+export function reorderArtboard(id, index) {
+  return new EditCommand('Reorder Artboard', data => {
+    const from = data.artboards.findIndex(board => board.id === id);
+    if (from < 0 || !Number.isInteger(index) || index < 0 || index >= data.artboards.length) throw new Error('Invalid artboard order');
+    const [board] = data.artboards.splice(from,1); data.artboards.splice(index,0,board);
+  }, {nodeIds:[id]});
+}
 export function updateDocument(properties) {
   const allowed = ['name', 'units', 'rasterEffectsPpi', 'colorMode', 'settings', 'swatches', 'swatchGroups', 'graphicStyles', 'assets', 'guides', 'cutLinks'];
   if (Object.keys(properties).some((key) => !allowed.includes(key))) throw new Error('Unsupported document property');

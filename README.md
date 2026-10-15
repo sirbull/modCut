@@ -106,7 +106,26 @@ Older version 1–3 projects open with an empty Draw document. Autosave recovers
 Draw and Cut per tab; either workspace can trigger the unsaved-work prompt.
 Unknown Draw schemas are read-only, with original data preserved on saving.
 Use this or a newer modCut to save v4 projects; older releases may drop Draw data.
-Visible Draw rendering/tools are still being built.
+Draw currently offers multiple artboards, artwork import and grouped drawing tools.
+New Draw documents have machine-bed, paper and screen presets. Artboards can be
+renamed, resized, rearranged and copied with their artwork. Selection supports
+resize handles, Shift/Alt scaling, smart guides and keyboard nudging. Rectangle,
+rounded rectangle, ellipse/pie, polygon, star and line tools support exact sizes.
+Each tool group has one toolbar entry; the right-hand rail opens one panel at a
+time. Layers, Transform, Color and Stroke have their own editors. Pen draws
+straight and Bézier paths, closes paths and continues either endpoint. Direct
+Selection edits anchors and handles, including marquee selection and nudging.
+Add/Delete/Anchor Point tools split curves and convert corner/smooth anchors.
+Shift constrains angles, Alt separates handles and Space moves a Pen anchor
+during dragging. Enter/Escape finishes an open path; Escape during a drag cancels
+the preview. Anchor Point can expand a live shape into an editable path, with undo.
+Grey tools are reserved for the later implementation steps. Live corner widgets
+and automatic shape expansion with Direct Selection are still pending.
+The renderer retains unchanged objects, skips artwork outside the viewport and
+offers **Outline / Preview** with **Ctrl/Cmd+Y** or the Outline button. Outline
+shows vector hairlines and image frames without changing the saved artwork.
+The remaining drawing and editing tools are being built in stages; see the
+[Draw implementation plan](docs/DRAW_WORKSPACE.md).
 
 The file does not copy local machine profiles, connection details, drivers,
 material libraries or process-profile libraries. A receiving computer must

@@ -1,0 +1,37 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {anchor,splitCurve,reversePath,moveAnchors,deleteAnchors,convertAnchor,constrain} from '../geom/path-editing.mjs';
+import {createProjectDraw} from '../io/project.mjs';
+import {createNode} from '../doc/schema.mjs';
+import {insertNode,replaceLeaf} from '../doc/commands.mjs';
+const close=(a,b)=>a.forEach((n,i)=>assert.ok(Math.abs(n-b[i])<1e-9,`${a} != ${b}`));
+const add=(a,b)=>a.map((n,i)=>n+b[i]);
+const cubic=(a,b,t)=>a.p.map((n,i)=>n*(1-t)**3+3*(n+a.out[i])*(1-t)**2*t+3*(b.p[i]+b.in[i])*(1-t)*t*t+b.p[i]*t**3);
+test('De Casteljau splitting preserves every point of an asymmetric cubic',()=>{
+  const original={closed:false,segments:[{p:[0,0],in:[0,0],out:[10,40]},{p:[50,20],in:[-25,5],out:[0,0]}]},saved=structuredClone(original);
+  const split=splitCurve(original,0,.37);
+  for(let i=0;i<=100;i++){const t=i/100,k=t<.37?0:1,u=t<.37?t/.37:(t-.37)/.63;close(cubic(...original.segments,t),cubic(split.segments[k],split.segments[k+1],u));}
+  assert.deepEqual(original,saved);assert.throws(()=>splitCurve(original,1,.5));assert.throws(()=>splitCurve(original,0,0));
+});
+test('closed closing-curve split and path reversal retain tangents',()=>{
+  const path={closed:true,segments:[{...anchor([0,0]),in:[-3,2]},{...anchor([10,10]),out:[3,-4]}]};
+  const split=splitCurve(path,1,.5);assert.equal(split.segments.length,3);close(split.segments[2].p,cubic(path.segments[1],path.segments[0],.5));
+  assert.deepEqual(reversePath(reversePath(path)),path);close(add(reversePath(path).segments[0].p,reversePath(path).segments[0].in),[13,6]);
+});
+test('moving, deleting and converting anchors do not alter unrelated subpaths',()=>{
+  const paths=[{closed:false,segments:[[0,0],[10,0],[10,10]].map(anchor)},{closed:true,segments:[[20,20],[30,20],[30,30]].map(anchor)}],selected=[{subpath:0,segment:1}];
+  const moved=moveAnchors(paths,selected,[3,4]);assert.deepEqual(moved[0].segments[1].p,[13,4]);assert.deepEqual(moved[1],paths[1]);assert.deepEqual(paths[0].segments[1].p,[10,0]);
+  const smooth=convertAnchor(paths[0],1,true);close(smooth.segments[1].in,[-10/Math.sqrt(2)/3,-10/Math.sqrt(2)/3]);assert.deepEqual(convertAnchor(smooth,1).segments[1],paths[0].segments[1]);
+  assert.equal(deleteAnchors(paths,[...selected,{subpath:0,segment:0}]).length,1);close(constrain([8,9],[0,0]),[Math.hypot(8,9)/Math.sqrt(2),Math.hypot(8,9)/Math.sqrt(2)]);
+  const singleton={closed:false,segments:[anchor([50,50])]};
+  assert.deepEqual(deleteAnchors([...paths,singleton],selected).at(-1),singleton,'Unselected subpaths are preserved even with only one anchor');
+});
+test('expanding a leaf retains identity and restores the exact shape on undo',()=>{
+  const state=createProjectDraw(),shape=createNode('shape',{name:'Live',params:{width:20,height:10}}),parent=state.document.data.layers[0].id;
+  state.history.execute(insertNode(parent,shape));state.history.markSaved();
+  const replacement=createNode('path',{id:shape.id,name:shape.name,subpaths:[{closed:false,segments:[anchor([0,0]),anchor([20,10])]}]});
+  state.history.execute(replaceLeaf(shape.id,replacement));assert.equal(state.document.getNode(shape.id).type,'path');assert.equal(state.dirty,true);
+  state.history.undo();assert.deepEqual(state.document.getNode(shape.id),shape);assert.equal(state.dirty,false);
+  state.history.redo();assert.deepEqual(state.document.getNode(shape.id),replacement);
+  assert.throws(()=>replaceLeaf(shape.id,{...replacement,id:'other'}));
+});
