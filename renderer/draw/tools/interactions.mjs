@@ -10,8 +10,11 @@ export function createInteractions(canvas, state, api) {
   const point=event=>{const b=canvas.getBoundingClientRect();return scope.view.viewToProject(new scope.Point(event.clientX-b.left,event.clientY-b.top));};
   function clearPreview() {preview?.remove();preview=null;renderer.clearTransformPreview();state.ui.transformPreviewBox=null;}
   function cancel() {const previous=gesture;gesture=null;withScope(()=>{clearPreview();if(TRANSFORM_TOOLS.includes(previous?.tool))api.transforms.setOrigin(previous.originBefore);renderer.updateView();});api.status();}
+  // Clicks select the outermost group around a hit, or, in isolation mode, the outermost group inside the isolated one.
   function targetId(id) {
-    const groups=state.document.ancestors(id).filter(n=>n.type==='group'); return groups.at(-1)?.id || id;
+    let chain=state.document.ancestors(id);const iso=state.ui.isolation;
+    if(iso){const k=chain.findIndex(n=>n.id===iso);if(k<0)return null;chain=chain.slice(0,k);}
+    const groups=chain.filter(n=>n.type==='group'); return groups.at(-1)?.id || id;
   }
   function targets() {
     const selected=new Set(api.selectedIds());
@@ -103,10 +106,10 @@ export function createInteractions(canvas, state, api) {
     const base={tool,start:p,end:p,center:scope.view.center.clone(),zoom:scope.view.zoom,screen:[event.clientX,event.clientY],modifiers:{shift:event.shiftKey,alt:event.altKey}};
     if (tool==='hand' || tool==='zoom') {gesture=base;if(tool==='hand')canvas.style.cursor=CURSORS['hand-active'];return;}
     if (state.document.readOnly) {
-      if (tool==='select') {const id=renderer.hit(p);api.select(id ? [targetId(id)] : []);} return;
+      if (tool==='select') {const id=renderer.hit(p),t=id&&targetId(id);api.select(t ? [t] : []);} return;
     }
     if(TRANSFORM_TOOLS.includes(tool)){
-      if(!api.selectedIds().length){const hit=renderer.hit(p);if(hit)api.select([targetId(hit)]);}
+      if(!api.selectedIds().length){const hit=renderer.hit(p),t=hit&&targetId(hit);if(t)api.select([t]);}
       const origin=api.transforms.origin(),box=renderer.selectionBounds();if(!origin||!box)return;
       const originBefore=state.ui.transformOrigin&&[...state.ui.transformOrigin];
       gesture={...base,origin,originBefore,originDrag:p.getDistance(new scope.Point(...origin))<=8/scope.view.zoom,ids:api.selectedIds(),box};
@@ -150,7 +153,8 @@ export function createInteractions(canvas, state, api) {
       } else if (drag.mode==='new-artboard' && moved && drag.rectangle.width>0 && drag.rectangle.height>0) {
         api.artboards.add({x:drag.rectangle.x,y:drag.rectangle.y,width:drag.rectangle.width,height:drag.rectangle.height});
       } else if (drag.mode==='marquee' && moved) {
-        const ids=state.document.data.layers.flatMap(layer=>layer.children).filter(n=>state.document.isEditable(n.id) && renderer.bounds(n.id)?.intersects(drag.rectangle)).map(n=>n.id);
+        const iso=state.ui.isolation&&state.document.getNode(state.ui.isolation),pool=iso?iso.children:state.document.data.layers.flatMap(layer=>layer.children);
+        const ids=pool.filter(n=>state.document.isEditable(n.id) && renderer.bounds(n.id)?.intersects(drag.rectangle)).map(n=>n.id);
         api.select([...drag.initial,...ids]);
       } else if (moved && drag.matrix) {
         if(drag.tool==='artboard')api.artboards.edit(drag.boardId,transformedBox(drag.box,drag.matrix),{copy:drag.modifiers.alt && !drag.handle});
@@ -159,14 +163,20 @@ export function createInteractions(canvas, state, api) {
     });
   },events);
   canvas.addEventListener('pointercancel',cancel,events);canvas.addEventListener('lostpointercapture',cancel,events);
-  canvas.addEventListener('dblclick',event=>{if(TRANSFORM_TOOLS.includes(api.tool())){event.preventDefault();cancel();void api.transformDialog(api.tool());}},events);
+  canvas.addEventListener('dblclick',event=>{
+    if(TRANSFORM_TOOLS.includes(api.tool())){event.preventDefault();cancel();void api.transformDialog(api.tool());return;}
+    // Selection tool: double-click a group to isolate it; double-click empty canvas to leave isolation.
+    if(api.tool()!=='select')return;
+    const hit=renderer.hit(point(event)),id=hit&&targetId(hit);
+    if(id&&state.document.getNode(id)?.type==='group')api.isolate(id);else if(!hit)api.exitIsolation();
+  },events);
   canvas.addEventListener('wheel',event=>{
     event.preventDefault();
     if(event.ctrlKey || event.metaKey) api.zoomAt(point(event),Math.exp(-event.deltaY*.001*(api.preferences().invertZoom ? -1 : 1)));
     else {scope.view.center=scope.view.center.add(new scope.Point(event.deltaX,event.deltaY).divide(scope.view.zoom));withScope(()=>renderer.updateView());api.status();}
   },{...events,passive:false});
   window.addEventListener('blur',cancel,events);
-  return {cancel,
+  return {cancel,busy:()=>!!gesture,
     adjust(direction) {
       if(!direction || !gesture)return false;
       if(['polygon','star'].includes(gesture.tool))state.ui.points=Math.max(gesture.tool==='polygon'?3:2,Math.min(100,(state.ui.points || (gesture.tool==='polygon'?6:5))+direction));

@@ -14,6 +14,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
   const artwork = new scope.Layer({ name: 'Draw artwork' });
   const overlay = new scope.Layer({ name: 'Selection' });
   const labels = new scope.Group({insert:false}); overlay.addChild(labels);
+  const ISOLATION_DIM = .35;
   const items = new Map(), records = new Map(), boardItems = new Map(), thumbnails = new Map();
   const worldBounds = new Map(), paintedBounds = new Map();
   const editPreviews=new Map();
@@ -129,6 +130,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
   }
   function style(item, node, asOutline = outlineFor(node.id), stackOwned = false) {
     item.opacity = asOutline ? 1 : node.opacity * (node.type === 'image' ? records.get(node.id)?.context.dim ?? 1 : 1);
+    item.data.baseOpacity = item.opacity;
     item.blendMode = asOutline ? 'normal' : node.blendMode;
     if (node.children || node.type === 'image') return;
     const bare = stackOwned && !asOutline && stacked(node);
@@ -153,7 +155,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     if (!stacked(node) || outlineFor(node.id)) return null;
     const group = new scope.Group({ insert: false });
     group.applyMatrix = false; group.matrix = new scope.Matrix(...node.transform); group.data.nodeId = node.id; group.data.stack = true;
-    group.opacity = node.opacity; group.blendMode = node.blendMode;
+    group.opacity = node.opacity; group.data.baseOpacity = node.opacity; group.blendMode = node.blendMode;
     const entries = [...shown(node.appearance.fills).map(e => ['fills', e]), ...shown(node.appearance.strokes).map(e => ['strokes', e])];
     for (const [kind, entry] of entries) {
       const piece = item.clone({ insert: false }); piece.matrix = new scope.Matrix();
@@ -279,8 +281,20 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     for (const id of state.selection.ids) { const b = bounds(id); if (b) result = union(result, b); }
     return result;
   }
+  // Isolation mode dims everything beside the isolated group and its ancestors.
+  function isolationDimmed() {
+    const iso = state.ui?.isolation;
+    if (!iso || !state.document.getNode(iso)) return null;
+    const keep = new Set([iso, ...state.document.ancestors(iso).map(n => n.id)]), dimmed = new Set();
+    for (const id of records.keys()) {
+      if (keep.has(id)) continue;
+      const parentId = state.document.locate(id)?.parentId ?? null;
+      if (parentId === null || keep.has(parentId) && parentId !== iso) dimmed.add(id);
+    }
+    return dimmed;
+  }
   function updateView() {
-    const viewport = scope.view.bounds.expand(16 / scope.view.zoom);
+    const viewport = scope.view.bounds.expand(16 / scope.view.zoom), dimmed = isolationDimmed();
     for (const [id, record] of records) {
       const item = items.get(id), node = record.node;
       if(node.strokeScaling===false){style(item,node,outlineFor(id),true);if(record.stack){const next=paintStack(item,node);record.stack.replaceWith(next);record.stack=next;}}
@@ -292,6 +306,9 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
       if (record.frame) { record.frame.visible = visible && asOutline; record.frame.strokeWidth = 1 / scope.view.zoom; }
       if (record.arrows) record.arrows.visible = item.visible && !asOutline;
       if (record.stack) record.stack.visible = item.visible && !asOutline;
+      const factor = dimmed?.has(id) ? ISOLATION_DIM : 1;
+      if (item.data.baseOpacity !== undefined) item.opacity = item.data.baseOpacity * factor;
+      if (record.stack) record.stack.opacity = (record.stack.data.baseOpacity ?? 1) * factor;
     }
     for (const [id,{item,label,labelRect}] of boardItems) {
       item.strokeWidth=(id===activeArtboard(state).id ? 2 : 1)/scope.view.zoom; item.visible=item.bounds.intersects(viewport);
@@ -320,6 +337,9 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     for (const result of results) {
       let item=result.item; while(item && !item.data.nodeId) item=item.parent;
       // Locked or hidden objects let clicks through; a layer itself is never the hit (a click on a locked object must not select its layer).
+      const iso = state.ui?.isolation;
+      // In isolation mode only the isolated group's contents can be hit.
+      if (iso && item?.data.nodeId && !state.document.ancestors(item.data.nodeId).some(n => n.id === iso)) continue;
       if (item?.data.nodeId && state.document.getNode(item.data.nodeId)?.type !== 'layer' && state.document.isEditable(item.data.nodeId)) return item.data.nodeId;
     }
     return null;

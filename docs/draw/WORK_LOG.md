@@ -744,3 +744,22 @@ endringene. Neste kandidat er hvordan Xvfb/Electron prioriterer et vindu uten fo
 Verifisering: 157 Draw-enhetstester passerer (ny `clipboard.test.mjs`). Objekt-E2E dekker alle
 variantene, inkludert to artboards og at Mod+V i et tekstfelt ikke limer inn objekter. Alle
 Draw-arbeidsflyter passerer; den kjente autolagringstesten feilet i denne kjøringen.
+
+## 2026-10-15: D1.10 del C, isolasjonsmodus (D1.10 ferdig)
+
+- **Dobbeltklikk på en gruppe** med Selection-verktøyet isolerer den. Bare gruppens innhold kan
+  klikkes og velges (klikk velger medlemmet, ikke gruppen); alt utenfor dempes til 35 % og kan ikke
+  treffes. Dobbeltklikk på en gruppe inne i gruppen går et nivå dypere.
+- Nye former, Pen-paths og innliming havner i den isolerte gruppen (i gruppens koordinatsystem, også
+  når gruppen har en transform). Select All og markeringsrektangel holder seg innenfor gruppen.
+- En stilinje øverst på tegneflaten viser «Layer › Gruppe» med tilbakeknapp; klikk på et høyere nivå
+  går dit. **Escape** (når ingen dra-handling pågår) eller **dobbeltklikk på tom flate** går ut av
+  isolasjon og velger gruppen. Sletter eller angrer man bort gruppen, avsluttes isolasjonen.
+- Tilstanden er midlertidig (`state.ui.isolation`) og lagres ikke i dokumentet.
+
+Verifisering: 157 Draw-enhetstester passerer. Objekt-E2E dekker inngang med dobbeltklikk, stilinje,
+demping, klikk og Select All innenfor, tegning og innliming inn i gruppen, Escape, dobbeltklikk på
+tom flate og angring. Alle Draw-arbeidsflyter passerer; den kjente autolagringstesten feilet.
+
+D1.10 er dermed ferdig. Neste: D1.9 (kontrollinje), D1.11 (Place bitmap og template-lag) og
+D1.12 (Send til Cut).

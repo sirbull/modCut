@@ -79,6 +79,37 @@ export async function runDrawObjectWorkflows(client) {
   assert.equal((await order()).length, 3, 'Mod+V in a text field does not paste objects');
   await evaluate('document.activeElement.blur()');
 
+  // Isolation mode: double-click a group to edit inside it; the rest is dimmed and out of reach.
+  const dbl = async point => { await click(point); await client.command('Input.dispatchMouseEvent', { type: 'mousePressed', x: point.x, y: point.y, button: 'left', buttons: 1, clickCount: 2 }); await client.command('Input.dispatchMouseEvent', { type: 'mouseReleased', x: point.x, y: point.y, button: 'left', clickCount: 2 }); await wait(80); };
+  await select([a, b]); await shortcut('g', 'KeyG');
+  const iso = (await model()).layers[0].children.find(n => n.type === 'group').id;
+  await dbl(await screen([20, 20]));
+  assert.equal(await evaluate(`(async()=>(${active}.state.ui.isolation))()`), iso, 'Double-click isolates the group');
+  assert.equal(await evaluate(`document.querySelector('${root} .draw-isolation-bar').hidden`), false);
+  assert.deepEqual(await evaluate(`[...document.querySelectorAll('${root} [data-draw-crumb]')].map(c=>c.dataset.drawCrumb)`), [(await model()).layers[0].id, iso], 'Breadcrumbs: layer › group');
+  assert.ok(Math.abs(await evaluate(`(async()=>(${active}.renderer.items.get('${c}').opacity))()`) - .35) < 1e-6, 'Objects outside the group are dimmed');
+  await command('deselect'); await click(await screen([20, 20]));
+  assert.deepEqual(await selection(), [a], 'Inside isolation a click selects the member, not the group');
+  await click(await screen([80, 20])); assert.deepEqual(await selection(), [], 'Objects outside cannot be selected');
+  await command('select-all'); assert.deepEqual((await selection()).sort(), [a, b].sort(), 'Select All stays inside the group');
+  await evaluate(`(async()=>(${active}.setTool('rectangle')))()`);
+  await drag(await screen([10, 50]), await screen([20, 60]));
+  await evaluate(`(async()=>(${active}.setTool('select')))()`);
+  let groupNode = (await model()).layers[0].children.find(n => n.id === iso);
+  assert.equal(groupNode.children.length, 3, 'New shapes are drawn into the isolated group');
+  await select([a]); await shortcut('c', 'KeyC'); await shortcut('V', 'KeyV', { shiftKey: true });
+  groupNode = (await model()).layers[0].children.find(n => n.id === iso);
+  assert.equal(groupNode.children.length, 4, 'Paste goes into the isolated group');
+  await command('deselect');
+  await evaluate("window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',code:'Escape',bubbles:true,cancelable:true}))");
+  assert.equal(await evaluate(`(async()=>(${active}.state.ui.isolation))()`), null, 'Escape leaves isolation mode');
+  assert.deepEqual(await selection(), [iso], 'and selects the group');
+  assert.ok(Math.abs(await evaluate(`(async()=>(${active}.renderer.items.get('${c}').opacity))()`) - 1) < 1e-6, 'Dimming ends');
+  await dbl(await screen([20, 20])); await dbl(await screen([100, 70]));
+  assert.equal(await evaluate(`(async()=>(${active}.state.ui.isolation))()`), null, 'Double-clicking empty canvas leaves isolation');
+  for (let i = 0; i < 3; i++) await command('undo');
+  assert.deepEqual(await order(), [a, b, c], 'Undo paste, rectangle and group');
+
   // Properties quick actions.
   await select([a, c]);
   await evaluate(`document.querySelector('${root} [data-draw-quick=group]').click()`);
@@ -94,5 +125,5 @@ export async function runDrawObjectWorkflows(client) {
     await wait(50);
   }
   if (await evaluate("document.body.dataset.workspace") === 'draw') await evaluate("document.querySelector('#workspaceToggle').click()");
-  process.stdout.write('PASS Draw objects: Group/Ungroup, Arrange keys, Lock/Unlock All, Hide/Show All, quick actions, Cut/Copy/Paste, Paste in Front/Back/Place/All Artboards\n');
+  process.stdout.write('PASS Draw objects: Group/Ungroup, Arrange keys, Lock/Unlock All, Hide/Show All, quick actions, Cut/Copy/Paste, Paste in Front/Back/Place/All Artboards, isolation mode\n');
 }

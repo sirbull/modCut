@@ -6,7 +6,8 @@ Oppdatert 2026-10-15. Arbeidsgren: `claude/draw-properties-layers-panels` (bygge
 Layers, dragbar delelinje, panelgrupper som flyout med faner) trinn 2 (scrubby labels) og trinn 3
 (Layers-rader, søk, bunnlinje, thumbnails og Layer Options) og trinn 4 (Swatches og Recent Colors)
 er ferdige. Trinn 5 (Transparency) og Pathfinder-delen av trinn 7 er også ferdige. Appearance (resten av trinn 7) og trinn 8 (Properties) er også ferdige,
-så hele høyrepanel-planen er gjennomført. Neste i hovedplanen: D1.9, D1.10, D1.11 og D1.12. Autolagringstesten `project-workflows.mjs:113` har
+så hele høyrepanel-planen er gjennomført. D1.10 (Group, Arrange, Lock/Hide, utklippstavle og
+isolasjonsmodus) er også ferdig. Neste i hovedplanen: D1.9, D1.11 og D1.12. Autolagringstesten `project-workflows.mjs:113` har
 vært ustabil på Linux, se arbeidsloggen.
 D1.8 (Transform, Align, Color, Stroke, Fill/Stroke-boks og Properties) ble fullført på
 `feat/vector-draw` og er slått inn her; panelene ligger nå i panelgruppene.

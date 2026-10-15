@@ -344,3 +344,11 @@ body.draw-scrubbing, body.draw-scrubbing * { cursor: ew-resize !important; user-
 .draw-doc-info { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0 0 12px; font-size: var(--fs-sm); }
 .draw-doc-info dt { color: var(--text-muted); }
 .draw-doc-info dd { margin: 0; }
+/* Isolation mode breadcrumb bar over the canvas */
+.draw-isolation-bar { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 5; display: flex; align-items: center; gap: 4px; max-width: calc(100% - 32px); padding: 3px 8px 3px 3px; border: 1px solid var(--border); border-radius: var(--r-pill); background: var(--surface); box-shadow: var(--shadow-1); font-size: var(--fs-sm); }
+.draw-isolation-bar[hidden] { display: none; }
+.draw-isolation-bar__back { width: 26px; height: 26px; border: 0; border-radius: 50%; background: var(--surface-2); color: var(--text); font-size: 18px; line-height: 1; cursor: pointer; }
+.draw-isolation-bar__crumb { border: 0; background: transparent; color: var(--text-muted); font: inherit; padding: 3px 4px; cursor: pointer; white-space: nowrap; }
+.draw-isolation-bar__crumb[aria-current=true] { color: var(--text); font-weight: 600; }
+.draw-isolation-bar__sep { color: var(--text-muted); }
+:is(.draw-isolation-bar__back, .draw-isolation-bar__crumb):focus-visible { outline: 2px solid var(--brand-mid); outline-offset: 1px; }

@@ -2,7 +2,8 @@ import { createProjectDraw } from './io/project.mjs';
 import { createDrawRenderer } from './render.mjs';
 import { createPanels } from './panels/ui.mjs';
 import { rememberColor } from './doc/swatches.mjs';
-import { copyNodes, drawClipboard, pasteCommands } from './doc/clipboard.mjs';
+import { copyNodes, drawClipboard, invert as invertMatrix, pasteCommands } from './doc/clipboard.mjs';
+import { multiply as multiplyMatrix } from './doc/arrange.mjs';
 import { stackingOrder as objectOrder } from './doc/arrange.mjs';
 import { arrangeCommands, groupCommands, hideCommands, lockCommands, showAllCommands, ungroupCommands, unlockAllCommands } from './doc/arrange.mjs';
 import { PATHFINDER_LABELS, runPathfinder } from './geom/pathfinder.mjs';
@@ -41,6 +42,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   const element=(tag,className,parent)=>{const el=document.createElement(tag);el.className=className;parent?.append(el);return el;};
   const shell=element('div','draw-shell',root),tools=element('nav','draw-tool-rail',shell);tools.setAttribute('aria-label','Draw tools');
   const stage=element('div','draw-stage',shell),canvas=element('canvas','draw-canvas',stage);canvas.setAttribute('aria-label','Draw canvas');canvas.tabIndex=0;
+  const isolationBar=element('nav','draw-isolation-bar',stage);isolationBar.hidden=true;isolationBar.setAttribute('aria-label','Isolation mode');
   const hint=element('div','draw-workspace__hint',stage),hintCard=element('div','draw-workspace__hint-card',hint);
   element('h1','',hintCard).textContent='Start drawing';element('p','',hintCard).textContent='Import artwork, or choose a drawing tool.';
   // Import has one primary location in the application toolbar; view controls join the app status bar when it is given.
@@ -135,7 +137,36 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     const layer=state.document.data.layers.find(n=>state.document.isEditable(n.id));
     if(!layer)throw new Error('Create or unlock a visible layer before drawing.');state.ui.layerId=layer.id;return layer.id;
   }
-  function insertShape(node) {state.history.execute(insertNode(layerId(),node));select([node.id]);}
+  // Isolation mode (double-click a group): new artwork, pastes and Select All stay inside the group.
+  function isolation() {
+    const id=state.ui.isolation;if(!id)return null;
+    if(state.document.getNode(id)?.type==='group')return id;
+    state.ui.isolation=null;return null;
+  }
+  function insertionParent() {const iso=isolation();return iso&&state.document.isEditable(iso)?iso:layerId();}
+  function toParentSpace(parentId,node) {
+    const world=renderer.worldMatrix(parentId);
+    return world.every((v,i)=>v===[1,0,0,1,0,0][i])?node:{...node,transform:multiplyMatrix(invertMatrix(world),node.transform)};
+  }
+  function isolate(id) {if(state.document.getNode(id)?.type!=='group')return;state.ui.isolation=id;select([]);isolationChanged();}
+  function exitIsolation() {const id=isolation();if(!id)return false;state.ui.isolation=null;select([id]);isolationChanged();return true;}
+  function isolationChanged() {withScope(()=>renderer.updateView());renderIsolationBar();toolbar?.update();}
+  function renderIsolationBar() {
+    const id=isolation();isolationBar.hidden=!id;isolationBar.replaceChildren();if(!id)return;
+    const back=document.createElement('button');back.type='button';back.className='draw-isolation-bar__back';back.textContent='‹';
+    back.setAttribute('aria-label','Exit isolation mode (Esc)');back.dataset.tooltip='Exit isolation mode (Esc)';back.addEventListener('click',()=>run(exitIsolation));
+    isolationBar.append(back);
+    const chain=[...state.document.ancestors(id)].reverse().concat(state.document.getNode(id));
+    chain.forEach((node,i)=>{
+      if(i)isolationBar.append(Object.assign(document.createElement('span'),{className:'draw-isolation-bar__sep',textContent:'›'}));
+      const crumb=document.createElement('button');crumb.type='button';crumb.className='draw-isolation-bar__crumb';
+      crumb.textContent=node.name||(node.type==='layer'?'Layer':'<Group>');crumb.dataset.drawCrumb=node.id;
+      if(node.id===id)crumb.setAttribute('aria-current','true');
+      crumb.addEventListener('click',()=>run(()=>node.type==='group'?(node.id===id?null:isolate(node.id)):exitIsolation()));
+      isolationBar.append(crumb);
+    });
+  }
+  function insertShape(node) {const parent=insertionParent();state.history.execute(insertNode(parent,toParentSpace(parent,node)));select([node.id]);}
   const shapeOptions=()=>({fill:state.ui.fill,stroke:state.ui.stroke,strokeWidth:state.ui.strokeWidth,points:state.ui.points,cornerRadius:state.ui.cornerRadius ?? 5});
   async function shapeDialog(tool,p=scope.view.center) {
     const options=await shapeSizeDialog(tool,shapeOptions());if(!options || destroyed)return;
@@ -200,7 +231,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     if(!command.startsWith('paste'))return null;
     return()=>{
       const clip=drawClipboard.get();if(!clip)throw new Error('Nothing to paste. Copy or cut objects first.');
-      const layer=layerId(),top={parentId:layer,atTop:true};
+      const layer=insertionParent(),top={parentId:layer,atTop:true};
       const placements=[];
       const order=objectOrder(doc,selectedIds().filter(id=>doc.getNode(id)?.type!=='layer'));
       if(command==='paste'){const center=scope.view.center;placements.push({...top,offset:[center.x-clip.center[0],center.y-clip.center[1]]});}
@@ -240,14 +271,15 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     if(command.startsWith('panel.'))return openPanel(command.slice(6));
     if(command==='cancel'&&(cancelActiveScrub()||panels.close()))return;
     if(paths?.handle(command)){if(command==='cancel')toolbar.close(true);return;}
-    if(command==='cancel'){interactions.cancel();toolbar.close(true);return;}
+    // Escape cancels a gesture in progress; otherwise it leaves isolation mode.
+    if(command==='cancel'){const busy=interactions.busy();interactions.cancel();toolbar.close(true);if(!busy)exitIsolation();return;}
     if(command==='undo'||command==='redo'){interactions.cancel();paths.finish();state.history[command]();select(state.selection.ids);return;}
     if(command==='fit-artboard')return fit();if(command==='fit-all')return fit(null);
     if(command==='zoom-in'||command==='zoom-out')return zoomAt(scope.view.center,command==='zoom-in'?1.25:.8);
     if(command==='actual-size')return zoomAt(scope.view.center,(96/25.4)/scope.view.zoom);
     if(command==='outline'){state.ui.outline=!renderer.outline;renderer.setOutline(state.ui.outline);outlineButton.setAttribute('aria-pressed',String(renderer.outline));return;}
     if(command==='deselect')return select([]);
-    if(command==='select-all')return select(state.document.data.layers.flatMap(l=>l.children).map(n=>n.id));
+    if(command==='select-all')return select((isolation()?state.document.getNode(isolation()).children:state.document.data.layers.flatMap(l=>l.children)).filter(n=>state.document.isEditable(n.id)).map(n=>n.id));
     if(command==='select-artboard'){const a=activeArtboard(state),rect=new scope.Rectangle(a.x,a.y,a.width,a.height);return select(state.document.data.layers.flatMap(l=>l.children).filter(n=>renderer.bounds(n.id)?.intersects(rect)).map(n=>n.id));}
       if(command==='toggle-panels'||command==='toggle-panels-except-tools'){shell.classList.toggle('draw-shell--panels-hidden');shell.classList.toggle('draw-shell--all-hidden',command==='toggle-panels' && shell.classList.contains('draw-shell--panels-hidden'));return;}
     if(state.document.readOnly)return;
@@ -285,12 +317,12 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     }
   });}
   toolbar=createToolbar(tools,state,{available:id=>implementedTools.has(id),setTool,command:handle,openPanel,run});
-  paths=createPathInteractions(canvas,state,{scope,renderer,withScope,run,select,selectionChanged,layerId,status,
+  paths=createPathInteractions(canvas,state,{scope,renderer,withScope,run,select,selectionChanged,layerId:insertionParent,status,
     tool:()=>temporary?.id || state.ui.tool,closeMenus:()=>toolbar.close()});
-  interactions=createInteractions(canvas,state,{scope,renderer,withScope,run,select,selectedIds,transform,artboards,status,shapeOptions,insertShape,shapeDialog,zoomAt,
+  interactions=createInteractions(canvas,state,{scope,renderer,withScope,run,select,selectedIds,transform,artboards,status,shapeOptions,insertShape,shapeDialog,zoomAt,isolate,exitIsolation,
     transforms,transformDialog:transformToolDialog,cursor,
     tool:()=>temporary?.id || state.ui.tool,zoomOut:()=>!!temporary?.zoomOut,preferences:getPreferences,closeMenus:()=>toolbar.close()});
-  const unsubscribe=state.subscribe(()=>{interactions.cancel();paths.documentChanged();refresh();});
+  const unsubscribe=state.subscribe(()=>{interactions.cancel();paths.documentChanged();refresh();if(state.ui.isolation&&!isolation())isolationChanged();else renderIsolationBar();});
   function resize(){const {width,height}=stage.getBoundingClientRect();if(width<=0||height<=0)return;
     withScope(()=>{scope.view.viewSize=new scope.Size(width,height);if(!fitted){renderer.fit();fitted=true;}renderer.updateView();});status();}
   const observer=new ResizeObserver(resize);observer.observe(stage);
@@ -299,7 +331,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   boardSelect.addEventListener('change',()=>artboards.choose(boardSelect.value,true));
   zoomInput.addEventListener('change',()=>{if(Number.isFinite(zoomInput.valueAsNumber)&&zoomInput.valueAsNumber>=.0001&&zoomInput.valueAsNumber<=10000)zoomAt(scope.view.center,zoomInput.valueAsNumber/100*(96/25.4)/scope.view.zoom);else status();});
   outlineButton.addEventListener('click',()=>handle('outline'));fitButton.addEventListener('click',()=>fit());
-  const workspace={state,scope,renderer,statusElement:controls,artboards,transforms,resize,select,setTool,handle,availableTool:id=>implementedTools.has(id),canHandle:command=>commands.has(command),
+  const workspace={state,scope,renderer,isolate,exitIsolation,statusElement:controls,artboards,transforms,resize,select,setTool,handle,availableTool:id=>implementedTools.has(id),canHandle:command=>commands.has(command),
     setTemporaryTool(value){temporary=value;canvas.dataset.tool=temporary?.id || state.ui.tool;canvas.style.cursor=cursor();status();},
     async import(prepared,name,options={}){const result=await importArtwork(scope,state,prepared,name,layerId(),{...options,alive:()=>!destroyed});select(result.ids);if(options.fitArtboard)fit();return result;},
     destroy(){destroyed=true;ownedTransformModal?.querySelector('[data-x=cancel]').click();paths.destroy();interactions.destroy();toolbar.destroy();unsubscribe();observer.disconnect();window.removeEventListener('modcut-theme-change',syncTheme);workspaces.delete(root);withScope(()=>{renderer.destroy();scope.remove();});controls.remove();root.replaceChildren();},

@@ -1405,7 +1405,7 @@ Oppdateres når oppgaven fullføres. Løpende arbeidslogg: [`draw/WORK_LOG.md`](
 * [x] D1.7 Rotate, Reflect, Scale med Copy og Transform Again
 * [x] D1.8 Grunnpaneler — Properties, Layers/template-lag, Transform, Align, Color, Stroke og Fill/Stroke-boks
 * [ ] D1.9 Kontrollinje og statuslinje
-* [ ] D1.10 Group, Arrange, Clipboard
+* [x] D1.10 Group, Arrange, Clipboard
 * [ ] D1.11 Place bitmap og template-lag
 * [ ] D1.12 Send til Cut v1
 * [ ] D2.1 Tekst
