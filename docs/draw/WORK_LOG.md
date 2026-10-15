@@ -727,3 +727,20 @@ av tiden, og én dokumentendring tar 8 til 14 ms, men en `setTimeout` på 10 ms 
 160 til 180 ms. Tidtakerne forsinkes altså uten at Draw-koden jobber. `backgroundThrottling: false`
 for testvinduet hjalp ikke og er ikke tatt med. Feilen fantes også på `feat/vector-draw` uten disse
 endringene. Neste kandidat er hvordan Xvfb/Electron prioriterer et vindu uten fokus.
+
+## 2026-10-15: D1.10 del B, utklippstavle
+
+- **Cut** (Mod+X), **Copy** (Mod+C), **Paste** (Mod+V, sentrert i visningen), **Paste in Front**
+  (Mod+F, rett over det valgte objektet, samme posisjon), **Paste in Back** (Mod+B, rett under),
+  **Paste in Place** (Mod+Shift+V) og **Paste on All Artboards** (Mod+Shift+Alt+V, samme plass på hvert
+  artboard). Hver er ett angresteg, og det innlimte blir valgt.
+- Kopier lagres i verdenskoordinater (hele transformen bakt inn) sammen med bildedataene de bruker,
+  så de kan limes inn i andre lag, i grupper med egen transform og i andre faner. Innliming gir nye
+  ID-er og legger til manglende bildedata i samme angresteg. Ren logikk i `doc/clipboard.mjs`.
+- Edit-menyen i Draw viser Cut, Copy og Paste-variantene. Tastene håndteres av Draws keymap
+  (`registerAccelerator: false` i menyen), så tekstfelt beholder sine vanlige Ctrl/Cmd+C/V.
+- Gjenstår fra planen: SVG på systemets utklippstavle (kommer med SVG-eksport i D2.5).
+
+Verifisering: 157 Draw-enhetstester passerer (ny `clipboard.test.mjs`). Objekt-E2E dekker alle
+variantene, inkludert to artboards og at Mod+V i et tekstfelt ikke limer inn objekter. Alle
+Draw-arbeidsflyter passerer; den kjente autolagringstesten feilet i denne kjøringen.

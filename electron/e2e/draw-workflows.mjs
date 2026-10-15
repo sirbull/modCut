@@ -1,3 +1,4 @@
+import { acceleratorFor } from '../../renderer/draw/keymap.mjs';
 import assert from "node:assert/strict";
 import { wait } from "./cdp.mjs";
 import { submitNewDrawDialog } from './draw-test-helpers.mjs';
@@ -22,7 +23,9 @@ export async function runDrawWorkflows({ evaluate }) {
   assert.equal(menu.label, "Cut workspace");
   assert.equal(menu.file.find((item) => item.label === "Import…").accelerator, process.platform === 'darwin' ? 'Cmd+Shift+P' : 'Ctrl+Shift+P', "Draw imports into the current model through Place");
   assert.ok(menu.file.some(item => item.label === 'Open…'));
-  assert.ok(menu.edit.every((a) => !a || ['Ctrl+K','Cmd+K','Ctrl+Z','Cmd+Z','Ctrl+Shift+Z','Cmd+Shift+Z'].includes(a)), "Draw editing accelerators belong to Draw history");
+  // Only Draw's own commands appear in Draw's Edit menu: history, preferences and the Draw clipboard.
+  const drawEdit = ['undo','redo','preferences','cut','copy','paste','paste-front','paste-back','paste-place','paste-all-artboards'].map(id => acceleratorFor(id, { isMac: process.platform === 'darwin' }));
+  assert.ok(menu.edit.every((a) => !a || drawEdit.includes(a)), `Draw editing accelerators belong to Draw: ${JSON.stringify(menu.edit)}`);
   for (const key of ["Backspace", "Enter", "Escape", "p", "m"]) {
     await evaluate(`window.dispatchEvent(new KeyboardEvent('keydown',{key:${JSON.stringify(key)},bubbles:true,cancelable:true}))`);
   }

@@ -221,9 +221,14 @@ function buildMenu(mode = "cut") {
     const appMenu = template.find((item) => item.label === "modCut");
     const preferences = appMenu?.submenu.find((item) => item.label === "Preferences…");
     if (preferences) preferences.accelerator = acceleratorFor("preferences", { isMac });
+    // Clipboard keys are handled by Draw's keymap so text fields keep their native shortcuts; the menu only shows them.
+    const editItem=(label,command)=>({label,accelerator:acceleratorFor(command,{isMac}),registerAccelerator:false,click:()=>send(command)});
     template.find((item) => item.label === "Edit").submenu = [
       { label:"Undo", accelerator:acceleratorFor("undo",{isMac}), click:() => send("undo") },
       { label:"Redo", accelerator:acceleratorFor("redo",{isMac}), click:() => send("redo") },
+      { type:"separator" }, editItem("Cut","cut"), editItem("Copy","copy"), editItem("Paste","paste"),
+      editItem("Paste in Front","paste-front"), editItem("Paste in Back","paste-back"), editItem("Paste in Place","paste-place"),
+      editItem("Paste on All Artboards","paste-all-artboards"),
       ...(isMac ? [] : [{ type: "separator" }, { label: "Preferences…", accelerator: acceleratorFor("preferences", { isMac }), click: () => send("preferences") }]),
     ];
     viewMenu.submenu = [viewMenu.submenu[0], { type: "separator" },

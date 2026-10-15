@@ -2,6 +2,8 @@ import { createProjectDraw } from './io/project.mjs';
 import { createDrawRenderer } from './render.mjs';
 import { createPanels } from './panels/ui.mjs';
 import { rememberColor } from './doc/swatches.mjs';
+import { copyNodes, drawClipboard, pasteCommands } from './doc/clipboard.mjs';
+import { stackingOrder as objectOrder } from './doc/arrange.mjs';
 import { arrangeCommands, groupCommands, hideCommands, lockCommands, showAllCommands, ungroupCommands, unlockAllCommands } from './doc/arrange.mjs';
 import { PATHFINDER_LABELS, runPathfinder } from './geom/pathfinder.mjs';
 import { fillHex, pathfinderCommands, stackingOrder } from './doc/pathfinder-commands.mjs';
@@ -29,6 +31,7 @@ const workspaces=new WeakMap();
 export function getDrawWorkspace(root) {return workspaces.get(root) || null;}
 const implementedTools=new Set(['select','hand','zoom','artboard',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
 const commands=new Set(['undo','redo','delete','select-all','select-artboard','deselect','cancel','fit-artboard','fit-all','actual-size','zoom-in','zoom-out','outline',
+  'cut','copy','paste','paste-front','paste-back','paste-place','paste-all-artboards',
   'group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
   'paint-focus','paint-swap','paint-none','paint-solid','default-paint','smart-guides','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','toggle-panels','toggle-panels-except-tools',
   ...PANEL_DEFINITIONS.map(p=>`panel.${p.id}`),...['left','right','up','down'].flatMap(d=>[`nudge-${d}`,`nudge-large-${d}`,`duplicate-${d}`])]);
@@ -188,6 +191,37 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       state.history.transaction(label,()=>{for(const m of moves)transforms.apply([1,0,0,1,...m.offset],label,{ids:[m.id],remember:false});});select(ids);
     },
   });
+  // Clipboard: Cut, Copy and the Paste family. The clipboard is shared by all Draw tabs.
+  function clipboardCommand(command) {
+    const doc=state.document,world=id=>renderer.worldMatrix(id);
+    const copy=()=>{const ids=selectedIds();drawClipboard.set(copyNodes(doc,ids,world,renderer.selectionBounds()));return ids;};
+    if(command==='copy')return()=>{copy();};
+    if(command==='cut')return()=>{const ids=copy();state.history.transaction('Cut',()=>{for(const id of ids)state.history.execute(removeNode(id));});select([]);};
+    if(!command.startsWith('paste'))return null;
+    return()=>{
+      const clip=drawClipboard.get();if(!clip)throw new Error('Nothing to paste. Copy or cut objects first.');
+      const layer=layerId(),top={parentId:layer,atTop:true};
+      const placements=[];
+      const order=objectOrder(doc,selectedIds().filter(id=>doc.getNode(id)?.type!=='layer'));
+      if(command==='paste'){const center=scope.view.center;placements.push({...top,offset:[center.x-clip.center[0],center.y-clip.center[1]]});}
+      else if(command==='paste-place')placements.push(top);
+      else if(command==='paste-front'||command==='paste-back'){
+        const anchor=command==='paste-front'?order.at(-1):order[0],at=anchor&&doc.locate(anchor);
+        placements.push(at?{parentId:at.parentId,index:at.index+(command==='paste-front'?1:0)}:command==='paste-front'?top:{parentId:layer,index:0});
+      }else for(const board of doc.data.artboards)placements.push({...top,offset:[board.x-clip.board[0],board.y-clip.board[1]]});
+      const created=[];
+      state.history.transaction({'paste':'Paste','paste-front':'Paste in Front','paste-back':'Paste in Back','paste-place':'Paste in Place','paste-all-artboards':'Paste on All Artboards'}[command],()=>{
+        for(const place of placements){
+          const parentWorld=place.parentId===null?[1,0,0,1,0,0]:world(place.parentId);
+          // Top-of-layer pastes stack in order: read the length now, after earlier placements.
+          const index=place.atTop?doc.getNode(place.parentId).children.length:place.index;
+          const {commands,ids}=pasteCommands(doc,clip,{...place,index,parentWorld});
+          commands.forEach(c=>state.history.execute(c));created.push(...ids);
+        }
+      });
+      select(created);
+    };
+  }
   // Object menu: Group, Ungroup, Arrange, Lock and Hide. Each is one undo step with a menu-style label.
   function objectCommand(command) {
     const doc=state.document,ids=()=>selectedIds(),apply=(label,commands)=>{if(commands.length)state.history.transaction(label,()=>commands.forEach(c=>state.history.execute(c)));};
@@ -218,7 +252,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       if(command==='toggle-panels'||command==='toggle-panels-except-tools'){shell.classList.toggle('draw-shell--panels-hidden');shell.classList.toggle('draw-shell--all-hidden',command==='toggle-panels' && shell.classList.contains('draw-shell--panels-hidden'));return;}
     if(state.document.readOnly)return;
     if(command==='transform-again')return transforms.again();
-    const object=objectCommand(command);if(object)return object();
+    const object=objectCommand(command)??clipboardCommand(command);if(object)return object();
     if(['rotate-dialog','reflect-dialog','scale-dialog'].includes(command))return void transformToolDialog(command.split('-')[0]);
     if(command==='delete') {
       if(state.ui.tool==='artboard')return artboards.remove();

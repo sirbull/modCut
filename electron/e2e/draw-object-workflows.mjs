@@ -48,6 +48,37 @@ export async function runDrawObjectWorkflows(client) {
   assert.equal((await model()).layers[0].children[1].visible, false, 'Object > Hide Selection');
   await shortcut('3', 'Digit3', { altKey: true }); assert.equal((await model()).layers[0].children[1].visible, true, 'Mod+Alt+3 shows all');
 
+  // Clipboard: Copy/Paste centres in the view, Paste in Front/Back/Place keep the position, Cut removes.
+  const bounds = id => evaluate(`(async()=>{const b=${active}.renderer.bounds('${id}');return[+b.x.toFixed(3),+b.y.toFixed(3),+b.width.toFixed(3),+b.height.toFixed(3)]})()`);
+  const aBox = await bounds(a);
+  await select([a]); await shortcut('c', 'KeyC'); await shortcut('v', 'KeyV');
+  let ids = await order(); const pasted = ids.at(-1);
+  assert.equal(ids.length, 4); assert.notEqual(pasted, a); assert.deepEqual(await selection(), [pasted], 'Paste selects the copy');
+  const center = await evaluate(`(async()=>{const w=${active},c=w.scope.view.center,b=w.renderer.bounds('${pasted}');return[+(b.x+b.width/2-c.x).toFixed(3),+(b.y+b.height/2-c.y).toFixed(3)]})()`);
+  assert.deepEqual(center, [0, 0], 'Paste centres the copy in the view');
+  await command('undo');
+  await select([b]); await shortcut('f', 'KeyF');
+  ids = await order(); assert.deepEqual([ids.indexOf(b) + 1, (await bounds(ids[ids.indexOf(b) + 1]))], [ids.indexOf(b) + 1, aBox], 'Paste in Front: directly above the selection, same place as the original');
+  await command('undo'); await select([b]); await shortcut('b', 'KeyB');
+  ids = await order(); assert.deepEqual(await bounds(ids[ids.indexOf(b) - 1]), aBox, 'Paste in Back: directly below the selection');
+  await command('undo'); await shortcut('V', 'KeyV', { shiftKey: true });
+  assert.deepEqual(await bounds((await order()).at(-1)), aBox, 'Paste in Place'); await command('undo');
+  await evaluate(`(async()=>{${active}.artboards.add()})()`);
+  const boards = (await model()).artboards; assert.equal(boards.length, 2);
+  await shortcut('V', 'KeyV', { shiftKey: true, altKey: true });
+  const copies = (await order()).slice(3); assert.equal(copies.length, 2, 'Paste on All Artboards: one copy per artboard');
+  const second = await bounds(copies[1]);
+  assert.deepEqual([+(second[0] - aBox[0]).toFixed(3), +(second[1] - aBox[1]).toFixed(3)], [+(boards[1].x - boards[0].x).toFixed(3), +(boards[1].y - boards[0].y).toFixed(3)], 'Same spot on the second artboard');
+  await command('undo'); await command('undo');
+  await select([c]); await shortcut('x', 'KeyX');
+  assert.deepEqual(await order(), [a, b], 'Cut removes'); await shortcut('v', 'KeyV', { shiftKey: true });
+  assert.equal((await order()).length, 3, 'and pastes back');
+  await command('undo'); await command('undo'); assert.deepEqual(await order(), [a, b, c]);
+  // Text fields keep their own clipboard keys.
+  await evaluate(`(()=>{const i=document.querySelector('${root} [data-draw-field=layer-search]');i.focus();i.dispatchEvent(new KeyboardEvent('keydown',{key:'v',code:'KeyV',bubbles:true,cancelable:true,...${JSON.stringify(mod)}}))})()`);
+  assert.equal((await order()).length, 3, 'Mod+V in a text field does not paste objects');
+  await evaluate('document.activeElement.blur()');
+
   // Properties quick actions.
   await select([a, c]);
   await evaluate(`document.querySelector('${root} [data-draw-quick=group]').click()`);
@@ -63,5 +94,5 @@ export async function runDrawObjectWorkflows(client) {
     await wait(50);
   }
   if (await evaluate("document.body.dataset.workspace") === 'draw') await evaluate("document.querySelector('#workspaceToggle').click()");
-  process.stdout.write('PASS Draw objects: Group/Ungroup, Arrange keys, Lock/Unlock All, Hide/Show All, quick actions\n');
+  process.stdout.write('PASS Draw objects: Group/Ungroup, Arrange keys, Lock/Unlock All, Hide/Show All, quick actions, Cut/Copy/Paste, Paste in Front/Back/Place/All Artboards\n');
 }
