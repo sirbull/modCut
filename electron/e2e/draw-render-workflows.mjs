@@ -18,11 +18,11 @@ export async function runDrawRenderWorkflows(client, imageId) {
   // The real central keymap must route Ctrl/Cmd+Y to Draw instead of Cut redo.
   await evaluate(`window.dispatchEvent(new KeyboardEvent('keydown',{key:'y',code:'KeyY',metaKey:/Mac/.test(navigator.platform),ctrlKey:!/Mac/.test(navigator.platform),bubbles:true,cancelable:true}))`);
   assert.deepEqual(await evaluate(`(async () => {
-    const w=${active}, b=document.querySelector('.draw-project[style*=block] [aria-label="Outline view"]');
+    const w=${active}, b=document.querySelector('#drawStatus .draw-view-controls:not([hidden]) [aria-label="Outline view"]');
     return {outline:w.renderer.outline, image:w.renderer.items.get(${JSON.stringify(imageId)}).visible, pressed:b.getAttribute('aria-pressed'), unchanged:w.state.document.serialize()===window.__drawRenderProof.snapshot,
       history:w.state.history.entries.length===window.__drawRenderProof.entries, dirty:w.state.dirty===window.__drawRenderProof.dirty};
   })()`), {outline:true,image:false,pressed:'true',unchanged:true,history:true,dirty:true});
-  await evaluate(`document.querySelector('.draw-project[style*=block] [aria-label="Outline view"]').click()`);
+  await evaluate(`document.querySelector('#drawStatus .draw-view-controls:not([hidden]) [aria-label="Outline view"]').click()`);
   assert.equal(await evaluate(`(async()=>(${active}.renderer.outline))()`), false);
 
   const transformed = await evaluate(`(async () => {

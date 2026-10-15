@@ -2,7 +2,8 @@ import { createKeymap, shortcutLabel } from "./draw/keymap.mjs";
 import { createDrawWorkspace } from "./draw/index.mjs";
 import { PROJECT_VERSION, validateProject, createProjectDraw } from "./draw/io/project.mjs";
 import { newDrawDocument } from "./draw/doc/artboards.mjs";
-import { newDocumentDialog } from "./draw/ui/dialogs.mjs";
+import { newDocumentDialog, saveTemplateDialog } from "./draw/ui/dialogs.mjs";
+import { saveTemplate, setupFromDocument, loadStoredList, storeList, TEMPLATES_KEY } from "./draw/doc/presets.mjs";
 import { createBed } from "./bed.js";
 import { prepareSVG } from "./svgimport.js";
 import { dxfToSvg } from "./dxfimport.js";
@@ -321,12 +322,13 @@ function setWorkspace(mode) {
     tab.drawRoot.className = "draw-project";
     tab.drawRoot.dataset.tabId = tab.id;
     $("drawWorkspace").append(tab.drawRoot);
-    tab.draw = createDrawWorkspace(tab.drawRoot, { state: drawState, onError: message => toast(message,"err"), onImport: () => importDrawFiles(), getPreferences:()=>preferences });
+    tab.draw = createDrawWorkspace(tab.drawRoot, { state: drawState, onError: message => toast(message,"err"), onImport: () => importDrawFiles(), getPreferences:()=>preferences, statusHost: $("drawStatus") });
   }
   drawKeymap.reset();
   tab.workspace = mode;
   for (const item of documentTabs) if (item.drawRoot) {
     item.drawRoot.style.display = item === tab && mode === "draw" ? "block" : "none";
+    if (item.draw) item.draw.statusElement.hidden = item !== tab || mode !== "draw";
   }
   document.body.dataset.workspace = mode;
   const button = $("workspaceToggle");
@@ -1150,10 +1152,21 @@ async function requestNewDocument() {
   if (creatingDrawDocument) return;
   creatingDrawDocument = true;
   try {
-    const m=machine(), data=await newDocumentDialog({name:m.name,width:m.bedW || 600,height:m.bedH || 400});
+    const m=machine(), data=await newDocumentDialog({name:m.name,width:m.bedW || 600,height:m.bedH || 400},
+      {machines:machines.map(item=>({name:item.name,width:item.bedW,height:item.bedH}))});
     if(data) return newDocument("draw",data);
   } catch(error) {toast(error.message,"err");}
   finally {creatingDrawDocument=false;}
+}
+async function saveDrawTemplate() {
+  const draw = activeTab()?.drawState;
+  if (document.body.dataset.workspace !== "draw" || !draw) return;
+  try {
+    const setup = setupFromDocument(draw.document.data), values = await saveTemplateDialog(draw.document.data.name || "Untitled");
+    if (!values) return;
+    if (!storeList(localStorage, TEMPLATES_KEY, saveTemplate(loadStoredList(localStorage, TEMPLATES_KEY), values.name, setup))) throw new Error("Could not save the template.");
+    toast(`Template “${values.name.trim()}” saved. Find it under Saved when you create a new document.`, "ok");
+  } catch (error) { toast(error.message, "err"); }
 }
 function newDocument(mode = document.body.dataset.workspace === "draw" ? "draw" : "cut", drawData = null) {
   captureActiveTab();
@@ -2149,6 +2162,7 @@ const drawIsMac = /Mac|iPhone|iPad/.test(navigator.platform);
 const drawActions = {
   new: requestNewDocument, import: doImport, add: addFiles, "close-tab": closeDocumentTab,
   "save-document": () => saveDocument(false), "save-document-as": () => saveDocument(true),
+  "save-document-template": saveDrawTemplate,
   "next-tab": () => switchRelativeTab(1), "previous-tab": () => switchRelativeTab(-1),
   preferences: openSettings,
   place: importDrawFiles,
@@ -2485,7 +2499,7 @@ window.modcut.onMenu((cmd) => {
   if (cmd === "workspace-cut" || cmd === "workspace-draw") return setWorkspace(cmd.slice(10));
   if (document.body.dataset.workspace === "draw" && activeTab()?.draw?.canHandle(cmd)) return activeTab()?.draw?.handle(cmd);
   if (document.body.dataset.workspace === "draw" && ![
-    "new", "import", "add", "close-tab", "save-document", "save-document-as", "docs", "about", "preferences",
+    "new", "import", "add", "close-tab", "save-document", "save-document-as", "save-document-template", "docs", "about", "preferences",
   ].includes(cmd)) return;
   return ({
   new: requestNewDocument, import: doImport, add: addFiles, "close-tab": closeDocumentTab,
@@ -2502,6 +2516,7 @@ window.modcut.onMenu((cmd) => {
   "add-material": addMaterial, materials: openMaterialLibrary,
   "add-process-profile": addProcessProfile, "process-profiles": openProcessProfileLibrary,
   "save-document": () => saveDocument(false), "save-document-as": () => saveDocument(true),
+  "save-document-template": saveDrawTemplate,
   save: () => runJob("Save"), export: () => runJob("Export"), preferences: openSettings,
   "export-settings": exportSettings, "import-settings": importSettings,
   docs: () => window.open("../docs/index.html"),

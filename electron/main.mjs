@@ -207,6 +207,9 @@ function buildMenu(mode = "cut") {
     const fileMenu = template.find((item) => item.label === "File");
     fileMenu.submenu = fileMenu.submenu.filter((item) =>
       ["New", "Import…", "Add…", "Close Tab", "Save document…", "Save document as…", "Quit"].includes(item.label));
+    const saveAsIndex = fileMenu.submenu.findIndex((item) => item.label === "Save document as…");
+    fileMenu.submenu.splice(saveAsIndex + 1, 0, { type: "separator" },
+      { label: "Save Document Properties as Template…", click: () => send("save-document-template") });
     const sharedCommands = { "New": "new", "Import…": "import", "Add…": "add", "Close Tab": "close-tab",
       "Save document…": "save-document", "Save document as…": "save-document-as" };
     for (const item of fileMenu.submenu) {
@@ -369,6 +372,11 @@ app.whenReady().then(() => {
       transform: Menu.getApplicationMenu()?.items.find(item=>item.label==='Object')?.submenu.items.find(item=>item.label==='Transform')?.submenu.items.map(item=>({label:item.label,accelerator:item.accelerator||null})),
     }));
     ipcMain.handle("e2eRequestQuit", () => { requestQuit(); return true; });
+    ipcMain.handle("e2eClickMenuItem", (_event, menuLabel, itemLabel) => {
+      const item = Menu.getApplicationMenu()?.items.find((entry) => entry.label === menuLabel)?.submenu.items.find((entry) => entry.label === itemLabel);
+      item?.click();
+      return !!item;
+    });
   }
 
   // Native file picker that also returns the file's contents so the renderer

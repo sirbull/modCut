@@ -18,9 +18,14 @@ export async function runDrawPhaseOneWorkflows(client) {
   const panel=id=>evaluate(`document.querySelector('.draw-project[style*=block] [data-draw-panel=${id}]').click()`);
   const undo=()=>shortcut('z','KeyZ',{ctrlKey:process.platform!=='darwin',metaKey:process.platform==='darwin'});
   await evaluate("document.querySelector('#workspaceToggle').click();document.querySelector('#newDoc').click()");
-  assert.equal(await evaluate("!!document.querySelector('.draw-document-dialog [name=preset] option[value=bed]')"),true);
-  await evaluate("(()=>{const i=document.querySelector('.draw-document-dialog [name=preset]');i.value='a4';i.dispatchEvent(new Event('input',{bubbles:true}))})()");
+  assert.equal(await evaluate("document.querySelector('.draw-document-dialog [name=preset]').value"),'bed','New starts from the current machine bed');
+  assert.deepEqual(await evaluate("[...document.querySelectorAll('.draw-document-dialog [role=tab]')].map(t=>t.textContent)"),['Recent','Templates','Saved']);
+  await evaluate("(()=>{const t=document.querySelector('.draw-document-dialog [data-tab=templates]');t.click();document.querySelector('.draw-document-dialog [data-category=print]').click();document.querySelector('.draw-document-dialog [data-preset=a4]').click()})()");
   assert.deepEqual(await evaluate("[...document.querySelectorAll('.draw-document-dialog input[name=width],.draw-document-dialog input[name=height]')].map(i=>+i.value)"),[210,297]);
+  await evaluate("document.querySelector('.draw-document-dialog [data-orientation=landscape]').click()");
+  assert.deepEqual(await evaluate("[...document.querySelectorAll('.draw-document-dialog input[name=width],.draw-document-dialog input[name=height]')].map(i=>+i.value)"),[297,210],'Orientation swaps width and height');
+  await evaluate("(()=>{const u=document.querySelector('.draw-document-dialog [name=units]');u.value='cm';u.dispatchEvent(new Event('change',{bubbles:true}))})()");
+  assert.deepEqual(await evaluate("[...document.querySelectorAll('.draw-document-dialog input[name=width],.draw-document-dialog input[name=height]')].map(i=>+i.value)"),[29.7,21],'Units convert the shown size');
   await key('Escape');
   assert.equal(await evaluate("!!document.querySelector('.draw-document-dialog')"),false,'Escape cancels New without creating a tab');
   assert.equal(await evaluate("document.querySelector('.doc-tab.is-active').dataset.tabId"),original.id);
@@ -29,6 +34,24 @@ export async function runDrawPhaseOneWorkflows(client) {
   const scratch=await evaluate("document.querySelector('.doc-tab.is-active').dataset.tabId"),initial=await data();
   assert.equal(initial.artboards.length,3);assert.equal(initial.artboards[0].width,120);assert.equal(initial.name,'Drawing tools proof');
   assert.equal(await evaluate("!!document.querySelector('.doc-tab.is-active .doc-tab__dirty')"),false,'Creating a configured blank document starts clean');
+  assert.deepEqual(await evaluate(`(()=>{const shown=[...document.querySelectorAll('#drawStatus .draw-view-controls')].filter(c=>!c.hidden);
+    return{shown:shown.length,besideFile:document.querySelector('#file').nextElementSibling.id,stage:document.querySelectorAll('.draw-stage .draw-view-controls').length,board:shown[0]?.querySelector('.draw-board-select').options.length}})()`),
+    {shown:1,besideFile:'drawStatus',stage:0,board:3},'View controls live in the bottom status bar beside the file name');
+  assert.equal(await evaluate("(async()=>(await window.modcut.getE2EWorkspaceMenu()).file.some(item=>item.label==='Save Document Properties as Template…'))()"),true);
+  await evaluate("localStorage.removeItem('modcut_draw_document_templates')");
+  assert.equal(await evaluate("window.modcut.clickE2EMenuItem('File','Save Document Properties as Template…')"),true);
+  await wait(50);
+  await evaluate("(()=>{const f=document.querySelector('.draw-template-dialog form');f.elements.name.value='E2E three boards';f.requestSubmit()})()");
+  await wait(50);
+  assert.deepEqual(await evaluate("JSON.parse(localStorage.getItem('modcut_draw_document_templates')).map(t=>[t.name,t.width,t.height,t.count,t.spacing])"),[['E2E three boards',120,80,3,20]]);
+  assert.equal(await evaluate("JSON.parse(localStorage.getItem('modcut_draw_recent_setups'))[0].width"),120,'Created setups are remembered as Recent');
+  await evaluate("document.querySelector('#newDoc').click()");
+  assert.equal(await evaluate("document.querySelector('.draw-document-dialog [data-tab=recent]').getAttribute('aria-selected')"),'true','New opens on Recent once there is history');
+  await evaluate("(()=>{document.querySelector('.draw-document-dialog [data-tab=saved]').click();document.querySelector('.draw-document-dialog [data-preset^=template-]').click()})()");
+  assert.deepEqual(await evaluate("(()=>{const f=document.querySelector('.draw-document-dialog form');return[+f.elements.width.value,+f.elements.height.value,+f.elements.count.value]})()"),[120,80,3],'A saved template restores its properties');
+  await evaluate("document.querySelector('.draw-document-dialog .draw-preset-card__remove').click()");
+  assert.equal(await evaluate("JSON.parse(localStorage.getItem('modcut_draw_document_templates')).length"),0);
+  await key('Escape');
 
   const unique=await evaluate("(()=>{const root=document.querySelector('.draw-project[style*=block]'),ids=[...root.querySelectorAll('[data-draw-tool]')].map(b=>b.dataset.drawTool);return ids.length===new Set(ids).size && root.querySelectorAll('.draw-panel').length===1})()");
   assert.equal(unique,true,'Tools and panel content have one mounted location');

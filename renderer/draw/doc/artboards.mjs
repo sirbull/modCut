@@ -25,13 +25,13 @@ export function artboardLayout(boards, { layout = 'grid-row', columns = 2, spaci
     y:(layout === 'row' ? 0 : layout === 'column' ? i : layout === 'grid-column' ? i%rows : Math.floor(i/columns))*(height+spacing),
   }));
 }
-export function newDrawDocument({name = 'Untitled', preset = 'bed', width, height, count = 1, ...layout} = {}, bed) {
+export function newDrawDocument({name = 'Untitled', preset = 'bed', width, height, count = 1, units = 'mm', ppi = 300, ...layout} = {}, bed) {
   if (!Number.isInteger(count) || count < 1 || count > MAX_ARTBOARDS) throw new Error('Use between 1 and 1,000 artboards.');
   const size = presetSize(preset,bed);
   if (preset === 'custom') { size.width = width; size.height = height; }
   const artboards = Array.from({length:count},(_,i) => createArtboard({...size,name:`Artboard ${i+1}`}));
   const positions = artboardLayout(artboards,layout);
-  const document = createDocument({name,artboards:artboards.map((board,i) => ({...board,...positions[i]}))});
+  const document = createDocument({name,units,rasterEffectsPpi:ppi,artboards:artboards.map((board,i) => ({...board,...positions[i]}))});
   assertDocument(document); return document;
 }
 export function activeArtboard(state) {

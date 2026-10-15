@@ -1,38 +1,160 @@
 import { openModal } from '../../ui.js';
-import { ARTBOARD_PRESETS, MAX_ARTBOARD_SIZE, presetSize, newDrawDocument } from '../doc/artboards.mjs';
+import { MAX_ARTBOARDS, newDrawDocument } from '../doc/artboards.mjs';
+import { DOCUMENT_PRESETS, PRESET_CATEGORIES, UNIT_LABELS, RESOLUTIONS, RECENT_KEY, TEMPLATES_KEY, toMm, fromMm, formatSize, normalizeSetup,
+  rememberRecent, removeTemplate, loadStoredList, storeList } from '../doc/presets.mjs';
 import { dialogOperation } from '../geom/transforms.mjs';
 
 let dialogId=0;
-const safeOption=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function openDrawModal(options) {
   const previous=document.activeElement, result=openModal(options), overlay=document.querySelector('.modal-overlay:last-of-type'),modal=overlay.querySelector('.modal');
   modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');
   const title=modal.querySelector('.panel__header');title.id=`draw-dialog-${++dialogId}`;modal.setAttribute('aria-labelledby',title.id);
-  const keyboard=event=>{
-    if(event.key==='Escape'){event.preventDefault();event.stopPropagation();modal.querySelector('[data-x=cancel]').click();}
-    if(event.key==='Tab'){
-      const items=[...modal.querySelectorAll('input:not(:disabled),select:not(:disabled),button:not(:disabled)')].filter(el=>el.getClientRects().length);
-      if(event.shiftKey && document.activeElement===items[0]){event.preventDefault();items.at(-1).focus();}
-      else if(!event.shiftKey && document.activeElement===items.at(-1)){event.preventDefault();items[0].focus();}
-    }
-  };
+  const keyboard=trapDialogKeys(modal,()=>modal.querySelector('[data-x=cancel]').click());
   modal.addEventListener('keydown',keyboard);
   return result.finally(()=>{modal.removeEventListener('keydown',keyboard);if(previous?.isConnected)previous.focus();});
 }
 
-export async function newDocumentDialog(bed) {
-  const values = await openDrawModal({title:'New Draw document',submitLabel:'Create document',className:'draw-document-dialog',fields:[
-    {key:'name',label:'Document name',value:'Untitled',required:true},
-    {key:'preset',label:'Size',type:'select',value:'bed',options:ARTBOARD_PRESETS.map(p=>({value:p.id,label:p.id==='bed' ? safeOption(`Bed: ${bed.name} (${bed.width} × ${bed.height} mm)`) : p.name})),
-      sync:(values,previous)=>previous && previous.preset===values.preset && (previous.width!==values.width || previous.height!==values.height) ? 'custom' : undefined},
-    ...['width','height'].map(key=>({key,label:`${key==='width'?'Width':'Height'} (mm)`,type:'number',value:bed[key],min:.001,max:MAX_ARTBOARD_SIZE,step:.001,required:true,
-      sync:(values,previous)=>values.preset!=='custom' && (!previous || previous.preset!==values.preset) ? presetSize(values.preset,bed)[key] : undefined})),
-    {key:'count',label:'Artboards',type:'number',value:1,min:1,max:1000,step:1,required:true},
-    {key:'layout',label:'Arrange',type:'select',value:'grid-row',options:[{value:'grid-row',label:'Grid by row'},{value:'grid-column',label:'Grid by column'},{value:'row',label:'Single row'},{value:'column',label:'Single column'}]},
-    {key:'columns',label:'Columns',type:'number',value:2,min:1,max:1000,step:1,showIf:v=>v.layout.startsWith('grid')},
-    {key:'spacing',label:'Spacing (mm)',type:'number',value:20,min:0,step:.1,required:true},
+function trapDialogKeys(modal,cancel) {
+  return event=>{
+    if(event.key==='Escape'){event.preventDefault();event.stopPropagation();cancel();}
+    if(event.key==='Tab'){
+      const items=[...modal.querySelectorAll('input:not(:disabled):not([type=hidden]),select:not(:disabled),button:not(:disabled)')].filter(el=>el.getClientRects().length);
+      if(event.shiftKey && document.activeElement===items[0]){event.preventDefault();items.at(-1).focus();}
+      else if(!event.shiftKey && document.activeElement===items.at(-1)){event.preventDefault();items[0].focus();}
+    }
+  };
+}
+const ORIENTATION_ICONS={portrait:'<rect x="7" y="3" width="10" height="18" rx="1.5"/>',landscape:'<rect x="3" y="7" width="18" height="10" rx="1.5"/>'};
+/**
+ * New document dialog with Recent, Templates and Saved tabs beside editable preset details.
+ * `machines` are the configured laser profiles; `storage` holds recent setups and saved templates.
+ */
+export function newDocumentDialog(bed,{machines=[],storage=globalThis.localStorage}={}) {
+  const machineEntries=[{id:'bed',name:`${bed.name||'Machine bed'} (current)`,width:bed.width,height:bed.height},
+    ...machines.filter(m=>m.name!==bed.name||m.width!==bed.width||m.height!==bed.height).map((m,i)=>({id:`machine-${i}`,name:m.name,width:m.width,height:m.height}))]
+    .filter(m=>m.width>0&&m.height>0).map(m=>({...m,category:'laser',units:'mm',ppi:300,machine:true}));
+  const presets=[...machineEntries,...DOCUMENT_PRESETS];
+  let recent=loadStoredList(storage,RECENT_KEY),templates=loadStoredList(storage,TEMPLATES_KEY);
+  const previous=document.activeElement,overlay=document.createElement('div');overlay.className='modal-overlay';
+  const modal=document.createElement('div');modal.className='modal panel draw-document-dialog';modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');
+  const make=(tag,className,parent,text)=>{const el=document.createElement(tag);if(className)el.className=className;if(text!=null)el.textContent=text;parent?.append(el);return el;};
+  const title=make('div','panel__header',modal,'New document');title.id=`draw-dialog-${++dialogId}`;modal.setAttribute('aria-labelledby',title.id);
+  const form=make('form','draw-new-doc',make('div','panel__body',modal));form.noValidate=false;
+  const browse=make('section','draw-new-doc__browse',form),tabs=make('div','draw-new-doc__tabs',browse);tabs.setAttribute('role','tablist');tabs.setAttribute('aria-label','Document sources');
+  const chips=make('div','draw-new-doc__chips',browse),grid=make('div','draw-new-doc__grid',browse);grid.setAttribute('role','tabpanel');grid.id=`${title.id}-panel`;
+  const details=make('aside','draw-new-doc__details',form);make('h3','draw-new-doc__heading',details,'Preset details');
+  const field=(label,parent,className='')=>{const wrap=make('label',`draw-new-doc__field ${className}`,parent);make('span','',wrap,label);return wrap;};
+  const input=(parent,name,attributes={})=>{const el=make('input','input',parent);el.name=name;Object.assign(el,attributes);return el;};
+  const nameInput=input(field('Name',details),'name',{value:'Untitled',required:true,maxLength:120});
+  const presetInput=input(form,'preset',{type:'hidden',value:'bed'});
+  const sizeRow=make('div','draw-new-doc__row',details);
+  const number={type:'number',step:'any',min:'0.001',required:true};
+  const widthInput=input(field('Width',sizeRow),'width',number);
+  const unitSelect=make('select','select',field('Units',sizeRow));unitSelect.name='units';
+  for(const [value,label] of Object.entries(UNIT_LABELS))unitSelect.append(new Option(label,value));
+  const heightRow=make('div','draw-new-doc__row',details);
+  const heightInput=input(field('Height',heightRow),'height',number);
+  const orientationField=make('div','draw-new-doc__field',heightRow);make('span','',orientationField,'Orientation');
+  const orientation=make('div','draw-new-doc__orientation',orientationField);orientation.setAttribute('role','group');orientation.setAttribute('aria-label','Orientation');
+  const orientationButtons=Object.fromEntries(['portrait','landscape'].map(id=>{const b=make('button','draw-new-doc__orient',orientation);b.type='button';b.dataset.orientation=id;
+    b.setAttribute('aria-label',id[0].toUpperCase()+id.slice(1));b.innerHTML=`<svg viewBox="0 0 24 24" aria-hidden="true">${ORIENTATION_ICONS[id]}</svg>`;return [id,b];}));
+  const boardRow=make('div','draw-new-doc__row',details);
+  const countInput=input(field('Artboards',boardRow),'count',{type:'number',min:'1',max:String(MAX_ARTBOARDS),step:'1',value:'1',required:true});
+  const ppiSelect=make('select','select',field('Resolution',boardRow));ppiSelect.name='ppi';
+  for(const ppi of RESOLUTIONS)ppiSelect.append(new Option(`${ppi} ppi${ppi===72?' (screen)':ppi===300?' (high)':''}`,String(ppi)));
+  const arrange=make('div','draw-new-doc__arrange',details);
+  const layoutSelect=make('select','select',field('Arrange',arrange));layoutSelect.name='layout';
+  for(const [value,label] of [['grid-row','Grid by row'],['grid-column','Grid by column'],['row','Single row'],['column','Single column']])layoutSelect.append(new Option(label,value));
+  const arrangeRow=make('div','draw-new-doc__row',arrange);
+  const columnsInput=input(field('Columns',arrangeRow),'columns',{type:'number',min:'1',max:String(MAX_ARTBOARDS),step:'1',value:'2',required:true});
+  const spacingInput=input(field('Spacing',arrangeRow),'spacing',{type:'number',min:'0',step:'any',value:'20',required:true});
+  const error=make('p','draw-new-doc__error',details);error.setAttribute('role','alert');
+  const actions=make('div','modal-actions draw-new-doc__actions',form);
+  const cancel=make('button','btn btn--ghost btn--sm',actions,'Cancel');cancel.type='button';cancel.dataset.x='cancel';
+  const create=make('button','btn btn--primary btn--sm',actions,'Create');create.type='submit';
+
+  // Sizes live in millimetres; the inputs show them in the chosen unit.
+  const state={tab:recent.length?'recent':'templates',category:'laser',widthMm:bed.width,heightMm:bed.height,spacingMm:20,label:machineEntries[0]?.name??'Custom'};
+  const showUnits=()=>{const unit=unitSelect.value;widthInput.value=fromMm(state.widthMm,unit);heightInput.value=fromMm(state.heightMm,unit);spacingInput.value=fromMm(state.spacingMm,unit);};
+  const syncControls=()=>{
+    const landscape=state.widthMm>state.heightMm;
+    orientationButtons.portrait.setAttribute('aria-pressed',String(!landscape));orientationButtons.landscape.setAttribute('aria-pressed',String(landscape));
+    const many=Number(countInput.value)>1;arrange.hidden=!many;for(const el of [layoutSelect,columnsInput,spacingInput])el.disabled=!many;
+    columnsInput.closest('label').hidden=!layoutSelect.value.startsWith('grid');columnsInput.disabled=!many||columnsInput.closest('label').hidden;
+    for(const card of grid.querySelectorAll('[data-preset]'))card.setAttribute('aria-pressed',String(card.dataset.preset===presetInput.value));
+    error.textContent='';
+  };
+  function apply(entry,id) {
+    state.widthMm=entry.width;state.heightMm=entry.height;state.label=entry.label??entry.name??'Custom';presetInput.value=id;
+    unitSelect.value=entry.units??'mm';ppiSelect.value=String(RESOLUTIONS.includes(entry.ppi)?entry.ppi:300);
+    if(entry.count){countInput.value=entry.count;layoutSelect.value=entry.layout;columnsInput.value=entry.columns;state.spacingMm=entry.spacing;}
+    showUnits();syncControls();
+  }
+  const preview=(parent,width,height)=>{const box=make('span','draw-preset-card__preview',parent),scale=1/Math.max(width,height);
+    const page=make('span','',box);page.style.width=`${Math.max(8,width*scale*100)}%`;page.style.height=`${Math.max(8,height*scale*100)}%`;};
+  function card(id,entry,name,detail,onRemove) {
+    const wrap=make('div','draw-preset-card',grid),button=make('button','draw-preset-card__select',wrap);button.type='button';button.dataset.preset=id;
+    preview(button,entry.width,entry.height);make('span','draw-preset-card__name',button,name);make('span','draw-preset-card__size',button,detail);
+    button.addEventListener('click',()=>apply(entry,id));button.addEventListener('dblclick',()=>{apply(entry,id);form.requestSubmit();});
+    if(onRemove){const remove=make('button','draw-preset-card__remove',wrap,'×');remove.type='button';remove.setAttribute('aria-label',`Delete template ${name}`);remove.addEventListener('click',onRemove);}
+  }
+  const sizeText=entry=>formatSize(entry.width,entry.height,entry.units)+(entry.count>1?` · ${entry.count} artboards`:'');
+  const empty=text=>make('p','draw-new-doc__empty',grid,text);
+  function renderGrid() {
+    for(const button of tabs.children){const on=button.dataset.tab===state.tab;button.setAttribute('aria-selected',String(on));button.tabIndex=on?0:-1;}
+    chips.hidden=state.tab!=='templates';
+    for(const chip of chips.children)chip.setAttribute('aria-pressed',String(chip.dataset.category===state.category));
+    grid.replaceChildren();
+    if(state.tab==='recent'){
+      if(!recent.length)empty('Documents you create appear here, so you can reuse their size and settings.');
+      recent.forEach((entry,i)=>card(`recent-${i}`,entry,entry.label,sizeText(entry)));
+    } else if(state.tab==='saved'){
+      if(!templates.length)empty('No saved templates yet. In an open document, choose File › Save Document Properties as Template…');
+      for(const entry of templates)card(`template-${entry.id}`,entry,entry.name,sizeText(entry),()=>{
+        templates=removeTemplate(templates,entry.id);storeList(storage,TEMPLATES_KEY,templates);renderGrid();});
+    } else for(const entry of presets.filter(p=>p.category===state.category))card(entry.id,entry,entry.name,formatSize(entry.width,entry.height,entry.units));
+    syncControls();
+  }
+  for(const [id,label] of [['recent','Recent'],['templates','Templates'],['saved','Saved']]){
+    const button=make('button','draw-new-doc__tab',tabs,label);button.type='button';button.dataset.tab=id;button.setAttribute('role','tab');button.setAttribute('aria-controls',grid.id);
+    button.addEventListener('click',()=>{state.tab=id;renderGrid();});
+  }
+  tabs.addEventListener('keydown',event=>{if(!['ArrowLeft','ArrowRight'].includes(event.key))return;event.preventDefault();
+    const list=[...tabs.children],next=list[(list.findIndex(b=>b.dataset.tab===state.tab)+(event.key==='ArrowRight'?1:list.length-1))%list.length];next.click();next.focus();});
+  for(const category of PRESET_CATEGORIES){const chip=make('button','draw-new-doc__chip',chips,category.name);chip.type='button';chip.dataset.category=category.id;
+    chip.addEventListener('click',()=>{state.category=category.id;renderGrid();});}
+  for(const [id,button] of Object.entries(orientationButtons))button.addEventListener('click',()=>{
+    if((id==='landscape')!==(state.widthMm>state.heightMm)&&state.widthMm!==state.heightMm){[state.widthMm,state.heightMm]=[state.heightMm,state.widthMm];showUnits();syncControls();}});
+  form.addEventListener('input',event=>{
+    const target=event.target,unit=unitSelect.value;
+    if(target===presetInput){const entry=presets.find(p=>p.id===presetInput.value);if(entry)apply(entry,entry.id);else{state.label='Custom';syncControls();}return;}
+    if(target===widthInput||target===heightInput){const mm=toMm(Number(target.value),unit);if(mm>0){state[target===widthInput?'widthMm':'heightMm']=mm;presetInput.value='custom';state.label='Custom';}}
+    if(target===spacingInput&&Number(spacingInput.value)>=0)state.spacingMm=toMm(Number(spacingInput.value),unit);
+    syncControls();
+  });
+  unitSelect.addEventListener('change',showUnits);
+  apply(machineEntries[0]??presets.find(p=>p.id==='a4'),machineEntries[0]?'bed':'a4');
+  renderGrid();
+  overlay.append(modal);document.body.append(overlay);nameInput.focus();nameInput.select();
+  return new Promise(resolve=>{
+    const close=value=>{modal.removeEventListener('keydown',keyboard);overlay.remove();if(previous?.isConnected)previous.focus();resolve(value);};
+    const keyboard=trapDialogKeys(modal,()=>close(null));modal.addEventListener('keydown',keyboard);
+    cancel.addEventListener('click',()=>close(null));overlay.addEventListener('click',event=>{if(event.target===overlay)close(null);});
+    form.addEventListener('submit',event=>{event.preventDefault();
+      try{
+        const setup=normalizeSetup({width:state.widthMm,height:state.heightMm,units:unitSelect.value,ppi:Number(ppiSelect.value),count:Number(countInput.value),
+          layout:layoutSelect.value,columns:Number(columnsInput.value),spacing:state.spacingMm});
+        const doc=newDrawDocument({name:nameInput.value.trim()||'Untitled',preset:'custom',...setup},bed);
+        recent=rememberRecent(recent,{label:state.label,...setup});storeList(storage,RECENT_KEY,recent);
+        close(doc);
+      }catch(problem){error.textContent=problem.message;}
+    });
+  });
+}
+export function saveTemplateDialog(name) {
+  return openDrawModal({title:'Save Document Properties as Template',submitLabel:'Save template',className:'draw-template-dialog',fields:[
+    {key:'name',label:'Template name',value:name,required:true,description:'Saves the artboard size, count and arrangement, units and resolution. Artwork is not included.'},
   ]});
-  return values ? newDrawDocument(values,bed) : null;
 }
 export function shapeSizeDialog(tool, defaults = {}) {
   const radial=['polygon','star'].includes(tool), line=tool==='line';

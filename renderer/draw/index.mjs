@@ -24,16 +24,16 @@ const implementedTools=new Set(['select','hand','zoom','artboard',...SHAPE_TOOLS
 const commands=new Set(['undo','redo','delete','select-all','select-artboard','deselect','cancel','fit-artboard','fit-all','actual-size','zoom-in','zoom-out','outline',
   'paint-focus','paint-swap','paint-none','default-paint','smart-guides','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','toggle-panels','toggle-panels-except-tools',
   ...PANEL_DEFINITIONS.map(p=>`panel.${p.id}`),...['left','right','up','down'].flatMap(d=>[`nudge-${d}`,`nudge-large-${d}`,`duplicate-${d}`])]);
-export function createDrawWorkspace(root,{paper=window.paper,state=createProjectDraw(),onError=console.warn,onImport=()=>{},getPreferences=()=>({})}={}) {
+export function createDrawWorkspace(root,{paper=window.paper,state=createProjectDraw(),onError=console.warn,onImport=()=>{},getPreferences=()=>({}),statusHost=null}={}) {
   state.ui={tool:'select',panel:'properties',layerId:state.document.data.layers[0]?.id,fill:'#FFFFFF',stroke:'#071411',strokeWidth:.5,paintFocus:'fill',...state.ui};
   state.ui.artboardId=activeArtboard(state).id;
   const element=(tag,className,parent)=>{const el=document.createElement(tag);el.className=className;parent?.append(el);return el;};
   const shell=element('div','draw-shell',root),tools=element('nav','draw-tool-rail',shell);tools.setAttribute('aria-label','Draw tools');
   const stage=element('div','draw-stage',shell),canvas=element('canvas','draw-canvas',stage);canvas.setAttribute('aria-label','Draw canvas');canvas.tabIndex=0;
-  const hint=element('div','draw-workspace__hint',stage);
-  element('h1','',hint).textContent='Start drawing';element('p','',hint).textContent='Import artwork, or choose a drawing tool.';
-  // Import has one primary location in the application toolbar.
-  const controls=element('div','draw-view-controls',stage),positionLabel=element('span','draw-position',controls);
+  const hint=element('div','draw-workspace__hint',stage),hintCard=element('div','draw-workspace__hint-card',hint);
+  element('h1','',hintCard).textContent='Start drawing';element('p','',hintCard).textContent='Import artwork, or choose a drawing tool.';
+  // Import has one primary location in the application toolbar; view controls join the app status bar when it is given.
+  const controls=element('div','draw-view-controls',statusHost||stage),positionLabel=element('span','draw-position',controls);
   const viewButtons=element('div','draw-view-buttons',controls),boardSelect=element('select','draw-board-select',viewButtons);boardSelect.setAttribute('aria-label','Active artboard');
   const zoomInput=element('input','draw-zoom-input',viewButtons);zoomInput.type='number';zoomInput.min='.0001';zoomInput.max='10000';zoomInput.step='any';zoomInput.setAttribute('aria-label','Zoom percent');
   element('span','draw-zoom-unit',viewButtons).textContent='%';
@@ -213,10 +213,10 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   boardSelect.addEventListener('change',()=>artboards.choose(boardSelect.value,true));
   zoomInput.addEventListener('change',()=>{if(Number.isFinite(zoomInput.valueAsNumber)&&zoomInput.valueAsNumber>=.0001&&zoomInput.valueAsNumber<=10000)zoomAt(scope.view.center,zoomInput.valueAsNumber/100*(96/25.4)/scope.view.zoom);else status();});
   outlineButton.addEventListener('click',()=>handle('outline'));fitButton.addEventListener('click',()=>fit());
-  const workspace={state,scope,renderer,artboards,transforms,resize,select,setTool,handle,availableTool:id=>implementedTools.has(id),canHandle:command=>commands.has(command),
+  const workspace={state,scope,renderer,statusElement:controls,artboards,transforms,resize,select,setTool,handle,availableTool:id=>implementedTools.has(id),canHandle:command=>commands.has(command),
     setTemporaryTool(value){temporary=value;canvas.dataset.tool=temporary?.id || state.ui.tool;status();},
     async import(prepared,name,options={}){const result=await importArtwork(scope,state,prepared,name,layerId(),{...options,alive:()=>!destroyed});select(result.ids);if(options.fitArtboard)fit();return result;},
-    destroy(){destroyed=true;ownedTransformModal?.querySelector('[data-x=cancel]').click();paths.destroy();interactions.destroy();toolbar.destroy();unsubscribe();observer.disconnect();window.removeEventListener('modcut-theme-change',syncTheme);workspaces.delete(root);withScope(()=>{renderer.destroy();scope.remove();});root.replaceChildren();},
+    destroy(){destroyed=true;ownedTransformModal?.querySelector('[data-x=cancel]').click();paths.destroy();interactions.destroy();toolbar.destroy();unsubscribe();observer.disconnect();window.removeEventListener('modcut-theme-change',syncTheme);workspaces.delete(root);withScope(()=>{renderer.destroy();scope.remove();});controls.remove();root.replaceChildren();},
   };
   workspaces.set(root,workspace);refresh();syncTheme();setTool(state.ui.tool);resize();return workspace;
 }

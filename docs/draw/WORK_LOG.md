@@ -337,3 +337,30 @@ komplett Draw-E2E, som også passerer. Skjermbilde:
 Gjenstår i D1.8: Transform-panel (B), Align (C), Color/Stroke, Fill/Stroke-boks
 og Properties-gjennomgang (D). Virtualisert lagliste for 500+ objekter er ikke
 gjort (AK i 10.9); vurder ved ytelsespass.
+
+## 2026-10-15 — Nytt dokument-dialog, statuslinje og dokumentmaler
+
+Utført på brukerens forespørsel, parallelt med D1.8 del B (egen commit).
+
+- Visningskontrollene (posisjon, aktiv artboard, zoom, Outline, Fit) ligger nå i
+  appens nederste statuslinje rett etter filnavnet (`#drawStatus`), ikke flytende
+  over canvas. `createDrawWorkspace` tar `statusHost`; hver fane eier sitt
+  `statusElement`, og `setWorkspace` viser bare aktiv Draw-fanes kontroller.
+- «Start drawing»-hintet har egen flate (`--surface`) slik at teksten er lesbar
+  også når den ligger over et hvitt artboard i mørkt tema.
+- Ny `doc/presets.mjs` (ren): enhetskonvertering (mm/cm/in/pt/px, px = 1/96 in),
+  presetkatalog (Print, Screen, Laser beds), validering av oppsett,
+  `setupFromDocument`, Recent (maks 8, uten duplikater) og lagrede maler.
+  Lagring i `localStorage` (`modcut_draw_recent_setups`,
+  `modcut_draw_document_templates`); korrupte data ignoreres.
+- New document-dialogen (Illustrator-inspirert): faner Recent/Templates/Saved
+  med kort til venstre, Preset details til høyre (navn, bredde/høyde i valgt
+  enhet, orientering, antall artboards, oppløsning, arrangering). Konfigurerte
+  maskiner vises først under Laser beds. Dobbeltklikk på kort oppretter.
+  Dokumentet får `units` og `rasterEffectsPpi` fra dialogen; visningen i Draw er
+  fortsatt i mm.
+- File › «Save Document Properties as Template…» (kun Draw) lagrer første
+  artboards størrelse, antall, arrangering, enheter og oppløsning. Ikke artwork.
+- E2E: `e2eClickMenuItem` (kun i E2E-modus) lar testene klikke menyvalg.
+
+Verifisering: se commit.
