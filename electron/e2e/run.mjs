@@ -14,6 +14,7 @@ import { runDrawCornerWorkflows } from './draw-corner-workflows.mjs';
 import { runDrawTransformWorkflows } from './draw-transform-workflows.mjs';
 import { runDrawPanelWorkflows } from './draw-panel-workflows.mjs';
 import { runDrawScrubWorkflows } from './draw-scrub-workflows.mjs';
+import { runDrawSwatchWorkflows } from './draw-swatch-workflows.mjs';
 import { runDrawFeedbackWorkflows } from './draw-feedback-workflows.mjs';
 import { runWorkflows, verifyRecoveredSession } from "./workflows.mjs";
 import { runThemeWorkflows } from "./theme-workflows.mjs";
@@ -66,6 +67,9 @@ try {
   } else if (process.argv.includes('--draw-feedback')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawFeedbackWorkflows(first);first.socket.close();
+  } else if (process.argv.includes('--draw-swatches')) {
+    for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
+    await runDrawSwatchWorkflows(first);first.socket.close();
   } else if (process.argv.includes('--draw-scrub')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawScrubWorkflows(first);first.socket.close();
@@ -106,6 +110,7 @@ try {
     await runDrawPanelWorkflows(first);
     await runDrawFeedbackWorkflows(first);
     await runDrawScrubWorkflows(first);
+    await runDrawSwatchWorkflows(first);
     const expected = await runProjectWorkflows(first, profile);
     first.socket.close();
     await stop("SIGKILL");

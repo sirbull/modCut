@@ -1,6 +1,7 @@
 import { createProjectDraw } from './io/project.mjs';
 import { createDrawRenderer } from './render.mjs';
 import { createPanels } from './panels/ui.mjs';
+import { rememberColor } from './doc/swatches.mjs';
 import { cancelActiveScrub } from './ui/number-field.mjs';
 import { PANEL_DEFINITIONS } from './panels/registry.mjs';
 import { toolRegistry } from './tools/registry.mjs';
@@ -16,7 +17,7 @@ import { insertNode, removeNode, updateNode, updateDocument } from './doc/comman
 import { activeArtboard } from './doc/artboards.mjs';
 import { changePaint, changeStroke, paintHex } from './doc/paint.mjs';
 import { importArtwork } from './import-artwork.mjs';
-import { shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog,layerOptionsDialog } from './ui/dialogs.mjs';
+import { shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog,layerOptionsDialog,swatchOptionsDialog } from './ui/dialogs.mjs';
 import { layerOptionsPatch } from './doc/layers.mjs';
 import { toolCursor } from './tools/cursors.mjs';
 import { alignReference, alignOffsets, distributeOffsets, spacingOffsets } from './geom/align.mjs';
@@ -116,6 +117,8 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     if(kind==='width')state.ui.strokeWidth=value;else state.ui[kind]=value;
     // Remember the last solid color per kind for the Color button / Comma shortcut.
     if(kind!=='width'&&value)state.ui.lastSolid={...state.ui.lastSolid,[kind]:value};
+    // Recent Colors records committed colors, not every step of a live slider drag.
+    if(kind!=='width'&&value&&!mergeKey)state.ui.recentColors=rememberColor(state.ui.recentColors,value);
     const ids=paintIds();
     if(ids.length)state.history.transaction('Appearance',()=>{for(const id of ids)state.history.execute(updateNode(id,{appearance:changePaint(state.document.getNode(id).appearance,kind,value,state.ui)}));},{mergeKey});
     else {panels?.render();toolbar?.update();}
@@ -151,6 +154,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       state.history.transaction('Stroke',()=>{for(const id of ids)state.history.execute(updateNode(id,{appearance:changeStroke(state.document.getNode(id).appearance,props,state.ui)}));},{mergeKey});},
     paintFocus(kind){state.ui.paintFocus=kind;toolbar?.update();panels?.render();},
     thumbnail:id=>withScope(()=>renderer.thumbnail(id)),
+    swatchOptions:swatch=>state.document.readOnly?null:swatchOptionsDialog(swatch),
     async layerOptions(id,options={}){const layer=state.document.getNode(id);if(layer?.type!=='layer'||state.document.readOnly)return;
       const values=await layerOptionsDialog(layer,options);if(!values||destroyed)return;
       run(()=>{const current=state.document.getNode(id);if(!current)return;const patch=layerOptionsPatch(current,values);if(Object.keys(patch).length)state.history.execute(updateNode(id,patch,{label:'Layer Options'}));});},

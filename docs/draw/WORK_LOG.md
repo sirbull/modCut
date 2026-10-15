@@ -598,3 +598,27 @@ passerer, også autolagringstesten.
 Verifisering: 137 Draw-enhetstester passerer (nye tester i `layers.test.mjs`). Panel-E2E dekker
 thumbnail (mørke piksler fra ellipsen), fargelinje, omdøping av lag, radsletting, søk med fokus,
 filter, teller, Layer Options via fargelinjen og valg av «Red». Komplett Draw-E2E passerer (15 av 15).
+
+## 2026-10-15: Høyrepanel trinn 4, Swatches og Recent Colors
+
+- Ny panelgruppe **Swatches** øverst i stolpen. Fill/Stroke-valg (samme som Color), None-rute,
+  **Recent Colors**, og biblioteket gruppert som Basic, Grays (K=90 til K=10), **Laser layers**
+  (#FF0000, #00AA00, #0000FF og #000000, de samme fargene Cut bruker for lag) og Custom.
+  Klikk på en rute setter fill eller stroke på utvalget (eller standard for nye former).
+  Rutenett- og listevisning (navn og hex).
+- Bunnlinje med antall, **New swatch** (fra gjeldende farge, havner i Custom) og **Delete swatch**
+  (sist valgte rute, markert med stiplet ring). Dobbeltklikk åpner **Swatch Options** (navn og farge).
+  Endringer er ett angresteg og lagres i dokumentets `swatches`. Et dokument uten egne swatches viser
+  standardbiblioteket; første endring lagrer biblioteket i dokumentet. Sletter man alle, kommer
+  standardbiblioteket tilbake.
+- **Recent Colors** (10, nyeste først, uten duplikater) deles mellom Swatches og Color. Den
+  registrerer fargen når den er brukt ferdig, ikke hvert steg i et slider-drag.
+- Color-panelet har fått Recent Colors og scrubby labels på kanalfeltene (R, G, B, H, S, B osv.)
+  med live forhåndsvisning og ett angresteg.
+- Ren logikk i `doc/swatches.mjs` med enhetstester. Nye Tabler-ikoner: `color-swatch`,
+  `layout-grid`, `list`, `square-plus`.
+- Gjenstår fra spesifikasjonen: spekterfelt i Color, swatch-grupper som brukeren lager selv og
+  globale swatches (D2.3).
+
+Verifisering: 140 Draw-enhetstester passerer. Ny E2E `draw-swatch-workflows.mjs` (`--draw-swatches`)
+passerer og er med i komplett Draw-E2E, som passerer (16 av 16).

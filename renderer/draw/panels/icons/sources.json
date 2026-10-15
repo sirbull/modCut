@@ -56,6 +56,11 @@
       "path": "icons/outline/chevron-right.svg",
       "sha256": "0142561fc2fd1b6a18b2cb0c08959b6037643aecf6adc6612aefe16ec4f39f0f"
     },
+    "color-swatch": {
+      "name": "color-swatch",
+      "path": "icons/outline/color-swatch.svg",
+      "sha256": "1ae94ff6191a0bdaeed438c7f2a872003c01b21ec12584e2947ecd390b810b97"
+    },
     "eye": {
       "name": "eye",
       "path": "icons/outline/eye.svg",
@@ -121,6 +126,11 @@
       "path": "icons/outline/layout-align-top.svg",
       "sha256": "3088b34b43596b0550f8aedb74a09123b294878b065ec44a7ba2355cc06c054c"
     },
+    "layout-grid": {
+      "name": "layout-grid",
+      "path": "icons/outline/layout-grid.svg",
+      "sha256": "eedad40587cfc6420b3c4dd734fa591b552b2c1eb7348e415471c694e6d7dabe"
+    },
     "line-dashed": {
       "name": "line-dashed",
       "path": "icons/outline/line-dashed.svg",
@@ -130,6 +140,11 @@
       "name": "link",
       "path": "icons/outline/link.svg",
       "sha256": "63c88f996a6c8c3a1687b92f75ef11cab9a549a1408f9ed85d7baf78c7cad12d"
+    },
+    "list": {
+      "name": "list",
+      "path": "icons/outline/list.svg",
+      "sha256": "c1565949477ea4fbc1d7ca9c5839720584f25f5a080cc3a20958314a38ddcccf"
     },
     "lock": {
       "name": "lock",
@@ -165,6 +180,11 @@
       "name": "spacing-vertical",
       "path": "icons/outline/spacing-vertical.svg",
       "sha256": "680d259668cb07c1f8ed7ca8fe7fe66bae25567a3a97b66aa162f2ef17fbc0b0"
+    },
+    "square-plus": {
+      "name": "square-plus",
+      "path": "icons/outline/square-plus.svg",
+      "sha256": "dcf1a26d76bd90aaa677b83a76eed9b0b345ff692a3d4e867a6d4d621718daf8"
     },
     "stack-pop": {
       "name": "stack-pop",

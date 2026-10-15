@@ -1,6 +1,6 @@
 export const PANEL_DEFINITIONS = Object.freeze([
   ['properties', 'Properties', 'adjustments'], ['layers', 'Layers', 'layers-intersect'],
-  ['artboards', 'Artboards', 'artboard'], ['color', 'Color', 'palette'],
+  ['artboards', 'Artboards', 'artboard'], ['swatches', 'Swatches', 'color-swatch'], ['color', 'Color', 'palette'],
   ['stroke', 'Stroke', 'line-dashed'], ['align', 'Align', 'align-center'], ['transform', 'Transform', 'arrows-move'],
 ].map(([id, name, icon]) => Object.freeze({ id, name, icon })));
 export function panelIconHref(id) {
@@ -14,6 +14,7 @@ export function panelSpriteHref(icon) { return new URL(`icons/sprite.svg#icon-${
 // group in the panel rail; a group opens as a flyout with one tab per panel, as in Illustrator.
 export const DOCK_PANELS = Object.freeze(['properties', 'layers']);
 export const PANEL_GROUPS = Object.freeze([
+  ['swatches', 'color-swatch', ['swatches']],
   ['color', 'palette', ['color']],
   ['stroke', 'line-dashed', ['stroke']],
   ['transform', 'arrows-move', ['transform', 'align']],

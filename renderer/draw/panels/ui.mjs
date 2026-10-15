@@ -1,5 +1,7 @@
 import { DOCK_PANELS, PANEL_GROUPS, clampDockSplit, groupForPanel, panelName, panelSpriteHref } from './registry.mjs';
-import { insertNode, updateNode } from '../doc/commands.mjs';
+import { insertNode, updateDocument, updateNode } from '../doc/commands.mjs';
+import { createId } from '../doc/schema.mjs';
+import { addSwatch, documentSwatches, editSwatch, groupSwatches, rememberColor, removeSwatch } from '../doc/swatches.mjs';
 import { ROOT_CONTEXT, collectCommands, deleteLayerCommands, deleteRowCommands, filterLayerTree, layerContext, moveCommand, newLayer, releaseCommands, soloUpdates } from '../doc/layers.mjs';
 import { shortcutLabel } from '../keymap.mjs';
 import { REFERENCE_POINTS } from '../geom/transforms.mjs';
@@ -368,9 +370,8 @@ export function createPanels(shell, state, api) {
     if (!node) return state.ui[kind];
     return paintHex(kind === 'fill' ? node.appearance.fills[0] : node.appearance.strokes[0]);
   }
-  function colorPanel(host) {
-    const target = state.ui.paintFocus === 'stroke' ? 'stroke' : 'fill', mode = state.ui.colorMode ?? 'rgb', hex = currentPaint(target);
-    const disabled = state.document.readOnly, shown = hex || '#FFFFFF', live = `color-${target}`;
+  function remember(target) { const hex = currentPaint(target); if (hex) state.ui.recentColors = rememberColor(state.ui.recentColors,hex); }
+  function paintTargets(host, target) {
     const targets = document.createElement('div'); targets.className = 'draw-segmented'; targets.setAttribute('role','group'); targets.setAttribute('aria-label','Color target');
     for (const kind of ['fill','stroke']) {
       const b = document.createElement('button'); b.type = 'button'; b.className = 'draw-segmented__option'; b.textContent = kind === 'fill' ? 'Fill' : 'Stroke';
@@ -378,17 +379,80 @@ export function createPanels(shell, state, api) {
       b.addEventListener('click',() => api.paintFocus(kind)); targets.append(b);
     }
     host.append(targets);
+  }
+  function chip(hex, label, onPick, { pressed = false, none = false } = {}) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'draw-swatch'; b.setAttribute('aria-label',label); b.dataset.tooltip = label;
+    if (none) b.classList.add('is-none'); else b.style.setProperty('--swatch',hex);
+    b.setAttribute('aria-pressed',String(pressed)); b.disabled = state.document.readOnly;
+    b.addEventListener('click',event => api.run(() => onPick(event))); return b;
+  }
+  function recentColors(host, target) {
+    const recent = state.ui.recentColors ?? [];
+    const title = document.createElement('h3'); title.className = 'draw-panel__section'; title.textContent = 'Recent Colors'; host.append(title);
+    const row = document.createElement('div'); row.className = 'draw-swatch-row'; row.dataset.drawRecent = '';
+    if (!recent.length) { const p = document.createElement('span'); p.className = 'draw-panel__hint'; p.textContent = 'Colors you apply appear here.'; row.append(p); }
+    for (const hex of recent) { const b = chip(hex,hex,() => api.paint(target,hex)); b.dataset.drawRecentColor = hex; row.append(b); }
+    host.append(row);
+  }
+  function swatchesPanel(host) {
+    const target = state.ui.paintFocus === 'stroke' ? 'stroke' : 'fill', current = currentPaint(target), doc = state.document;
+    const list = documentSwatches(doc.data), view = state.ui.swatchView ?? 'grid', readOnly = doc.readOnly;
+    const setSwatches = (label, swatches) => state.history.transaction(label,() => state.history.execute(updateDocument({ swatches })));
+    paintTargets(host,target);
+    const tools = document.createElement('div'); tools.className = 'draw-swatch-tools';
+    const none = chip(null,`None (${target})`,() => api.paint(target,null),{ none: true, pressed: !current }); none.dataset.drawSwatch = 'none';
+    const views = document.createElement('div'); views.className = 'draw-swatch-views';
+    for (const [id,label,iconId] of [['list','List view','list'],['grid','Grid view','layout-grid']]) {
+      const b = iconButton(label,iconId,() => { state.ui.swatchView = id; render(); }); b.setAttribute('aria-pressed',String(view === id)); b.dataset.drawSwatchView = id; views.append(b);
+    }
+    tools.append(none,views); host.append(tools);
+    recentColors(host,target);
+    for (const group of groupSwatches(list)) {
+      const title = document.createElement('h3'); title.className = 'draw-panel__section'; title.textContent = group.name; host.append(title);
+      const box = document.createElement('div'); box.className = view === 'list' ? 'draw-swatch-list' : 'draw-swatch-row'; box.dataset.drawSwatchGroup = group.name;
+      for (const s of group.swatches) {
+        const b = chip(s.hex,`${s.name} ${s.hex}`,() => { state.ui.swatchId = s.id; api.paint(target,s.hex); render(); },{ pressed: s.hex === current });
+        b.classList.toggle('is-chosen',state.ui.swatchId === s.id);
+        b.dataset.drawSwatch = s.id;
+        if (view === 'list') { const name = document.createElement('span'); name.textContent = s.name; const code = document.createElement('code'); code.textContent = s.hex; b.append(name,code); }
+        b.addEventListener('dblclick',() => api.run(() => swatchOptions(s)));
+        box.append(b);
+      }
+      host.append(box);
+    }
+    const bar = document.createElement('div'); bar.className = 'draw-layer-bar draw-swatch-bar';
+    const count = document.createElement('span'); count.className = 'draw-layer-count'; count.textContent = `${list.length} swatches`;
+    const actions = document.createElement('div'); actions.className = 'draw-layer-actions';
+    const add = iconButton(`New swatch from the current ${target} color`,'square-plus',() => {
+      const { swatches, created } = addSwatch(doc.data,currentPaint(target),'',createId);
+      setSwatches('New Swatch',swatches); state.ui.swatchId = created.id;
+    }); add.dataset.drawSwatchAction = 'new'; add.disabled = readOnly || !current;
+    const selectedSwatch = list.find(s => s.id === state.ui.swatchId);
+    const remove = iconButton('Delete swatch','trash',() => { setSwatches('Delete Swatch',removeSwatch(doc.data,state.ui.swatchId)); state.ui.swatchId = null; });
+    remove.dataset.drawSwatchAction = 'delete'; remove.disabled = readOnly || !selectedSwatch;
+    actions.append(add,remove); bar.append(count,actions); host.append(bar);
+    text(host,'Click a swatch to apply it to the ' + target + '. Double-click to rename or change it.');
+    async function swatchOptions(s) {
+      const values = await api.swatchOptions(s); if (!values) return;
+      api.run(() => setSwatches('Swatch Options',editSwatch(state.document.data,s.id,values)));
+    }
+  }
+  function colorPanel(host) {
+    const target = state.ui.paintFocus === 'stroke' ? 'stroke' : 'fill', mode = state.ui.colorMode ?? 'rgb', hex = currentPaint(target);
+    const disabled = state.document.readOnly, shown = hex || '#FFFFFF', live = `color-${target}`;
+    paintTargets(host,target);
     const top = document.createElement('div'); top.className = 'draw-color-top'; host.append(top);
     const swatch = document.createElement('input'); swatch.type = 'color'; swatch.className = 'draw-color-swatch'; swatch.value = shown.toLowerCase();
     swatch.setAttribute('aria-label',`${target === 'fill' ? 'Fill' : 'Stroke'} color picker`); swatch.dataset.drawField = 'color-picker'; swatch.dataset.live = 'true'; swatch.disabled = disabled;
     swatch.classList.toggle('is-none',!hex);
     swatch.addEventListener('input',() => { liveEdit = true; }); swatch.addEventListener('input',() => api.run(() => api.paint(target,swatch.value.toUpperCase(),{ mergeKey: live })));
-    swatch.addEventListener('change',() => { liveEdit = false; render(); });
+    swatch.addEventListener('change',() => { liveEdit = false; remember(target); render(); });
     const none = button('None',() => api.paint(target,null)); none.dataset.drawField = 'color-none'; none.disabled = disabled; none.setAttribute('aria-pressed',String(!hex));
     const modeSelect = document.createElement('select'); modeSelect.className = 'draw-select'; modeSelect.dataset.drawField = 'color-mode'; modeSelect.setAttribute('aria-label','Color mode');
     for (const [value,spec] of Object.entries(COLOR_MODES)) modeSelect.append(new Option(spec.name,value,false,value === mode));
     modeSelect.addEventListener('change',() => { state.ui.colorMode = modeSelect.value; render(); });
     top.append(swatch,modeSelect,none);
+    recentColors(host,target);
     const values = colorValues(mode,shown), inputs = [];
     const apply = (mergeKey) => api.run(() => api.paint(target,colorFromValues(mode,inputs.map(i => i.number.valueAsNumber)),{ mergeKey }));
     COLOR_MODES[mode].channels.forEach(([label,max],i) => {
@@ -400,8 +464,9 @@ export function createPanels(shell, state, api) {
       number.dataset.drawField = `color-${mode}-${i}`; number.setAttribute('aria-label',label); number.disabled = disabled;
       range.addEventListener('pointerdown',() => { liveEdit = true; });
       range.addEventListener('input',() => { number.value = range.value; apply(live); });
-      range.addEventListener('change',() => { liveEdit = false; render(); });
+      range.addEventListener('change',() => { liveEdit = false; remember(target); render(); });
       number.addEventListener('change',() => { range.value = number.value; apply(null); });
+      attachScrub(name,number,{ step: mode === 'rgb' ? 1 : .1, min: 0, max, onScrub: (phase,value) => { if (phase === 'move') { range.value = String(value); apply(live); } else if (phase === 'end') { remember(target); render(); } else if (phase === 'cancel') { number.value = String(values[i]); range.value = String(values[i]); apply(live); render(); } } });
       inputs.push({ range, number }); row.append(name,range,number); host.append(row);
     });
     const hexInput = field(host,'Hex',hex ? hex.slice(1).toUpperCase() : '',value => api.paint(target,normalizeHex(value)),{ type:'text', key:'color-hex', disabled });
@@ -507,7 +572,7 @@ export function createPanels(shell, state, api) {
       for(const [key,label,min] of editable)field(host,label,node.params[key]??({sides:6,points:5,endAngle:360}[key] || 0),value=>state.history.execute(updateNode(node.id,{params:{...node.params,[key]:value}})),{min,max:['sides','points'].includes(key)?100:undefined,key:`shape-${key}`});
     }
   }
-  const PANEL_CONTENT = { color: colorPanel, stroke: strokePanel, transform: host => transform(host), align: alignPanel, artboards: artboardPanel };
+  const PANEL_CONTENT = { swatches: swatchesPanel, color: colorPanel, stroke: strokePanel, transform: host => transform(host), align: alignPanel, artboards: artboardPanel };
   function renderFlyout() {
     const group = PANEL_GROUPS.find(g => g.id === state.ui.flyout);
     flyout.hidden = !group; if (!group) { flyoutTabs.replaceChildren(); flyoutBody.replaceChildren(); return; }

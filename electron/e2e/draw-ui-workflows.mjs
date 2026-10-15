@@ -46,7 +46,7 @@ export async function runDrawUIWorkflows(client) {
   assert.ok(await evaluate(`(async()=>(${active}.renderer.items.get(${JSON.stringify(image.id)}).getPixel(0,0).red>.99))()`),'Draw preserves original raster colors');
 
   const layout = await evaluate("(()=>{const root=document.querySelector('.draw-project[style*=block]'),tool=root.querySelector('.draw-tool-rail').getBoundingClientRect(),canvas=root.querySelector('.draw-canvas').getBoundingClientRect(),rail=root.querySelector('.draw-panel-rail').getBoundingClientRect(),panel=root.querySelector('.draw-panels').getBoundingClientRect();return{left:tool.right<=canvas.left,right:canvas.right<=rail.left,options:rail.right<=panel.left,icons:root.querySelectorAll('[data-draw-panel]').length,dock:[...root.querySelectorAll('.draw-panels [data-draw-dock]')].map(s=>s.dataset.drawDock)}})()");
-  assert.deepEqual(layout,{left:true,right:true,options:true,icons:4,dock:['properties','layers']},'Properties and Layers share the dock; other panels are rail groups');
+  assert.deepEqual(layout,{left:true,right:true,options:true,icons:5,dock:['properties','layers']},'Properties and Layers share the dock; other panels are rail groups');
   await evaluate("document.querySelector('.draw-project[style*=block] [data-draw-panel=artboards]').click()");
   assert.ok(await evaluate("!!document.querySelector('.draw-project[style*=block] [data-draw-field=artboard-width]')"));
   await evaluate(`document.querySelector('.draw-project[style*=block] [data-draw-node="${path.id}"] .draw-layer-name').click()`);

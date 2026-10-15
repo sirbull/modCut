@@ -243,3 +243,10 @@ export function layerOptionsDialog(layer,{focus='name'}={}) {
   const target=focus==='color'?menu:el.name;setTimeout(()=>{target.focus();if(target===el.name)el.name.select();});
   return result.then(values=>values&&({...values,locked:el.template.checked||values.locked,printable:!el.template.checked&&values.printable,preview:el.template.checked||values.preview}));
 }
+/** Swatch Options: rename a swatch or change its color. */
+export function swatchOptionsDialog(swatch) {
+  return openDrawModal({title:'Swatch Options',submitLabel:'OK',className:'draw-swatch-dialog',fields:[
+    {key:'name',label:'Swatch name',value:swatch.name,required:true},
+    {key:'hex',label:'Color',type:'color',value:swatch.hex.toLowerCase()},
+  ]}).then(values=>values&&{name:values.name,hex:values.hex.toUpperCase()});
+}

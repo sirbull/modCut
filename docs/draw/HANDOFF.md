@@ -4,7 +4,9 @@ Oppdatert 2026-10-15. Arbeidsgren: `claude/draw-properties-layers-panels` (bygge
 
 **Høyrepanelet følger nå [RIGHT_PANELS.md](RIGHT_PANELS.md).** Trinn 1 (dokk med Properties over
 Layers, dragbar delelinje, panelgrupper som flyout med faner) trinn 2 (scrubby labels) og trinn 3
-(Layers-rader, søk, bunnlinje, thumbnails og Layer Options) er ferdige. Neste er trinn 4, Swatches. Autolagringstesten `project-workflows.mjs:113` har
+(Layers-rader, søk, bunnlinje, thumbnails og Layer Options) og trinn 4 (Swatches og Recent Colors)
+er ferdige. Neste er trinn 5: Transparency-fanen i Stroke-gruppen (Stroke-panelet er allerede
+fullt fra D1.8). Autolagringstesten `project-workflows.mjs:113` har
 vært ustabil på Linux, se arbeidsloggen.
 D1.8 (Transform, Align, Color, Stroke, Fill/Stroke-boks og Properties) ble fullført på
 `feat/vector-draw` og er slått inn her; panelene ligger nå i panelgruppene.
