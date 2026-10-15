@@ -130,6 +130,7 @@ export function validateDocument(doc) {
     if (value.type === 'layer') {
       string(value.color, `${path}.color`); bool(value.template, `${path}.template`); bool(value.printable, `${path}.printable`);
       if (value.dimImagesTo !== undefined) number(value.dimImagesTo, `${path}.dimImagesTo`, 0, 100);
+      for (const key of ['preview', 'dimImages']) if (value[key] !== undefined) bool(value[key], `${path}.${key}`);
     }
     if (value.type === 'path') {
       enumeration(value.fillRule, ['nonzero', 'evenodd'], `${path}.fillRule`);

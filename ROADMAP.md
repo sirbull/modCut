@@ -102,8 +102,9 @@ the same commit that completes an item.
 - [x] Phase 0 — Foundation: workspace, document model/history, geometry kernel,
   keymap and `.modcut` v4 persistence. D0.1–D0.6 complete.
 - [ ] Phase 1 — Basic drawing MVP: artboards, Pen, shapes, layers, bitmap
-  references and Send to Cut v1. D1.1–D1.7 complete; D1.8 (remaining panel
-  functionality and template layers) is next. The phase remains in progress.
+  references and Send to Cut v1. D1.1–D1.7 complete. D1.8 in progress: Layers
+  panel and template layers done; Transform, Align, Color/Stroke and the Fill/Stroke
+  box remain. The phase remains in progress.
 - [ ] Phase 2 — Core vector editing: text, Pathfinder, gradients, import/export
   and Send to Cut v2.
 - [ ] Phase 3 — Advanced editing: stroke expansion, effects, Image Trace,

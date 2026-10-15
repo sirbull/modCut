@@ -6,5 +6,6 @@ export const PANEL_DEFINITIONS = Object.freeze([
 export function panelIconHref(id) {
   const panel = PANEL_DEFINITIONS.find(panel => panel.id === id);
   if (!panel) throw new Error(`Unknown panel: ${id}`);
-  return new URL(`icons/sprite.svg#icon-${panel.icon}`, import.meta.url).href;
+  return panelSpriteHref(panel.icon);
 }
+export function panelSpriteHref(icon) { return new URL(`icons/sprite.svg#icon-${icon}`, import.meta.url).href; }

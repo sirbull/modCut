@@ -81,3 +81,17 @@ export function transformDialog(tool,origin,defaults={},onPreview=()=>{}) {
   form.addEventListener('input',preview);form.addEventListener('change',preview);preview();
   return result.finally(()=>{form.removeEventListener('input',preview);form.removeEventListener('change',preview);});
 }
+export function layerOptionsDialog(layer) {
+  return openDrawModal({title:'Layer Options',submitLabel:'OK',className:'draw-layer-dialog',fields:[
+    {key:'name',label:'Name',value:layer.name,required:true},
+    {key:'color',label:'Color',type:'color',value:layer.color.toLowerCase()},
+    {key:'template',label:'Template',type:'checkbox',value:layer.template,description:'A locked, dimmed reference layer. It is never printed, exported or sent to Cut.',
+      onChange:on=>{const dim=document.querySelector('.draw-layer-dialog form')?.elements.dimImages;if(on&&dim&&!dim.checked){dim.checked=true;dim.dispatchEvent(new Event('input',{bubbles:true}));}}},
+    {key:'visible',label:'Show',type:'checkbox',value:layer.visible},
+    {key:'preview',label:'Preview',type:'checkbox',value:layer.preview!==false,showIf:v=>!v.template},
+    {key:'locked',label:'Lock',type:'checkbox',value:layer.locked,showIf:v=>!v.template},
+    {key:'printable',label:'Print',type:'checkbox',value:layer.printable,showIf:v=>!v.template},
+    {key:'dimImages',label:'Dim images',type:'checkbox',value:layer.template||!!layer.dimImages},
+    {key:'dimImagesTo',label:'Dim images to (%)',type:'number',value:layer.dimImagesTo??50,min:0,max:100,step:1,required:true,showIf:v=>v.dimImages},
+  ]});
+}

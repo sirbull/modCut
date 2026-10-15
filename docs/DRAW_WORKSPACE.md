@@ -1403,7 +1403,7 @@ Oppdateres når oppgaven fullføres. Løpende arbeidslogg: [`draw/WORK_LOG.md`](
 * [x] D1.5 Pen og ankerverktøy
 * [x] D1.6 Former
 * [x] D1.7 Rotate, Reflect, Scale med Copy og Transform Again
-* [ ] D1.8 Grunnpaneler
+* [ ] D1.8 Grunnpaneler — pågår: Layers og template-lag ferdig; Transform, Align, Color/Stroke og Fill/Stroke-boks gjenstår
 * [ ] D1.9 Kontrollinje og statuslinje
 * [ ] D1.10 Group, Arrange, Clipboard
 * [ ] D1.11 Place bitmap og template-lag
@@ -1739,3 +1739,17 @@ Adapteren konverterer verdens-mm-streker til Paper sin skjermpikselbredde ved
 hvert zoomnivå; en pikseltest ved dobbel zoom verifiserer den fysiske tykkelsen.
 Full `npm test` stopper fortsatt i den tidligere dokumenterte Cut crop-E2E-testen
 etter grønne sidecar/bridge/main/renderer/Draw/kontrast-tester.
+
+### Implementasjonsnotater — D1.8 (pågår)
+
+**Del A — Layers og template-lag (ferdig).** Ren lagmodell i `doc/layers.mjs`.
+Lag arver kontekst nedover: Template (låst, ikke Print, alltid Preview, bilder
+dimmet til `dimImagesTo`), Print, per-lag Outline (`preview:false`) og lagfarge.
+`isOutputNode` er den felles regelen for senere eksport og Send til Cut: kun
+synlig artwork i printbare, ikke-template lag. Skjemaet har valgfrie boolske
+`preview` og `dimImages` på lag. Layers-panelet viser øverste lag først, med
+øye/template-ikon, lås, sammenfelling, lagfarge, navn, valgsirkel og
+drag-and-drop. Alt-klikk øye gir solo, Ctrl/Cmd-klikk veksler Outline/Preview.
+Layer Options åpnes med dobbeltklikk. New layer/sublayer, Collect in New Layer,
+Release to Layers (Sequence), Locate Object og Delete er hver ett angresteg.
+Utvalgsrammen følger lagfargen. Virtualisering for 500+ rader er ikke gjort.

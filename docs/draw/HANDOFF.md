@@ -4,13 +4,17 @@ Oppdatert 2026-10-15. Arbeidsgren: `feat/vector-draw`.
 
 ## Status og neste oppgave
 
-Fase 0 og D1.1–D1.7 er fullført. **Neste oppgave er D1.8: fullføre grunnpanelene og template-lag.** Fase 1 er fortsatt under arbeid.
+Fase 0 og D1.1–D1.7 er fullført. **D1.8 pågår** og gjøres i delsteg som committes
+og pushes hver for seg: A Layers/template-lag (**ferdig**), B Transform-panel,
+C Align-panel, D Color/Stroke, Fill/Stroke-boks og Properties-gjennomgang.
+Fortsett med første ikke-ferdige delsteg. Se [arbeidsloggen](WORK_LOG.md) for detaljer.
 
-Les [hovedplanen](../DRAW_WORKSPACE.md), spesielt panelspesifikasjonen og sjekklisten i kapittel 23. [Arbeidsloggen](WORK_LOG.md) dokumenterer tidligere trinn kronologisk; eldre «neste oppgave»-notater er historiske. Denne overleveringen beskriver gjeldende stoppunkt.
+Les [hovedplanen](../DRAW_WORKSPACE.md), spesielt panelspesifikasjonen og sjekklisten i kapittel 23.
 
-Brukeren ønsker at agenten fortsetter konkret på neste trinn, holder dem orientert og unngår at Layers og andre verktøy vises flere steder.
+Brukeren ønsker at agenten tar én fase/del av gangen, committer, pusher og dokumenterer
+etter hver del, holder dem orientert og unngår at Layers og andre verktøy vises flere steder.
 
-**Arbeidstreet inneholder mange endrede og nye, usporede filer. Arbeidet er ikke committet. Bevar alle endringene og ta med nye kilde- og testfiler ved eventuell commit. Ikke reset eller clean arbeidstreet.** Se `git status --short` for faktisk status.
+Arbeidet er committet på `feat/vector-draw`. Ikke reset eller clean arbeidstreet.
 
 ## Sist fullført: D1.7
 

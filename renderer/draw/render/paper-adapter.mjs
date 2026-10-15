@@ -6,6 +6,7 @@ import { transformProperties } from '../geometry.mjs';
 import { editablePath,cornerGeometry,roundCorners } from '../geom/corners.mjs';
 import { shapeSelectionKey } from '../doc/selection.mjs';
 import { scaledStrokeProperties } from '../geom/transforms.mjs';
+import { layerContext, ROOT_CONTEXT } from '../doc/layers.mjs';
 
 export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withScope = fn => fn() } = {}) {
   const boards = new scope.Layer({ name: 'Artboards' });
@@ -18,7 +19,9 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
   const transformPreviewIds=new Set();let transformPreview=null,transformPreviewOptions=null;
   let destroyed = false, outline = !!state.ui?.outline;
   let labelColor='#435A50',labelBackground='#E7F5EF';
-  const selection = createSelectionOverlay(scope, overlay, state, id => bounds(id));
+  const selection = createSelectionOverlay(scope, overlay, state, id => bounds(id), id => records.get(id)?.context.color);
+  // Template layers stay previewed in Outline view; other layers may request Outline individually.
+  const outlineFor = id => { const context = records.get(id)?.context ?? ROOT_CONTEXT; return !context.template && (outline || context.outline); };
   const pointToWorld=(id,point)=>new scope.Point(...point).transform(records.get(id).worldMatrix);
   const editingMatrix=id=>{
     const node=state.document.getNode(id),parentId=node?.type==='shape'?state.document.locate(id).parentId:id;
@@ -117,8 +120,8 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     if (node.type === 'image') return JSON.stringify([node.assetId, state.document.data.assets[node.assetId]]);
     return node.type;
   }
-  function style(item, node, asOutline = outline) {
-    item.opacity = asOutline ? 1 : node.opacity;
+  function style(item, node, asOutline = outlineFor(node.id)) {
+    item.opacity = asOutline ? 1 : node.opacity * (node.type === 'image' ? records.get(node.id)?.context.dim ?? 1 : 1);
     item.blendMode = asOutline ? 'normal' : node.blendMode;
     if (node.children || node.type === 'image') return;
     const fill = node.appearance.fills[0], stroke = node.appearance.strokes[0];
@@ -139,22 +142,22 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
   function place(parent, item, index) {
     if (parent.children[index] !== item) parent.insertChild(index, item);
   }
-  function reconcile(nodes, parent, alive) {
+  function reconcile(nodes, parent, alive, parentContext = ROOT_CONTEXT) {
     let index = 0;
     for (const node of nodes) {
       alive.add(node.id);
       const geometry = geometryKey(node), own = { ...node }; delete own.children;
-      const fingerprint = JSON.stringify(own);
+      const context = layerContext(parentContext, node), fingerprint = JSON.stringify([own, context]);
       let record = records.get(node.id), item = items.get(node.id);
       const replaced = !record || record.node.type !== node.type || record.geometry !== geometry;
       if (replaced) {
         item?.remove(); record?.frame?.remove();
         item = make(node); item.applyMatrix = false; item.data.nodeId = node.id;
         items.set(node.id, item);
-        record = { node, geometry }; records.set(node.id, record);
+        record = { node, geometry, context }; records.set(node.id, record);
       }
       if (replaced || record.fingerprint !== fingerprint) {
-        record.node = node; record.fingerprint = fingerprint;
+        record.node = node; record.fingerprint = fingerprint; record.context = context;
         item.matrix = new scope.Matrix(...node.transform);
         if (node.type === 'image') {
           positionImage(item, node);
@@ -170,7 +173,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
       item.visible = node.visible;
       place(parent, item, index++);
       if (record.frame) { record.frame.visible = false; place(parent, record.frame, index++); }
-      if (node.children) reconcile(node.children, item, alive);
+      if (node.children) reconcile(node.children, item, alive, context);
     }
   }
   function union(a, b) { return a ? a.unite(b) : b.clone(); }
@@ -188,9 +191,9 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
         if (b) {
           worldBounds.set(node.id, b.clone());
           // Stroke bounds preserve thick strokes intersecting the viewport edge.
-          if (outline && !node.children && node.type !== 'image') style(item, node, false);
+          if (outlineFor(node.id) && !node.children && node.type !== 'image') style(item, node, false);
           paintedBounds.set(node.id, node.children || node.type === 'image' ? b.clone() : item.getStrokeBounds(matrix));
-          if (outline && !node.children && node.type !== 'image') style(item, node);
+          if (outlineFor(node.id) && !node.children && node.type !== 'image') style(item, node);
           if (node.visible) combined = union(combined, b);
         }
       }
@@ -234,9 +237,10 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
       if(node.strokeScaling===false)style(item,node);
       const b = paintedBounds.get(id);
       const visible = node.visible && (!!node.children || !!b?.intersects(viewport));
-      item.visible = visible && !(outline && node.type === 'image') && !editPreviews.has(id) && !transformPreviewIds.has(id);
-      if (outline && !node.children && node.type !== 'image') item.strokeWidth = 1 / scope.view.zoom;
-      if (record.frame) { record.frame.visible = visible && outline; record.frame.strokeWidth = 1 / scope.view.zoom; }
+      const asOutline = outlineFor(id);
+      item.visible = visible && !(asOutline && node.type === 'image') && !editPreviews.has(id) && !transformPreviewIds.has(id);
+      if (asOutline && !node.children && node.type !== 'image') item.strokeWidth = 1 / scope.view.zoom;
+      if (record.frame) { record.frame.visible = visible && asOutline; record.frame.strokeWidth = 1 / scope.view.zoom; }
     }
     for (const [id,{item,label,labelRect}] of boardItems) {
       item.strokeWidth=(id===activeArtboard(state).id ? 2 : 1)/scope.view.zoom; item.visible=item.bounds.intersects(viewport);
@@ -280,7 +284,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     clearTransformPreview();transformPreviewOptions={matrix,scaleStrokes};transformPreview=new scope.Group({insert:false});overlay.addChild(transformPreview);
     for(const id of ids){const original=items.get(id);if(!original)continue;const clone=original.clone({insert:false});
       const prepare=item=>{const record=records.get(item.data.nodeId);if(record){item.visible=record.node.visible;
-        if(scaleStrokes!==null&&!outline){const properties=scaledStrokeProperties(record.node,record.worldMatrix.values,matrix,scaleStrokes);if(properties.appearance)style(item,{...record.node,...properties},false);}}
+        if(scaleStrokes!==null&&!outlineFor(item.data.nodeId)){const properties=scaledStrokeProperties(record.node,record.worldMatrix.values,matrix,scaleStrokes);if(properties.appearance)style(item,{...record.node,...properties},false);}}
         item.children?.forEach(prepare);
       };prepare(clone);clone.applyMatrix=false;clone.matrix=new scope.Matrix(...matrix).append(records.get(id).worldMatrix);transformPreview.addChild(clone);transformPreviewIds.add(id);
     }updateView();

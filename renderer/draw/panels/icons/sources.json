@@ -26,6 +26,36 @@
       "path": "icons/outline/artboard.svg",
       "sha256": "a2659ef614767a30364b8b3fe902f4622e8167889a71fb8b390c1c95ff422006"
     },
+    "chevron-down": {
+      "name": "chevron-down",
+      "path": "icons/outline/chevron-down.svg",
+      "sha256": "a3a801faaeeb084e8a96897a5e2f355870b861e9606a1b50a89011b2718cc322"
+    },
+    "chevron-right": {
+      "name": "chevron-right",
+      "path": "icons/outline/chevron-right.svg",
+      "sha256": "0142561fc2fd1b6a18b2cb0c08959b6037643aecf6adc6612aefe16ec4f39f0f"
+    },
+    "eye": {
+      "name": "eye",
+      "path": "icons/outline/eye.svg",
+      "sha256": "d74739aaa5c3e99e9b6519cd70089e550593b9495d39ac586de601c49ceaa9a6"
+    },
+    "eye-off": {
+      "name": "eye-off",
+      "path": "icons/outline/eye-off.svg",
+      "sha256": "0b761c8c6d812f3e40068454614b49e372df1546d74f718988365b423ff9adac"
+    },
+    "focus-2": {
+      "name": "focus-2",
+      "path": "icons/outline/focus-2.svg",
+      "sha256": "273346ebf838f75b31df81ce9d303ee5ef1e8c2f56f1f85cbcd6ef8d6ef8a482"
+    },
+    "folder-plus": {
+      "name": "folder-plus",
+      "path": "icons/outline/folder-plus.svg",
+      "sha256": "add07c96cd278366823b4d028cb0a4cb135ce6f7d2d8b72bece4fd65dcd3e521"
+    },
     "layers-intersect": {
       "name": "layers-intersect",
       "path": "icons/outline/layers-intersect.svg",
@@ -36,10 +66,45 @@
       "path": "icons/outline/line-dashed.svg",
       "sha256": "38f82a1f06e01bc1753e0f1d66771c346bc97003b46e69ad3cf333ee38258965"
     },
+    "lock": {
+      "name": "lock",
+      "path": "icons/outline/lock.svg",
+      "sha256": "748ef36a7e3b7a4dc2b44a16576dc60123968a6c8184155015f85cfa442ce7d7"
+    },
+    "lock-open": {
+      "name": "lock-open",
+      "path": "icons/outline/lock-open.svg",
+      "sha256": "681702f968770541c584a4002f800de73b74c625d91442f13b17cb053816d917"
+    },
     "palette": {
       "name": "palette",
       "path": "icons/outline/palette.svg",
       "sha256": "0b462801eadbeeb017eb323aee44880c13336ea8b4ac2182afac81d79d58d45e"
+    },
+    "plus": {
+      "name": "plus",
+      "path": "icons/outline/plus.svg",
+      "sha256": "c273c746b4db19bebe87aaad5142f649c8e60cecfeb63d457ad4633d9907d17d"
+    },
+    "stack-pop": {
+      "name": "stack-pop",
+      "path": "icons/outline/stack-pop.svg",
+      "sha256": "5b5175f1bfd85bdefd706573f6a63c2155b4aaa31a649da9c132a7f9cdff3d97"
+    },
+    "stack-push": {
+      "name": "stack-push",
+      "path": "icons/outline/stack-push.svg",
+      "sha256": "b57d27927f15022730b4e8687c92dd09169ed443a3679853b665029c52f6b6dc"
+    },
+    "template": {
+      "name": "template",
+      "path": "icons/outline/template.svg",
+      "sha256": "f3533b7cf7e5f3c065d9d14255956b85c1ee584e2d4f381e28ae8070560e7dea"
+    },
+    "trash": {
+      "name": "trash",
+      "path": "icons/outline/trash.svg",
+      "sha256": "94176fd47075e845088ac13745104d722daae7fa8be94ae9665c143f8e2705a7"
     }
   }
 }

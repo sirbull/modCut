@@ -1,6 +1,6 @@
-import { PANEL_DEFINITIONS, panelIconHref } from './registry.mjs';
-import { createNode } from '../doc/schema.mjs';
+import { PANEL_DEFINITIONS, panelIconHref, panelSpriteHref } from './registry.mjs';
 import { insertNode, updateNode } from '../doc/commands.mjs';
+import { ROOT_CONTEXT, collectCommands, deleteLayerCommands, layerContext, moveCommand, newLayer, releaseCommands, soloUpdates } from '../doc/layers.mjs';
 import { shortcutLabel } from '../keymap.mjs';
 
 export function icon(href) {
@@ -43,31 +43,112 @@ export function createPanels(shell, state, api) {
     }));
     row.append(name,input); host.append(row); return input;
   }
+  function iconButton(label, iconId, action, className = 'draw-layer-action') {
+    const b = document.createElement('button'); b.type = 'button'; b.className = className;
+    b.setAttribute('aria-label',label); b.dataset.tooltip = label; if (iconId) b.append(icon(panelSpriteHref(iconId)));
+    if (action) b.addEventListener('click',event => api.run(() => action(event))); return b;
+  }
   function layerPanel(host) {
-    const add = button('+',() => {
-      const node = createNode('layer',{ name: `Layer ${state.document.data.layers.length+1}` });
-      state.ui.layerId = node.id; state.history.execute(insertNode(null,node));
-    }); add.setAttribute('aria-label','New layer'); add.disabled = state.document.readOnly;
-    heading(host,'Layers',add);
-    const list = document.createElement('div'); list.className = 'draw-layer-list'; list.setAttribute('role','tree');
-    function row(node, depth) {
+    const doc = state.document, readOnly = doc.readOnly, collapsed = state.ui.collapsedNodes ??= new Set();
+    const activeLayer = () => doc.getNode(state.ui.layerId)?.type === 'layer' ? doc.getNode(state.ui.layerId) : doc.data.layers.at(-1);
+    const topLevel = id => [...doc.ancestors(id)].reverse()[0] ?? doc.getNode(id);
+    const transaction = (label, commands) => state.history.transaction(label,() => commands.forEach(command => state.history.execute(command)));
+    const actions = document.createElement('div'); actions.className = 'draw-layer-actions';
+    for (const [label,iconId,action,disabled] of [
+      ['New layer','plus',() => {
+        const node = newLayer(doc), index = doc.locate(topLevel(activeLayer().id).id).index+1;
+        state.ui.layerId = node.id; state.history.execute(insertNode(null,node,index));
+      },readOnly],
+      ['New sublayer','folder-plus',() => {
+        const parent = activeLayer(), node = newLayer(doc);
+        state.ui.layerId = node.id; collapsed.delete(parent.id); state.history.execute(insertNode(parent.id,node));
+      },readOnly],
+      ['Collect in new layer','stack-push',() => {
+        const { layer, commands } = collectCommands(doc,api.selectedIds());
+        transaction('Collect in New Layer',commands); state.ui.layerId = layer.id; api.select(api.selectedIds());
+      },readOnly || !api.selectedIds().length],
+      ['Release to layers (sequence)','stack-pop',() => transaction('Release to Layers',releaseCommands(doc,activeLayer().id).commands),readOnly],
+      ['Locate object','focus-2',() => {
+        const id = api.selectedIds()[0]; if (!id) return;
+        for (const node of doc.ancestors(id)) collapsed.delete(node.id);
+        render(); const row = primary.querySelector(`[data-draw-node="${id}"]`); row?.scrollIntoView({block:'nearest'}); row?.querySelector('.draw-layer-name')?.focus();
+      },!api.selectedIds().length],
+      ['Delete layer','trash',() => transaction('Delete Layer',deleteLayerCommands(doc,activeLayer().id)),readOnly],
+    ]) { const b = iconButton(label,iconId,action); b.disabled = !!disabled; b.dataset.drawLayerAction = iconId; actions.append(b); }
+    heading(host,'Layers',actions);
+    const list = document.createElement('div'); list.className = 'draw-layer-list'; list.setAttribute('role','tree'); list.setAttribute('aria-label','Layers');
+    const selected = new Set(state.selection.ids);
+    function row(node, depth, context) {
+      const own = layerContext(context,node), isLayer = node.type === 'layer';
       const item = document.createElement('div'); item.className = 'draw-layer-row'; item.style.setProperty('--depth',depth);
+      item.style.setProperty('--layer-color',own.color || '#006B5C');
       item.dataset.drawNode = node.id; item.setAttribute('role','treeitem'); item.setAttribute('aria-level',String(depth+1));
-      item.classList.toggle('is-selected',state.selection.ids.includes(node.id) || node.id === state.ui.layerId);
-      for (const [key,label] of [['visible','Visible'],['locked','Locked']]) {
-        const check = document.createElement('input'); check.type = 'checkbox'; check.checked = node[key];
-        check.setAttribute('aria-label',`${label}: ${node.name || node.type}`); check.disabled = state.document.readOnly;
-        check.addEventListener('change',() => api.run(() => state.history.execute(updateNode(node.id,{[key]:check.checked})))); item.append(check);
-      }
-      const choose = document.createElement('button'); choose.type = 'button'; choose.className = 'draw-layer-name'; choose.textContent = node.name || node.type;
-      choose.addEventListener('click',event => {
-        const layer = node.type === 'layer' ? node : state.document.ancestors(node.id).find(n => n.type === 'layer');
+      item.classList.toggle('is-active',node.id === state.ui.layerId); item.classList.toggle('is-layer',isLayer);
+      item.classList.toggle('is-template',own.template); item.classList.toggle('is-dimmed',!doc.isEditable(node.id));
+      item.setAttribute('aria-selected',String(selected.has(node.id)));
+      const name = node.name || (isLayer ? 'Layer' : `<${node.type}>`);
+      const eye = iconButton(`Visibility: ${name}`,node.template ? 'template' : node.visible ? 'eye' : 'eye-off',event => {
+        if (event.altKey && isLayer && doc.locate(node.id).parentId === null) transaction('Show Only This Layer',soloUpdates(doc,node.id).map(([id,visible]) => updateNode(id,{visible})));
+        else if ((event.ctrlKey || event.metaKey) && isLayer) state.history.execute(updateNode(node.id,{preview:node.preview === false}));
+        else state.history.execute(updateNode(node.id,{visible:!node.visible}));
+      },'draw-layer-toggle');
+      eye.setAttribute('aria-pressed',String(node.visible)); eye.dataset.drawToggle = 'visible'; eye.disabled = readOnly;
+      if (isLayer) eye.dataset.tooltip += ` · Alt: show only this layer · ${/Mac/.test(navigator.platform) ? 'Cmd' : 'Ctrl'}: Outline/Preview`;
+      const lock = iconButton(`Lock: ${name}`,node.locked ? 'lock' : 'lock-open',() => state.history.execute(updateNode(node.id,{locked:!node.locked})),'draw-layer-toggle');
+      lock.setAttribute('aria-pressed',String(node.locked)); lock.dataset.drawToggle = 'locked'; lock.disabled = readOnly;
+      item.append(eye,lock);
+      if (node.children?.length && node.type !== 'compoundPath') {
+        const open = !collapsed.has(node.id), twisty = iconButton(`${open ? 'Collapse' : 'Expand'} ${name}`,open ? 'chevron-down' : 'chevron-right',() => {
+          if (open) collapsed.add(node.id); else collapsed.delete(node.id); render();
+        },'draw-layer-twisty');
+        twisty.setAttribute('aria-expanded',String(open)); item.setAttribute('aria-expanded',String(open)); item.append(twisty);
+      } else { const spacer = document.createElement('span'); spacer.className = 'draw-layer-twisty'; item.append(spacer); }
+      if (isLayer) { const swatch = document.createElement('span'); swatch.className = 'draw-layer-color'; swatch.setAttribute('aria-hidden','true'); item.append(swatch); }
+      const choose = document.createElement('button'); choose.type = 'button'; choose.className = 'draw-layer-name'; choose.textContent = name;
+      choose.addEventListener('click',event => api.run(() => {
+        const layer = isLayer ? node : doc.ancestors(node.id).find(n => n.type === 'layer');
         if (layer) state.ui.layerId = layer.id;
-        api.select(event.shiftKey ? [...state.selection.ids,node.id] : [node.id]);
-      }); item.append(choose); list.append(item);
-      if (node.children) node.children.forEach(child => row(child,depth+1));
+        if (isLayer) render();
+        else api.select(event.shiftKey ? (selected.has(node.id) ? [...selected].filter(id => id !== node.id) : [...selected,node.id]) : [node.id]);
+      }));
+      choose.addEventListener('dblclick',() => api.run(() => isLayer ? api.layerOptions(node.id) : rename(choose,node)));
+      const target = iconButton(`Select ${name}`,null,event => {
+        const ids = isLayer ? doc.descendants(node.id).filter(n => n.type !== 'layer' && doc.getNode(doc.locate(n.id).parentId).type === 'layer' && doc.isEditable(n.id)).map(n => n.id) : [node.id];
+        api.select(event.shiftKey ? [...new Set([...selected,...ids])] : ids);
+      },'draw-layer-target');
+      target.classList.toggle('is-selected',selected.has(node.id) || doc.descendants(node.id).some(n => selected.has(n.id)));
+      item.append(choose,target);
+      if (!readOnly) {
+        item.draggable = true;
+        item.addEventListener('dragstart',event => { event.dataTransfer.setData('application/x-modcut-node',node.id); event.dataTransfer.effectAllowed = 'move'; });
+        const placement = event => {
+          const box = item.getBoundingClientRect(), y = (event.clientY-box.top)/box.height;
+          return node.children && node.type !== 'compoundPath' ? (y < .25 ? 'above' : y > .75 ? 'below' : 'inside') : (y < .5 ? 'above' : 'below');
+        };
+        item.addEventListener('dragover',event => {
+          if (!event.dataTransfer.types.includes('application/x-modcut-node')) return;
+          event.preventDefault(); item.dataset.drop = placement(event);
+        });
+        item.addEventListener('dragleave',() => delete item.dataset.drop);
+        item.addEventListener('drop',event => {
+          event.preventDefault(); delete item.dataset.drop;
+          const id = event.dataTransfer.getData('application/x-modcut-node'), where = placement(event);
+          api.run(() => { const command = id && moveCommand(doc,id,node.id,where); if (command) state.history.execute(command); });
+        });
+      }
+      list.append(item);
+      if (node.children && node.type !== 'compoundPath' && !collapsed.has(node.id)) [...node.children].reverse().forEach(child => row(child,depth+1,own));
     }
-    state.document.data.layers.forEach(node => row(node,0)); host.append(list);
+    function rename(button, node) {
+      const input = document.createElement('input'); input.className = 'draw-layer-rename'; input.value = node.name; input.setAttribute('aria-label','Name');
+      let done = false;
+      const finish = commit => { if (done) return; done = true; if (commit && input.value !== node.name) api.run(() => state.history.execute(updateNode(node.id,{name:input.value}))); else render(); };
+      // Draw's window keymap captures keydown, so Enter/blur commit through the native change event.
+      input.addEventListener('change',() => finish(true));
+      input.addEventListener('blur',() => finish(false));
+      button.replaceWith(input); input.focus(); input.select();
+    }
+    [...doc.data.layers].reverse().forEach(node => row(node,0,ROOT_CONTEXT)); host.append(list);
   }
   function transform(host) {
     const box = api.bounds();

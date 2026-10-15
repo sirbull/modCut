@@ -304,3 +304,36 @@ er kjørt og stopper fortsatt i den kjente Cut crop-E2E-testen
 «100 × 100%»), etter grønne sidecar/bridge/main/renderer/Draw/kontrast-tester.
 
 **Neste: D1.8 — fullfør grunnpanelene og template-lag.**
+
+## 2026-10-15 — D1.8 del A: Layers-panel og template-lag
+
+D1.8 deles i delsteg som committes hver for seg: A Layers/template, B Transform,
+C Align, D Color/Stroke/Fill-Stroke-boks/Properties.
+
+- Ny ren modul `doc/layers.mjs`: lagfargepalett, arvet lagkontekst (template,
+  print, per-lag Outline, bildedimming, lagfarge), `isOutputNode` for senere
+  eksport/Send to Cut, Layer Options-normalisering, solo, drop-mål, sletting,
+  Collect in New Layer og Release to Layers (Sequence). Alt går via Commands.
+- Skjemaet godtar valgfrie lagfelt `preview` og `dimImages` (boolske).
+- Template slår på Lock, slår av Print, tvinger Preview og dimmer bilder til
+  `dimImagesTo` (standard 50 %). Template-lag vises alltid i Preview, også i
+  Outline-visning. Låst template-artwork kan ikke velges på canvas.
+- Adapteren lagrer arvet kontekst per node og tar den med i fingerprint, slik at
+  endring av et lag oppdaterer etterkommerne. Utvalgsrammen følger lagfargen.
+- Layers-panelet er ett tre med øverste lag først: øye/template-ikon, lås,
+  sammenfelling, lagfarge, navn, valgsirkel og drag-and-drop (over/under/inni).
+  Alt-klikk på øye = solo, Ctrl/Cmd-klikk = Outline/Preview for laget.
+  Dobbeltklikk lag = Layer Options; dobbeltklikk objekt = navneendring.
+  Toppknapper: New layer, New sublayer, Collect, Release, Locate, Delete.
+- Draws globale keydown-lytter fanger tastetrykk i capture-fasen. Inline-felt i
+  paneler må derfor bruke `change`/`blur`, ikke keydown på elementet.
+- 13 nye Tabler-ikoner er vendret i `panels/icons` med hash i `sources.json`.
+
+Verifisering: 108 Draw-enhetstester passerer (6 nye i `layers.test.mjs`). Ny
+`electron/e2e/draw-panel-workflows.mjs` (`--draw-panels`) passerer og er med i
+komplett Draw-E2E, som også passerer. Skjermbilde:
+`%TEMP%\modcut-draw-layers-panel.png`. Ingen endring i Cut, `bed.js` eller sidecar.
+
+Gjenstår i D1.8: Transform-panel (B), Align (C), Color/Stroke, Fill/Stroke-boks
+og Properties-gjennomgang (D). Virtualisert lagliste for 500+ objekter er ikke
+gjort (AK i 10.9); vurder ved ytelsespass.
