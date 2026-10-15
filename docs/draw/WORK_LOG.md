@@ -381,3 +381,8 @@ Utført på brukerens forespørsel, parallelt med D1.8 del B (egen commit).
 - E2E: `e2eClickMenuItem` (kun i E2E-modus) lar testene klikke menyvalg.
 
 Verifisering: se commit.
+Komplett Draw-E2E passerer etter del B. `submitNewDrawDialog` venter nå på at den
+nye, asynkrone New-dialogen (fra commit d337a8f) finnes før den fylles ut. Én full
+kjøring traff en ustabil Rotate-drag-assert (`draw-transform-workflows.mjs:47`)
+som passerte isolert og i neste fulle kjøring. En annen agent (Codex) arbeidet
+samtidig i samme tre; parallelle Electron-kjøringer ga da en autosave-feil.
