@@ -251,10 +251,32 @@ export async function runDrawPanelWorkflows(client) {
   await writeFile(join(tmpdir(), 'modcut-draw-stroke-panel.png'), Buffer.from(arrowShot.data, 'base64'));
   await tool('select');
 
+  // Fill/Stroke box: Color (Comma), None (Slash), disabled Gradient; Properties summary opens Color/Stroke.
+  await evaluate(`(async()=>(${active}.select(['${rect.id}'])))()`);
+  const fillBefore = await fillHex(rect.id);
+  await evaluate(`document.querySelector('${root} [data-paint=fill]').click()`);
+  assert.equal(await evaluate(`document.querySelector('${root} [data-draw-panel=color]').getAttribute('aria-pressed')`), 'true', 'Fill swatch opens Color');
+  assert.equal(await evaluate(`document.querySelector('${root} [data-paint-action=paint-gradient]').disabled`), true);
+  await evaluate(`document.querySelector('${root} [data-paint-action=paint-none]').click()`);
+  assert.equal(await fillHex(rect.id), null, 'None removes the focused fill');
+  await evaluate(`document.querySelector('${root} [data-paint-action=paint-solid]').click()`);
+  assert.notEqual(await fillHex(rect.id), null, 'Color reapplies the last solid fill');
+  await command('undo'); await command('undo');
+  await evaluate(`document.querySelector('${root} [data-draw-panel=properties]').click()`);
+  assert.deepEqual(await evaluate(`[...document.querySelectorAll('${root} [data-draw-open]')].map(b=>b.dataset.drawOpen)`), ['fill', 'stroke', 'weight']);
+  await evaluate(`document.querySelector('${root} [data-draw-open=stroke]').click()`);
+  assert.equal(await evaluate(`document.querySelector('${root} [data-draw-paint-target=stroke]').getAttribute('aria-pressed')`), 'true', 'Stroke summary opens Color for the stroke');
+  await evaluate(`document.querySelector('${root} [data-draw-panel=properties]').click()`);
+  await evaluate(`document.querySelector('${root} [data-draw-open=weight]').click()`);
+  assert.equal(await evaluate(`!!document.querySelector('${root} [data-draw-field=stroke-weight]')`), true, 'Weight summary opens Stroke');
+  await evaluate(`document.querySelector('${root} [data-draw-paint-target=fill]')?.click()`);
+  const toolShot = await client.command('Page.captureScreenshot', { format: 'png' });
+  await writeFile(join(tmpdir(), 'modcut-draw-fill-stroke-box.png'), Buffer.from(toolShot.data, 'base64'));
+
   await evaluate(`document.querySelector('[data-close-tab="${scratch}"]').click()`); await wait(100);
   if (await evaluate("!!document.querySelector('[data-x=discard]')")) { await evaluate("document.querySelector('[data-x=discard]').click()"); await wait(100); }
   await evaluate(`document.querySelector('[data-tab-id="${original.id}"]').click()`);
   if (await evaluate("document.body.dataset.workspace") === 'draw') await evaluate("document.querySelector('#workspaceToggle').click()");
   assert.equal(await evaluate("paper.project.layers[1].exportJSON({asString:true})"), original.cut, 'Draw panels preserve the Cut document');
-  process.stdout.write('PASS Draw panels: Layers tree, Layer Options, template layers, solo/outline, drag, collect/release, delete, rename, Transform, Align, Color and Stroke panels\n');
+  process.stdout.write('PASS Draw panels: Layers tree, Layer Options, template layers, solo/outline, drag, collect/release, delete, rename, Transform, Align, Color and Stroke panels, Fill/Stroke box and Properties\n');
 }

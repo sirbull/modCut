@@ -478,3 +478,21 @@ angring, og rendrede pilspisser med skala. Skjermbilde:
 `%TEMP%\modcut-draw-stroke-panel.png`.
 Kjent: pilstørrelse for `strokeScaling:false` under skalerte foreldre er omtrentlig;
 «align dashes to corners» og profiler er ikke laget. Send til Cut må håndtere piler.
+
+## 2026-10-15 — D1.8 del D3: Fill/Stroke-boks og Properties. D1.8 ferdig
+
+- Fill/Stroke-boksen har to rader som i Illustrator: Swap (Shift+X) og Default
+  (D), deretter Color (`,`), Gradient (`.`, deaktivert til fase 2) og None (`/`).
+  `paint-solid` fantes i keymap uten håndtering; den gjenbruker nå siste
+  heldekkende farge for fokusert fyll/strek. Klikk på fyll- eller strekruten
+  setter fokus og åpner Color-panelet (strekfarge redigeres der, ikke i Stroke).
+- Properties viser utvalg, navn, opacity, formparametre/hjørneradius og en kort
+  utseende-oppsummering (Fill, Stroke, Weight) som åpner Color/Stroke uten å
+  duplisere redigeringsfeltene. Phase 1-testen sjekker fortsatt at Properties
+  ikke gjentar Layers/Transform/Stroke/Color/Align.
+- Ingen nye farger: «ingen maling»-markeringen bruker `--danger`.
+
+**D1.8 er ferdig:** Properties, Layers (inkl. template-lag), Transform, Align,
+Color, Stroke uten profiles og Fill/Stroke-boks. **Neste: D1.9 kontrollinje og
+statuslinje.** Merk at commit d337a8f (annen agent) allerede flyttet
+visningskontrollene til appens statuslinje; sammenlign med 3.2 før D1.9 startes.

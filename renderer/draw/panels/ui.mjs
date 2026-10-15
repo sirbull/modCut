@@ -359,6 +359,22 @@ export function createPanels(shell, state, api) {
         field(primary,'Opacity (%)',opacity*100,value => state.history.transaction('Opacity',() => {
           for (const id of api.selectedIds()) state.history.execute(updateNode(id,{opacity:value/100}));
         }),{min:0,max:100,disabled:!api.selectedIds().length,key:'opacity'});
+        // Appearance summary: shortcuts to Color and Stroke, without repeating their editors.
+        const painted = state.document.getNode(api.paintIds()[0]);
+        if (painted) {
+          const summary = document.createElement('div'); summary.className = 'draw-appearance'; summary.setAttribute('aria-label','Appearance');
+          const fill = paintHex(painted.appearance.fills[0]), stroke = paintHex(painted.appearance.strokes[0]), weight = painted.appearance.strokes[0]?.width;
+          for (const [kind,label,value,panel] of [['fill','Fill',fill,'color'],['stroke','Stroke',stroke,'color'],['weight','Weight',stroke ? `${Number(weight.toFixed(3))} mm` : '—','stroke']]) {
+            const b = document.createElement('button'); b.type = 'button'; b.className = 'draw-appearance__item'; b.dataset.drawOpen = kind;
+            const chip = document.createElement('span'); chip.className = 'draw-appearance__chip'; chip.setAttribute('aria-hidden','true');
+            if (kind !== 'weight') { chip.style.setProperty('--paint-color',value || 'transparent'); chip.classList.toggle('is-none',!value); } else chip.classList.add('is-weight');
+            const name = document.createElement('span'); name.textContent = kind === 'weight' ? `${label} ${value}` : `${label} ${value ?? 'none'}`;
+            b.setAttribute('aria-label',`${name.textContent}: open ${panel === 'color' ? 'Color' : 'Stroke'} panel`);
+            b.addEventListener('click',() => { if (kind !== 'weight') state.ui.paintFocus = kind; state.ui.panel = panel; if (kind !== 'weight') api.paintFocus(kind); else render(); });
+            b.append(chip,name); summary.append(b);
+          }
+          primary.append(summary);
+        }
         const corners=api.cornerInfo?.();
         if(corners){
           const input=field(primary,'Corner radius (mm)',corners.radius??0,value=>api.setCornerRadius(value),{min:0,key:'corner-radius'});

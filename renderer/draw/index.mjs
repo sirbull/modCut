@@ -24,7 +24,7 @@ const workspaces=new WeakMap();
 export function getDrawWorkspace(root) {return workspaces.get(root) || null;}
 const implementedTools=new Set(['select','hand','zoom','artboard',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
 const commands=new Set(['undo','redo','delete','select-all','select-artboard','deselect','cancel','fit-artboard','fit-all','actual-size','zoom-in','zoom-out','outline',
-  'paint-focus','paint-swap','paint-none','default-paint','smart-guides','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','toggle-panels','toggle-panels-except-tools',
+  'paint-focus','paint-swap','paint-none','paint-solid','default-paint','smart-guides','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','toggle-panels','toggle-panels-except-tools',
   ...PANEL_DEFINITIONS.map(p=>`panel.${p.id}`),...['left','right','up','down'].flatMap(d=>[`nudge-${d}`,`nudge-large-${d}`,`duplicate-${d}`])]);
 export function createDrawWorkspace(root,{paper=window.paper,state=createProjectDraw(),onError=console.warn,onImport=()=>{},getPreferences=()=>({}),statusHost=null}={}) {
   state.ui={tool:'select',panel:'properties',layerId:state.document.data.layers[0]?.id,fill:'#FFFFFF',stroke:'#071411',strokeWidth:.5,paintFocus:'fill',...state.ui};
@@ -113,6 +113,8 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   function paint(kind,value,{mergeKey=null}={}) {
     if(state.document.readOnly)return;
     if(kind==='width')state.ui.strokeWidth=value;else state.ui[kind]=value;
+    // Remember the last solid color per kind for the Color button / Comma shortcut.
+    if(kind!=='width'&&value)state.ui.lastSolid={...state.ui.lastSolid,[kind]:value};
     const ids=paintIds();
     if(ids.length)state.history.transaction('Appearance',()=>{for(const id of ids)state.history.execute(updateNode(id,{appearance:changePaint(state.document.getNode(id).appearance,kind,value,state.ui)}));},{mergeKey});
     else {panels?.render();toolbar?.update();}
@@ -191,6 +193,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     if(command==='smart-guides'){const settings=state.document.data.settings;state.history.execute(updateDocument({settings:{...settings,smartGuides:!settings.smartGuides}}));return;}
     if(command==='paint-focus'){state.ui.paintFocus=state.ui.paintFocus==='fill'?'stroke':'fill';toolbar.update();return;}
     if(command==='paint-none')return paint(state.ui.paintFocus,null);
+    if(command==='paint-solid'){const kind=state.ui.paintFocus==='stroke'?'stroke':'fill';return paint(kind,state.ui.lastSolid?.[kind]??(kind==='fill'?'#FFFFFF':'#071411'));}
     if(command==='default-paint'||command==='paint-swap') {
       const ids=paintIds(),swapped=command==='paint-swap';
       const fill=swapped?state.ui.stroke:'#FFFFFF',stroke=swapped?state.ui.fill:'#071411';
