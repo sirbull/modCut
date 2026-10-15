@@ -622,3 +622,16 @@ filter, teller, Layer Options via fargelinjen og valg av «Red». Komplett Draw-
 
 Verifisering: 140 Draw-enhetstester passerer. Ny E2E `draw-swatch-workflows.mjs` (`--draw-swatches`)
 passerer og er med i komplett Draw-E2E, som passerer (16 av 16).
+
+## 2026-10-15: Høyrepanel trinn 5, Stroke-gruppen med Transparency
+
+- Stroke-gruppen har nå fanene **Stroke | Gradient | Transparency**, som i Illustrator.
+  Stroke-panelet er det fullstendige fra D1.8. Gradient vises deaktivert med forklaring
+  («Gradients arrive in D2.3»); Mod+F9 åpner gruppen uten å velge den deaktiverte fanen.
+- **Transparency**: Blending mode (alle 16 modusene canvas støtter, «Mixed» ved ulike verdier)
+  og Opacity (%) med scrubby label, for hele utvalget som ett angresteg. Make Mask, Clip og
+  Invert Mask vises deaktivert (D4.3). Mod+Shift+F10 åpner fanen.
+- Registeret har fått `panelAvailable` og en liste over faner som ikke er bygget ennå.
+
+Verifisering: 141 Draw-enhetstester og komplett Draw-E2E (16 av 16) passerer. Swatch-E2E dekker
+fanene, at Gradient er deaktivert, Multiply på canvas, opasitet 40 % og angring.

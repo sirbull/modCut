@@ -46,6 +46,11 @@
       "path": "icons/outline/artboard.svg",
       "sha256": "a2659ef614767a30364b8b3fe902f4622e8167889a71fb8b390c1c95ff422006"
     },
+    "blend-mode": {
+      "name": "blend-mode",
+      "path": "icons/outline/blend-mode.svg",
+      "sha256": "17a8f5f6361b1b959c5158ce2884b53eeb7e81469d18c4b12814adfcab0a999f"
+    },
     "chevron-down": {
       "name": "chevron-down",
       "path": "icons/outline/chevron-down.svg",
@@ -60,6 +65,11 @@
       "name": "color-swatch",
       "path": "icons/outline/color-swatch.svg",
       "sha256": "1ae94ff6191a0bdaeed438c7f2a872003c01b21ec12584e2947ecd390b810b97"
+    },
+    "contrast-2": {
+      "name": "contrast-2",
+      "path": "icons/outline/contrast-2.svg",
+      "sha256": "32ad24d1cd03ed2974602f7d51a2d5c3567a85ee9713abb5b1de4a67513697e2"
     },
     "eye": {
       "name": "eye",

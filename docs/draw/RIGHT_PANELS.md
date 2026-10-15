@@ -259,7 +259,7 @@ Hvert trinn committes og pushes for seg, med oppdatert `WORK_LOG.md` og `HANDOFF
 | 2 (ferdig) | Scrubby labels: `scrub.mjs` (ren logikk) og `number-field.mjs`, tatt i bruk i alle eksisterende tallfelt. | Enhetstester for steg, Shift/Alt, min/max, avrunding. E2E: drag på tittel endrer verdi, ett angresteg, Escape avbryter. |
 | 3 (ferdig) | Layers-redesign: rad med øye, lås, fargelinje, thumbnail, navn, målsirkel, søppelkasse; søk og filter; bunnlinje med teller og ikoner; Layer Options som bilde 2. | E2E for alle interaksjonene i 3.2 og 3.4, thumbnail-test (piksel i forventet farge). |
 | 4 (ferdig) | Swatches og Color med Recent Colors. | Enhetstester for fargekonvertering. E2E: velg swatch for fill og stroke. |
-| 5 | Stroke (full uten profiles/arrowheads) og Transparency. Render-adapteren støtter cap, join, limit, align og dash fullt. | Enhets- og pikseltester for cap/join/dash. |
+| 5 (ferdig; Stroke fra D1.8, Transparency her) | Stroke (full uten profiles/arrowheads) og Transparency. Render-adapteren støtter cap, join, limit, align og dash fullt. | Enhets- og pikseltester for cap/join/dash. |
 | 6 (ferdig i `feat/vector-draw`, D1.8 del C) | Align (alle ikoner, distribute, distribute spacing, key object). Transform-panelet er også ferdig og har scrubby labels fra trinn 2. | Enhetstester for align/distribute-matematikk. E2E for key object. |
 | 7 | Pathfinder og Appearance. | Golden tests for booleans via kernel. E2E for Unite og Minus Front. |
 | 8 | Properties-gjennomgang med kontekstuelle seksjoner og quick actions. | E2E for hver seksjon ved ulike utvalg. |

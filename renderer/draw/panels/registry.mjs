@@ -1,8 +1,10 @@
+// Tabs shown for structure but not built yet; they stay disabled with this explanation.
+const UNAVAILABLE = { gradient: 'Gradients arrive in D2.3' };
 export const PANEL_DEFINITIONS = Object.freeze([
   ['properties', 'Properties', 'adjustments'], ['layers', 'Layers', 'layers-intersect'],
   ['artboards', 'Artboards', 'artboard'], ['swatches', 'Swatches', 'color-swatch'], ['color', 'Color', 'palette'],
-  ['stroke', 'Stroke', 'line-dashed'], ['align', 'Align', 'align-center'], ['transform', 'Transform', 'arrows-move'],
-].map(([id, name, icon]) => Object.freeze({ id, name, icon })));
+  ['stroke', 'Stroke', 'line-dashed'], ['gradient', 'Gradient', 'contrast-2'], ['transparency', 'Transparency', 'blend-mode'], ['align', 'Align', 'align-center'], ['transform', 'Transform', 'arrows-move'],
+].map(([id, name, icon]) => Object.freeze({ id, name, icon, ...(UNAVAILABLE[id] ? { unavailable: UNAVAILABLE[id] } : {}) })));
 export function panelIconHref(id) {
   const panel = PANEL_DEFINITIONS.find(panel => panel.id === id);
   if (!panel) throw new Error(`Unknown panel: ${id}`);
@@ -16,11 +18,12 @@ export const DOCK_PANELS = Object.freeze(['properties', 'layers']);
 export const PANEL_GROUPS = Object.freeze([
   ['swatches', 'color-swatch', ['swatches']],
   ['color', 'palette', ['color']],
-  ['stroke', 'line-dashed', ['stroke']],
+  ['stroke', 'line-dashed', ['stroke', 'gradient', 'transparency']],
   ['transform', 'arrows-move', ['transform', 'align']],
   ['artboards', 'artboard', ['artboards']],
 ].map(([id, icon, tabs]) => Object.freeze({ id, icon, tabs: Object.freeze(tabs) })));
 export function groupForPanel(id) { return PANEL_GROUPS.find(group => group.tabs.includes(id)) ?? null; }
+export function panelAvailable(id) { return !PANEL_DEFINITIONS.find(panel => panel.id === id)?.unavailable; }
 export function panelName(id) { return PANEL_DEFINITIONS.find(panel => panel.id === id)?.name ?? id; }
 export const DOCK_MIN_PX = 120;
 /** Properties' share of the dock height, clamped so both halves keep at least `min` pixels. */

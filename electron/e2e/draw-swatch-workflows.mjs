@@ -47,6 +47,20 @@ export async function runDrawSwatchWorkflows(client) {
   assert.ok(await evaluate(`!!document.querySelector('${root} .draw-swatch-list [data-draw-swatch] code')`), 'List view shows names and hex values');
   await click('[data-draw-panel=color]');
   assert.ok(await evaluate(`document.querySelectorAll('${root} [data-draw-recent-color]').length >= 2`), 'Color shares Recent Colors');
+  // Transparency tab in the Stroke group: blending mode and opacity on the selection, one undo step each.
+  await command('panel.transparency');
+  assert.deepEqual(await evaluate(`[...document.querySelectorAll('${root} .draw-flyout [data-draw-panel-tab]')].map(t=>t.dataset.drawPanelTab+(t.disabled?':off':''))`), ['stroke', 'gradient:off', 'transparency'], 'Stroke | Gradient | Transparency, Gradient not built yet');
+  assert.equal(await evaluate(`document.querySelector('${root} .draw-flyout [aria-selected=true]').dataset.drawPanelTab`), 'transparency');
+  await command('panel.gradient');
+  assert.equal(await evaluate(`document.querySelector('${root} .draw-flyout [aria-selected=true]').dataset.drawPanelTab`), 'transparency', 'Mod+F9 cannot select the disabled Gradient tab');
+  await evaluate(`(()=>{const s=document.querySelector('${root} [data-draw-field=blend-mode]');s.value='multiply';s.dispatchEvent(new Event('change',{bubbles:true}))})()`);
+  assert.equal((await model()).layers[0].children[0].blendMode, 'multiply');
+  assert.equal(await evaluate(`(async()=>(${active}.renderer.items.get('${rect.id}').blendMode))()`), 'multiply', 'The canvas renders the blending mode');
+  await evaluate(`(()=>{const i=document.querySelector('${root} [data-draw-field=transparency-opacity]');i.value='40';i.dispatchEvent(new Event('change',{bubbles:true}))})()`);
+  assert.equal((await model()).layers[0].children[0].opacity, .4);
+  await command('undo'); await command('undo');
+  node = (await model()).layers[0].children[0];
+  assert.deepEqual([node.blendMode, node.opacity], ['normal', 1], 'Undo restores both');
   assert.ok(rect.id);
 
   await evaluate(`document.querySelector('[data-close-tab="${scratch}"]').click()`);
@@ -56,5 +70,5 @@ export async function runDrawSwatchWorkflows(client) {
     await wait(50);
   }
   if (await evaluate("document.body.dataset.workspace") === 'draw') await evaluate("document.querySelector('#workspaceToggle').click()");
-  process.stdout.write('PASS Draw swatches: library with laser colors, fill/stroke/None, Recent Colors, new/rename/delete swatch, list view\n');
+  process.stdout.write('PASS Draw swatches: library with laser colors, fill/stroke/None, Recent Colors, new/rename/delete swatch, list view, Transparency blending mode and opacity\n');
 }

@@ -1,4 +1,4 @@
-import { DOCK_PANELS, PANEL_GROUPS, clampDockSplit, groupForPanel, panelName, panelSpriteHref } from './registry.mjs';
+import { DOCK_PANELS, PANEL_DEFINITIONS, PANEL_GROUPS, clampDockSplit, groupForPanel, panelAvailable, panelName, panelSpriteHref } from './registry.mjs';
 import { insertNode, updateDocument, updateNode } from '../doc/commands.mjs';
 import { createId } from '../doc/schema.mjs';
 import { addSwatch, documentSwatches, editSwatch, groupSwatches, rememberColor, removeSwatch } from '../doc/swatches.mjs';
@@ -66,7 +66,7 @@ export function createPanels(shell, state, api) {
       return true;
     }
     const group = groupForPanel(id); if (!group) return false;
-    state.ui.flyout = group.id; state.ui.groupTabs[group.id] = id; render(); return true;
+    state.ui.flyout = group.id; if (panelAvailable(id)) state.ui.groupTabs[group.id] = id; render(); return true;
   }
   function layoutDock() {
     const height = panels.clientHeight, split = clampDockSplit(state.ui.dockSplit ?? storedSplit(),height);
@@ -437,6 +437,27 @@ export function createPanels(shell, state, api) {
       api.run(() => setSwatches('Swatch Options',editSwatch(state.document.data,s.id,values)));
     }
   }
+  const BLEND_MODES = [['normal','Normal'],['darken','Darken'],['multiply','Multiply'],['color-burn','Color Burn'],['lighten','Lighten'],['screen','Screen'],['color-dodge','Color Dodge'],
+    ['overlay','Overlay'],['soft-light','Soft Light'],['hard-light','Hard Light'],['difference','Difference'],['exclusion','Exclusion'],['hue','Hue'],['saturation','Saturation'],['color','Color'],['luminosity','Luminosity']];
+  function transparencyPanel(host) {
+    const ids = api.selectedIds(), node = state.document.getNode(ids[0]), disabled = !ids.length || state.document.readOnly;
+    const mixed = key => ids.some(id => state.document.getNode(id)?.[key] !== node?.[key]);
+    const set = (label, patch) => state.history.transaction(label,() => { for (const id of api.selectedIds()) state.history.execute(updateNode(id,patch)); });
+    const row = document.createElement('label'); row.className = 'draw-field';
+    const name = document.createElement('span'); name.textContent = 'Blending mode';
+    const select = document.createElement('select'); select.className = 'draw-select'; select.dataset.drawField = 'blend-mode'; select.disabled = disabled;
+    if (node && mixed('blendMode')) select.append(new Option('Mixed','',true,true));
+    for (const [value,label] of BLEND_MODES) select.append(new Option(label,value,false,!mixed('blendMode') && (node?.blendMode ?? 'normal') === value));
+    select.addEventListener('change',() => { if (select.value) api.run(() => set('Blending Mode',{ blendMode: select.value })); });
+    row.append(name,select); host.append(row);
+    const opacity = field(host,'Opacity (%)',(node?.opacity ?? 1)*100,value => set('Opacity',{ opacity: value/100 }),{ min:0, max:100, step:1, disabled, key:'transparency-opacity' });
+    if (node && mixed('opacity')) { opacity.value = ''; opacity.placeholder = 'Mixed'; }
+    const masks = document.createElement('div'); masks.className = 'draw-transparency-masks';
+    const make = button('Make Mask',() => {}); make.disabled = true; make.dataset.tooltip = 'Opacity masks arrive in D4.3'; masks.append(make);
+    for (const label of ['Clip','Invert Mask']) { const c = document.createElement('label'); c.className = 'draw-check'; const i = document.createElement('input'); i.type = 'checkbox'; i.disabled = true; c.append(i,document.createTextNode(label)); masks.append(c); }
+    host.append(masks);
+    text(host,ids.length ? 'Applies to the whole selected object. Fill and stroke opacity are set per entry in Appearance (coming).' : 'Select artwork to change its blending mode and opacity.');
+  }
   function colorPanel(host) {
     const target = state.ui.paintFocus === 'stroke' ? 'stroke' : 'fill', mode = state.ui.colorMode ?? 'rgb', hex = currentPaint(target);
     const disabled = state.document.readOnly, shown = hex || '#FFFFFF', live = `color-${target}`;
@@ -572,16 +593,19 @@ export function createPanels(shell, state, api) {
       for(const [key,label,min] of editable)field(host,label,node.params[key]??({sides:6,points:5,endAngle:360}[key] || 0),value=>state.history.execute(updateNode(node.id,{params:{...node.params,[key]:value}})),{min,max:['sides','points'].includes(key)?100:undefined,key:`shape-${key}`});
     }
   }
-  const PANEL_CONTENT = { swatches: swatchesPanel, color: colorPanel, stroke: strokePanel, transform: host => transform(host), align: alignPanel, artboards: artboardPanel };
+  const PANEL_CONTENT = { swatches: swatchesPanel, color: colorPanel, stroke: strokePanel, transparency: transparencyPanel, transform: host => transform(host), align: alignPanel, artboards: artboardPanel };
   function renderFlyout() {
     const group = PANEL_GROUPS.find(g => g.id === state.ui.flyout);
     flyout.hidden = !group; if (!group) { flyoutTabs.replaceChildren(); flyoutBody.replaceChildren(); return; }
-    const active = group.tabs.includes(state.ui.groupTabs[group.id]) ? state.ui.groupTabs[group.id] : group.tabs[0];
+    const remembered = state.ui.groupTabs[group.id];
+    const active = group.tabs.includes(remembered) && panelAvailable(remembered) ? remembered : group.tabs.find(panelAvailable);
     flyout.dataset.drawGroup = group.id; flyout.setAttribute('aria-label',group.tabs.map(panelName).join(', '));
     flyoutTabs.replaceChildren(...group.tabs.map(id => {
       const tab = document.createElement('button'); tab.type = 'button'; tab.className = 'draw-flyout__tab'; tab.setAttribute('role','tab');
       tab.dataset.drawPanelTab = id; tab.textContent = panelName(id); tab.setAttribute('aria-selected',String(id === active));
       const shortcut = shortcutLabel(`panel.${id}`,{isMac}); if (shortcut) tab.dataset.tooltip = `${panelName(id)} (${shortcut})`;
+      const unavailable = PANEL_DEFINITIONS.find(p => p.id === id)?.unavailable;
+      if (unavailable) { tab.disabled = true; tab.dataset.tooltip = `${panelName(id)}: ${unavailable}`; }
       tab.addEventListener('click',() => { state.ui.groupTabs[group.id] = id; render(); }); return tab;
     }));
     flyoutBody.replaceChildren(); flyoutBody.dataset.drawPanelBody = active;

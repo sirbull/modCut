@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DOCK_PANELS, PANEL_DEFINITIONS, PANEL_GROUPS, clampDockSplit, groupForPanel } from '../panels/registry.mjs';
+import { DOCK_PANELS, PANEL_DEFINITIONS, PANEL_GROUPS, clampDockSplit, groupForPanel, panelAvailable } from '../panels/registry.mjs';
 
 test('every non-dock panel belongs to exactly one rail group', () => {
   const grouped = PANEL_GROUPS.flatMap(group => group.tabs);
@@ -19,4 +19,11 @@ test('dock split keeps both halves usable', () => {
   assert.equal(clampDockSplit(.99, 600), .8, 'Layers keeps 120 px');
   assert.equal(clampDockSplit(NaN, 600), .5, 'invalid stored value falls back to half');
   assert.equal(clampDockSplit(.9, 200), .5, 'too short to split: even halves');
+});
+
+test('unbuilt tabs are listed but unavailable, and every group has an available tab', () => {
+  assert.equal(panelAvailable('gradient'), false);
+  assert.equal(panelAvailable('transparency'), true);
+  assert.deepEqual(groupForPanel('transparency').tabs, ['stroke', 'gradient', 'transparency']);
+  for (const group of PANEL_GROUPS) assert.ok(group.tabs.some(panelAvailable), `${group.id} has a usable tab`);
 });
