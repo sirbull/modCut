@@ -683,3 +683,21 @@ angring. Komplett Draw-E2E passerer (17 av 17).
 Verifisering: 150 Draw-enhetstester passerer. Pathfinder-E2E er utvidet med Appearance (stabel med
 tre deler, bredde, trefftest gjennom stabelen, skjul, dupliser, slett, tøm og seks angresteg).
 Komplett Draw-E2E passerer (17 av 17). UI-testen teller nå panelgruppene fra registeret.
+
+## 2026-10-15: Høyrepanel trinn 8, Properties
+
+- Properties har en tittel for utvalget: «No Selection», objekttypen («Rectangle», «Ellipse»,
+  «Path», «Group» …) eller «N objects». Navn vises bare ved ett objekt.
+- **Quick actions** nederst: Expand Shape (gjør valgte live former om til paths med samme id, ett
+  angresteg), og snarveier som åpner Transform, Align, Pathfinder (ved to eller flere objekter) og
+  Appearance. Group, Arrange, Lock/Hide osv. kommer hit når D1.10 er bygget.
+- Uten utvalg: **Document**-seksjon med aktivt artboard og størrelse, antall artboards, enheter og
+  raster effects-oppløsning, Smart Guides av/på, og snarveier til Artboards, Swatches og Layer Options.
+- Properties gjentar fortsatt ikke kontrollene fra Transform, Color og Stroke (regelen fra D1.8).
+
+Verifisering: 150 Draw-enhetstester og komplett Draw-E2E (17 av 17) passerer. Pathfinder-E2E er
+utvidet med tittel, Expand Shape med angring, snarvei til Appearance, «2 objects», «No Selection»,
+dokumentinfo og Smart Guides.
+
+Høyrepanel-planen i RIGHT_PANELS.md er dermed gjennomført. Neste i hovedplanen er D1.9 (kontrollinje),
+D1.10 (Group, isolasjon, Arrange, utklippstavle), D1.11 (Place bitmap) og D1.12 (Send til Cut).

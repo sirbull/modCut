@@ -645,11 +645,36 @@ export function createPanels(shell, state, api) {
       const b=button(label,action);b.disabled=disabled || state.document.readOnly;host.append(b);
     }
   }
+  const TYPE_NAMES = { path: 'Path', group: 'Group', compoundPath: 'Compound Path', image: 'Image', text: 'Text', layer: 'Layer' };
+  function selectionTitle(ids) {
+    if (!ids.length) return 'No Selection';
+    if (ids.length > 1) return `${ids.length} objects`;
+    const node = state.document.getNode(ids[0]);
+    return node?.type === 'shape' ? { rect: 'Rectangle', ellipse: 'Ellipse', polygon: 'Polygon', star: 'Star', line: 'Line' }[node.shape] ?? 'Shape' : TYPE_NAMES[node?.type] ?? 'Object';
+  }
+  function quickActions(host, actions) {
+    const row = document.createElement('div'); row.className = 'draw-quick-actions'; row.setAttribute('aria-label','Quick actions');
+    for (const [label,action,key,disabled] of actions) { const b = button(label,action); b.dataset.drawQuick = key; b.disabled = !!disabled; row.append(b); }
+    host.append(row);
+  }
+  function documentProperties(host) {
+    const doc = state.document.data, board = api.artboards.active();
+    const h = document.createElement('h3'); h.className = 'draw-panel__section'; h.textContent = 'Document'; host.append(h);
+    const info = document.createElement('dl'); info.className = 'draw-doc-info';
+    for (const [term,value] of [['Artboard',`${board.name} · ${Number(board.width.toFixed(2))} × ${Number(board.height.toFixed(2))} mm`],['Artboards',String(doc.artboards.length)],['Units',doc.units ?? 'mm'],['Raster effects',`${doc.rasterEffectsPpi ?? 300} ppi`]]) {
+      const dt = document.createElement('dt'); dt.textContent = term; const dd = document.createElement('dd'); dd.textContent = value; info.append(dt,dd);
+    }
+    host.append(info);
+    check(host,'Smart Guides','smart-guides',doc.settings.smartGuides !== false,() => api.run(() => api.command('smart-guides')));
+    quickActions(host,[['Artboards…',() => open('artboards'),'artboards'],['Swatches…',() => open('swatches'),'swatches'],['Layer Options…',() => api.layerOptions(state.ui.layerId ?? doc.layers.at(-1).id),'layer-options',state.document.readOnly]]);
+    text(host,'Fill and Stroke for new shapes are set with the boxes below the drawing tools.');
+  }
   function propertiesPanel(host) {
-    text(host,state.selection.ids.length ? `${state.selection.ids.length} selected` : 'Select artwork or choose a drawing tool.');
-    const node = state.document.getNode(api.selectedIds()[0]);
-    if (node) field(host,'Name',node.name,value => state.history.execute(updateNode(node.id,{name:value})),{type:'text'});
-    else text(host,'Fill and Stroke are set with the swatches below the drawing tools.');
+    const ids = api.selectedIds(), title = document.createElement('div'); title.className = 'draw-appearance-head'; title.dataset.drawSelectionTitle = '';
+    title.textContent = selectionTitle(ids); host.append(title);
+    if (!ids.length) return documentProperties(host);
+    const node = state.document.getNode(ids[0]);
+    if (ids.length === 1) field(host,'Name',node.name,value => state.history.execute(updateNode(node.id,{name:value})),{type:'text'});
     const opacity = state.document.getNode(api.selectedIds()[0])?.opacity ?? 1;
     field(host,'Opacity (%)',opacity*100,value => state.history.transaction('Opacity',() => {
       for (const id of api.selectedIds()) state.history.execute(updateNode(id,{opacity:value/100}));
@@ -679,6 +704,12 @@ export function createPanels(shell, state, api) {
       const editable=node.shape==='rect' ? [['cornerRadius','Corner radius (mm)',0]] : node.shape==='polygon' ? [['sides','Sides',3]] : node.shape==='star' ? [['points','Points',2],['innerRadius','Inner radius (mm)',0],['outerRadius','Outer radius (mm)',0]] : node.shape==='ellipse' ? [['startAngle','Pie start (°)',-360],['endAngle','Pie end (°)',-360]] : [];
       for(const [key,label,min] of editable)field(host,label,node.params[key]??({sides:6,points:5,endAngle:360}[key] || 0),value=>state.history.execute(updateNode(node.id,{params:{...node.params,[key]:value}})),{min,max:['sides','points'].includes(key)?100:undefined,key:`shape-${key}`});
     }
+    const shapes = ids.filter(id => state.document.getNode(id)?.type === 'shape' && state.document.isEditable(id));
+    quickActions(host,[
+      ['Expand Shape',() => api.expandShapes(shapes),'expand-shape',!shapes.length || state.document.readOnly],
+      ['Transform…',() => open('transform'),'transform'],['Align…',() => open('align'),'align'],
+      ['Pathfinder…',() => open('pathfinder'),'pathfinder',ids.length < 2],['Appearance…',() => open('appearance'),'appearance'],
+    ]);
   }
   const PANEL_CONTENT = { swatches: swatchesPanel, color: colorPanel, stroke: strokePanel, transparency: transparencyPanel, pathfinder: pathfinderPanel, appearance: appearancePanel, transform: host => transform(host), align: alignPanel, artboards: artboardPanel };
   function renderFlyout() {

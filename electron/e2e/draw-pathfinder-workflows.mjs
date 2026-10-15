@@ -76,6 +76,24 @@ export async function runDrawPathfinderWorkflows(client) {
   assert.deepEqual([(await look()).fills.length, (await look()).strokes.length], [1, 1], 'Each Appearance edit is one undo step');
   assert.equal(await evaluate(`document.querySelector('${root} [data-draw-appearance-action=add-effect]').disabled`), true);
 
+  // Properties: a title for the selection, quick actions, and a Document section with nothing selected.
+  const title = () => evaluate(`document.querySelector('${root} [data-draw-selection-title]').textContent`);
+  await evaluate(`(async()=>(${active}.select(['${ellipse.id}'])))()`);
+  assert.equal(await title(), 'Ellipse');
+  await evaluate(`document.querySelector('${root} [data-draw-quick=expand-shape]').click()`);
+  assert.equal((await kids()).find(n => n.id === ellipse.id).type, 'path', 'Expand Shape keeps the id and becomes a path');
+  assert.equal(await title(), 'Path');
+  await command('undo'); assert.equal((await kids()).find(n => n.id === ellipse.id).type, 'shape');
+  await evaluate(`document.querySelector('${root} [data-draw-quick=appearance]').click()`);
+  assert.equal(await evaluate(`document.querySelector('${root} .draw-flyout').dataset.drawGroup`), 'appearance', 'Quick actions open their panel group');
+  await command('select-all'); assert.equal(await title(), '2 objects');
+  await command('deselect'); assert.equal(await title(), 'No Selection');
+  assert.match(await evaluate(`document.querySelector('${root} .draw-doc-info').textContent`), /Artboard 1 · 120 × 80 mm/);
+  const guides = () => evaluate(`(async()=>(${active}.state.snapshot().settings.smartGuides))()`), before = await guides();
+  await evaluate(`document.querySelector('${root} [data-draw-field=smart-guides]').click()`);
+  assert.equal(await guides(), !before, 'Smart Guides toggles from Properties');
+  await command('undo');
+
   await evaluate(`document.querySelector('[data-close-tab="${scratch}"]').click()`);
   for (let i = 0; i < 40; i++) {
     if (await evaluate("!!document.querySelector('[data-x=discard]')")) await evaluate("document.querySelector('[data-x=discard]').click()");
@@ -83,5 +101,5 @@ export async function runDrawPathfinderWorkflows(client) {
     await wait(50);
   }
   if (await evaluate("document.body.dataset.workspace") === 'draw') await evaluate("document.querySelector('#workspaceToggle').click()");
-  process.stdout.write('PASS Draw Pathfinder: panel, Unite with curves, Minus Front, Divide, Intersect, one undo step each; Appearance stack with add/hide/duplicate/delete/clear\n');
+  process.stdout.write('PASS Draw Pathfinder: panel, Unite with curves, Minus Front, Divide, Intersect, one undo step each; Appearance stack with add/hide/duplicate/delete/clear; Properties title, quick actions and Document section\n');
 }

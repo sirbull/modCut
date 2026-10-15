@@ -15,7 +15,7 @@ import { createTransformController } from './tools/transforms.mjs';
 import { TRANSFORM_TOOLS, operationMatrix, dialogOperation, panelMatrix } from './geom/transforms.mjs';
 import { transformedBox } from './tools/selection.mjs';
 import { SHAPE_TOOLS, shapeFromDrag } from './tools/shapes.mjs';
-import { insertNode, removeNode, updateNode, updateDocument } from './doc/commands.mjs';
+import { insertNode, removeNode, replaceLeaf, updateNode, updateDocument } from './doc/commands.mjs';
 import { activeArtboard } from './doc/artboards.mjs';
 import { changePaint, changeStroke, paintHex } from './doc/paint.mjs';
 import { importArtwork } from './import-artwork.mjs';
@@ -156,6 +156,9 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       state.history.transaction('Stroke',()=>{for(const id of ids)state.history.execute(updateNode(id,{appearance:changeStroke(state.document.getNode(id).appearance,props,state.ui)}));},{mergeKey});},
     paintFocus(kind){state.ui.paintFocus=kind;toolbar?.update();panels?.render();},
     thumbnail:id=>withScope(()=>renderer.thumbnail(id)),
+    command:id=>handle(id),
+    expandShapes(ids){if(state.document.readOnly||!ids.length)return;
+      state.history.transaction('Expand Shape',()=>{for(const id of ids)if(state.document.getNode(id)?.type==='shape')state.history.execute(replaceLeaf(id,withScope(()=>renderer.expandedShape(id))));});select(ids);},
     pathfinder(op){if(state.document.readOnly)return;
       const ids=stackingOrder(state.document,selectedIds().filter(id=>state.document.isEditable(id)));
       if(ids.length<2)throw new Error('Select at least two objects for Pathfinder.');

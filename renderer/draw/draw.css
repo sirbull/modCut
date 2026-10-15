@@ -338,3 +338,9 @@ body.draw-scrubbing, body.draw-scrubbing * { cursor: ew-resize !important; user-
 .draw-appearance-width input { width: 62px; box-sizing: border-box; border: 1px solid var(--border); border-radius: 5px; background: var(--bg); color: var(--text); padding: 4px 6px; font: inherit; font-size: var(--fs-sm); }
 .draw-appearance-opacity { margin-left: auto; font-size: var(--fs-xs); color: var(--text-muted); }
 .draw-appearance-opacity-row { display: block; width: 100%; padding: 8px 6px; border-top: 1px solid var(--border); border-radius: 0; color: var(--text-muted); }
+/* Properties: quick actions and document summary */
+.draw-quick-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 14px; padding-top: 10px; border-top: 1px solid var(--border); }
+.draw-quick-actions .btn { margin: 0; }
+.draw-doc-info { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0 0 12px; font-size: var(--fs-sm); }
+.draw-doc-info dt { color: var(--text-muted); }
+.draw-doc-info dd { margin: 0; }
