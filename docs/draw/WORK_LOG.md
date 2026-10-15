@@ -381,6 +381,11 @@ Utført på brukerens forespørsel, parallelt med D1.8 del B (egen commit).
 - E2E: `e2eClickMenuItem` (kun i E2E-modus) lar testene klikke menyvalg.
 
 Verifisering: se commit.
+Komplett Draw-E2E passerer etter del B. `submitNewDrawDialog` venter nå på at den
+nye, asynkrone New-dialogen (fra commit d337a8f) finnes før den fylles ut. Én full
+kjøring traff en ustabil Rotate-drag-assert (`draw-transform-workflows.mjs:47`)
+som passerte isolert og i neste fulle kjøring. En annen agent (Codex) arbeidet
+samtidig i samme tre; parallelle Electron-kjøringer ga da en autosave-feil.
 
 ## 2026-10-15: Høyrepanel trinn 1, dokk og panelgrupper
 
@@ -411,7 +416,7 @@ Verifisering: 119 Draw-enhetstester passerer (ny `panel-groups.test.mjs`). Kompl
 faner, Escape, delelinje, kollaps og F7. To eksisterende E2E-antagelser er oppdatert: panelinnhold
 har nå tre monterte steder (Properties, Layers, flyout), og Artboards-flyouten lukkes før testen
 tegner der den dekker canvas. Transform-testen sammenlignet tidligere tre-desimalers feltverdier
-eksakt og feilet på Linux også før denne endringen; den bruker nå toleranse. Sidecar-jar kunne
+eksakt og feilet på Linux også før denne endringen; toleransen fra del B (`b912a26`) er beholdt ved sammenslåing. Sidecar-jar kunne
 ikke bygges i skymiljøet (jitpack.io er blokkert), så Cut/sidecar-testene er ikke kjørt her.
 `bed.js`, Cut og sidecar er ikke endret.
 

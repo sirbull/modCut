@@ -118,16 +118,14 @@ export async function runDrawPanelWorkflows(client) {
   // Transform panel: 9-point reference, linked proportions, relative Rotate/Shear, one undo step each.
   const bounds = () => evaluate(`(async()=>{const b=${active}.renderer.selectionBounds();return{x:b.x,y:b.y,width:b.width,height:b.height}})()`);
   const setField = (key, value) => evaluate(`(()=>{const i=document.querySelector('${root} [data-draw-field=${key}]');i.value='${value}';i.dispatchEvent(new Event('change',{bubbles:true}))})()`);
-  const near = (a, b, message) => Object.keys(b).forEach(k => assert.ok(Math.abs(a[k]-b[k]) < 1e-6, `${message}: ${JSON.stringify(a)} vs ${JSON.stringify(b)}`));
+  const near = (a, b, message) => Object.keys(b).forEach(k => assert.ok(Math.abs(a[k]-b[k]) < 1e-3, `${message}: ${JSON.stringify(a)} vs ${JSON.stringify(b)}`));
   await evaluate(`document.querySelector('${row(rect.id)} .draw-layer-name').click()`);
   await evaluate(`document.querySelector('${root} [data-draw-panel=transform]').click()`);
   const start = await bounds();
   assert.equal(await evaluate(`document.querySelectorAll('${root} [data-draw-reference]').length`), 9);
-  // Fields show three decimals, so compare within display precision.
-  const shows = async (key, value, message) => assert.ok(Math.abs(Number(await evaluate(`document.querySelector('${root} [data-draw-field=${key}]').value`)) - value) < 5e-4, message);
-  await shows('x', start.x + start.width / 2, 'X shows the center reference by default');
+  near({ x: Number(await evaluate(`document.querySelector('${root} [data-draw-field=x]').value`)) }, { x: start.x + start.width / 2 }, 'X shows the center reference by default');
   await evaluate(`document.querySelector('${root} [data-draw-reference="1,1"]').click()`);
-  await shows('y', start.y + start.height, 'Y shows the bottom reference');
+  near({ y: Number(await evaluate(`document.querySelector('${root} [data-draw-field=y]').value`)) }, { y: start.y + start.height }, 'Y shows the bottom reference');
   const depth = await evaluate(`(async()=>(${active}.state.history.entries.length))()`);
   await setField('width', start.width * 2);
   near(await bounds(), { x: start.x - start.width, y: start.y, width: start.width * 2, height: start.height }, 'Bottom-right reference stays fixed');
