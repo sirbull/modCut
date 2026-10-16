@@ -1004,3 +1004,22 @@ Windows unpacked-build og smoketest av den medfølgende Java-runtime er kontroll
 fra faktisk app.asar er utvidet til også å forme og bryte områdetekst, uten fontfiler i pakken.
 
 Neste: D2.1d tekst på path, deretter Character/Paragraph og videre områdetekst.
+
+## 2026-10-16: Eksport del 1 — vektorskrivere (PDF, EPS, DXF)
+
+Brukeren ønsker eksport fra File-menyen (ikke Properties), flere vektorformater, et Export for
+Screens-vindu som i Illustrator og en Save Adobe PDF-dialog. Arbeidet deles i tre deler; denne
+delen legger bare skriverne, uten UI.
+
+- `io/vector-model.mjs` går gjennom eksportgruppen fra renderer én gang og gir en nøytral modell i
+  artboard-millimeter: grupper med opasitet/blending, paths som kubiske segmenter, bilder.
+- `io/pdf.mjs`: én side per artboard, kurver beholdes, gjennomsiktighetsgrupper for gruppeopasitet,
+  ExtGState for fill/stroke-alfa og blend, bilder med SMask (ZIP eller JPEG/DCT), PDF-lag (OCG,
+  PDF 1.5+) fra toppnivålag, TrimBox/BleedBox, beskjæringsmerker, registreringsmerker,
+  sideinformasjon, miniatyrer, Info og vedlagt Draw-dokument. Forhåndsinnstillinger som Illustrator.
+- `io/eps.mjs`: PostScript nivå 2; uten gjennomsiktighet (advarsel, bilder på hvitt).
+- `io/dxf.mjs`: R12, mm, y opp, POLYLINE per delbane med kurver flatet innen toleranse, DXF-lag
+  per Draw-lag og nærmeste AutoCAD-farge. Bilder utelates med advarsel.
+
+Verifisering: 8 nye enhetstester; PDF-en leses tilbake med pdf.js (sider, størrelse, lag,
+vedlegg, metadata).
