@@ -810,6 +810,12 @@ Main sender fontmetadata og beregnet glyfgeometri, ikke fontfiler. Utlegget lagr
 brukes direkte til visning, eksport og Create Outlines, slik at alle bruker de samme glyfposisjonene.
 Fontembedding og de øvrige tekstfunksjonene nedenfor gjenstår; se [status](draw/STATUS.md#27-systemfonter-shaping-og-create-outlines-d21b-2026-10-16).
 
+Implementert D2.1c: Type-drag og Area Type lager rektangulære tekstrammer. Edit Text har
+bredde/høyde i mm med live linjebryting; fontmål og leading avgjør hvilke linjer som får plass.
+Overløp bevarer teksten og markeres med rødt pluss. Eksport bruker synlige glyfer, mens Create
+Outlines krever at all tekst får plass. Reflow med canvas-håndtak, tekst i vilkårlige former,
+lenkede rammer og språkavhengig orddeling gjenstår; se [status](draw/STATUS.md#28-rektangulær-områdetekst-d21c-2026-10-16).
+
 * Fonter: main-prosessen lister systemfonter (filbaner, familie, stil) og leser fontfiler på
   forespørsel. Renderer bruker `FontFace` for visning og HarfBuzz for shaping og glyfkonturer.
   Fonter som brukes i dokumentet kan bygges inn (`assets`) hvis lisensen tillater det
@@ -1414,8 +1420,8 @@ Oversikt over hva som er gjort og gjenstår, inkludert delvis ferdige oppgaver: 
 * [x] D1.10 Group, Arrange, Clipboard
 * [x] D1.11 Place bitmap og template-lag (høyreklikkmeny, Crop Image og Links gjenstår, se [STATUS.md](draw/STATUS.md))
 * [x] D1.12 Send til Cut v1 (se [STATUS.md](draw/STATUS.md) for hva v1 dekker)
-* [ ] D2.1 Tekst — punkttekst, systemfonter, shaping og Create Outlines (D2.1a/b) ferdig.
-  Område-/path-tekst, flere tekstegenskaper og Character/Paragraph gjenstår; se [STATUS.md](draw/STATUS.md#27-systemfonter-shaping-og-create-outlines-d21b-2026-10-16).
+* [ ] D2.1 Tekst — punkttekst, systemfonter, shaping, Create Outlines og rektangulær områdetekst (D2.1a/b/c) ferdig.
+  Path-tekst, videre områdetekst, flere tekstegenskaper og Character/Paragraph gjenstår; se [STATUS.md](draw/STATUS.md).
 * [ ] D2.2 Pathfinder, Compound, Clipping
 * [ ] D2.3 Gradienter og Swatches
 * [ ] D2.4 Path-kommandoer

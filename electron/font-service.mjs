@@ -6,6 +6,7 @@ import { setImmediate as yieldEventLoop } from 'node:timers/promises';
 import { create } from 'fontkit';
 import { textProperties, textValues, PT_TO_MM } from '../renderer/draw/doc/text.mjs';
 import { glyphSubpaths, textSignature } from '../renderer/draw/doc/text-layout.mjs';
+import { wrapText } from '../renderer/draw/doc/text-wrap.mjs';
 
 export function systemFontDirectories(platform=process.platform, env=process.env, home=homedir()) {
   if(platform==='win32')return [join(env.WINDIR||'C:/Windows','Fonts'),...(env.LOCALAPPDATA?[join(env.LOCALAPPDATA,'Microsoft','Windows','Fonts')]:[])];
@@ -48,7 +49,7 @@ export function createFontService({directories=systemFontDirectories()}={}) {
     return catalogPromise;
   }
   async function shape(values) {
-    const patch=textProperties(values),v=textValues({kind:'point',...patch});
+    const patch=textProperties(values),v=textValues(patch);
     if(v.text.length>10000)throw new Error('Text is limited to 10,000 characters per object.');
     const catalog=await list();
     const candidates=catalog.filter(f=>f.family.toLowerCase()===v.fontFamily.toLowerCase()&&f.fontWeight===v.fontWeight&&f.fontStyle===v.fontStyle);
@@ -60,23 +61,32 @@ export function createFontService({directories=systemFontDirectories()}={}) {
       const source=create(await readFile(entries.get(face.id).path));font=source.fonts?source.getFont(face.postscriptName):source;
       if(cache.size>=12)cache.delete(cache.keys().next().value);cache.set(face.id,font);
     }
-    const scale=v.fontSize*PT_TO_MM/font.unitsPerEm,glyphs=[],lineWidths=[];
-    for(const [line,text] of v.text.split('\n').entries()) {
+    const scale=v.fontSize*PT_TO_MM/font.unitsPerEm,glyphs=[],lineWidths=[],area=v.kind==='area';
+    const width=run=>run.positions.reduce((sum,p)=>sum+p.xAdvance,0);
+    const lines=area?wrapText(v.text,v.frameWidth/scale,text=>width(font.layout(text.replace(/\t/g,'    ')))):v.text.split('\n');
+    const ascent=area?font.ascent*scale:0,lineHeight=area?(font.ascent-font.descent)*scale:0;
+    let visibleLines=area?Math.max(0,Math.min(lines.length,Math.floor((v.frameHeight-lineHeight+1e-9)/(v.leading*PT_TO_MM))+1)):lines.length;
+    for(const [line,text] of lines.entries()) {
       const run=font.layout(text.replace(/\t/g,'    '));
-      const width=run.positions.reduce((sum,p)=>sum+p.xAdvance,0);lineWidths.push(width*scale);
-      const offset=v.alignment==='center'?-width/2:v.alignment==='right'?-width:0;
+      const advance=width(run);lineWidths.push(advance*scale);
+      if(area&&advance*scale>v.frameWidth+1e-9)visibleLines=Math.min(visibleLines,line);
+      const offset=(v.alignment==='center'?-advance/2:v.alignment==='right'?-advance:0)+(area?(v.alignment==='center'?v.frameWidth/scale/2:v.alignment==='right'?v.frameWidth/scale:0):0);
       let x=0,y=0;
       for(let i=0;i<run.glyphs.length;i++) {
         const glyph=run.glyphs[i],pos=run.positions[i];
         if(glyph.id===0)throw new Error(`The font “${face.family}” does not contain every character in the text.`);
         const commands=glyph.path.commands;
         if(!commands.length&&glyph.codePoints.some(cp=>!/[\s\u200B-\u200F\u202A-\u202E\u2060-\u206F]/u.test(String.fromCodePoint(cp))))throw new Error('This font uses a glyph without vector outlines. Choose a vector font.');
-        const subpaths=glyphSubpaths(commands,(gx,gy)=>[(offset+x+pos.xOffset+gx)*scale,line*v.leading*PT_TO_MM-(y+pos.yOffset+gy)*scale]);
-        glyphs.push({line,glyphId:glyph.id,subpaths});x+=pos.xAdvance;y+=pos.yAdvance;
+        if(line<visibleLines) {
+          const subpaths=glyphSubpaths(commands,(gx,gy)=>[(offset+x+pos.xOffset+gx)*scale,ascent+line*v.leading*PT_TO_MM-(y+pos.yOffset+gy)*scale]);
+          glyphs.push({line,glyphId:glyph.id,subpaths});
+        }
+        x+=pos.xAdvance;y+=pos.yAdvance;
       }
       await yieldEventLoop();
     }
-    return {version:1,signature:textSignature({kind:'point',...patch}),font:{family:face.family,style:face.style,postscriptName:face.postscriptName},glyphs,lineWidths};
+    return {version:1,signature:textSignature(patch),font:{family:face.family,style:face.style,postscriptName:face.postscriptName},glyphs,lineWidths,
+      ...(area?{visibleLines,overflow:visibleLines<lines.length}:{})};
   }
   return {list,shape};
 }

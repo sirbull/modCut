@@ -35,3 +35,11 @@ test('Send to Cut reports omitted text instead of silently losing lettering', ()
   const result=artboardCutSvg(doc,doc.data.artboards[0].id,{});
   assert.equal(result.count,0);assert.match(result.warnings.join(' '),/1 text object is not sent yet/);
 });
+
+test('area frame dimensions are validated and unresolved area layouts cannot be saved',()=>{
+  const v={...values,kind:'area',frameWidth:40,frameHeight:30};
+  for(const patch of [{frameWidth:0},{frameHeight:Infinity},{frameWidth:100001}])assert.throws(()=>textProperties({...v,...patch}),/Frame dimensions/);
+  const node=pointText([4,5],v),doc=createDocument();doc.layers[0].children=[node];
+  assert.ok(validateDocument(doc).some(e=>e.path.endsWith('.layout')));
+  node.frame.height=-1;assert.ok(validateDocument(doc).some(e=>e.path.endsWith('.frame.height')));
+});

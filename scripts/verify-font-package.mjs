@@ -24,6 +24,8 @@ try {
   if(face) {
     const layout=await fonts.shape({text:'AV fi ÆØÅ',fontFamily:face.family,fontPostscriptName:face.postscriptName,fontWeight:'normal',fontStyle:'normal',fontSize:24,leading:28.8,alignment:'left'});
     if(!layout.glyphs.some(g=>g.subpaths.length))throw new Error('Packaged font engine returned no glyphs.');
+    const area=await fonts.shape({text:'AV fi Horten Horten',kind:'area',frameWidth:25,frameHeight:100,fontFamily:face.family,fontPostscriptName:face.postscriptName,fontWeight:'normal',fontStyle:'normal',fontSize:24,leading:28.8,alignment:'left'});
+    if(area.overflow||area.lineWidths.length<2||!area.glyphs.length)throw new Error('Packaged area text wrapping failed.');
   }
   console.log(`Packaged font engine passed (${catalog.length} installed faces${face?', glyph layout verified':''}).`);
 } finally {

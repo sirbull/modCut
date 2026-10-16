@@ -5,7 +5,7 @@ import { glyphSubpaths,hasTextLayout,textSignature,textSubpaths } from '../doc/t
 import { pointText,DEFAULT_CHARACTER,textToOutlines } from '../doc/text.mjs';
 import { createDocument,validateDocument } from '../doc/schema.mjs';
 import { createProjectDraw } from '../io/project.mjs';
-import { insertNode,removeNode } from '../doc/commands.mjs';
+import { insertNode,removeNode,updateNode } from '../doc/commands.mjs';
 import { createDrawRenderer } from '../render.mjs';
 import { artboardCutSvg } from '../io/cut-svg.mjs';
 
@@ -52,4 +52,9 @@ test('live text previews retain multiple fills and parent opacity, including fro
   const preview=scope.project.getItems({class:scope.Group,match:g=>g.opacity===.25&&g.children.length===2&&g.children[0].className==='CompoundPath'&&g.children[1].children?.length===2}).find(g=>g!==renderer.items.get(data.layers[0].id));
   assert.ok(preview);assert.equal(preview.children[1].children[1].fillColor.alpha,.3);
   assert.equal(renderer.items.get(node.id).visible,false);renderer.previewText(null);assert.equal(renderer.items.get(node.id).visible,true);
+  renderer.setOutline(false);
+  const paintItems=()=>scope.project.getItems({match:item=>item.data.nodeId===node.id}).length,before=paintItems();
+  const next=structuredClone(node);next.character.fontSize=36;next.layout.signature=textSignature(next);
+  state.history.execute(updateNode(node.id,{character:next.character,layout:next.layout}));renderer.render();
+  assert.equal(paintItems(),before,'Rebuilding edited text removes its previous appearance stack');
 });

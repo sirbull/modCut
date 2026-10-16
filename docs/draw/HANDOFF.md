@@ -17,9 +17,23 @@ D1.8 (Transform, Align, Color, Stroke, Fill/Stroke-boks og Properties) ble fullf
 
 ## Status og neste oppgave
 
-Fase 0 og fase 1 er fullført. Export As og **D2.1a/b punkttekst med systemfonter, shaping og
-Create Outlines** er ferdige. **Neste del er områdetekst i D2.1**, deretter tekst på path og egne
-Character/Paragraph-paneler. Se STATUS.md 2.7. Ikke marker hele D2.1 som ferdig.
+Fase 0 og fase 1 er fullført. Export As, **D2.1a/b punkttekst med systemfonter, shaping og
+Create Outlines** og **D2.1c rektangulær områdetekst med linjebryting** er ferdige.
+**Neste del er tekst på path i D2.1**, deretter egne Character/Paragraph-paneler.
+Se STATUS.md 2.7–2.8. Ikke marker hele D2.1 som ferdig.
+
+Type (T): klikk lager punkttekst, dra lager en rektangulær tekstramme med live kant under drag.
+Area Type finnes i Type-gruppen og har egen markør; klikk åpner en ramme på 60 × 30 mm.
+Edit Text har bredde/høyde i mm for områdetekst; endringene bryter teksten på nytt i preview.
+`text-wrap.mjs` bryter ved mellomrom/bindestrek og lange ord ved grafemgrenser, uten orddeling.
+`node.frame` inngår i utleggssignaturen, og områdetekst krever et ferdig utlegg ved lagring.
+`layout.visibleLines/overflow` beskriver hvilke linjer som får plass. Skjult tekst beholdes i
+`content`; overløp vises i dialogen og som rødt pluss på canvas. Eksport tar synlige glyfer;
+Create Outlines avviser overløp, slik at skjult tekst ikke slettes ved konvertering.
+Rammegrenser brukes til valg/hit-test, også under transformerte foreldre; UI-kant/pluss er
+utenfor eksporten. Endre rammedimensjoner i Edit Text for reflow. Vanlige resize-/Transform-
+kommandoer skalerer fortsatt hele objektet. Tekst i vilkårlig lukket form, lenkede rammer,
+automatisk orddeling og reflow med canvas-håndtak gjenstår.
 
 `electron/font-service.mjs` skanner system-/brukerfonter og bruker Fontkit 2.0.4 til å beregne
 kerning, ligaturer og Bézier-konturer. IPC sender metadata og geometri, aldri vilkårlige fontfiler.
@@ -36,7 +50,7 @@ gruppert per linje/objekt. Deretter virker vanlig Send to Cut. SVG bruker outlin
 `scripts/verify-font-package.mjs` kontrollerer fontmotoren fra app.asar; kjøres av `npm run pack`.
 
 E2E-flagg for de nye delene: `--draw-cut`, `--draw-place`, `--draw-control`, `--draw-export`,
-`--draw-text`, `--draw-outlines`.
+`--draw-text`, `--draw-outlines`, `--draw-area-text`.
 
 Historikk for D1.9: commit `d337a8f` (en annen agent) flyttet allerede visningskontrollene
 (posisjon, artboard, zoom, Outline, Fit) til appens nederste statuslinje (`#drawStatus`) og

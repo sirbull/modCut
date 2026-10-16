@@ -136,7 +136,12 @@ shows vector hairlines and image frames without changing the saved artwork.
 The remaining drawing and editing tools are being built in stages; see the
 [Draw implementation plan](docs/DRAW_WORKSPACE.md).
 
-Type (T) now places point text. Click text with Type, double-click it with Selection,
+Type (T) places point text on click and rectangular area text on drag. Area Type in
+the same tool group also opens a default frame on click. Edit Text offers frame width
+and height in mm, with live wrapping. Text that does not fit remains editable and is
+marked with a red plus; export includes visible text, and Create Outlines requires all
+text to fit. Use Edit Text to reflow the frame; ordinary transforms scale the object.
+Click text with Type, double-click it with Selection,
 or use **Edit Text…** in Properties to edit it. The dialog previews text on the
 canvas, with multiline content, font family, point size, leading, bold/italic and
 paragraph alignment. Apply creates one undo step; Cancel discards the preview.

@@ -9,7 +9,7 @@ import { EXPORT_FORMATS, EXPORT_RESOLUTIONS } from '../io/export.mjs';
 import { textProperties } from '../doc/text.mjs';
 
 let dialogId=0;
-/** Uniform point-text editor. Preview is detached; Apply is a single document command. */
+/** Uniform text editor. Preview is detached; Apply is a single document command. */
 export function textDialog(defaults, onPreview = () => {}, {fonts=[],resolve=patch=>patch}={}) {
   const choices = values => values.map(value => ({ value, label: value[0].toUpperCase() + value.slice(1) }));
   const fields = [
@@ -21,7 +21,10 @@ export function textDialog(defaults, onPreview = () => {}, {fonts=[],resolve=pat
     {key:'fontStyle',label:'Style',type:'select',value:defaults.fontStyle,options:choices(['normal','italic'])},
     {key:'alignment',label:'Paragraph alignment',type:'select',value:defaults.alignment,options:choices(['left','center','right'])},
   ];
-  const result = openDrawModal({title:'Point Text',submitLabel:'Apply',className:'draw-text-dialog',fields});
+  if(defaults.kind==='area')fields.push(
+    {key:'frameWidth',label:'Frame width (mm)',type:'number',value:defaults.frameWidth,min:.1,max:100000,step:'any',required:true},
+    {key:'frameHeight',label:'Frame height (mm)',type:'number',value:defaults.frameHeight,min:.1,max:100000,step:'any',required:true});
+  const result = openDrawModal({title:defaults.kind==='area'?'Area Text':'Point Text',submitLabel:'Apply',className:'draw-text-dialog',fields});
   const form = document.querySelector('.draw-text-dialog form'), original = form.elements.text;
   const families=document.createElement('datalist');families.id=`draw-fonts-${++dialogId}`;
   for(const family of new Set(fonts.map(f=>f.family))){const option=document.createElement('option');option.value=family;families.append(option);}
@@ -29,7 +32,7 @@ export function textDialog(defaults, onPreview = () => {}, {fonts=[],resolve=pat
   const input = document.createElement('textarea'); input.name = 'text'; input.className = 'input'; input.required = true; input.rows = 3;
   input.value = defaults.text; original.replaceWith(input);
   const error = document.createElement('p'); error.setAttribute('role','alert'); form.insertBefore(error,form.querySelector('.modal-actions'));
-  const read = () => Object.fromEntries(fields.map(f => [f.key, f.type === 'number' ? form.elements[f.key].valueAsNumber : form.elements[f.key].value]));
+  const read = () => ({kind:defaults.kind??'point',...Object.fromEntries(fields.map(f => [f.key, f.type === 'number' ? form.elements[f.key].valueAsNumber : form.elements[f.key].value]))});
   const submit=form.querySelector('[type=submit]');let revision=0,alive=true,resolved=null,accepted=null,lastInput=null;
   const preview = async () => {
     if(!alive)return;
@@ -39,7 +42,8 @@ export function textDialog(defaults, onPreview = () => {}, {fonts=[],resolve=pat
       const patch=await resolve(textProperties(values));
       if(!alive||current!==revision)return;
       resolved=patch;onPreview(patch);input.setCustomValidity('');submit.disabled=false;form.dataset.textReady='true';
-      error.textContent=fonts.length&&!fonts.some(f=>f.family.toLowerCase()===patch.character.fontFamily.toLowerCase())?'Font unavailable: saved outlines are preserved. Choose an installed font to change the text.':'';
+      error.textContent=patch.layout?.overflow?`Text overflow: ${patch.layout.visibleLines} of ${patch.layout.lineWidths.length} lines fit. Enlarge the frame to show all text. Export includes only visible text; Create Outlines requires all text to fit.`:
+        fonts.length&&!fonts.some(f=>f.family.toLowerCase()===patch.character.fontFamily.toLowerCase())?'Font unavailable: saved outlines are preserved. Choose an installed font to change the text.':'';
     } catch (e) {if(alive&&current===revision){error.textContent=e.message;input.setCustomValidity(e.message);onPreview(null);}}
   };
   form.addEventListener('submit',event=>{if(!resolved||submit.disabled){event.preventDefault();event.stopImmediatePropagation();return;}accepted=resolved;alive=false;revision++;},true);

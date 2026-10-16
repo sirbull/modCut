@@ -43,6 +43,24 @@ test('layout uses kerning and the same glyph coordinates for left/center/right a
   await assert.rejects(service.shape({...v,fontPostscriptName:'MissingFace'}),/not installed/);
 });
 const otf=faces.find(f=>f.format==='otf');
+test('area text wraps shaped words, fits lines vertically and preserves overset text',{skip:!latin},async()=>{
+  const v={...values(latin,'AV fi Horten ÆØÅ Horten ÆØÅ'),kind:'area',frameWidth:28,frameHeight:100};
+  const layout=await service.shape(v),node=pointText([3,4],v);node.layout=layout;
+  assert.ok(layout.lineWidths.length>1);assert.ok(layout.lineWidths.every(w=>w<=v.frameWidth+1e-9));assert.equal(layout.overflow,false);
+  const data=createDocument();data.layers[0].children=[node];assert.deepEqual(validateDocument(data),[]);
+  for(const patch of [{visibleLines:-1},{overflow:true},{glyphs:[{...layout.glyphs[0],line:layout.visibleLines}]}]) {
+    const malformed=structuredClone(data);malformed.layers[0].children[0].layout={...layout,...patch};assert.ok(validateDocument(malformed).length);
+  }
+  assert.ok(layout.glyphs.flatMap(g=>g.subpaths.flatMap(p=>p.segments)).every(s=>s.p[1]>=-1e-9));
+  const wider=await service.shape({...v,frameWidth:100});assert.ok(wider.lineWidths.length<layout.lineWidths.length);
+  const center=await service.shape({...v,alignment:'center'}),x=l=>l.glyphs[0].subpaths[0].segments[0].p[0];
+  assert.ok(Math.abs(x(center)-x(layout)-(v.frameWidth-layout.lineWidths[0])/2)<1e-9);
+  const short=await service.shape({...v,frameHeight:.1});assert.equal(short.overflow,true);assert.equal(short.visibleLines,0);assert.deepEqual(short.glyphs,[]);
+  const overset={...node,frame:{width:28,height:.1},layout:short};assert.equal(hasTextLayout(overset),true);assert.throws(()=>textToOutlines(overset),/overflows/);
+  assert.equal(overset.content.runs[0].text,v.text);
+  node.frame.width++;assert.equal(hasTextLayout(node),false,'Changing frame dimensions invalidates old wrapping');
+  assert.ok(validateDocument(data).some(e=>e.path.endsWith('.signature')));
+});
 test('installed OpenType/CFF fonts can produce editable glyph outlines',{skip:!otf},async()=>{
   const layout=await service.shape(values(otf,'AV fi'));assert.ok(layout.glyphs.some(g=>g.subpaths.length));
 });

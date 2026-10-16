@@ -966,3 +966,41 @@ Arbeidet ble gjort samtidig med dokumentoppsett-/lagarbeidet, som er lagret sepa
 Eksisterende endringer er bevart; Electron-kjøringene ble holdt adskilt.
 
 Neste: D2.1c områdetekst med automatisk linjebryting, basert på samme fontutlegg.
+
+### 2026-10-16 — D2.1c: rektangulær områdetekst
+
+Fortsatte fra et rent arbeidstre på `feat/vector-draw`, etter punkttekst/systemfonter/outlines.
+
+- Type (T) lager punkttekst ved klikk og områdetekst ved drag. Rammen vises under draget uten
+  dokumentendring. Area Type er aktivert i samme verktøygruppe, med egen synlig markør og en
+  60 × 30 mm ramme ved klikk/eksakt dialog. Escape avbryter en pågående rammegest.
+- Edit Text har bredde og høyde i mm for områdetekst. Feltene beregner live linjebryting og
+  glyph-layout; Apply er én historikktransaksjon, og Cancel beholder originalen.
+- Ren `doc/text-wrap.mjs` bryter ved mellomrom/bindestrek og bruker grafemgrenser for lange ord.
+  Eksponentiell målesøking begrenser fontarbeidet for lange avsnitt i smale rammer. Fontkit
+  former hver ferdige linje med kerning/ligaturer. Første baseline og høyde bruker fontens mål;
+  valgt leading bestemmer videre linjeavstand. Avsnittsjustering tar hensyn til rammebredden.
+- Modellens `frame` inngår i utleggssignaturen. `visibleLines/overflow` valideres sammen med
+  glyfene, og områdetekst uten ferdig utlegg avvises ved lagring. Tekst som ikke får plass,
+  beholdes i `content` og markeres i dialogen og med rødt pluss på canvas. Tomme rammer kan
+  fortsatt treffes. Create Outlines avviser overløp før noen konvertering blir committed.
+- Renderer bruker rammegrenser til utvalg, følger foreldrematriser og eksporterer bare synlige
+  glyfer. Canvas-kant/pluss og den usynlige målerammen utelates helt fra SVG-geometrien.
+  Rettet også livssyklus for gamle Appearance-stakker når redigert tekst får ny geometri.
+
+Avgrensning: rektangler og reflow gjennom Edit Text. Vanlige resize-/Transform-kommandoer
+skalerer fortsatt hele objektet. Reflow med canvas-håndtak, tekst i vilkårlig lukket form,
+lenkede rammer, full språkavhengig Unicode-linjebryting og automatisk orddeling gjenstår.
+Hele D2.1 er fortsatt åpen.
+
+Verifisert: 176 Draw-enhetstester og 19 main-tester. Electron `--draw-area-text`, `--draw-text`,
+`--draw-outlines`, `--draw-export` og `--draw-tools` passerer. Den nye app-testen kontrollerer
+rammen midt i draget, live reflow/cancel, angre/redo, overløp uten teksttap, tom rammes hit-test,
+transformert forelder, save/reload, SVG uten rammegeometri og raster før/etter outlines med
+gjennomsnittlig kanalavvik under 0,1. Skjermbilder for preview og transformert ramme er kontrollert.
+Komplett Draw-E2E er ikke kjørt på nytt; tidligere kjent samlet Pen-markørfeil står fortsatt i STATUS.
+
+Windows unpacked-build og smoketest av den medfølgende Java-runtime er kontrollert. Fonttesten
+fra faktisk app.asar er utvidet til også å forme og bryte områdetekst, uten fontfiler i pakken.
+
+Neste: D2.1d tekst på path, deretter Character/Paragraph og videre områdetekst.

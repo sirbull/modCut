@@ -185,6 +185,11 @@ export function validateDocument(doc) {
     }
     if (value.type === 'text') {
       enumeration(value.kind, ['point', 'area', 'onPath'], `${path}.kind`);
+      if(value.kind==='area') {
+        if(!object(value.frame))fail(`${path}.frame`,'Expected a rectangular text frame');
+        else for(const key of ['width','height'])number(value.frame[key],`${path}.frame.${key}`,.1,100000);
+        if(value.layout===undefined)fail(`${path}.layout`,'Area text requires a resolved layout');
+      }
       if (!object(value.content)) fail(`${path}.content`, 'Expected rich text');
       else array(value.content.runs, `${path}.content.runs`).forEach((run, i) => {
         if (!object(run)) fail(`${path}.content.runs.${i}`, 'Expected a text run');
@@ -213,10 +218,17 @@ export function validateDocument(doc) {
           if(!object(l.font))fail(`${p}.font`,'Expected font metadata');
           else for(const key of ['family','style','postscriptName'])string(l.font[key],`${p}.font.${key}`);
           array(l.lineWidths,`${p}.lineWidths`).forEach((w,i)=>number(w,`${p}.lineWidths.${i}`));
+          if(value.kind==='area') {
+            number(l.visibleLines,`${p}.visibleLines`,0,l.lineWidths?.length??0);
+            if(!Number.isInteger(l.visibleLines))fail(`${p}.visibleLines`,'Expected a whole number of visible lines');
+            bool(l.overflow,`${p}.overflow`);
+            if(l.overflow!==(l.visibleLines<l.lineWidths?.length))fail(`${p}.overflow`,'Overflow must match visible lines');
+          }
           array(l.glyphs,`${p}.glyphs`).forEach((g,i)=>{
             const q=`${p}.glyphs.${i}`;
             if(!object(g)){fail(q,'Expected a glyph');return;}
             number(g.line,`${q}.line`,0);if(!Number.isInteger(g.line)||g.line>=l.lineWidths?.length)fail(`${q}.line`,'Expected a valid line index');
+            if(value.kind==='area'&&g.line>=l.visibleLines)fail(`${q}.line`,'Overset glyphs must not be painted');
             number(g.glyphId,`${q}.glyphId`,0);
             array(g.subpaths,`${q}.subpaths`).forEach((s,j)=>{
               const r=`${q}.subpaths.${j}`;

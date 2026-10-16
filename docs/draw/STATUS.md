@@ -4,7 +4,7 @@
 > Detaljer: [hovedplanen](../DRAW_WORKSPACE.md) (spesifikasjon og byggeplan),
 > [RIGHT_PANELS.md](RIGHT_PANELS.md) (høyresiden), [WORK_LOG.md](WORK_LOG.md) (hva som er gjort, dag for dag)
 > og [HANDOFF.md](HANDOFF.md) (overlevering til neste agent).
-> Sist oppdatert: 2026-10-16 (fase 1 ferdig; D2.1b systemfonter og outlines). Arbeidsgren: `feat/vector-draw`.
+> Sist oppdatert: 2026-10-16 (fase 1 ferdig; D2.1c rektangulær områdetekst). Arbeidsgren: `feat/vector-draw`.
 
 ## 1. Kort oppsummert
 
@@ -13,7 +13,7 @@ grunnformer med live hjørner, transformasjoner, lag med template-lag, farger, s
 gjennomsiktighet, flere fyll og streker (Appearance), Pathfinder, gruppering, rekkefølge, låsing,
 utklippstavle, isolasjonsmodus, kontrollinje og Place med Template. Et artboard kan sendes til Cut
 med **Send to Cut** (D1.12 v1), så det man tegner kan kuttes. Fase 1 er ferdig. SVG-, PNG- og
-JPEG-eksport og punkttekst med systemfonter og **Create Outlines** finnes. Område-/path-tekst,
+JPEG-eksport, punkt-/rektangulær områdetekst med systemfonter og **Create Outlines** finnes. Path-tekst,
 Image Trace og effekter gjenstår.
 
 ## 2. Høyresiden sammenlignet med Illustrator
@@ -153,9 +153,29 @@ Dette var første del av D2.1. Fontvalg, shaping og outlines er senere utvidet i
 * Eldre punkttekst uten glyfutlegg vises fortsatt med systemets tekstmotor. Edit Text > Apply eller
   Create Outlines beregner et nytt utlegg med den valgte fonten.
 
-Gjenstår i D2.1: områdetekst, tekst på path, blandede tekststiler, egne Character/Paragraph-paneler,
+Gjenstår i D2.1: videre områdetekst (se 2.8), tekst på path, blandede tekststiler, egne Character/Paragraph-paneler,
 flere tegn-/avsnittsegenskaper, finere fontvarianter og variabel-font-akser. Full fontembedding og
 rosa markering av manglende fonter i selve canvas er heller ikke bygget.
+
+### 2.8 Rektangulær områdetekst (D2.1c, 2026-10-16)
+
+* **Type (T)** lager punkttekst ved klikk og områdetekst ved drag. Rammekanten er synlig under
+  draget. **Area Type** i samme verktøygruppe har egen markør og åpner også en 60 × 30 mm ramme ved klikk.
+* **Edit Text** har rammebredde og -høyde i mm. Endringer beregner linjebryting og glyfer på nytt
+  i live preview; Apply er ett angresteg og Cancel gjenoppretter originalen.
+* Teksten brytes ved mellomrom/bindestrek. Lange ord deles ved Unicode-grafemgrenser, slik at
+  kombinerte tegn og emoji ikke splittes. Eksplisitte linjeskift og tomme avsnitt beholdes.
+  Kerning og ligaturer beregnes per ferdig linje; venstre/sentrert/høyre bruker rammebredden.
+* Fontens høyde og valgt leading avgjør antall synlige linjer. Resten av teksten beholdes i
+  dokumentet. Overløp varsles i dialogen og med rødt pluss på canvas, også når ingen linje får plass.
+  En tom ramme kan fortsatt treffes og redigeres. **Create Outlines** avviser overløp med beskjed
+  om å øke rammen; SVG/PNG/JPEG eksporterer de synlige glyfene.
+* Lagring, eksport og outlines bruker samme versjonerte utlegg. Endret ramme ugyldiggjør gammel
+  geometri. Rammen følger modellens foreldrematriser, og UI-kanten/plussmarkeringen eksporteres ikke.
+
+Avgrensning: reflow gjøres med rammefeltene i Edit Text. Vanlige resize-/Transform-kommandoer
+skalerer hele objektet. Reflow med canvas-håndtak, tekst i vilkårlig lukket form, lenkede rammer,
+automatisk orddeling og full språkavhengig Unicode-linjebryting gjenstår.
 
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
@@ -167,7 +187,7 @@ rosa markering av manglende fonter i selve canvas er heller ikke bygget.
 | D1.10 Group, Arrange, Clipboard, isolasjon | Ferdig |
 | D1.11 Place bitmap og template-lag | Ferdig (se 2.3); høyreklikkmeny, Crop Image og Links gjenstår |
 | D1.12 Send til Cut v1 | Ferdig (se 2.2) |
-| D2.1 Tekst | Punkttekst, systemfonter, shaping og Create Outlines ferdig (D2.1a/b); resten gjenstår, se 2.7 |
+| D2.1 Tekst | Punkttekst, systemfonter, shaping, outlines og rektangulær områdetekst ferdig (D2.1a/b/c); resten gjenstår, se 2.7–2.8 |
 | D2.2 Pathfinder, Compound, Clipping | Pathfinder ferdig; compound paths og clipping masks gjenstår |
 | D2.3 Gradienter og Swatches | Swatches ferdig (solide); gradienter og globale swatches gjenstår |
 | D2.4 Path-kommandoer | Gjenstår |
@@ -187,8 +207,8 @@ Fase 1 er ferdig. Neste er fase 2, i denne rekkefølgen:
 
 SVG-, PNG- og JPEG-eksport er gjort (2.5).
 
-1. **D2.1 Tekst**: punkttekst, systemfonter og Create Outlines er ferdig (2.7).
-   Neste del er områdetekst, deretter tekst på path og Character/Paragraph-paneler.
+1. **D2.1 Tekst**: punkttekst, systemfonter, Create Outlines og rektangulær områdetekst er ferdig (2.7–2.8).
+   Neste del er tekst på path, deretter Character/Paragraph-paneler og videre områdetekst.
 2. D2.2 Compound paths og clipping masks (Make Clipping Mask i Layers-menyen venter på dette).
 3. D2.4 Path-kommandoer (Join, Average, Offset Path, Simplify).
 4. D2.6 PDF-eksport, D2.3 gradienter, D2.8 flere verktøy, D2.9 History/Info/kommandosøk.

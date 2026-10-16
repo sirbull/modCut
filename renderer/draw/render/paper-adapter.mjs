@@ -16,13 +16,14 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
   const artwork = new scope.Layer({ name: 'Draw artwork' });
   const overlay = new scope.Layer({ name: 'Selection' });
   const labels = new scope.Group({insert:false}); overlay.addChild(labels);
+  const textFrames = new scope.Group({insert:false}); overlay.addChild(textFrames);
   const ISOLATION_DIM = .35;
   const items = new Map(), records = new Map(), boardItems = new Map(), thumbnails = new Map();
   const worldBounds = new Map(), paintedBounds = new Map();
   const editPreviews=new Map();
   const transformPreviewIds=new Set();let transformPreview=null,transformPreviewOptions=null;
   let destroyed = false, outline = !!state.ui?.outline;
-  let textPreview = null;
+  let textPreview = null, textPreviewFrame=null;
   let labelColor='#435A50',labelBackground='#E7F5EF';
   const selection = createSelectionOverlay(scope, overlay, state, id => bounds(id), id => records.get(id)?.context.color);
   // Template layers stay previewed in Outline view; other layers may request Outline individually.
@@ -128,7 +129,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     return new scope.Group({ insert: false });
   }
   function geometryKey(node) {
-    if (node.type === 'text') return JSON.stringify([node.content, node.character, node.paragraph,node.layout]);
+    if (node.type === 'text') return JSON.stringify([node.kind,node.frame,node.content, node.character, node.paragraph,node.layout]);
     if (node.type === 'path') return JSON.stringify([node.subpaths, node.fillRule]);
     if (node.type === 'shape') return JSON.stringify([node.shape, node.params]);
     if (node.type === 'image') return JSON.stringify([node.assetId, state.document.data.assets[node.assetId]]);
@@ -210,7 +211,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
       let record = records.get(node.id), item = items.get(node.id);
       const replaced = !record || record.node.type !== node.type || record.geometry !== geometry;
       if (replaced) {
-        item?.remove(); record?.frame?.remove(); record?.arrows?.remove();
+        item?.remove(); record?.frame?.remove(); record?.arrows?.remove(); record?.stack?.remove();
         item = make(node); item.applyMatrix = false; item.data.nodeId = node.id;
         items.set(node.id, item);
         record = { node, geometry, context }; records.set(node.id, record);
@@ -218,10 +219,10 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
       if (replaced || record.fingerprint !== fingerprint) {
         record.node = node; record.fingerprint = fingerprint; record.context = context;
         item.matrix = new scope.Matrix(...node.transform);
-        if (node.type === 'image') {
-          positionImage(item, node);
+        if (node.type === 'image' || node.type==='text'&&node.kind==='area') {
+          if(node.type==='image')positionImage(item, node);
           record.frame?.remove();
-          const [width, height] = imageSize(node);
+          const [width, height] = node.type==='image'?imageSize(node):[node.frame.width,node.frame.height];
           record.frame = new scope.Path.Rectangle({ rectangle: [0, 0, width, height], insert: false });
           record.frame.applyMatrix = false; record.frame.matrix = new scope.Matrix(...node.transform);
           record.frame.data.nodeId = node.id; record.frame.strokeColor = '#071411'; record.frame.strokeScaling = false;
@@ -249,13 +250,13 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
         // Compose from the model: Paper may cache an old global matrix after reparenting.
         const matrix = new scope.Matrix(...node.transform).prepend(parentMatrix);
         records.get(node.id).worldMatrix = matrix;
-        const b = node.children ? visit(node.children, matrix) : node.type === 'image'
+        const b = node.children ? visit(node.children, matrix) : records.get(node.id).frame
           ? records.get(node.id).frame.getBounds(matrix) : item.getBounds(matrix);
         if (b) {
           worldBounds.set(node.id, b.clone());
           // Stroke bounds preserve thick strokes intersecting the viewport edge.
           if (outlineFor(node.id) && !node.children && node.type !== 'image') style(item, node, false);
-          paintedBounds.set(node.id, node.children || node.type === 'image' ? b.clone() : item.getStrokeBounds(matrix));
+          paintedBounds.set(node.id, node.children || records.get(node.id).frame ? b.clone() : item.getStrokeBounds(matrix));
           if (outlineFor(node.id) && !node.children && node.type !== 'image') style(item, node);
           if (node.visible) combined = union(combined, b);
         }
@@ -305,8 +306,20 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     }
     return dimmed;
   }
+  function areaFrame(node,matrix) {
+    const group=new scope.Group({insert:false});group.data.textFrame=true;group.data.textId=node.id;
+    const {width:w,height:h}=node.frame,color=node.layout?.overflow?'#C0392B':records.get(node.id)?.context.color??'#006B5C';
+    const frame=new scope.Path({insert:false,segments:[[0,0],[w,0],[w,h],[0,h]].map(p=>new scope.Point(...p).transform(matrix)),closed:true,strokeColor:color,strokeWidth:1/scope.view.zoom});group.addChild(frame);
+    if(node.layout?.overflow) {
+      const p=new scope.Point(w,h).transform(matrix),r=4/scope.view.zoom;
+      group.addChild(new scope.Path.Rectangle({insert:false,rectangle:[p.x-r,p.y-r,2*r,2*r],strokeColor:color,fillColor:'#FFFFFF',strokeWidth:1/scope.view.zoom}));
+      for(const [from,to] of [[[p.x-r/2,p.y],[p.x+r/2,p.y]],[[p.x,p.y-r/2],[p.x,p.y+r/2]]])group.addChild(new scope.Path.Line({insert:false,from,to,strokeColor:color,strokeWidth:1/scope.view.zoom}));
+    }
+    return group;
+  }
   function updateView() {
     const viewport = scope.view.bounds.expand(16 / scope.view.zoom), dimmed = isolationDimmed();
+    textFrames.removeChildren();
     for (const [id, record] of records) {
       const item = items.get(id), node = record.node;
       if(node.strokeScaling===false){style(item,node,outlineFor(id),true);if(record.stack){const next=paintStack(item,node);record.stack.replaceWith(next);record.stack=next;}}
@@ -315,7 +328,9 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
       const asOutline = outlineFor(id);
       item.visible = visible && !(asOutline && node.type === 'image') && !editPreviews.has(id) && !transformPreviewIds.has(id);
       if (asOutline && !node.children && node.type !== 'image') item.strokeWidth = 1 / scope.view.zoom;
-      if (record.frame) { record.frame.visible = visible && asOutline; record.frame.strokeWidth = 1 / scope.view.zoom; }
+      if (record.frame) { record.frame.visible = visible && asOutline && node.type==='image'; record.frame.strokeWidth = 1 / scope.view.zoom; }
+      if(node.type==='text'&&node.kind==='area'&&visible&&!transformPreviewIds.has(id)&&state.document.ancestors(id).every(n=>n.visible)&&
+        (state.selection.ids.includes(id)||asOutline||node.layout?.overflow))textFrames.addChild(areaFrame(node,record.worldMatrix));
       if (record.arrows) record.arrows.visible = item.visible && !asOutline;
       if (record.stack) record.stack.visible = item.visible && !asOutline;
       const factor = dimmed?.has(id) ? ISOLATION_DIM : 1;
@@ -338,6 +353,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
   function exportArtwork() {
     const wasOutline = outline; if (wasOutline) setOutline(false);
     try {
+      const isTextFrame=item=>{const record=records.get(item.data?.nodeId);return record?.node.type==='text'&&record.frame===item;};
       const fix = (original, copy) => {
         const id = original.data?.nodeId;
         if (id) {
@@ -348,12 +364,12 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
         const children = [...(copy.children ?? [])];
         (original.children ?? []).forEach((child, i) => {
           const childId = child.data?.nodeId;
-          if (childId && !isOutputNode(state.document, childId)) children[i].remove(); else fix(child, children[i]);
+          if (isTextFrame(child) || childId && !isOutputNode(state.document, childId)) children[i].remove(); else fix(child, children[i]);
         });
       };
       const group = new scope.Group({ insert: false });
       for (const child of artwork.children) {
-        const id = child.data?.nodeId; if (id && !isOutputNode(state.document, id)) continue;
+        const id = child.data?.nodeId; if (isTextFrame(child) || id && !isOutputNode(state.document, id)) continue;
         const copy = child.clone({ insert: false, deep: true }); fix(child, copy); group.addChild(copy);
       }
       return group;
@@ -378,6 +394,12 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
       // In isolation mode only the isolated group's contents can be hit.
       if (iso && item?.data.nodeId && !state.document.ancestors(item.data.nodeId).some(n => n.id === iso)) continue;
       if (item?.data.nodeId && state.document.getNode(item.data.nodeId)?.type !== 'layer' && state.document.isEditable(item.data.nodeId)) return item.data.nodeId;
+    }
+    // Empty and overset frames remain editable even when no glyph can be hit.
+    for(const [id,record] of [...records].reverse())if(record.node.type==='text'&&record.node.kind==='area'&&state.document.isEditable(id)&&
+      (!state.ui?.isolation||state.document.ancestors(id).some(n=>n.id===state.ui.isolation))) {
+      const local=new scope.Point(point).transform(record.worldMatrix.inverted()),{width,height}=record.node.frame;
+      if(local.x>=0&&local.y>=0&&local.x<=width&&local.y<=height)return id;
     }
     return null;
   }
@@ -461,7 +483,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
   }
   return { render, select: updateView, updateView, bounds, selectionBounds, hit, items, setOutline, thumbnail, exportArtwork, booleanOperand, selectionHandle:point=>selection.hit(point),
     previewText(node, parentId = null) {
-      textPreview?.remove(); textPreview = null;
+      textPreview?.remove(); textPreview = null;textPreviewFrame?.remove();textPreviewFrame=null;
       render();
       if (node) {
         textPreview = new scope.Group({insert:false});textPreview.applyMatrix=false;
@@ -470,6 +492,10 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
         const item=make(node);item.applyMatrix=false;item.matrix=new scope.Matrix(...node.transform);style(item,node,false,true);textPreview.addChild(item);
         const stack=paintStack(item,node,false);if(stack)textPreview.addChild(stack);
         overlay.addChild(textPreview);
+        if(node.kind==='area') {
+          for(const frame of textFrames.children)if(frame.data.textId===node.id)frame.visible=false;
+          textPreviewFrame=areaFrame(node,new scope.Matrix(...node.transform).prepend(textPreview.matrix));overlay.addChild(textPreviewFrame);
+        }
         for (const item of [items.get(node.id), records.get(node.id)?.stack, records.get(node.id)?.arrows]) if (item) item.visible = false;
       }
       scope.view.update();
@@ -525,7 +551,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
       scope.view.center = b.center; updateView();
     },
     destroy() {
-      destroyed = true; textPreview?.remove(); selection.destroy();anchors.destroy();clearTransformPreview();
+      destroyed = true; textPreview?.remove();textPreviewFrame?.remove();textFrames.remove(); selection.destroy();anchors.destroy();clearTransformPreview();
       for (const record of records.values()) if (record.node.type === 'image') items.get(record.node.id).onLoad = null;
       boards.remove(); artwork.remove(); overlay.remove();
       items.clear(); records.clear(); boardItems.clear(); thumbnails.clear(); worldBounds.clear(); paintedBounds.clear();
