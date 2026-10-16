@@ -3,7 +3,7 @@ import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { inputHelpers, wait } from './cdp.mjs';
-import { activeDraw as active, submitNewDrawDialog } from './draw-test-helpers.mjs';
+import { activeDraw as active, submitNewDrawDialog, submitPlaceDialog } from './draw-test-helpers.mjs';
 
 const root = ".draw-project[style*=block]";
 export async function runDrawPanelWorkflows(client) {
@@ -40,6 +40,7 @@ export async function runDrawPanelWorkflows(client) {
   const png = await evaluate("(()=>{const c=document.createElement('canvas');c.width=20;c.height=10;const x=c.getContext('2d');x.fillStyle='#ff0000';x.fillRect(0,0,20,10);return c.toDataURL('image/png')})()");
   await evaluate(`window.modcut.setE2EImportResult(${JSON.stringify([{ name: 'reference.png', ext: 'png', dataUrl: png }])})`);
   await evaluate("document.querySelector('#add').click()");
+  await submitPlaceDialog(evaluate);
   for (let i = 0; i < 100 && (await model()).layers[0].children.length < 2; i++) await wait(50);
   data = await model(); const image = data.layers[0].children[1];
   assert.equal(image.type, 'image');

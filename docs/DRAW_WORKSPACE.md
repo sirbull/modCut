@@ -2,7 +2,7 @@
 
 **Ny agent:** Start med [overleveringen](draw/HANDOFF.md) for gjeldende stoppunkt, teststatus og lokale kjøreinstruksjoner.
 
-> Status: Fase 0 og D1.1–D1.8 er fullført. Grunnpanelene (Layers med template-lag, Transform, Align, Color, Stroke, Fill/Stroke-boks og Properties) er ferdige, sammen med Illustrator-markører og live Pen-håndtak. Neste oppgave er D1.9: kontrollinje og statuslinje. Fase 1 er fortsatt under arbeid.
+> Status: Fase 0 og fase 1 (D1.1 til D1.12) er fullført, inkludert Send til Cut v1, Place med Template og kontrollinjen. Neste er fase 2. Oppdatert oversikt og rekkefølge: [draw/STATUS.md](draw/STATUS.md).
 > Sist oppdatert: 2026-10-15.
 > Målgruppe: utviklere og kodeagenter (Claude Code og Codex) som skal bygge løsningen.
 
@@ -849,8 +849,8 @@ Effekter ligger i `appearance.effects` og kan redigeres, slås av og omorganiser
   `renderer/tiffimport.js` og raster-dekodingen fra Cut). PDF/SVG/AI plasseres som vektor
   (kapittel 12).
 * Place-dialogen har avkrysning **Template**. Når den er på (eller når brukeren slipper et
-  bilde med Alt), opprettes et nytt template-lag over aktivt lag med bildet: låst, dimmet
-  50 %, `printable: false`, `reference: true`.
+  bilde med Alt), opprettes et nytt template-lag under aktivt lag med bildet (som Illustrator): låst,
+  dimmet 50 %, `printable: false`. Malen beholdes til neste Place i samme økt.
 * Høyreklikk på bilde: Bruk som referanse (flytt til template-lag), Juster opacity, Lås,
   Image Trace, Crop Image, Embed/Unlink, Show in Folder.
 * Link vs. embed: standard er **embed** (dokumentet skal være portabelt som `.modcut` i dag).
@@ -1405,10 +1405,10 @@ Oversikt over hva som er gjort og gjenstår, inkludert delvis ferdige oppgaver: 
 * [x] D1.6 Former
 * [x] D1.7 Rotate, Reflect, Scale med Copy og Transform Again
 * [x] D1.8 Grunnpaneler — Properties, Layers/template-lag, Transform, Align, Color, Stroke og Fill/Stroke-boks
-* [ ] D1.9 Kontrollinje og statuslinje
+* [x] D1.9 Kontrollinje og statuslinje
 * [x] D1.10 Group, Arrange, Clipboard
-* [ ] D1.11 Place bitmap og template-lag
-* [ ] D1.12 Send til Cut v1
+* [x] D1.11 Place bitmap og template-lag (høyreklikkmeny, Crop Image og Links gjenstår, se [STATUS.md](draw/STATUS.md))
+* [x] D1.12 Send til Cut v1 (se [STATUS.md](draw/STATUS.md) for hva v1 dekker)
 * [ ] D2.1 Tekst
 * [ ] D2.2 Pathfinder, Compound, Clipping
 * [ ] D2.3 Gradienter og Swatches

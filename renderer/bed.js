@@ -163,9 +163,12 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     if ("clipped" in item) item.clipped = false;
     if (item.children) for (const child of item.children.slice()) releaseClipping(child);
   }
-  function loadSVG(node, wMm, hMm, viewBox) {
+  // options.placement "origin" puts the SVG's top-left at the bed origin instead of centering it;
+  // options.replace clears the design inside the same undo step (Send to Cut from Draw).
+  function loadSVG(node, wMm, hMm, viewBox, { placement = "center", replace = false } = {}) {
     resetGroupFocus();
     pushHistory();
+    if (replace) { abandonPenInteraction(); clearNodeSelection(); designLayer.removeChildren(); selected.clear(); }
     designLayer.activate();
     const before = new Set(designLayer.children);
     const g = paper.project.importSVG(node, { expandShapes: true, insert: true });
@@ -174,7 +177,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     if (hasViewport) {
       // prepareSVG normalized the root viewport to millimetres. Center the
       // document/artboard on the bed, preserving every item's page position.
-      g.translate(P((bedWmm - wMm) / 2, (bedHmm - hMm) / 2));
+      if (placement !== "origin") g.translate(P((bedWmm - wMm) / 2, (bedHmm - hMm) / 2));
     } else {
       const sf = wMm && g.bounds.width ? wMm / g.bounds.width : MM_PER_PX;
       g.scale(sf, g.bounds.topLeft);

@@ -209,7 +209,8 @@ function buildMenu(mode = "cut") {
       ["New", "Import…", "Add…", "Close Tab", "Save document…", "Save document as…", "Quit"].includes(item.label));
     const saveAsIndex = fileMenu.submenu.findIndex((item) => item.label === "Save document as…");
     fileMenu.submenu.splice(saveAsIndex + 1, 0, { type: "separator" },
-      { label: "Save Document Properties as Template…", click: () => send("save-document-template") });
+      { label: "Save Document Properties as Template…", click: () => send("save-document-template") },
+      { type: "separator" }, { label: "Send Artboard to Cut…", click: () => send("send-to-cut") });
     const sharedCommands = { "New": "new", "Import…": "import", "Add…": "add", "Close Tab": "close-tab",
       "Save document…": "save-document", "Save document as…": "save-document-as" };
     for (const item of fileMenu.submenu) {
@@ -233,6 +234,7 @@ function buildMenu(mode = "cut") {
     ];
     viewMenu.submenu = [viewMenu.submenu[0], { type: "separator" },
       { label: "Outline / Preview", accelerator: acceleratorFor("outline", { isMac }), click: () => send("outline") },
+      { label: "Control Bar", click: () => send("toggle-control-bar") },
       { role: "togglefullscreen", label: "Full screen" },
       { role: "toggleDevTools", label: "Developer Tools" }];
     for (const label of ["Machine", "Materials"]) {

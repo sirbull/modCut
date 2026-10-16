@@ -12,3 +12,8 @@ export async function submitNewDrawDialog(evaluate, values={}) {
   })()`);
   await wait(50);
 }
+/** Import in Draw asks for Place options when an image is chosen; submit them (Template off unless asked). */
+export async function submitPlaceDialog(evaluate, { template = false } = {}) {
+  for (let i=0;i<100&&!(await evaluate("!!document.querySelector('.draw-place-dialog form')"));i++) await wait(50);
+  await evaluate(`(()=>{const f=document.querySelector('.draw-place-dialog form');if(!f)return;if(f.elements.template.checked!==${template})f.elements.template.click();f.requestSubmit();})()`);
+}

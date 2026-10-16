@@ -26,12 +26,12 @@ body[data-workspace="draw"] .actionbar {display:none;}
 .draw-workspace__hint h1 { color: var(--text); margin: 0; font-size: var(--fs-lg); }
 .draw-workspace__hint p { color: var(--text); margin: 0; font-size: var(--fs-sm); }
 .draw-project { position: absolute; inset: 0; }
-.draw-shell { position: relative; display: grid; grid-template-columns: 52px minmax(0, 1fr) 48px 286px; grid-template-rows:minmax(0,1fr) 28px; height: 100%; min-height: 0; }
+.draw-shell { position: relative; display: grid; grid-template-columns: 52px minmax(0, 1fr) 48px 286px; grid-template-rows:auto minmax(0,1fr) 28px; height: 100%; min-height: 0; }
 .draw-tool-rail { grid-column:1;grid-row:1 / -1; }
-.draw-stage {grid-column:2;grid-row:1;}
+.draw-stage {grid-column:2;grid-row:2;}
 .draw-panel-rail {grid-column:3;grid-row:1 / -1;overflow-y:auto;}
 .draw-panels {grid-column:4;grid-row:1 / -1;}
-.draw-tool-hint {grid-column:2;grid-row:2;display:flex;align-items:center;padding:0 12px;background:var(--surface);border-top:1px solid var(--border);font-size:var(--fs-xs);color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.draw-tool-hint {grid-column:2;grid-row:3;display:flex;align-items:center;padding:0 12px;background:var(--surface);border-top:1px solid var(--border);font-size:var(--fs-xs);color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .draw-tool-grid {display:grid;grid-template-columns:38px;gap:5px;flex:0 0 auto;}
 .draw-shell--panels-hidden {grid-template-columns:52px minmax(0,1fr);}
 .draw-shell--panels-hidden :is(.draw-panel-rail,.draw-panels) {display:none;}
@@ -382,3 +382,26 @@ body.draw-scrubbing, body.draw-scrubbing * { cursor: ew-resize !important; user-
 .draw-layer-row.is-picked { background: var(--surface-2); box-shadow: inset 3px 0 0 var(--layer-color); }
 .draw-layer-target[draggable=true] { cursor: grab; }
 .draw-layer-menu { max-height: calc(100% - 52px); overflow-y: auto; }
+
+/* Send to Cut: a CTA beside the workspace toggle, only in Draw. */
+#sendToCut { display: none; }
+body[data-workspace="draw"] #sendToCut { display: inline-flex; }
+.draw-send-dialog__summary { margin: 4px 0 12px; font-size: 12px; color: var(--text-muted); }
+.draw-send-dialog__summary p { margin: 0 0 6px; color: var(--text); }
+.draw-send-dialog__summary ul { margin: 0; padding-left: 18px; }
+.draw-place-dialog__note { margin: 4px 0 12px; font-size: 12px; color: var(--text-muted); max-width: 360px; }
+
+/* Control bar: one row of contextual fields above the canvas. */
+.draw-control-bar { grid-column: 2; grid-row: 1; display: flex; align-items: center; gap: 6px; min-height: 36px; padding: 3px 10px; background: var(--surface); border-bottom: 1px solid var(--border); overflow-x: auto; overflow-y: hidden; scrollbar-width: none; white-space: nowrap; font-size: var(--fs-xs); }
+.draw-control-bar[hidden] { display: none; }
+.draw-cb-title { font-weight: 600; color: var(--text); padding-right: 4px; }
+.draw-cb-group { display: flex; align-items: center; gap: 5px; padding-left: 6px; border-left: 1px solid var(--border); }
+.draw-control-bar .draw-field.draw-cb-field { display: inline-flex; flex-direction: row; align-items: center; gap: 4px; margin: 0; }
+.draw-control-bar .draw-cb-field > span { color: var(--text-muted); font-size: var(--fs-xs); }
+.draw-control-bar .draw-cb-field input { width: 50px; height: 24px; padding: 0 5px; font-size: var(--fs-xs); }
+.draw-control-bar .draw-cb-field--text input { width: 110px; }
+.draw-cb-color { display: inline-flex; align-items: center; gap: 4px; color: var(--text-muted); }
+.draw-cb-color input { width: 24px; height: 22px; padding: 0; border: 1px solid var(--border); border-radius: 3px; background: none; cursor: pointer; }
+.draw-cb-color input.is-none { background: linear-gradient(to top right, transparent 46%, #e5484d 47%, #e5484d 53%, transparent 54%); }
+.draw-control-bar .draw-layer-action { width: 26px; height: 26px; }
+.draw-control-bar .btn { height: 24px; padding: 0 8px; }

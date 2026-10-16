@@ -53,7 +53,9 @@ export function createPanels(shell, state, api) {
   closeButton.addEventListener('click',() => close());
   const flyoutHeader = document.createElement('div'); flyoutHeader.className = 'draw-flyout__header'; flyoutHeader.append(flyoutTabs,closeButton);
   flyout.append(flyoutHeader,flyoutBody);
-  shell.append(rail,panels,flyout);
+  // Control bar (Illustrator's Control panel): contextual fields above the canvas. View > Control Bar hides it.
+  const controlBar = document.createElement('div'); controlBar.className = 'draw-control-bar'; controlBar.setAttribute('role','toolbar'); controlBar.setAttribute('aria-label','Control bar');
+  shell.append(controlBar,rail,panels,flyout);
   for (const group of PANEL_GROUPS) {
     const button = document.createElement('button'); button.type = 'button'; button.className = 'draw-icon-button';
     const names = group.tabs.map(panelName).join(' · '), shortcut = shortcutLabel(`panel.${group.tabs[0]}`,{isMac});
@@ -702,6 +704,7 @@ export function createPanels(shell, state, api) {
     for(const [label,action,disabled] of [['New artboard',()=>api.artboards.add(),false],['Duplicate',()=>api.artboards.duplicate(),false],['Delete',()=>api.artboards.remove(),state.document.data.artboards.length===1],['Move up',()=>api.artboards.order(-1),state.document.data.artboards[0].id===board.id],['Move down',()=>api.artboards.order(1),state.document.data.artboards.at(-1).id===board.id],['Rearrange…',api.rearrange,false]]) {
       const b=button(label,action);b.disabled=disabled || state.document.readOnly;host.append(b);
     }
+    const send=button('Send to Cut…',()=>api.command('send-to-cut'));send.className='btn btn--primary btn--sm draw-send-button';send.dataset.drawSendToCut='';host.append(send);
   }
   const TYPE_NAMES = { path: 'Path', group: 'Group', compoundPath: 'Compound Path', image: 'Image', text: 'Text', layer: 'Layer' };
   function selectionTitle(ids) {
@@ -725,7 +728,7 @@ export function createPanels(shell, state, api) {
     }
     host.append(info);
     check(host,'Smart Guides','smart-guides',doc.settings.smartGuides !== false,() => api.run(() => api.command('smart-guides')));
-    quickActions(host,[['Artboards…',() => open('artboards'),'artboards'],['Swatches…',() => open('swatches'),'swatches'],['Layer Options…',() => api.layerOptions(state.ui.layerId ?? doc.layers.at(-1).id),'layer-options',state.document.readOnly]]);
+    quickActions(host,[['Artboards…',() => open('artboards'),'artboards'],['Swatches…',() => open('swatches'),'swatches'],['Layer Options…',() => api.layerOptions(state.ui.layerId ?? doc.layers.at(-1).id),'layer-options',state.document.readOnly],['Send to Cut…',() => api.command('send-to-cut'),'send-to-cut']]);
     text(host,'Fill and Stroke for new shapes are set with the boxes below the drawing tools.');
   }
   function propertiesPanel(host) {
@@ -792,6 +795,8 @@ export function createPanels(shell, state, api) {
     if (ids.length === 1 && (state.ui.alignTo ?? 'selection') === 'selection') text(host,'A single object aligns to the artboard.');
     const shapes = ids.filter(id => state.document.getNode(id)?.type === 'shape' && state.document.isEditable(id));
     const groups = ids.filter(id => state.document.getNode(id)?.type === 'group');
+    const images = ids.filter(id => state.document.getNode(id)?.type === 'image');
+    if (images.length) quickActions(host,[['Use as Template',() => api.command('use-as-template'),'use-as-template',ro]]);
     quickActions(host,[
       ['Group',() => api.command('group'),'group',ro],
       ['Ungroup',() => api.command('ungroup'),'ungroup',ro || !groups.length],
@@ -823,13 +828,76 @@ export function createPanels(shell, state, api) {
   }
   function render() {
     // A slider drag or color-picker session updates the canvas live; rebuilding would interrupt it.
-    if (liveEdit && (flyoutBody.contains(document.activeElement) || primary.contains(document.activeElement))) return;
+    if (liveEdit && [flyoutBody,primary,controlBar].some(host => host.contains(document.activeElement))) return;
     liveEdit = false;
     for (const button of rail.children) button.setAttribute('aria-pressed',String(button.dataset.drawPanel === state.ui.flyout));
     primary.replaceChildren(); dock.layers.body.replaceChildren();
     if (state.document.readOnly) text(primary,state.warning || 'Read-only document');
     propertiesPanel(primary); layerPanel(dock.layers.body);
+    controlBar.replaceChildren(); controlBar.hidden = state.ui.controlBar === false; if (!controlBar.hidden) controlBarContent(controlBar);
     renderFlyout(); layoutDock();
+  }
+  /** Control bar: compact fields for the selection, the artboard tool, or the paint for new objects. */
+  function controlBarContent(host) {
+    const ro = state.document.readOnly, ids = api.selectedIds();
+    const group = (label) => { const g = document.createElement('div'); g.className = 'draw-cb-group'; if (label) g.setAttribute('aria-label',label); host.append(g); return g; };
+    const title = (text) => { const t = document.createElement('span'); t.className = 'draw-cb-title'; t.dataset.drawCbTitle = ''; t.textContent = text; host.append(t); };
+    const num = (parent, label, value, action, options = {}) => { const input = field(parent,label,value,action,{ step:.1, ...options }); input.closest('label').classList.add('draw-cb-field'); return input; };
+    if (state.ui.tool === 'artboard') {
+      const board = api.artboards.active(); title('Artboard');
+      const name = field(group('Artboard name'),'Name',board.name,v => api.artboards.edit(board.id,{name:v},{artwork:false}),{ type:'text', key:'cb-artboard-name' });
+      name.closest('label').classList.add('draw-cb-field','draw-cb-field--text');
+      const g = group('Artboard position and size');
+      for (const [key,label] of [['x','X'],['y','Y'],['width','W'],['height','H']])
+        num(g,label,board[key],v => api.artboards.edit(board.id,{[key]:v}),{ key:`cb-artboard-${key}`, min:['width','height'].includes(key) ? .001 : undefined, max:['width','height'].includes(key) ? 5779 : undefined });
+      const actions = group('Artboard actions');
+      for (const [label,iconId,action,key] of [['New artboard','plus',() => api.artboards.add(),'new'],['Delete artboard','trash',() => api.artboards.remove(),'delete']]) {
+        const b = iconButton(label,iconId,action,'draw-layer-action'); b.dataset.drawCb = `artboard-${key}`;
+        b.disabled = ro || (key === 'delete' && state.document.data.artboards.length === 1); actions.append(b);
+      }
+      return;
+    }
+    title(selectionTitle(ids));
+    // Fill, stroke and weight: the selection's first fill and stroke, or the paint for new objects.
+    const painted = state.document.getNode(api.paintIds()[0]);
+    const fill = painted ? paintHex(painted.appearance.fills[0]) : state.ui.fill, stroke = painted ? paintHex(painted.appearance.strokes[0]) : state.ui.stroke;
+    const weight = painted ? painted.appearance.strokes[0]?.width ?? 0 : state.ui.strokeWidth ?? 0;
+    const paint = group('Fill and stroke');
+    for (const [kind,label,value] of [['fill','Fill',fill],['stroke','Stroke',stroke]]) {
+      const wrap = document.createElement('label'); wrap.className = 'draw-cb-color'; wrap.dataset.tooltip = `${label}: ${value ?? 'none'}`;
+      const name = document.createElement('span'); name.textContent = label;
+      const picker = document.createElement('input'); picker.type = 'color'; picker.value = (value ?? '#ffffff').toLowerCase(); picker.classList.toggle('is-none',!value);
+      picker.dataset.drawField = `cb-${kind}`; picker.setAttribute('aria-label',`${label} color`); picker.disabled = ro;
+      picker.addEventListener('change',() => api.run(() => { api.paint(kind,picker.value.toUpperCase()); render(); }));
+      wrap.append(name,picker); paint.append(wrap);
+    }
+    num(paint,'Weight',weight,v => { api.paint('width',v); render(); },{ key:'cb-stroke-weight', min:0, step:.05, disabled: painted ? !stroke : false });
+    if (!ids.length) {
+      const doc = group('Document');
+      for (const [label,panel] of [['Artboards…','artboards'],['Swatches…','swatches']]) { const b = button(label,() => open(panel)); b.dataset.drawCb = panel; doc.append(b); }
+      return;
+    }
+    const opacity = state.document.getNode(ids[0])?.opacity ?? 1;
+    num(group('Opacity'),'Opacity',opacity*100,value => state.history.transaction('Opacity',() => { for (const id of api.selectedIds()) state.history.execute(updateNode(id,{opacity:value/100})); }),
+      { key:'cb-opacity', min:0, max:100, step:1, disabled: ro });
+    const box = api.bounds(), ref = state.ui.referencePoint ?? [.5,.5], disabled = !box || ro, point = box ? [box.x+box.width*ref[0],box.y+box.height*ref[1]] : [0,0];
+    const size = group('Position and size');
+    num(size,'X',point[0],v => api.transformPanel('x',v),{ key:'cb-x', disabled });
+    num(size,'Y',point[1],v => api.transformPanel('y',v),{ key:'cb-y', disabled });
+    num(size,'W',box?.width ?? 0,v => api.transformPanel('width',v),{ key:'cb-width', min:.001, disabled: disabled || box.width < 1e-9 });
+    num(size,'H',box?.height ?? 0,v => api.transformPanel('height',v),{ key:'cb-height', min:.001, disabled: disabled || box.height < 1e-9 });
+    const align = group('Align');
+    for (const [label,iconId,mode] of [['Horizontal align left','layout-align-left','left'],['Horizontal align center','layout-align-center','centerX'],['Horizontal align right','layout-align-right','right'],
+      ['Vertical align top','layout-align-top','top'],['Vertical align center','layout-align-middle','centerY'],['Vertical align bottom','layout-align-bottom','bottom']]) {
+      const b = iconButton(label,iconId,() => api.alignPanel('align',mode),'draw-layer-action'); b.dataset.drawCbAlign = mode; b.disabled = ro; align.append(b);
+    }
+    const shapes = ids.filter(id => state.document.getNode(id)?.type === 'shape' && state.document.isEditable(id));
+    const images = ids.filter(id => state.document.getNode(id)?.type === 'image');
+    const actions = group('Quick actions');
+    for (const [label,action,key,show] of [['Expand Shape',() => api.expandShapes(shapes),'expand-shape',shapes.length],['Use as Template',() => api.command('use-as-template'),'use-as-template',images.length],
+      ['Transform…',() => open('transform'),'transform',true]]) {
+      if (!show) continue; const b = button(label,action); b.dataset.drawCb = key; b.disabled = ro && key !== 'transform'; actions.append(b);
+    }
   }
   render(); return { render, open, close };
 }

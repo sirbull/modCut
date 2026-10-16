@@ -785,3 +785,63 @@ Brukeren ba om at Properties og Layers skal se ut og fungere ganske likt Illustr
 
 Verifisering: 158 Draw-enhetstester passerer. Objekt-E2E dekker Flip, fyllfarge og Align fra
 Properties, panelmenyen (Duplicate, Hide Others, Merge Selected) og dra av utvalg til et annet lag.
+
+## 2026-10-15: D1.12 Send til Cut v1
+
+- Ny ren modul `renderer/draw/io/cut-svg.mjs` (`artboardCutSvg`, `pathData`): ett artboard blir en
+  SVG i millimeter med bare `<path>`, i artboardets koordinater. Grupper og transformasjoner bakes inn,
+  former ekspanderes, strekbredden skaleres med transformen. Template-lag, skjulte objekter, bilder og
+  objekter utenfor artboardet utelates, med advarsler.
+- Dialogen `sendToCutDialog` (artboard, mål, plassering, live oppsummering). Inngang fra topplinjen,
+  Artboards-panelet, Properties (Quick Actions uten utvalg), File-menyen og kommandoen `send-to-cut`.
+- `app.js` (`sendDrawToCut`) åpner ny Cut-fane eller bruker denne fanens Cut, bytter til Cut, laster
+  SVG-en med `prepareSVG` og `bed.loadSVG`, synkroniserer Cut-lagene og viser en toast.
+- `bed.loadSVG` har fått et fjerde argument `{ placement, replace }`. Dette er den eneste endringen i
+  `bed.js`, som planen krever. Erstatning skjer etter `pushHistory`, så ett angresteg gjenoppretter
+  det gamle designet.
+
+Verifisering: 160 Draw-enhetstester passerer (to nye for cut-svg). Ny E2E
+`electron/e2e/draw-cut-workflows.mjs` (`--draw-cut`) dekker oppsummering i dialogen, ny fane med
+artboardet på bed-origo, mål i millimeter innen 0,01 mm, skalert strekbredde i en skalert gruppe,
+ett angresteg, Legg til og Erstatt i samme fane, sentrert plassering, angring av Erstatt, og at Send
+er deaktivert for et tomt artboard.
+
+Neste: D1.11 (Place med Template-valg), deretter D1.9 (kontrollinje).
+
+## 2026-10-15: D1.11 Place med Template
+
+- `importArtwork` har fått valget `template`. Da legges artworket på et nytt template-lag under det
+  aktive laget (som Illustrator gjør), i samme angresteg som importen. Ren funksjon
+  `templateLayerCommands` i `doc/layers.mjs` lager laget unlåst, fyller det og gjør det til template
+  til slutt, slik at flyttinger fortsatt er lovlige.
+- Import i Draw viser dialogen **Place** (`placeOptionsDialog`) når minst én fil er et bilde, med
+  avkrysningen Template. Valget huskes i økten.
+- Alt-slipp av bilder plasserer dem som template uten dialog.
+- **Use as Template** i Properties (Quick Actions) og kommandoen `use-as-template` flytter valgte bilder
+  til et nytt template-lag.
+- Avvik fra planteksten: planen sa «over aktivt lag»; Illustrator legger template-laget under, og det
+  gjør vi også. Kapittel 11.1 er rettet.
+
+Verifisering: to nye enhetstester i `layers.test.mjs`, ny E2E `electron/e2e/draw-place-workflows.mjs`
+(`--draw-place`): Place-dialogen, template-lag under aktivt lag med riktige Layer Options, ingenting
+valgt, ett angresteg, Alt-slipp, vanlig slipp og Use as Template med angring.
+
+Neste: D1.9 (kontrollinje), som avslutter fase 1.
+
+## 2026-10-15: D1.9 Kontrollinje (fase 1 ferdig)
+
+- Kontrollinjen bygges i `panels/ui.mjs` (`controlBarContent`) og rendres sammen med Properties, så den
+  følger utvalg, verktøy og angring. Felt-nøklene har prefikset `cb-` så de ikke kolliderer med
+  Properties.
+- Innhold: uten utvalg Fill/Stroke/Weight for nye objekter; med utvalg type, Fill, Stroke, Weight,
+  Opacity, X/Y/W/H, Align og hurtigknapper; med Artboard-verktøyet navn og mål for aktivt artboard.
+- **View > Control Bar** og kommandoen `toggle-control-bar`; valget lagres i `localStorage`
+  (`modcut.draw.controlBar`). Draw-rutenettet har fått en egen rad øverst.
+- Import av bilder viser nå Place-dialogen; E2E-hjelperen `submitPlaceDialog` brukes i testene som
+  importerer bilder.
+
+Verifisering: ny E2E `electron/e2e/draw-control-workflows.mjs` (`--draw-control`) dekker feltene uten
+utvalg, med utvalg (W, X, opacity, vekt, Align høyre mot artboard), artboardmodus, View-menyen med
+lagret valg og File > Send Artboard to Cut.
+
+Fase 1 er dermed ferdig. Neste: fase 2, se STATUS.md kapittel 4.

@@ -250,3 +250,37 @@ export function swatchOptionsDialog(swatch) {
     {key:'hex',label:'Color',type:'color',value:swatch.hex.toLowerCase()},
   ]}).then(values=>values&&{name:values.name,hex:values.hex.toUpperCase()});
 }
+const escapeHtml=text=>String(text).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+/**
+ * Send to Cut: artboard, target and placement, with a live summary of what will be sent.
+ * `summary(boardId)` returns { count, warnings } for the chosen artboard.
+ */
+export function sendToCutDialog({boards,boardId,summary}) {
+  const result=openDrawModal({title:'Send to Cut',submitLabel:'Send',className:'draw-send-dialog',fields:[
+    {key:'boardId',label:'Artboard',type:'select',value:boardId,options:boards.map((b,i)=>({value:b.id,label:escapeHtml(`${i+1}. ${b.name}`)}))},
+    {key:'target',label:'Target',type:'select',value:'new-tab',options:[{value:'new-tab',label:'New Cut tab'},{value:'replace',label:'Replace the design in this tab’s Cut'},{value:'add',label:'Add to this tab’s Cut'}]},
+    {key:'placement',label:'Placement',type:'select',value:'origin',options:[{value:'origin',label:'Artboard top left at the bed origin'},{value:'center',label:'Centered on the bed'}]},
+  ]});
+  const modal=document.querySelector('.draw-send-dialog'),form=modal.querySelector('form'),submit=form.querySelector('[type=submit]');
+  const info=document.createElement('div');info.className='draw-send-dialog__summary';info.setAttribute('role','status');info.dataset.drawSendSummary='';
+  form.querySelector('.modal-actions').before(info);
+  const update=()=>{
+    let s;try{s=summary(form.elements.boardId.value);}catch(error){s={count:0,warnings:[error.message]};}
+    info.replaceChildren();const p=document.createElement('p');info.append(p);
+    p.textContent=s.count?`${s.count} path${s.count===1?'':'s'} will be sent as centerline geometry. Colors become Cut layers.`:'Nothing on this artboard can be sent.';
+    if(s.warnings.length){const list=document.createElement('ul');for(const w of s.warnings){const li=document.createElement('li');li.textContent=w;list.append(li);}info.append(list);}
+    submit.disabled=!s.count;
+  };
+  form.elements.boardId.addEventListener('change',update);update();
+  return result;
+}
+/** Place options shown after choosing images, like the Template checkbox in Illustrator's Place dialog. */
+export function placeOptionsDialog({template=false,count=1}={}) {
+  const result=openDrawModal({title:'Place',submitLabel:'Place',className:'draw-place-dialog',fields:[
+    {key:'template',label:'Template',type:'checkbox',value:template},
+  ]});
+  const form=document.querySelector('.draw-place-dialog form'),note=document.createElement('p');note.className='draw-place-dialog__note';
+  note.textContent=`${count} file${count===1?'':'s'}. Template puts each file on its own locked layer below the active layer, dimmed to 50 %. Template layers are never exported or sent to Cut. Tip: hold Alt while dropping an image.`;
+  form.querySelector('.modal-actions').before(note);
+  return result;
+}

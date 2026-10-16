@@ -3,6 +3,7 @@ import { createNode } from './doc/schema.mjs';
 import { insertNode, updateDocument, updateArtboard } from './doc/commands.mjs';
 import { appearance } from './geometry.mjs';
 import { activeArtboard } from './doc/artboards.mjs';
+import { templateLayerCommands } from './doc/layers.mjs';
 
 async function imageFrom(source) {
   const image = new Image();
@@ -61,7 +62,8 @@ async function rasterize(vector) {
 }
 
 /** Prepare everything before committing one atomic command per imported file. */
-export async function importArtwork(scope, state, prepared, name, layerId, { fitArtboard = false, alive = () => true } = {}) {
+/** `template: true` places the artwork on a new template layer below the active layer (Place > Template). */
+export async function importArtwork(scope, state, prepared, name, layerId, { fitArtboard = false, template = false, alive = () => true } = {}) {
   if (state.document.readOnly) throw new Error('This Draw document is read-only. Create a new document to import artwork.');
   const board = activeArtboard(state), offset = fitArtboard ? [board.x,board.y] : [board.x+10,board.y+10];
   const nodes = [], assets = {};
@@ -114,11 +116,12 @@ export async function importArtwork(scope, state, prepared, name, layerId, { fit
   if (!nodes.length) throw new Error('No supported artwork found.');
   if (!alive()) throw new Error('The target Draw document was closed or replaced.');
   const layer = state.document.getNode(layerId);
-  if (!layer || layer.type !== 'layer' || !state.document.isEditable(layerId)) throw new Error('Select a visible, unlocked layer before importing.');
+  if (!template && (!layer || layer.type !== 'layer' || !state.document.isEditable(layerId))) throw new Error('Select a visible, unlocked layer before importing.');
   state.history.transaction(`Import ${name}`, () => {
     if (fitArtboard && dimensions?.width > 0 && dimensions?.height > 0) state.history.execute(updateArtboard(board.id,dimensions));
     if (Object.keys(assets).length) state.history.execute(updateDocument({ assets: { ...state.document.data.assets, ...assets } }));
-    for (const node of nodes) state.history.execute(insertNode(layerId,node));
+    if (template) templateLayerCommands(state.document, layer ? layerId : state.document.data.layers.at(-1).id, { name, nodes }).commands.forEach(command => state.history.execute(command));
+    else for (const node of nodes) state.history.execute(insertNode(layerId,node));
   });
   return { ids: nodes.map(node => node.id), warning };
 }

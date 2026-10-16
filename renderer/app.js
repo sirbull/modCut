@@ -2,7 +2,7 @@ import { createKeymap, shortcutLabel } from "./draw/keymap.mjs";
 import { createDrawWorkspace } from "./draw/index.mjs";
 import { PROJECT_VERSION, validateProject, createProjectDraw } from "./draw/io/project.mjs";
 import { newDrawDocument } from "./draw/doc/artboards.mjs";
-import { newDocumentDialog, saveTemplateDialog } from "./draw/ui/dialogs.mjs";
+import { newDocumentDialog, placeOptionsDialog, saveTemplateDialog } from "./draw/ui/dialogs.mjs";
 import { saveTemplate, setupFromDocument, loadStoredList, storeList, TEMPLATES_KEY } from "./draw/doc/presets.mjs";
 import { createBed } from "./bed.js";
 import { prepareSVG } from "./svgimport.js";
@@ -322,7 +322,7 @@ function setWorkspace(mode) {
     tab.drawRoot.className = "draw-project";
     tab.drawRoot.dataset.tabId = tab.id;
     $("drawWorkspace").append(tab.drawRoot);
-    tab.draw = createDrawWorkspace(tab.drawRoot, { state: drawState, onError: message => toast(message,"err"), onImport: () => importDrawFiles(), getPreferences:()=>preferences, statusHost: $("drawStatus") });
+    tab.draw = createDrawWorkspace(tab.drawRoot, { state: drawState, onError: message => toast(message,"err"), onImport: () => importDrawFiles(), onSendToCut: sendDrawToCut, getPreferences:()=>preferences, statusHost: $("drawStatus") });
   }
   drawKeymap.reset();
   tab.workspace = mode;
@@ -356,6 +356,22 @@ function setWorkspace(mode) {
 $("workspaceToggle").addEventListener("click", () => {
   setWorkspace(activeTab()?.workspace === "draw" ? "cut" : "draw");
 });
+
+// Draw's Send to Cut: a millimetre SVG of one artboard enters Cut through the normal SVG import path.
+async function sendDrawToCut({ svg, name, count, warnings, target, placement }) {
+  const prepared = prepareSVG(svg);
+  if (target === "new-tab") newDocument("cut");
+  setWorkspace("cut");
+  bed.finishDrawing();
+  const wasEmpty = !bed.getDesign();
+  bed.loadSVG(prepared.node, prepared.widthMm, prepared.heightMm, prepared.viewBox, { placement, replace: target === "replace" });
+  if (wasEmpty || target !== "add") { $("filename").value = name; setFileLabel(name); }
+  syncColorsAndLayers();
+  markDirty();
+  toast(`${name} sent to Cut (${count} path${count === 1 ? "" : "s"}). Undo in Cut removes the whole send.`, "ok");
+  if (warnings.length) toast(warnings.join(" "), "info");
+}
+$("sendToCut").addEventListener("click", () => activeTab()?.draw?.sendToCut());
 
 function activeTab() { return documentTabs.find((tab) => tab.id === activeTabId) || null; }
 function setFileLabel(name) {
@@ -862,8 +878,8 @@ async function placeArtwork(prepared) {
   [...$("mapmode").children].forEach((c) => c.classList.toggle("on", c.dataset.mode === "color"));
 }
 
-async function addArtworkFiles(files) {
-  if (document.body.dataset.workspace === "draw") return addDrawArtworkFiles(files);
+async function addArtworkFiles(files, drawOptions = {}) {
+  if (document.body.dataset.workspace === "draw") return addDrawArtworkFiles(files, activeTab(), drawOptions);
   bed.finishDrawing();
   const wasEmpty = !bed.getDesign();
   let added = 0;
@@ -959,7 +975,7 @@ async function prepareDrawArtwork(file) {
   return prepareArtwork(file);
 }
 
-async function addDrawArtworkFiles(files, tab = activeTab()) {
+async function addDrawArtworkFiles(files, tab = activeTab(), { template = false } = {}) {
   if (!tab?.draw || tab.drawState.document.readOnly) {
     toast("Create an editable Draw document before importing artwork.","info"); return 0;
   }
@@ -976,7 +992,7 @@ async function addDrawArtworkFiles(files, tab = activeTab()) {
       const prepared = await prepareDrawArtwork(file);
       if (!prepared) throw new Error("This format cannot be imported into Draw yet.");
       if (!documentTabs.includes(tab) || tab.draw !== workspace) throw new Error("The target Draw document was closed or replaced.");
-      const result = await workspace.import(prepared,file.name);
+      const result = await workspace.import(prepared,file.name,{template});
       if (result.warning) toast(result.warning,"info");
       added++;
     } catch (error) { toast(`Could not import ${file.name}: ${error.message}`,"err"); }
@@ -984,13 +1000,22 @@ async function addDrawArtworkFiles(files, tab = activeTab()) {
   return added;
 }
 
+// Place remembers the Template choice for the session, as Illustrator's Place dialog does.
+let placeAsTemplate = false;
+const isPlacedImage = (file) => [...IMAGE_FORMATS, ...TIFF_FORMATS].includes(file?.ext);
 async function importDrawFiles() {
   const tab = activeTab();
   if (tab?.drawState?.document.readOnly) { toast("This Draw document is read-only.","info"); return; }
   try {
     const files = await window.modcut.openImport({multiple:true,allowDocuments:false,intent:"draw-import"});
     if (!files?.length) return;
-    const added = await addDrawArtworkFiles(files,tab);
+    let template = false;
+    if (files.some(isPlacedImage)) {
+      const options = await placeOptionsDialog({ template: placeAsTemplate, count: files.length });
+      if (!options) return;
+      template = placeAsTemplate = options.template;
+    }
+    const added = await addDrawArtworkFiles(files,tab,{template});
     if (added) toast(`Imported ${added} file${added === 1 ? "" : "s"} into Draw.`,"ok");
   } catch (error) { toast("Import failed: "+error.message,"err"); }
 }
@@ -1074,7 +1099,8 @@ async function droppedFilePayload(file) {
   return null;
 }
 
-async function handleDroppedFiles(fileList) {
+// In Draw, dropping images with Alt held places them as templates.
+async function handleDroppedFiles(fileList, { altKey = false } = {}) {
   const files = [...fileList];
   if (!files.length) return;
   const targetTabId = activeTabId;
@@ -1107,7 +1133,7 @@ async function handleDroppedFiles(fileList) {
   let added = 0;
   if (artwork.length) {
     if (targetTabId && activeTabId !== targetTabId) switchDocumentTab(targetTabId);
-    added = await addArtworkFiles(artwork);
+    added = await addArtworkFiles(artwork, { template: altKey && artwork.every(isPlacedImage) });
   }
   if (opened) toast(`Opened ${opened} project${opened === 1 ? "" : "s"} in new tab${opened === 1 ? "" : "s"}.`, "ok");
   if (added) toast(`Added ${added} file${added === 1 ? "" : "s"} to the active project.`, "ok");
@@ -1142,7 +1168,7 @@ function initFileDrop() {
     event.preventDefault();
     const files = event.dataTransfer.files;
     hide();
-    void handleDroppedFiles(files);
+    void handleDroppedFiles(files, { altKey: event.altKey });
   });
 }
 

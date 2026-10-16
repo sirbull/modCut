@@ -5,7 +5,7 @@ import { DrawDocument } from '../doc/document.mjs';
 import { History } from '../doc/history.mjs';
 import { updateNode } from '../doc/commands.mjs';
 import { LAYER_COLORS, ROOT_CONTEXT, collectCommands, deleteLayerCommands, dropTarget, isOutputNode, layerContext, layerOptionsPatch,
-  moveCommand, newLayer, nodeContext, releaseCommands, soloUpdates, NAMED_LAYER_COLORS, layerColorName, filterLayerTree, deleteRowCommands } from '../doc/layers.mjs';
+  moveCommand, newLayer, nodeContext, releaseCommands, soloUpdates, NAMED_LAYER_COLORS, layerColorName, filterLayerTree, deleteRowCommands, templateLayerCommands, TEMPLATE_LAYER } from '../doc/layers.mjs';
 
 function setup() {
   const a = createNode('path', { id: 'a' }), b = createNode('path', { id: 'b' }), c = createNode('path', { id: 'c' });
@@ -173,4 +173,27 @@ test('Layers panel menu: duplicate, merge, flatten, hide/lock others and move se
   run(history, 'Move', moveToLayerCommands(doc, ['a', 'c'], 'top'));
   assert.deepEqual(doc.getNode('top').children.map((n) => n.id), ['image', 'a', 'c']);
   assert.deepEqual(moveToLayerCommands(doc, ['image'], 'top'), [], 'already there');
+});
+
+test('Place with Template puts the image on a new locked, dimmed template layer below the active layer', () => {
+  const { doc, history } = setup();
+  const placed = createNode('image', { id: 'placed', assetId: 'asset' });
+  const { layer, commands } = templateLayerCommands(doc, 'c', { name: 'photo.jpg', nodes: [placed] });
+  run(history, 'Place', commands);
+  assert.deepEqual(doc.data.layers.map((l) => l.id), [layer.id, 'bottom', 'top'], 'below the top-level layer that holds the active sublayer');
+  const made = doc.getNode(layer.id);
+  assert.equal(made.name, 'Template photo.jpg'); assert.deepEqual(made.children.map((n) => n.id), ['placed']);
+  for (const [key, value] of Object.entries(TEMPLATE_LAYER)) assert.equal(made[key], value, key);
+  assert.equal(isOutputNode(doc, 'placed'), false, 'template artwork is never exported or sent to Cut');
+  validateDocument(doc.data);
+  history.undo(); assert.deepEqual(doc.data.layers.map((l) => l.id), ['bottom', 'top'], 'one undo step');
+});
+
+test('Use as Template moves selected images to a new template layer', () => {
+  const { doc, history } = setup();
+  const { layer, commands } = templateLayerCommands(doc, 'top', { name: 'image', moveIds: ['image', 'image'] });
+  run(history, 'Use as Template', commands);
+  assert.deepEqual(doc.data.layers.map((l) => l.id), ['bottom', layer.id, 'top']);
+  assert.deepEqual(doc.getNode(layer.id).children.map((n) => n.id), ['image']); assert.deepEqual(doc.getNode('top').children, []);
+  assert.equal(doc.getNode(layer.id).locked, true);
 });

@@ -203,3 +203,20 @@ export function moveToLayerCommands(doc, ids, layerId) {
   const moving = [...new Set(ids)].filter((id) => doc.getNode(id) && doc.getNode(id).type !== 'layer' && doc.locate(id).parentId !== layerId).sort((a, b) => order.get(a) - order.get(b));
   return moving.map((id) => moveNode(id, layerId));
 }
+
+/** Layer Options for a template layer as Place with Template creates it: locked, dimmed 50 %, never printed. */
+export const TEMPLATE_LAYER = Object.freeze({ template: true, locked: true, printable: false, preview: true, dimImages: true, dimImagesTo: 50 });
+/**
+ * A new template layer directly below the top-level layer that holds `layerId` (as Illustrator's
+ * Place > Template does), filled with new `nodes` or with existing artwork moved from `moveIds`.
+ * The layer is inserted unlocked and becomes a template last, so the moves stay editable.
+ */
+export function templateLayerCommands(doc, layerId, { name = 'Image', nodes = [], moveIds = [] } = {}) {
+  const top = [...doc.ancestors(layerId)].at(-1) ?? doc.getNode(layerId);
+  const index = Math.max(0, doc.data.layers.findIndex((l) => l.id === top?.id));
+  const layer = newLayer(doc, { name: `Template ${name}` });
+  const order = new Map(doc.descendants(null).map((n, i) => [n.id, i]));
+  const moving = [...new Set(moveIds)].filter((id) => doc.getNode(id) && doc.getNode(id).type !== 'layer').sort((a, b) => order.get(a) - order.get(b));
+  return { layer, commands: [insertNode(null, layer, index), ...nodes.map((node) => insertNode(layer.id, node)),
+    ...moving.map((id) => moveNode(id, layer.id)), updateNode(layer.id, { ...TEMPLATE_LAYER }, { label: 'Template' })] };
+}

@@ -9,7 +9,7 @@ Layers, dragbar delelinje, panelgrupper som flyout med faner) trinn 2 (scrubby l
 (Layers-rader, søk, bunnlinje, thumbnails og Layer Options) og trinn 4 (Swatches og Recent Colors)
 er ferdige. Trinn 5 (Transparency) og Pathfinder-delen av trinn 7 er også ferdige. Appearance (resten av trinn 7) og trinn 8 (Properties) er også ferdige,
 så hele høyrepanel-planen er gjennomført. D1.10 (Group, Arrange, Lock/Hide, utklippstavle og
-isolasjonsmodus) er også ferdig. Neste i hovedplanen: D1.9, D1.11 og D1.12. Autolagringstesten `project-workflows.mjs:113` har
+isolasjonsmodus), D1.11 (Place med Template, STATUS.md 2.3) D1.12 (Send til Cut v1, STATUS.md 2.2) og D1.9 (kontrollinje, STATUS.md 2.4) er også ferdige. Fase 1 er ferdig; neste er fase 2 i rekkefølgen i STATUS.md kapittel 4. Autolagringstesten `project-workflows.mjs:113` har
 vært ustabil på Linux, se arbeidsloggen.
 D1.8 (Transform, Align, Color, Stroke, Fill/Stroke-boks og Properties) ble fullført på
 `feat/vector-draw` og er slått inn her; panelene ligger nå i panelgruppene.
@@ -17,8 +17,8 @@ D1.8 (Transform, Align, Color, Stroke, Fill/Stroke-boks og Properties) ble fullf
 
 ## Status og neste oppgave
 
-Fase 0 og D1.1–D1.8 er fullført. **Neste oppgave er D1.9: kontrollinje og statuslinje.**
-Fase 1 er ikke ferdig (D1.9–D1.12 gjenstår). Ikke merk fasen ferdig før Send til Cut v1 virker.
+Fase 0 og fase 1 er fullført. **Neste oppgave er fase 2, se STATUS.md kapittel 4** (først SVG- og PNG-eksport).
+E2E-flagg for de nye delene: `--draw-cut`, `--draw-place`, `--draw-control`.
 
 Før du starter D1.9: commit `d337a8f` (en annen agent) flyttet allerede visningskontrollene
 (posisjon, artboard, zoom, Outline, Fit) til appens nederste statuslinje (`#drawStatus`) og

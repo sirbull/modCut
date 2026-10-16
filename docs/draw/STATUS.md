@@ -4,15 +4,15 @@
 > Detaljer: [hovedplanen](../DRAW_WORKSPACE.md) (spesifikasjon og byggeplan),
 > [RIGHT_PANELS.md](RIGHT_PANELS.md) (høyresiden), [WORK_LOG.md](WORK_LOG.md) (hva som er gjort, dag for dag)
 > og [HANDOFF.md](HANDOFF.md) (overlevering til neste agent).
-> Sist oppdatert: 2026-10-15. Arbeidsgren: `claude/draw-properties-layers-panels`.
+> Sist oppdatert: 2026-10-15 (fase 1 ferdig). Arbeidsgren: `claude/draw-properties-layers-panels`.
 
 ## 1. Kort oppsummert
 
 Draw kan i dag brukes til å tegne enkle logoer og former: artboards, utvalg, Pen og ankerredigering,
 grunnformer med live hjørner, transformasjoner, lag med template-lag, farger, swatches, strek,
 gjennomsiktighet, flere fyll og streker (Appearance), Pathfinder, gruppering, rekkefølge, låsing,
-utklippstavle og isolasjonsmodus. Det som mangler for å kunne **kutte** det man tegner, er
-**Send til Cut** (D1.12). Tekst, eksport, Image Trace og effekter er ikke bygget.
+utklippstavle, isolasjonsmodus, kontrollinje og Place med Template. Et artboard kan sendes til Cut
+med **Send to Cut** (D1.12 v1), så det man tegner kan kuttes. Fase 1 er ferdig. Tekst, eksport, Image Trace og effekter er ikke bygget.
 
 ## 2. Høyresiden sammenlignet med Illustrator
 
@@ -46,16 +46,67 @@ utklippstavle og isolasjonsmodus. Det som mangler for å kunne **kutte** det man
   Regelen fra D1.8 om at Properties ikke skal gjenta panelkontroller er erstattet av brukerens ønske om
   Illustrator-likhet. Layers vises fortsatt bare ett sted.
 
+### 2.2 Send til Cut v1 (D1.12, 2026-10-15)
+
+Hva som virker:
+
+* Knappen **Send to Cut** i topplinjen (bare i Draw), i Artboards-panelet, i Properties uten utvalg
+  (Quick Actions), i File-menyen (**Send Artboard to Cut…**) og som kommandoen `send-to-cut`.
+* Dialogen velger artboard, mål (**ny Cut-fane** som standard, **erstatt** designet i denne fanens Cut,
+  eller **legg til**) og plassering (artboardets øvre venstre hjørne på bed-origo som standard, eller
+  sentrert). Den viser hvor mange paths som sendes og advarsler før noe skjer; Send er deaktivert når
+  artboardet er tomt.
+* `renderer/draw/io/cut-svg.mjs` lager en kanonisk SVG i millimeter: bare `<path>` med hex-farger,
+  artboard-lokale koordinater, transformasjoner og grupper bakt inn, former ekspandert, strekbredde
+  skalert med transformen (unntatt når strokeScaling er av). Template-lag, skjulte og ikke-utskrivbare
+  objekter og objekter helt utenfor artboardet tas ikke med.
+* Cut tar imot via den vanlige SVG-importen (`prepareSVG` og `bed.loadSVG`). `loadSVG` har fått valgene
+  `placement: "origin"` og `replace: true`; erstatning og innsetting er ett angresteg i Cut. Farger blir
+  Cut-lag som ved vanlig import (strekfargen bestemmer laget).
+* Advarsler: bilder sendes ikke ennå, objekter som stikker utenfor artboardet sendes hele, bare første
+  fyll og strek sendes når en figur har flere, åpne paths med fyll.
+
+Gjenstår til Send til Cut v2 (D2.10): bilder som rastergravering, tekst til outlines (etter D2.1),
+Outline Stroke som valg, klipping til artboard, flere artboards samtidig, validering av små segmenter
+og duplikater, `cutLinks` med **Oppdater i Cut**.
+
+### 2.3 Place med Template (D1.11, 2026-10-15)
+
+* **Import** i Draw (File > Import, Mod+Shift+P) viser dialogen **Place** når minst én fil er et bilde.
+  Avkrysningen **Template** huskes i økten, som i Illustrator.
+* Med Template havner hver fil på et eget lag **under** aktivt lag, kalt «Template filnavn»: låst,
+  dimmet til 50 %, ikke utskrivbart. Tegning fortsetter på det aktive laget, og ingenting velges.
+  Hele plasseringen er ett angresteg.
+* **Alt-slipp** av bilder fra Finder/Explorer gjør det samme uten dialog.
+* **Use as Template** (Quick Actions i Properties når et bilde er valgt, og kommandoen
+  `use-as-template`) flytter valgte bilder til et nytt template-lag.
+* Template-lag kommer aldri med i Send til Cut (og senere eksport).
+* Ren funksjon: `templateLayerCommands` i `doc/layers.mjs`.
+
+Gjenstår fra kapittel 11.1: høyreklikkmeny på bilder (opacity, lås, Image Trace, Crop, Embed/Unlink,
+Show in Folder), Crop Image, lenkede bilder og Links-panelet, liming av bilder fra utklippstavlen.
+
+### 2.4 Kontrollinje (D1.9, 2026-10-15)
+
+* En rad over tegneflaten, som Illustrators Control-panel. Uten utvalg: Fill, Stroke og Weight for nye
+  objekter, og snarveier til Artboards og Swatches. Med utvalg: objekttype, Fill, Stroke, Weight,
+  Opacity, X, Y, W, H (fra referansepunktet), seks Align-knapper (ett objekt justeres mot artboardet),
+  Expand Shape for live former, Use as Template for bilder og Transform…. Med Artboard-verktøyet:
+  navn, X, Y, W, H og knapper for nytt og slett artboard.
+* Alle felt har scrubby labels og gir ett angresteg. Ingen funksjon finnes bare her.
+* **View > Control Bar** (og kommandoen `toggle-control-bar`) skjuler og viser den; valget huskes
+  per bruker. Statuslinjen nederst (posisjon, artboard, zoom, Outline, Fit) fantes fra før.
+
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
 | Oppgave | Status |
 |---|---|
 | Fase 0 (D0.1 til D0.6) | Ferdig |
 | D1.1 til D1.8 | Ferdig |
-| D1.9 Kontrollinje og statuslinje | Gjenstår (statuslinjen finnes delvis) |
+| D1.9 Kontrollinje og statuslinje | Ferdig (se 2.4) |
 | D1.10 Group, Arrange, Clipboard, isolasjon | Ferdig |
-| D1.11 Place bitmap og template-lag | Delvis: template-lag og bildeimport finnes; Place-dialog og Template-valg gjenstår |
-| D1.12 Send til Cut v1 | **Gjenstår, neste store oppgave** |
+| D1.11 Place bitmap og template-lag | Ferdig (se 2.3); høyreklikkmeny, Crop Image og Links gjenstår |
+| D1.12 Send til Cut v1 | Ferdig (se 2.2) |
 | D2.1 Tekst | Gjenstår |
 | D2.2 Pathfinder, Compound, Clipping | Pathfinder ferdig; compound paths og clipping masks gjenstår |
 | D2.3 Gradienter og Swatches | Swatches ferdig (solide); gradienter og globale swatches gjenstår |
@@ -72,10 +123,15 @@ utklippstavle og isolasjonsmodus. Det som mangler for å kunne **kutte** det man
 
 ## 4. Rekkefølge videre
 
-1. **D1.12 Send til Cut v1**: fra artboard til Cut med én knapp.
-2. D1.11 Place bitmap med Template-valg.
-3. D1.9 Kontrollinje.
-4. Deretter fase 2: tekst, SVG/PDF/PNG-eksport, path-kommandoer, compound og clipping.
+Fase 1 er ferdig. Neste er fase 2, i denne rekkefølgen:
+
+1. **D2.5 SVG-eksport og D2.7 PNG/JPG-eksport med gjennomsiktighet** (bruker samme resolve-steg som
+   Send til Cut).
+2. D2.1 Tekst (Type-verktøy, Character/Paragraph, Create Outlines).
+3. D2.2 Compound paths og clipping masks (Make Clipping Mask i Layers-menyen venter på dette).
+4. D2.4 Path-kommandoer (Join, Average, Offset Path, Simplify).
+5. D2.6 PDF-eksport, D2.3 gradienter, D2.8 flere verktøy, D2.9 History/Info/kommandosøk.
+6. D2.10 Send til Cut v2.
 
 ## 5. Kjente begrensninger og risiko
 

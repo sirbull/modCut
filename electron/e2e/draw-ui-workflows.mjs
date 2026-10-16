@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { wait, inputHelpers } from './cdp.mjs';
 import { runDrawRenderWorkflows } from './draw-render-workflows.mjs';
-import { submitNewDrawDialog } from './draw-test-helpers.mjs';
+import { submitNewDrawDialog, submitPlaceDialog } from './draw-test-helpers.mjs';
 
 const active = `(await import('./draw/index.mjs')).getDrawWorkspace(document.querySelector('.draw-project[data-tab-id="'+document.querySelector('.doc-tab.is-active').dataset.tabId+'"]'))`;
 const model = evaluate => evaluate(`(async()=>(${active}.state.snapshot()))()`);
@@ -39,6 +39,7 @@ export async function runDrawUIWorkflows(client) {
   const png = await evaluate("(()=>{const c=document.createElement('canvas');c.width=24;c.height=12;const x=c.getContext('2d');x.fillStyle='#ff0000';x.fillRect(0,0,24,12);return c.toDataURL('image/png')})()");
   await evaluate(`window.modcut.setE2EImportResult(${JSON.stringify([{name:'colored-image.png',ext:'png',dataUrl:png}])})`);
   await evaluate("document.querySelector('#add').click()");
+  await submitPlaceDialog(evaluate);
   await until(async () => (await model(evaluate)).layers[0].children.length === 3,'Raster was not imported into Draw');
   data = await model(evaluate); const image = data.layers[0].children[2];
   assert.equal(image.type,'image'); assert.ok(data.assets[image.assetId].data);
