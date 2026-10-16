@@ -1023,3 +1023,24 @@ delen legger bare skriverne, uten UI.
 
 Verifisering: 8 nye enhetstester; PDF-en leses tilbake med pdf.js (sider, størrelse, lag,
 vedlegg, metadata).
+
+## 2026-10-16: Eksport del 2 — File › Export › Export As med PDF-dialog
+
+- Export er fjernet fra Properties og Artboards-panelet; **File › Export › Export As…**
+  (Ctrl+Shift+Alt+S) åpner systemets lagringsdialog med alle formater som filtyper (PDF, SVG,
+  SVG Compressed, EPS, DXF, PNG, JPEG), deretter formatets valg. Flere artboards gir én PDF med
+  sider, ellers én fil per artboard («Navn-Artboard.ext»).
+- **Save PDF** som Illustrators Adobe PDF-dialog: forhåndsinnstilling (Default, High Quality Print,
+  Press Quality, Smallest File Size, egne lagret i localStorage), kompatibilitet (PDF 1.4–1.7),
+  «(Modified)» når noe endres, seksjonene General (sider, bevar redigering, miniatyrer, vis etter
+  lagring, PDF-lag), Compression (nedsampling, ZIP/JPEG, kvalitet, komprimer linjekunst), Marks and
+  Bleeds og Summary med advarsler. Security/Output/Advanced er utelatt med vilje.
+- **Bevar redigering:** PDF-en bærer Draw-dokumentet som vedlegg; Open i Draw gjenkjenner det og
+  åpner et redigerbart dokument (`pdfDrawDocument` i `pdfimport.js`).
+- Hovedprosessen (`electron/export-files.mjs`) skriver bare til valgt sti (og «-Artboard»-søsken)
+  eller inni valgt mappe. E2E bruker `setE2EExportPath` i stedet for dialogen.
+
+Verifisering: 4 nye enhetstester (`export-plan.test.mjs`); `--draw-export` dekker PDF-dialogen,
+gjenåpning som redigerbart dokument, DXF og PNG; eksportert PDF og dialogen er kontrollert visuelt.
+`--draw`, `--draw-control/objects/cut/place/text/panels` passerer. Fire enhetstester i
+Send to Cut/tekst feiler i arbeidstreet, men de hører til den andre øktens uferdige endringer.

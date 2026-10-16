@@ -424,3 +424,49 @@ body[data-workspace="draw"] #sendToCut { display: inline-flex; }
 .draw-text-dialog form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
 .draw-text-dialog .field { margin: 0; min-width: 0; }
 .draw-text-dialog .field:has([name=text]), .draw-text-dialog .field:has([name=fontFamily]), .draw-text-dialog [role=alert], .draw-text-dialog .modal-actions { grid-column: 1 / -1; }
+
+/* Export As options and Save PDF (File > Export). */
+.modal.draw-export-dialog { width: min(520px, 94vw); }
+.modal.draw-pdf-dialog { width: min(880px, 94vw); max-height: 92vh; }
+.draw-export-body { display: grid; gap: 12px; }
+.draw-pdf-page[hidden], .draw-pdf-preset-name[hidden] { display: none; }
+.draw-export-field { margin: 0; }
+.draw-export-field--inline { display: flex; align-items: center; gap: 8px; }
+.draw-export-field--inline > span { text-transform: none; letter-spacing: 0; font-size: var(--fs-sm); color: var(--text); }
+.draw-export-unit { margin-left: 6px; color: var(--text-muted); font-size: var(--fs-sm); }
+.draw-export-field:has(.draw-export-unit) { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; column-gap: 0; }
+.draw-export-field:has(.draw-export-unit) > span:first-child { grid-column: 1 / -1; }
+.draw-export-range, .draw-pdf-options, .draw-pdf-group { margin: 0; padding: 10px 12px 12px; border: 1px solid var(--border); border-radius: 6px; }
+.draw-export-range { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.draw-export-range legend, .draw-pdf-options legend, .draw-pdf-group legend { padding: 0 4px; font-size: var(--fs-xs); color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+.draw-export-range__text { width: 120px; }
+.draw-export-note { margin: 0; color: var(--text-muted); font-size: var(--fs-sm); }
+.draw-export-error { min-height: 1em; margin: 8px 0 0; color: var(--danger); font-size: var(--fs-sm); }
+.draw-pdf-top { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 220px); align-items: end; gap: 10px; }
+.draw-pdf-save-preset { margin-bottom: 4px; }
+.draw-pdf-preset-name { grid-column: 1 / -1; display: flex; gap: 8px; }
+.draw-pdf-split { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 14px; min-height: 380px; }
+.draw-pdf-nav { display: flex; flex-direction: column; gap: 2px; padding: 4px; border: 1px solid var(--border); border-radius: 6px; align-self: start; }
+.draw-pdf-tab { padding: 7px 10px; border: 0; border-radius: 4px; background: transparent; color: var(--text); text-align: left; font: inherit; cursor: pointer; }
+.draw-pdf-tab:hover { background: var(--surface-2); }
+.draw-pdf-tab[aria-selected="true"] { background: var(--brand-fill); color: var(--on-brand); }
+.draw-pdf-pages { min-width: 0; }
+.draw-pdf-page { display: grid; gap: 12px; align-content: start; }
+.draw-pdf-heading { margin: 0; padding-bottom: 6px; border-bottom: 1px solid var(--border); font-size: var(--fs-base); }
+.draw-pdf-description { resize: none; color: var(--text-muted); font: inherit; font-size: var(--fs-sm); }
+.draw-pdf-options { display: grid; gap: 8px; }
+.draw-pdf-group { display: grid; gap: 10px; }
+.draw-pdf-row { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr); gap: 10px; align-items: end; }
+.draw-pdf-marks { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.draw-pdf-marks > div { display: grid; gap: 8px; align-content: start; }
+.draw-pdf-bleed { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; }
+.draw-pdf-link { justify-self: start; }
+.draw-pdf-link[aria-pressed="true"] { color: var(--brand-deep); box-shadow: inset 0 0 0 1px var(--brand-deep); }
+.draw-pdf-summary__list, .draw-pdf-summary__warnings { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: var(--fs-sm); }
+.draw-pdf-summary__warnings { color: var(--danger); }
+.draw-pdf-summary h4 { margin: 12px 0 6px; font-size: var(--fs-sm); }
+.draw-export-field:has(:disabled) { opacity: .55; }
+@media (max-width: 640px) {
+  .draw-pdf-top, .draw-pdf-split, .draw-pdf-row, .draw-pdf-marks { grid-template-columns: 1fr; }
+  .draw-pdf-nav { flex-direction: row; flex-wrap: wrap; }
+}

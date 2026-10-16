@@ -22,7 +22,7 @@ const paint = (color) => color && color.type !== 'gradient' && color.alpha !== 0
  * @param group detached Paper group (top-level children are layers when they carry a node id)
  * @param board {x,y,width,height}
  * @param options.layerName id → layer name, for top-level groups
- * @param options.image raster → {width,height,rgba} pixels; images are skipped without it
+ * @param options.image (raster, unit-square matrix in mm) → {width,height,rgba,jpeg?}; images are skipped without it
  * @param options.viewZoom view zoom that non-scaling strokes were multiplied by
  */
 export function artworkModel(group, board, { layerName = () => null, image = null, viewZoom = 1 } = {}) {
@@ -54,11 +54,9 @@ export function artworkModel(group, board, { layerName = () => null, image = nul
     }
     if (item.className === 'Raster') {
       if (!image) { warnings.add('Images are not included in this format.'); return null; }
-      const pixels = image(item);
-      if (!pixels) return null;
       // Paper centres a raster on its position; the unit square maps to its top-left-origin bounds.
-      const w = item.width, h = item.height;
-      return { type: 'image', ...base, matrix: multiply(m, [w, 0, 0, h, -w / 2, -h / 2]), ...pixels };
+      const w = item.width, h = item.height, matrix = multiply(m, [w, 0, 0, h, -w / 2, -h / 2]), pixels = image(item, matrix);
+      return pixels ? { type: 'image', ...base, matrix, ...pixels } : null;
     }
     if (item.className === 'PointText') { warnings.add('Text without outlines is not included. Use Create Outlines or an installed font.'); return null; }
     return null;

@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { wait } from './cdp.mjs';
 import { activeDraw as active, submitNewDrawDialog, rememberTabs, enterDraw } from './draw-test-helpers.mjs';
 
@@ -40,17 +43,60 @@ export async function runDrawExportWorkflows(client) {
   assert.equal(jpg.mime, 'image/jpeg'); assert.ok(jpg.empty.slice(0, 3).every(v => v > 245), `JPEG has a white background: ${jpg.empty}`);
   assert.equal(await evaluate(`(async()=>(${active}.renderer.outline))()`), true, 'Export leaves Outline view as it was');
 
-  // Export As from the File menu: format choice, the saved file and its name.
-  assert.equal(await evaluate("window.modcut.clickE2EMenuItem('File','Export As…')"), true);
-  await until("!!document.querySelector('.draw-export-dialog form')", 'Export As dialog');
-  assert.equal(await evaluate("document.querySelector('.draw-export-dialog form').elements.ppi.closest('label').hidden"), false);
-  await evaluate("(()=>{const f=document.querySelector('.draw-export-dialog form');f.elements.format.value='jpg';f.elements.format.dispatchEvent(new Event('change',{bubbles:true}));})()");
-  assert.equal(await evaluate("document.querySelector('.draw-export-dialog form').elements.background.value"), 'white', 'JPEG cannot be transparent');
-  await evaluate("(()=>{const f=document.querySelector('.draw-export-dialog form');f.elements.format.value='svg';f.elements.format.dispatchEvent(new Event('change',{bubbles:true}));f.requestSubmit();})()");
-  let exports = [];
-  for (let i = 0; i < 100 && !exports.length; i++) { exports = await evaluate('window.modcut.getE2EExports()'); if (!exports.length) await wait(50); }
-  assert.equal(exports.length, 1); assert.equal(exports[0].name, 'Export proof.svg'); assert.match(exports[0].text, /width="120mm"/);
+  // Export lives in File > Export; the panels no longer offer it.
+  assert.equal(await evaluate("[...document.querySelectorAll('.draw-shell button')].some(b=>/^Export/.test(b.textContent.trim()))"), false, 'Export is not in the panels');
+  // The save dialog chooses the file and its type; then that type's options; then the file is written.
+  const exportAs = async (file, options) => {
+    await evaluate(`window.modcut.setE2EExportPath(${JSON.stringify(file)})`);
+    assert.equal(await evaluate("window.modcut.clickE2EMenuItem('File','Export As…')"), true);
+    await options();
+    let list = [];
+    for (let i = 0; i < 200 && !list.length; i++) { list = await evaluate('window.modcut.getE2EExports()'); if (!list.length) await wait(50); }
+    return list;
+  };
+  const presetLabel = () => evaluate("document.querySelector('.draw-pdf-dialog [name=preset]').selectedOptions[0].textContent");
+  const [pdf, ...extraPdf] = await exportAs('Export proof.pdf', async () => {
+    await until("!!document.querySelector('.draw-pdf-dialog form')", 'Save PDF dialog');
+    assert.deepEqual(await evaluate("[...document.querySelectorAll('.draw-pdf-tab')].map(t=>t.textContent)"), ['General', 'Compression', 'Marks and Bleeds', 'Summary']);
+    assert.equal(await presetLabel(), '[modCut Default]');
+    await evaluate("document.querySelector('.draw-pdf-tab[data-section=marks]').click();document.querySelector('.draw-pdf-dialog [name=trim]').click()");
+    assert.equal(await presetLabel(), '[modCut Default] (Modified)', 'Changing a setting marks the preset as modified');
+    await evaluate("document.querySelector('.draw-pdf-dialog [name=trim]').click()");
+    assert.equal(await presetLabel(), '[modCut Default]', 'Undoing the change matches the preset again');
+    await evaluate("(()=>{const s=document.querySelector('.draw-pdf-dialog [name=preset]');s.value='press';s.dispatchEvent(new Event('change',{bubbles:true}));})()");
+    assert.deepEqual(await evaluate("['trim','bleed-top','preserveEditing'].map(n=>{const e=document.querySelector('.draw-pdf-dialog [name='+n+']');return e.type==='checkbox'?e.checked:e.value;})"), [true, '3', false]);
+    await evaluate("(()=>{const s=document.querySelector('.draw-pdf-dialog [name=preset]');s.value='default';s.dispatchEvent(new Event('change',{bubbles:true}));document.querySelector('.draw-pdf-tab[data-section=summary]').click();})()");
+    assert.match(await evaluate("document.querySelector('.draw-pdf-summary').textContent"), /Editing data: kept/);
+    assert.deepEqual(await evaluate("[...document.querySelectorAll('.draw-pdf-page')].map(p=>p.getClientRects().length>0)"), [false, false, false, true], 'Only the chosen section shows');
+    await writeFile(join(tmpdir(), 'modcut-draw-pdf-dialog.png'), Buffer.from((await client.command('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
+    await evaluate("document.querySelector('.draw-pdf-tab[data-section=general]').click();document.querySelector('.draw-pdf-dialog form').requestSubmit()");
+  });
+  assert.equal(extraPdf.length, 0, 'A PDF holds every artboard in one file');
+  await writeFile(join(tmpdir(), 'modcut-draw-export.pdf'), Buffer.from(pdf.data, 'base64'));
+  assert.equal(pdf.name, 'Export proof.pdf'); assert.match(Buffer.from(pdf.head, 'base64').toString('latin1'), /^%PDF-1.6/);
+  // The PDF keeps modCut editing data, so Open brings the Draw document back with its objects.
+  const before = await evaluate("document.querySelector('.doc-tab.is-active').dataset.tabId");
+  await evaluate(`window.modcut.setE2EImportResult(${JSON.stringify({ name: 'Export proof.pdf', ext: 'pdf', dataUrl: `data:application/pdf;base64,${pdf.data}` })})`);
+  await evaluate("document.querySelector('#import').click()");
+  await until(`document.querySelector('.doc-tab.is-active').dataset.tabId!=='${before}'`, 'PDF opened in a new tab');
+  await until(`(async()=>{const w=${active};return !!w&&!!w.state.document.getNode('ex-red')&&!!w.state.document.getNode('ex-blue');})()`, 'Editable objects from the PDF');
+  await evaluate(`document.querySelector('[data-tab-id="${before}"]').click()`);
+
+  // DXF and PNG through the same flow, with their own options.
+  const [dxf] = await exportAs('Export proof.dxf', async () => {
+    await until("!!document.querySelector('.draw-export-options form')", 'DXF options');
+    assert.equal(await evaluate("document.querySelector('.draw-export-options .panel__header').textContent"), 'DXF (AutoCAD R12) Options');
+    await evaluate("document.querySelector('.draw-export-options form').requestSubmit()");
+  });
+  assert.equal(dxf.name, 'Export proof.dxf'); assert.match(dxf.text, /AC1009/); assert.match(dxf.text, /POLYLINE/);
+  const [image] = await exportAs('Export proof.png', async () => {
+    await until("!!document.querySelector('.draw-export-options form')", 'PNG options');
+    await evaluate("(()=>{const f=document.querySelector('.draw-export-options form');f.elements.ppi.value='72';f.requestSubmit();})()");
+  });
+  assert.equal(image.name, 'Export proof.png');
+  const size = await evaluate(`(async()=>{const img=new Image();img.src='data:image/png;base64,${image.data}';await img.decode();return [img.width,img.height];})()`);
+  assert.deepEqual(size, [340, 227]);
   await evaluate(`(async()=>{${active}.handle('outline')})()`);
   await restoreTabs();
-  console.log('PASS Draw export: SVG in millimetres without templates, preview from Outline view, PNG transparency and size, JPEG on white, Export As dialog and file');
+  console.log('PASS Draw export: SVG in millimetres without templates, preview from Outline view, PNG transparency and size, JPEG on white, Export As via File > Export with PDF (Save PDF presets, editable reopen), DXF and PNG');
 }

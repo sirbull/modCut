@@ -8,7 +8,7 @@ import { createBed } from "./bed.js";
 import { prepareSVG } from "./svgimport.js";
 import { dxfToSvg } from "./dxfimport.js";
 import { hpglToSvg } from "./hpglimport.js";
-import { pdfToArtwork } from "./pdfimport.js";
+import { pdfDrawDocument, pdfToArtwork } from "./pdfimport.js";
 import { tiffToPng } from "./tiffimport.js";
 import { OPERATIONS, canAssignRasterToOperation, distinctVectorColor, isOutputLayer, operationsForLayer } from "./layer-model.mjs";
 import { RASTER_MODES, applyProcessProfile, combinedFocusOffset, normalizeProcessProfile, profilesForOperation } from "./process-profiles.mjs";
@@ -325,7 +325,7 @@ function setWorkspace(mode) {
     tab.drawRoot.className = "draw-project";
     tab.drawRoot.dataset.tabId = tab.id;
     $("drawWorkspace").append(tab.drawRoot);
-    tab.draw = createDrawWorkspace(tab.drawRoot, { state: drawState, onError: message => toast(message,"err"), onImport: () => importDrawFiles(), onSendToCut: sendDrawToCut, onExport: exportDrawFile, getPreferences:()=>preferences, statusHost: $("drawStatus") });
+    tab.draw = createDrawWorkspace(tab.drawRoot, { state: drawState, onError: message => toast(message,"err"), onImport: () => importDrawFiles(), onSendToCut: sendDrawToCut, onExport: drawExportBridge, getPreferences:()=>preferences, statusHost: $("drawStatus") });
   }
   drawKeymap.reset();
   tab.workspace = mode;
@@ -376,11 +376,13 @@ async function sendDrawToCut({ svg, name, count, warnings, target, placement }) 
   if (warnings.length) toast(warnings.join(" "), "info");
 }
 // Draw's Export As: SVG text or a PNG/JPEG data URL, written where the user chooses.
-async function exportDrawFile({ name, format, data }) {
-  const binary = format !== "svg";
-  const path = await window.modcut.exportFile({ name, format, data: binary ? data.slice(data.indexOf(",") + 1) : data, encoding: binary ? "base64" : "utf8" });
-  if (path) toast(`Exported ${pathBase(path)}.`, "ok");
-}
+// Draw export writes only where the user chose in the main process's save or folder dialog.
+const drawExportBridge = {
+  choosePath: (options) => window.modcut.chooseExportPath(options),
+  chooseFolder: (options) => window.modcut.chooseExportFolder(options),
+  write: (options) => window.modcut.writeExportFiles(options),
+  notify: (message, kind) => toast(message, kind),
+};
 $("sendToCut").addEventListener("click", () => activeTab()?.draw?.sendToCut());
 
 function activeTab() { return documentTabs.find((tab) => tab.id === activeTabId) || null; }
@@ -1035,8 +1037,12 @@ async function openDrawFile() {
     const file = await window.modcut.openImport({multiple:false,allowDocuments:true,intent:"draw-open"});
     if (!file) return;
     if (file.kind === "unsupported") return showImportIssue(file);
+    let drawData = null;
     if (file.kind === "document") {
       openDocumentInNewTab(JSON.parse(file.text),file.path,file.name,"draw");
+    } else if (file.ext === "pdf" && (drawData = await pdfDrawDocument(file.dataUrl))) {
+      // A PDF saved with "Preserve modCut editing capabilities" opens as the Draw document it carries.
+      newDocument("draw", drawData);
     } else {
       const prepared = await prepareDrawArtwork(file);
       if (!prepared) throw new Error("This format cannot be opened in Draw yet.");

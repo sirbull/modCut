@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, Menu, nativeImage, nativeTheme } from "electron";
+import { app, BrowserWindow, ipcMain, dialog, Menu, nativeImage, nativeTheme, shell } from "electron";
 import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join, extname, basename } from "node:path";
@@ -11,6 +11,7 @@ import { createRecoveryStore } from "./recovery-store.mjs";
 import { writeProject } from "./project-store.mjs";
 import { IMAGE_FORMATS, PDF_FORMATS, TEXT_FORMATS, TIFF_FORMATS, importIssueFor } from "./import-formats.mjs";
 import { createFontService } from './font-service.mjs';
+import { registerExportFiles } from './export-files.mjs';
 
 app.name = "modCut"; // makes the macOS app menu read "modCut", not "Electron"
 
@@ -213,7 +214,9 @@ function buildMenu(mode = "cut") {
     const saveAsIndex = fileMenu.submenu.findIndex((item) => item.label === "Save document as…");
     fileMenu.submenu.splice(saveAsIndex + 1, 0, { type: "separator" },
       { label: "Save Document Properties as Template…", click: () => send("save-document-template") },
-      { type: "separator" }, { label: "Export As…", accelerator: acceleratorFor("export-as", { isMac }), click: () => send("export-as") },
+      { type: "separator" }, { label: "Export", submenu: [
+        { label: "Export As…", accelerator: acceleratorFor("export-as", { isMac }), click: () => send("export-as") },
+      ] },
       { label: "Send Artboard to Cut…", click: () => send("send-to-cut") });
     const sharedCommands = { "New": "new", "Import…": "import", "Add…": "add", "Close Tab": "close-tab",
       "Save document…": "save-document", "Save document as…": "save-document-as" };
@@ -391,7 +394,9 @@ app.whenReady().then(() => {
     }));
     ipcMain.handle("e2eRequestQuit", () => { requestQuit(); return true; });
     ipcMain.handle("e2eClickMenuItem", (_event, menuLabel, itemLabel) => {
-      const item = Menu.getApplicationMenu()?.items.find((entry) => entry.label === menuLabel)?.submenu.items.find((entry) => entry.label === itemLabel);
+      // Items may sit in a submenu, such as File > Export > Export As….
+      const find = (items) => { for (const entry of items ?? []) { if (entry.label === itemLabel) return entry; const nested = find(entry.submenu?.items); if (nested) return nested; } return null; };
+      const item = find(Menu.getApplicationMenu()?.items.find((entry) => entry.label === menuLabel)?.submenu.items);
       item?.click();
       return !!item;
     });
@@ -472,18 +477,8 @@ app.whenReady().then(() => {
     return writeProject(filePath, json);
   });
 
-  // Draw Export As: SVG as text, PNG/JPEG as base64. E2E runs keep the file in memory instead of a dialog.
-  const EXPORT_FILTERS = { svg: ["SVG image", "svg"], png: ["PNG image", "png"], jpg: ["JPEG image", "jpg"] };
-  ipcMain.handle("exportFile", async (event, { name, format, data, encoding }) => {
-    if (event.sender !== win?.webContents || !EXPORT_FILTERS[format] || typeof data !== "string" || !["utf8", "base64"].includes(encoding)) return null;
-    const bytes = Buffer.from(data, encoding);
-    if (isE2E) { e2eExports.push({ name, format, size: bytes.length, head: bytes.subarray(0, 64).toString("base64"), text: format === "svg" ? data : null }); return `/e2e/${name}`; }
-    const [label, extension] = EXPORT_FILTERS[format];
-    const { canceled, filePath } = await dialog.showSaveDialog(win, { title: "Export As", defaultPath: name, filters: [{ name: label, extensions: [extension] }] });
-    if (canceled || !filePath) return null;
-    await writeFile(filePath, bytes);
-    return filePath;
-  });
+  // Draw Export As / Export for Screens. E2E runs keep the files in memory instead of showing dialogs.
+  registerExportFiles({ ipcMain, dialog, shell, getWindow: () => win, isE2E, e2eExports });
 
   // Export/import all settings as one shareable JSON file.
   // ponytail: single JSON file, not a .zip — the payload is just JSON, so a zip

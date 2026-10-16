@@ -23,9 +23,10 @@ import { insertNode, removeNode, replaceLeaf, updateNode, updateDocument } from 
 import { activeArtboard } from './doc/artboards.mjs';
 import { changePaint, changeStroke, paintHex } from './doc/paint.mjs';
 import { importArtwork } from './import-artwork.mjs';
-import { shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog,layerOptionsDialog,swatchOptionsDialog,sendToCutDialog,exportDialog } from './ui/dialogs.mjs';
+import { shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog,layerOptionsDialog,swatchOptionsDialog,sendToCutDialog } from './ui/dialogs.mjs';
 import { artboardCutSvg } from './io/cut-svg.mjs';
-import { EXPORT_FORMATS, exportFileName, rasterSize, svgDocument } from './io/export.mjs';
+import { EXPORT_FORMATS, rasterSize, svgDocument } from './io/export.mjs';
+import { createExportController } from './export-controller.mjs';
 import { layerOptionsPatch, templateLayerCommands } from './doc/layers.mjs';
 import { toolCursor } from './tools/cursors.mjs';
 import { alignReference, alignOffsets, distributeOffsets, spacingOffsets } from './geom/align.mjs';
@@ -196,16 +197,12 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       } finally {art.remove();}
     });
   }
-  let exportOptions={format:'png',ppi:150,background:'transparent'};
-  async function exportAs(boardId=state.ui.artboardId) {
-    if(!onExport)throw new Error('Export is not available here.');
+  // onExport is the app's file bridge (save dialog, folder, write); see export-controller.mjs.
+  const exporter=createExportController({state,scope,renderer,withScope,exportBoard,bridge:onExport});
+  async function exportAs() {
+    if(destroyed||document.querySelector('.modal-overlay'))return;
     interactions?.cancel();paths?.finish();
-    const options=await exportDialog({boards:state.document.data.artboards,boardId,...exportOptions});
-    if(!options||destroyed)return;
-    exportOptions={format:options.format,ppi:options.ppi,background:options.background};
-    const board=state.document.getArtboard(options.boardId),data=exportBoard(board.id,options.format,options);
-    const name=exportFileName(state.document.data.name,board,options.format,{single:state.document.data.artboards.length===1});
-    await onExport({name,format:options.format,data,width:board.width,height:board.height});
+    return exporter.exportAs();
   }
   async function sendToCut(boardId=state.ui.artboardId) {
     if(!onSendToCut)throw new Error('Send to Cut is not available here.');
@@ -460,7 +457,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   boardSelect.addEventListener('change',()=>artboards.choose(boardSelect.value,true));
   zoomInput.addEventListener('change',()=>{if(Number.isFinite(zoomInput.valueAsNumber)&&zoomInput.valueAsNumber>=.0001&&zoomInput.valueAsNumber<=10000)zoomAt(scope.view.center,zoomInput.valueAsNumber/100*(96/25.4)/scope.view.zoom);else status();});
   outlineButton.addEventListener('click',()=>handle('outline'));fitButton.addEventListener('click',()=>fit());
-  const workspace={state,scope,renderer,isolate,cutSvg,exportBoard,exportAs:boardId=>exportAs(boardId).catch(error=>onError(error.message)),sendToCut:boardId=>sendToCut(boardId).catch(error=>onError(error.message)),exitIsolation,statusElement:controls,artboards,transforms,resize,select,setTool,handle,availableTool:id=>implementedTools.has(id),canHandle:command=>commands.has(command),
+  const workspace={state,scope,renderer,isolate,cutSvg,exportBoard,exporter,exportAs:()=>exportAs().catch(error=>onError(error.message)),sendToCut:boardId=>sendToCut(boardId).catch(error=>onError(error.message)),exitIsolation,statusElement:controls,artboards,transforms,resize,select,setTool,handle,availableTool:id=>implementedTools.has(id),canHandle:command=>commands.has(command),
     setTemporaryTool(value){temporary=value;canvas.dataset.tool=temporary?.id || state.ui.tool;canvas.style.cursor=cursor();status();},
     async import(prepared,name,options={}){const result=await importArtwork(scope,state,prepared,name,layerId(),{...options,alive:()=>!destroyed});select(options.template?[]:result.ids);if(options.fitArtboard)fit();return result;},
     destroy(){destroyed=true;ownedTextModal?.querySelector('[data-x=cancel]').click();ownedTransformModal?.querySelector('[data-x=cancel]').click();paths.destroy();interactions.destroy();toolbar.destroy();unsubscribe();observer.disconnect();window.removeEventListener('modcut-theme-change',syncTheme);workspaces.delete(root);withScope(()=>{renderer.destroy();scope.remove();});controls.remove();root.replaceChildren();},

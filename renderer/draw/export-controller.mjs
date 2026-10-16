@@ -1,0 +1,128 @@
+/**
+ * Export As (and the file building shared with Export for Screens): choose where, set the format's
+ * options, build the files from the printable artwork and hand them to the main process.
+ *
+ * `bridge` comes from the app: choosePath({name,format}) → {path,format}, chooseFolder(), write({files,open}),
+ * notify(message,kind). `exportBoard` is the workspace's SVG/PNG/JPEG renderer for one artboard.
+ */
+import { artworkModel } from './io/vector-model.mjs';
+import { pdfDocument, JPEG_QUALITY } from './io/pdf.mjs';
+import { epsDocument } from './io/eps.mjs';
+import { dxfDocument } from './io/dxf.mjs';
+import { exportTarget, artboardFilePath } from './io/export-plan.mjs';
+import { exportFileName } from './io/export.mjs';
+import { exportOptionsDialog, pdfOptionsDialog } from './ui/export-dialogs.mjs';
+
+export const DRAW_ATTACHMENT = 'modcut-draw.json';
+const THUMBNAIL_PIXELS = 106;
+
+export function base64(bytes) {
+  let text = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) text += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(text);
+}
+const dataUrlBytes = (url) => Uint8Array.from(atob(url.slice(url.indexOf(',') + 1)), (c) => c.charCodeAt(0));
+const loadImage = (url) => new Promise((resolve, reject) => { const img = new Image(); img.onload = () => resolve(img); img.onerror = () => reject(new Error('Could not draw the page thumbnail.')); img.src = url; });
+const fileName = (path) => path.split(/[\\/]/).pop();
+
+export function createExportController({ state, scope, renderer, withScope, exportBoard, bridge }) {
+  const remembered = { format: 'pdf', pdf: null, options: {} };
+  const compress = globalThis.pako ? (bytes) => globalThis.pako.deflate(bytes) : null;
+  const available = () => !!bridge && typeof bridge.choosePath === 'function';
+
+  /** Pixels of a placed image, downsampled above `above` ppi to `ppi`, plus JPEG bytes when asked for. */
+  function imageReader({ downsample = 'none', ppi = 300, above = 450, jpeg = null } = {}) {
+    return (raster, matrix) => {
+      const source = raster.image ?? raster.canvas; if (!source || !raster.width || !raster.height) return null;
+      const mmWide = Math.hypot(matrix[0], matrix[1]) || 1, current = raster.width / (mmWide / 25.4);
+      const scale = downsample !== 'none' && current > above ? ppi / current : 1;
+      const width = Math.max(1, Math.round(raster.width * scale)), height = Math.max(1, Math.round(raster.height * scale));
+      const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = downsample === 'average' ? 'low' : 'high';
+      ctx.drawImage(source, 0, 0, width, height);
+      const rgba = ctx.getImageData(0, 0, width, height).data;
+      let bytes = null;
+      if (jpeg) { // JPEG has no alpha: the colour is flattened onto white and the alpha goes to the soft mask.
+        const flat = document.createElement('canvas'); flat.width = width; flat.height = height;
+        const f = flat.getContext('2d'); f.fillStyle = '#FFFFFF'; f.fillRect(0, 0, width, height); f.drawImage(canvas, 0, 0);
+        bytes = dataUrlBytes(flat.toDataURL('image/jpeg', jpeg));
+      }
+      return { width, height, rgba, jpeg: bytes };
+    };
+  }
+  function model(board, images = null) {
+    return withScope(() => {
+      const art = renderer.exportArtwork();
+      try { return artworkModel(art, board, { layerName: (id) => state.document.getNode(id)?.name, image: images, viewZoom: scope.view.zoom }); }
+      finally { art.remove(); }
+    });
+  }
+  async function thumbnail(board) {
+    const ppi = THUMBNAIL_PIXELS / (Math.max(board.width, board.height) / 25.4), img = await loadImage(exportBoard(board.id, 'png', { ppi, background: 'white' }));
+    const canvas = document.createElement('canvas'); canvas.width = img.width; canvas.height = img.height;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true }); ctx.drawImage(img, 0, 0);
+    const rgba = ctx.getImageData(0, 0, img.width, img.height).data, rgb = new Uint8Array(img.width * img.height * 3);
+    for (let i = 0, j = 0; i < rgba.length; i += 4) { rgb[j++] = rgba[i]; rgb[j++] = rgba[i + 1]; rgb[j++] = rgba[i + 2]; }
+    return { width: img.width, height: img.height, rgb };
+  }
+
+  /**
+   * Files for `format` and the artboards at `indices`. A PDF holds every artboard as a page; other
+   * formats write one file per artboard (named "-Artboard" beside `path` when there are several).
+   */
+  async function build(format, path, indices, options = {}) {
+    const boards = indices.map((i) => state.document.data.artboards[i]).filter(Boolean), warnings = new Set();
+    if (!boards.length) throw new Error('Choose at least one artboard.');
+    const target = exportTarget(format); if (!target) throw new Error('Choose a file format.');
+    if (format === 'pdf') {
+      const images = imageReader({ ...options, jpeg: options.imageCompression === 'jpeg' ? JPEG_QUALITY[options.jpegQuality] ?? .85 : null });
+      const pages = [];
+      for (const board of boards) {
+        const m = model(board, images); m.warnings.forEach((w) => warnings.add(w));
+        pages.push({ model: m, thumbnail: options.thumbnails ? await thumbnail(board) : null });
+      }
+      const name = state.document.data.name || 'Untitled';
+      const attachment = options.preserveEditing ? { name: DRAW_ATTACHMENT, mime: 'application/json', bytes: new TextEncoder().encode(JSON.stringify(state.document.data)) } : null;
+      const bytes = pdfDocument(pages, { ...options, compress, title: name, documentName: name, attachment });
+      return { files: [{ path, data: base64(bytes), encoding: 'base64' }], warnings: [...warnings] };
+    }
+    const files = [];
+    boards.forEach((board) => {
+      const index = state.document.data.artboards.indexOf(board), file = boards.length > 1 ? artboardFilePath(path, board, index) : path;
+      if (format === 'svg' || format === 'svgz') {
+        const svg = exportBoard(board.id, 'svg', options);
+        if (format === 'svg') files.push({ path: file, data: svg, encoding: 'utf8' });
+        else if (globalThis.pako) files.push({ path: file, data: base64(globalThis.pako.gzip(new TextEncoder().encode(svg))), encoding: 'base64' });
+        else throw new Error('SVG compression is not available.');
+      } else if (format === 'eps' || format === 'dxf') {
+        const m = model(board), result = format === 'eps' ? epsDocument(m) : dxfDocument(m, { tolerance: options.tolerance ?? 0.01 });
+        result.warnings.forEach((w) => warnings.add(w));
+        files.push({ path: file, data: result.text, encoding: 'utf8' });
+      } else {
+        const url = exportBoard(board.id, format, { ppi: options.ppi ?? 150, background: options.background ?? 'transparent', quality: (options.quality ?? 8) / 10 });
+        files.push({ path: file, data: url.slice(url.indexOf(',') + 1), encoding: 'base64' });
+      }
+    });
+    return { files, warnings: [...warnings] };
+  }
+
+  /** File > Export > Export As…: the save dialog picks the place and format, then that format's options. */
+  async function exportAs() {
+    if (!available()) throw new Error('Export is not available here.');
+    const last = exportTarget(remembered.format);
+    const choice = await bridge.choosePath({ name: exportFileName(state.document.data.name, null, last.ext, { single: true }), format: last.id });
+    if (!choice) return null;
+    const format = choice.format, boards = state.document.data.artboards;
+    const options = format === 'pdf' ? await pdfOptionsDialog({ boards, defaults: remembered.pdf }) : await exportOptionsDialog({ format, boards, defaults: remembered.options[format] });
+    if (!options) return null;
+    remembered.format = format;
+    if (format === 'pdf') remembered.pdf = options; else remembered.options[format] = options;
+    const { files, warnings } = await build(format, choice.path, options.indices, options);
+    const written = await bridge.write({ files, open: format === 'pdf' && options.viewAfter ? files[0].path : null });
+    bridge.notify?.(`Exported ${written.length === 1 ? fileName(written[0]) : `${written.length} files`}.`, 'ok');
+    for (const warning of warnings) bridge.notify?.(warning, 'info');
+    return written;
+  }
+  return { exportAs, build, model, available };
+}

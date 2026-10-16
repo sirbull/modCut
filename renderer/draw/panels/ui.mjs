@@ -714,7 +714,6 @@ export function createPanels(shell, state, api) {
     for(const [label,action,disabled] of [['New artboard',()=>api.artboards.add(),false],['Duplicate',()=>api.artboards.duplicate(),false],['Delete',()=>api.artboards.remove(),state.document.data.artboards.length===1],['Move up',()=>api.artboards.order(-1),state.document.data.artboards[0].id===board.id],['Move down',()=>api.artboards.order(1),state.document.data.artboards.at(-1).id===board.id],['Rearrange…',api.rearrange,false]]) {
       const b=button(label,action);b.disabled=disabled || state.document.readOnly;host.append(b);
     }
-    const exporter=button('Export…',()=>api.command('export-as'));exporter.dataset.drawExport='';host.append(exporter);
     const send=button('Send to Cut…',()=>api.command('send-to-cut'));send.className='btn btn--primary btn--sm draw-send-button';send.dataset.drawSendToCut='';host.append(send);
   }
   const TYPE_NAMES = { path: 'Path', group: 'Group', compoundPath: 'Compound Path', image: 'Image', text: 'Text', layer: 'Layer' };
@@ -739,7 +738,7 @@ export function createPanels(shell, state, api) {
     }
     host.append(info);
     check(host,'Smart Guides','smart-guides',doc.settings.smartGuides !== false,() => api.run(() => api.command('smart-guides')));
-    quickActions(host,[['Artboards…',() => open('artboards'),'artboards'],['Swatches…',() => open('swatches'),'swatches'],['Layer Options…',() => api.layerOptions(state.ui.layerId ?? doc.layers.at(-1).id),'layer-options',state.document.readOnly],['Export…',() => api.command('export-as'),'export-as'],['Send to Cut…',() => api.command('send-to-cut'),'send-to-cut']]);
+    quickActions(host,[['Artboards…',() => open('artboards'),'artboards'],['Swatches…',() => open('swatches'),'swatches'],['Layer Options…',() => api.layerOptions(state.ui.layerId ?? doc.layers.at(-1).id),'layer-options',state.document.readOnly],['Send to Cut…',() => api.command('send-to-cut'),'send-to-cut']]);
     text(host,'Fill and Stroke for new shapes are set with the boxes below the drawing tools.');
   }
   function propertiesPanel(host) {
