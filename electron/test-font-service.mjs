@@ -75,7 +75,7 @@ test('type on a path follows the curve, flips, aligns and reports glyphs that do
   assert.ok(flipped.glyphs.flatMap(g=>g.subpaths.flatMap(p=>p.segments)).every(s=>s.p[1]>=-1e-9),'Flip puts the text on the other side');
   const right=await service.shape({...v,alignment:'right'});assert.ok(Math.abs(xs(right)[0][0]-xs(layout)[0][0]-(190-layout.lineWidths[0]))<1e-6);
   const short=await service.shape({...v,pathSubpath:{closed:false,segments:[seg([0,0]),seg([12,0])]}});
-  assert.equal(short.overflow,true);assert.ok(short.glyphs.length<layout.glyphs.length);assert.throws(()=>textToOutlines({...node,onPath:{...node.onPath,subpath:{closed:false,segments:[seg([0,0]),seg([12,0])]}},layout:short}),/overflow/);
+  assert.equal(short.overflow,true);assert.ok(short.glyphs.length<layout.glyphs.length);assert.throws(()=>textToOutlines({...node,onPath:{...node.onPath,subpath:{closed:false,segments:[seg([0,0]),seg([12,0])]}},layout:short}),/does not fit on its path/);
   const k=10*0.5522847498,circle={closed:true,segments:[seg([0,-10],[-k,0],[k,0]),seg([10,0],[0,-k],[0,k]),seg([0,10],[k,0],[-k,0]),seg([-10,0],[0,k],[0,-k])]};
   const ring=await service.shape({...v,pathSubpath:circle,pathOffset:0});
   for(const g of ring.glyphs)for(const s of g.subpaths.flatMap(p=>p.segments)){const r=Math.hypot(...s.p);assert.ok(r>=10-1e-6&&r<=10+v.fontSize*25.4/72,`outside the circle: ${r}`);}
