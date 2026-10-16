@@ -29,6 +29,7 @@ const closePending = new WeakSet();
 const rendererGone = new WeakSet();
 const isE2E = process.env.MODCUT_E2E === "1";
 const e2eImportResults = [];
+const e2eExports = [];
 const gunzipAsync = promisify(gunzip);
 
 // Keep local development and an installed build from sharing Chromium state,
@@ -210,7 +211,8 @@ function buildMenu(mode = "cut") {
     const saveAsIndex = fileMenu.submenu.findIndex((item) => item.label === "Save document as…");
     fileMenu.submenu.splice(saveAsIndex + 1, 0, { type: "separator" },
       { label: "Save Document Properties as Template…", click: () => send("save-document-template") },
-      { type: "separator" }, { label: "Send Artboard to Cut…", click: () => send("send-to-cut") });
+      { type: "separator" }, { label: "Export As…", accelerator: acceleratorFor("export-as", { isMac }), click: () => send("export-as") },
+      { label: "Send Artboard to Cut…", click: () => send("send-to-cut") });
     const sharedCommands = { "New": "new", "Import…": "import", "Add…": "add", "Close Tab": "close-tab",
       "Save document…": "save-document", "Save document as…": "save-document-as" };
     for (const item of fileMenu.submenu) {
@@ -374,6 +376,7 @@ app.whenReady().then(() => {
   });
   if (isE2E) {
     ipcMain.handle("e2eSetImportResult", (_event, result) => { e2eImportResults.push(result); return true; });
+    ipcMain.handle("e2eExports", () => e2eExports.splice(0));
     ipcMain.handle("e2eWorkspaceMenu", () => ({
       label: Menu.getApplicationMenu()?.getMenuItemById("workspace-toggle")?.label,
       edit: Menu.getApplicationMenu()?.items.find((item) => item.label === "Edit")?.submenu.items.map((item) => item.accelerator || null),
@@ -462,6 +465,19 @@ app.whenReady().then(() => {
     });
     if (canceled || !filePath) return null;
     return writeProject(filePath, json);
+  });
+
+  // Draw Export As: SVG as text, PNG/JPEG as base64. E2E runs keep the file in memory instead of a dialog.
+  const EXPORT_FILTERS = { svg: ["SVG image", "svg"], png: ["PNG image", "png"], jpg: ["JPEG image", "jpg"] };
+  ipcMain.handle("exportFile", async (event, { name, format, data, encoding }) => {
+    if (event.sender !== win?.webContents || !EXPORT_FILTERS[format] || typeof data !== "string" || !["utf8", "base64"].includes(encoding)) return null;
+    const bytes = Buffer.from(data, encoding);
+    if (isE2E) { e2eExports.push({ name, format, size: bytes.length, head: bytes.subarray(0, 64).toString("base64"), text: format === "svg" ? data : null }); return `/e2e/${name}`; }
+    const [label, extension] = EXPORT_FILTERS[format];
+    const { canceled, filePath } = await dialog.showSaveDialog(win, { title: "Export As", defaultPath: name, filters: [{ name: label, extensions: [extension] }] });
+    if (canceled || !filePath) return null;
+    await writeFile(filePath, bytes);
+    return filePath;
   });
 
   // Export/import all settings as one shareable JSON file.

@@ -17,8 +17,8 @@ D1.8 (Transform, Align, Color, Stroke, Fill/Stroke-boks og Properties) ble fullf
 
 ## Status og neste oppgave
 
-Fase 0 og fase 1 er fullført. **Neste oppgave er fase 2, se STATUS.md kapittel 4** (først SVG- og PNG-eksport).
-E2E-flagg for de nye delene: `--draw-cut`, `--draw-place`, `--draw-control`.
+Fase 0 og fase 1 er fullført. **Neste oppgave er fase 2, se STATUS.md kapittel 4.** Export As (SVG, PNG, JPEG) er ferdig; neste er D2.1 Tekst.
+E2E-flagg for de nye delene: `--draw-cut`, `--draw-place`, `--draw-control`, `--draw-export`.
 
 Før du starter D1.9: commit `d337a8f` (en annen agent) flyttet allerede visningskontrollene
 (posisjon, artboard, zoom, Outline, Fit) til appens nederste statuslinje (`#drawStatus`) og

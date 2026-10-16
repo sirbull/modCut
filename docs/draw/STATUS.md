@@ -97,6 +97,25 @@ Show in Folder), Crop Image, lenkede bilder og Links-panelet, liming av bilder f
 * **View > Control Bar** (og kommandoen `toggle-control-bar`) skjuler og viser den; valget huskes
   per bruker. Statuslinjen nederst (posisjon, artboard, zoom, Outline, Fit) fantes fra før.
 
+### 2.5 Export As: SVG, PNG og JPEG (D2.5 og D2.7, 2026-10-16)
+
+* **File > Export As…** (Mod+Shift+Alt+S), knappen **Export…** i Artboards-panelet og i Properties uten
+  utvalg, og kommandoen `export-as`.
+* Dialogen velger artboard, format (SVG, PNG, JPEG), oppløsning (72, 150, 300, 600 ppi) og bakgrunn
+  (gjennomsiktig, hvit eller artboardets farge). JPEG kan ikke være gjennomsiktig. Valgene huskes i økten.
+* Eksporten tegnes fra det som skrives ut: template-lag, skjulte og ikke-utskrivbare objekter tas ikke
+  med, og eksporten blir som Preview selv om man står i Outline-visning. Isolasjonsdemping og
+  «Dim Images» påvirker ikke filen.
+* SVG er i millimeter (`width="120mm"`, `viewBox` i artboardets koordinater) med flere fyll og streker,
+  opacity, stiplede linjer og innebygde bilder slik Paper.js skriver dem.
+* PNG og JPEG har nøyaktig artboardets størrelse ved valgt oppløsning (for eksempel 120 × 80 mm ved
+  72 ppi blir 340 × 227 piksler). Over 16 384 piksler i en retning avvises med beskjed.
+* Kode: `io/export.mjs` (rene hjelpere: filnavn, rasterstørrelse, SVG-dokument), `exportArtwork()` i
+  `render/paper-adapter.mjs`, `exportBoard`/`exportAs` i `index.mjs`, IPC `exportFile` i `electron/main.mjs`.
+
+Gjenstår: alle artboards i én eksport, Export for Screens, WebP, skala i prosent, SVG-valg (tekst,
+CSS-stil), og PDF (D2.6).
+
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
 | Oppgave | Status |
@@ -111,9 +130,9 @@ Show in Folder), Crop Image, lenkede bilder og Links-panelet, liming av bilder f
 | D2.2 Pathfinder, Compound, Clipping | Pathfinder ferdig; compound paths og clipping masks gjenstår |
 | D2.3 Gradienter og Swatches | Swatches ferdig (solide); gradienter og globale swatches gjenstår |
 | D2.4 Path-kommandoer | Gjenstår |
-| D2.5 SVG eksport/import | Gjenstår (enkel SVG-import finnes) |
+| D2.5 SVG eksport/import | SVG-eksport ferdig (se 2.5); SVG-import finnes i enkel form |
 | D2.6 PDF-eksport | Gjenstår |
-| D2.7 Raster-eksport | Gjenstår |
+| D2.7 Raster-eksport | PNG og JPEG ferdig (se 2.5); WebP, Export for Screens og skala gjenstår |
 | D2.8 Pencil, Shear, Eyedropper m.fl. | Gjenstår |
 | D2.9 Transparency, History, Info, kommandosøk | Transparency ferdig; resten gjenstår |
 | D2.10 Send til Cut v2 | Gjenstår |
@@ -125,13 +144,13 @@ Show in Folder), Crop Image, lenkede bilder og Links-panelet, liming av bilder f
 
 Fase 1 er ferdig. Neste er fase 2, i denne rekkefølgen:
 
-1. **D2.5 SVG-eksport og D2.7 PNG/JPG-eksport med gjennomsiktighet** (bruker samme resolve-steg som
-   Send til Cut).
-2. D2.1 Tekst (Type-verktøy, Character/Paragraph, Create Outlines).
-3. D2.2 Compound paths og clipping masks (Make Clipping Mask i Layers-menyen venter på dette).
-4. D2.4 Path-kommandoer (Join, Average, Offset Path, Simplify).
-5. D2.6 PDF-eksport, D2.3 gradienter, D2.8 flere verktøy, D2.9 History/Info/kommandosøk.
-6. D2.10 Send til Cut v2.
+SVG-, PNG- og JPEG-eksport er gjort (2.5).
+
+1. **D2.1 Tekst** (Type-verktøy, Character/Paragraph, Create Outlines). Neste.
+2. D2.2 Compound paths og clipping masks (Make Clipping Mask i Layers-menyen venter på dette).
+3. D2.4 Path-kommandoer (Join, Average, Offset Path, Simplify).
+4. D2.6 PDF-eksport, D2.3 gradienter, D2.8 flere verktøy, D2.9 History/Info/kommandosøk.
+5. D2.10 Send til Cut v2.
 
 ## 5. Kjente begrensninger og risiko
 

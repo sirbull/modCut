@@ -6,7 +6,7 @@ import { transformProperties } from '../geometry.mjs';
 import { editablePath,cornerGeometry,roundCorners } from '../geom/corners.mjs';
 import { shapeSelectionKey } from '../doc/selection.mjs';
 import { scaledStrokeProperties } from '../geom/transforms.mjs';
-import { layerContext, ROOT_CONTEXT } from '../doc/layers.mjs';
+import { isOutputNode, layerContext, ROOT_CONTEXT } from '../doc/layers.mjs';
 import { arrowShapes } from '../geom/arrows.mjs';
 
 export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withScope = fn => fn() } = {}) {
@@ -322,6 +322,31 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     });
     selection.update(); anchors.update(); scope.view.update();
   }
+  /** A detached group with the printable artwork in preview mode: no templates, hidden objects, dimming or culling. */
+  function exportArtwork() {
+    const wasOutline = outline; if (wasOutline) setOutline(false);
+    try {
+      const fix = (original, copy) => {
+        const id = original.data?.nodeId;
+        if (id) {
+          const node = state.document.getNode(id), record = records.get(id);
+          copy.visible = original !== record?.frame;
+          if (original.data.baseOpacity !== undefined) copy.opacity = node?.type === 'image' && original === items.get(id) ? node.opacity : original.data.baseOpacity;
+        }
+        const children = [...(copy.children ?? [])];
+        (original.children ?? []).forEach((child, i) => {
+          const childId = child.data?.nodeId;
+          if (childId && !isOutputNode(state.document, childId)) children[i].remove(); else fix(child, children[i]);
+        });
+      };
+      const group = new scope.Group({ insert: false });
+      for (const child of artwork.children) {
+        const id = child.data?.nodeId; if (id && !isOutputNode(state.document, id)) continue;
+        const copy = child.clone({ insert: false, deep: true }); fix(child, copy); group.addChild(copy);
+      }
+      return group;
+    } finally { if (wasOutline) setOutline(true); }
+  }
   function setOutline(value) {
     outline = !!value;
     for (const [id, record] of records) {
@@ -422,7 +447,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     } catch { url = null; } finally { clone.remove(); }
     thumbnails.set(id, { key, url }); return url;
   }
-  return { render, select: updateView, updateView, bounds, selectionBounds, hit, items, setOutline, thumbnail, booleanOperand, selectionHandle:point=>selection.hit(point),
+  return { render, select: updateView, updateView, bounds, selectionBounds, hit, items, setOutline, thumbnail, exportArtwork, booleanOperand, selectionHandle:point=>selection.hit(point),
     setTheme({muted,background=labelBackground}) {labelColor=muted;labelBackground=background;for(const {label,labelRect} of boardItems.values()){label.fillColor=muted;labelRect.fillColor=background;}updateView();},
     shapePreview(node,sourceId=null) { const item=make(node);item.applyMatrix=false;style(item,node,false);item.opacity=.6;
       if(sourceId)item.matrix=records.get(sourceId).worldMatrix.clone();overlay.addChild(item);return item; },

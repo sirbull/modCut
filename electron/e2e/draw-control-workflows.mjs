@@ -1,14 +1,14 @@
 import assert from 'node:assert/strict';
 import { wait } from './cdp.mjs';
-import { activeDraw as active, submitNewDrawDialog } from './draw-test-helpers.mjs';
+import { activeDraw as active, submitNewDrawDialog, rememberTabs } from './draw-test-helpers.mjs';
 
 /** D1.9: the control bar follows the selection and the artboard tool, and View > Control Bar hides it. */
 export async function runDrawControlWorkflows(client) {
   const { evaluate } = client;
   const root = '.draw-project[style*=block]';
   const until = async (expression, label) => { for (let i = 0; i < 100; i++) { if (await evaluate(expression)) return; await wait(50); } assert.fail(`Timed out: ${label}`); };
-  // Later suites expect the workspace this one started in.
-  const startMode = await evaluate('document.body.dataset.workspace');
+  // Later suites expect the tabs and workspace this one started with.
+  const restoreTabs = await rememberTabs(evaluate);
   await evaluate("document.body.dataset.workspace==='draw'||document.querySelector('#workspaceToggle').click();document.querySelector('#newDoc').click()");
   await submitNewDrawDialog(evaluate, { preset: 'custom', width: 120, height: 80, name: 'Control proof' });
   const bar = `${root} .draw-control-bar`;
@@ -61,6 +61,6 @@ export async function runDrawControlWorkflows(client) {
   assert.equal(await evaluate("window.modcut.clickE2EMenuItem('File','Send Artboard to Cut…')"), true);
   await until("!!document.querySelector('.draw-send-dialog form')", 'Send to Cut from the File menu');
   await evaluate("document.querySelector('.draw-send-dialog [data-x=cancel]').click()");
-  if (await evaluate('document.body.dataset.workspace') !== startMode) await evaluate("document.querySelector('#workspaceToggle').click()");
+  await restoreTabs();
   console.log('PASS Draw control bar: paint for new objects, selection title, X/W/opacity/weight, align to artboard, artboard size, View > Control Bar remembered, File > Send Artboard to Cut');
 }

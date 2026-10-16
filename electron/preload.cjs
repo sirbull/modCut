@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld("modcut", {
   getPathForFile: (file) => webUtils.getPathForFile(file),
   saveDocument: (json, path, saveAs, name) => ipcRenderer.invoke("saveDocument", { json, path, saveAs, name }),
   exportSettings: (json, name) => ipcRenderer.invoke("exportSettings", { json, name }),
+  exportFile: (file) => ipcRenderer.invoke("exportFile", file),
+  getE2EExports: () => ipcRenderer.invoke("e2eExports"),
   importSettings: () => ipcRenderer.invoke("importSettings"),
   readRecovery: () => ipcRenderer.invoke("readRecovery"),
   writeRecovery: (json) => ipcRenderer.invoke("writeRecovery", json),

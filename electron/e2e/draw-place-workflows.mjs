@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import { wait } from './cdp.mjs';
-import { activeDraw as active, submitNewDrawDialog, submitPlaceDialog } from './draw-test-helpers.mjs';
+import { activeDraw as active, submitNewDrawDialog, submitPlaceDialog, rememberTabs } from './draw-test-helpers.mjs';
 
 /** D1.11: Place with Template, Alt-drop as template, and Use as Template for placed images. */
 export async function runDrawPlaceWorkflows(client) {
   const { evaluate } = client;
   const until = async (expression, label) => { for (let i = 0; i < 100; i++) { if (await evaluate(expression)) return; await wait(50); } assert.fail(`Timed out: ${label}`); };
-  // Later suites expect the workspace this one started in.
-  const startMode = await evaluate('document.body.dataset.workspace');
+  // Later suites expect the tabs and workspace this one started with.
+  const restoreTabs = await rememberTabs(evaluate);
   await evaluate("document.body.dataset.workspace==='draw'||document.querySelector('#workspaceToggle').click();document.querySelector('#newDoc').click()");
   await submitNewDrawDialog(evaluate, { preset: 'custom', width: 120, height: 80, name: 'Place proof' });
   const png = "(()=>{const c=document.createElement('canvas');c.width=8;c.height=4;const g=c.getContext('2d');g.fillStyle='#c00';g.fillRect(0,0,8,4);return c.toDataURL('image/png');})()";
@@ -58,6 +58,6 @@ export async function runDrawPlaceWorkflows(client) {
   assert.equal(list[1].name, 'Template drop.png'); assert.equal(list[1].locked, true); assert.deepEqual(list[1].children, ['image']);
   await evaluate(`(async()=>{${active}.handle('undo')})()`);
   assert.deepEqual((await layers()).at(-1).children, ['image'], 'Undo puts the image back');
-  if (await evaluate('document.body.dataset.workspace') !== startMode) await evaluate("document.querySelector('#workspaceToggle').click()");
+  await restoreTabs();
   console.log('PASS Draw Place: Import shows Place with Template (remembered, Cancel), template layer below the active layer (locked, 50 %, not printed, one undo step), Alt-drop as template, plain drop, Use as Template');
 }

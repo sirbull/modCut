@@ -5,6 +5,7 @@ import { DOCUMENT_PRESETS, PRESET_CATEGORIES, UNIT_LABELS, RESOLUTIONS, RECENT_K
 import { dialogOperation } from '../geom/transforms.mjs';
 import { NAMED_LAYER_COLORS, layerColorName } from '../doc/layers.mjs';
 import { enhanceNumberFields } from './number-field.mjs';
+import { EXPORT_FORMATS, EXPORT_RESOLUTIONS } from '../io/export.mjs';
 
 let dialogId=0;
 function openDrawModal(options) {
@@ -283,4 +284,19 @@ export function placeOptionsDialog({template=false,count=1}={}) {
   note.textContent=`${count} file${count===1?'':'s'}. Template puts each file on its own locked layer below the active layer, dimmed to 50 %. Template layers are never exported or sent to Cut. Tip: hold Alt while dropping an image.`;
   form.querySelector('.modal-actions').before(note);
   return result;
+}
+/** Export As: one artboard as SVG, PNG or JPEG. Resolution and background apply to the raster formats. */
+export function exportDialog({boards,boardId,format='png',ppi=150,background='transparent'}) {
+  const result=openDrawModal({title:'Export As',submitLabel:'Export…',className:'draw-export-dialog',fields:[
+    {key:'boardId',label:'Artboard',type:'select',value:boardId,options:boards.map((b,i)=>({value:b.id,label:escapeHtml(`${i+1}. ${b.name}`)}))},
+    {key:'format',label:'Format',type:'select',value:format,options:Object.entries(EXPORT_FORMATS).map(([value,f])=>({value,label:f.label}))},
+    {key:'ppi',label:'Resolution',type:'select',value:String(ppi),options:EXPORT_RESOLUTIONS.map(r=>({value:String(r),label:`${r} ppi`}))},
+    {key:'background',label:'Background',type:'select',value:background,options:[{value:'transparent',label:'Transparent'},{value:'white',label:'White'},{value:'artboard',label:'Artboard color'}]},
+  ]});
+  const form=document.querySelector('.draw-export-dialog form'),el=form.elements;
+  // SVG ignores resolution; JPEG has no transparency.
+  const update=()=>{const raster=el.format.value!=='svg';el.ppi.closest('label').hidden=!raster;
+    const transparent=el.background.querySelector('[value=transparent]');transparent.disabled=el.format.value==='jpg';if(transparent.disabled&&el.background.value==='transparent')el.background.value='white';};
+  el.format.addEventListener('change',update);update();
+  return result.then(values=>values&&{...values,ppi:Number(values.ppi)});
 }

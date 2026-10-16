@@ -845,3 +845,27 @@ utvalg, med utvalg (W, X, opacity, vekt, Align høyre mot artboard), artboardmod
 lagret valg og File > Send Artboard to Cut.
 
 Fase 1 er dermed ferdig. Neste: fase 2, se STATUS.md kapittel 4.
+
+## 2026-10-16: Export As (D2.5 SVG-eksport, D2.7 PNG og JPEG)
+
+- `render/paper-adapter.mjs` har fått `exportArtwork()`: en frittstående kopi av det som skrives ut,
+  i Preview-utseende (Outline slås midlertidig av), uten template-lag, skjulte objekter, demping eller
+  viewport-culling.
+- `index.mjs`: `exportBoard(boardId, format, options)` lager SVG-tekst eller en PNG/JPEG-data-URL for
+  nøyaktig artboardet; `exportAs()` viser dialogen og sender filen til appen. SVG skrives av Paper.js
+  og pakkes i et millimeterdokument (`io/export.mjs`). Raster tegnes direkte på et lerret med
+  artboardets mål og valgt ppi.
+- Dialogen `exportDialog`, menyvalget File > Export As…, knapper i Artboards-panelet og Properties.
+- `electron/main.mjs`: IPC `exportFile` med lagringsdialog per format; i E2E holdes filene i minnet
+  (`getE2EExports`).
+- E2E-testene for Send til Cut, Place, kontrollinje og eksport lukker fanene de åpner og setter
+  arbeidsflaten tilbake (`rememberTabs` i `draw-test-helpers.mjs`), fordi prosjekttestene etter dem
+  forventer den opprinnelige fanen i Cut.
+
+Verifisering: tre nye enhetstester (`export.test.mjs`) og E2E `draw-export-workflows.mjs`
+(`--draw-export`): SVG i mm uten template, Preview fra Outline-visning, gjennomsiktig PNG med riktig
+pikselstørrelse og halvgjennomsiktig fyll, JPEG på hvitt, dialogen fra File-menyen og lagret fil.
+Hele Draw-E2E (`node electron/e2e/run.mjs --draw`) passerer: 22 av 22, inkludert prosjektlagring,
+autolagring og gjenoppretting etter krasj.
+
+Neste: D2.1 Tekst.

@@ -1413,9 +1413,9 @@ Oversikt over hva som er gjort og gjenstår, inkludert delvis ferdige oppgaver: 
 * [ ] D2.2 Pathfinder, Compound, Clipping
 * [ ] D2.3 Gradienter og Swatches
 * [ ] D2.4 Path-kommandoer
-* [ ] D2.5 SVG eksport/import
+* [ ] D2.5 SVG eksport/import (eksport ferdig, se [STATUS.md](draw/STATUS.md))
 * [ ] D2.6 PDF-eksport
-* [ ] D2.7 Raster-eksport
+* [ ] D2.7 Raster-eksport (PNG og JPEG ferdig; WebP, Export for Screens og skala gjenstår)
 * [ ] D2.8 Pencil, Shear, Eyedropper m.fl.
 * [ ] D2.9 Transparency, History, Info, kommandosøk
 * [ ] D2.10 Send til Cut v2

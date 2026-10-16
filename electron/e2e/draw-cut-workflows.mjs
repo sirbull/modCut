@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import { wait } from './cdp.mjs';
-import { activeDraw as active, submitNewDrawDialog } from './draw-test-helpers.mjs';
+import { activeDraw as active, submitNewDrawDialog, rememberTabs } from './draw-test-helpers.mjs';
 
 /** Send to Cut v1: an artboard reaches Cut's bed through the SVG import path, in millimetres, as one undo step. */
 export async function runDrawCutWorkflows(client) {
   const { evaluate } = client;
   const until = async (expression, label) => { for (let i = 0; i < 100; i++) { if (await evaluate(expression)) return; await wait(50); } assert.fail(`Timed out: ${label}`); };
-  // Later suites expect the workspace this one started in.
-  const startMode = await evaluate('document.body.dataset.workspace');
+  // Later suites expect the tabs and workspace this one started with.
+  const restoreTabs = await rememberTabs(evaluate);
   await evaluate("document.body.dataset.workspace==='draw'||document.querySelector('#workspaceToggle').click();document.querySelector('#newDoc').click()");
   await submitNewDrawDialog(evaluate, { preset: 'custom', width: 120, height: 80, name: 'Send proof' });
   const drawTab = await evaluate("document.querySelector('.doc-tab.is-active').dataset.tabId");
@@ -75,6 +75,6 @@ export async function runDrawCutWorkflows(client) {
   await until("!!document.querySelector('.draw-send-dialog form')", 'dialog for empty artboard');
   assert.equal(await evaluate("document.querySelector('.draw-send-dialog [type=submit]').disabled"), true, 'Send is disabled when nothing can be sent');
   await evaluate("document.querySelector('.draw-send-dialog [data-x=cancel]').click()");
-  if (await evaluate('document.body.dataset.workspace') !== startMode) await evaluate("document.querySelector('#workspaceToggle').click()");
+  await restoreTabs();
   console.log('PASS Draw Send to Cut: dialog summary, new tab at the bed origin in millimetres, scaled strokes, one undo step, add and replace in this tab, centred placement, replace undone in one step, empty artboard disabled');
 }

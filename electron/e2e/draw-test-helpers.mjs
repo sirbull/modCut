@@ -17,3 +17,19 @@ export async function submitPlaceDialog(evaluate, { template = false } = {}) {
   for (let i=0;i<100&&!(await evaluate("!!document.querySelector('.draw-place-dialog form')"));i++) await wait(50);
   await evaluate(`(()=>{const f=document.querySelector('.draw-place-dialog form');if(!f)return;if(f.elements.template.checked!==${template})f.elements.template.click();f.requestSubmit();})()`);
 }
+/** Remember the open tabs and workspace, and later close every tab opened since, discarding changes. */
+export async function rememberTabs(evaluate) {
+  const tabs = await evaluate("[...document.querySelectorAll('.doc-tab')].map(t=>t.dataset.tabId)"), mode = await evaluate('document.body.dataset.workspace');
+  return async function restore() {
+    const opened = (await evaluate("[...document.querySelectorAll('.doc-tab')].map(t=>t.dataset.tabId)")).filter(id => !tabs.includes(id));
+    for (const id of opened) {
+      await evaluate(`document.querySelector('[data-close-tab="${id}"]')?.click()`);
+      for (let i = 0; i < 40; i++) {
+        if (await evaluate("!!document.querySelector('[data-x=discard]')")) await evaluate("document.querySelector('[data-x=discard]').click()");
+        if (!await evaluate(`!!document.querySelector('[data-tab-id="${id}"]') || !!document.querySelector('.modal-overlay')`)) break;
+        await wait(50);
+      }
+    }
+    if (await evaluate('document.body.dataset.workspace') !== mode) await evaluate("document.querySelector('#workspaceToggle').click()");
+  };
+}

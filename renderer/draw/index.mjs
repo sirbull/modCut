@@ -23,8 +23,9 @@ import { insertNode, removeNode, replaceLeaf, updateNode, updateDocument } from 
 import { activeArtboard } from './doc/artboards.mjs';
 import { changePaint, changeStroke, paintHex } from './doc/paint.mjs';
 import { importArtwork } from './import-artwork.mjs';
-import { shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog,layerOptionsDialog,swatchOptionsDialog,sendToCutDialog } from './ui/dialogs.mjs';
+import { shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog,layerOptionsDialog,swatchOptionsDialog,sendToCutDialog,exportDialog } from './ui/dialogs.mjs';
 import { artboardCutSvg } from './io/cut-svg.mjs';
+import { EXPORT_FORMATS, exportFileName, rasterSize, svgDocument } from './io/export.mjs';
 import { layerOptionsPatch, templateLayerCommands } from './doc/layers.mjs';
 import { toolCursor } from './tools/cursors.mjs';
 import { alignReference, alignOffsets, distributeOffsets, spacingOffsets } from './geom/align.mjs';
@@ -34,10 +35,10 @@ export function getDrawWorkspace(root) {return workspaces.get(root) || null;}
 const implementedTools=new Set(['select','hand','zoom','artboard',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
 const commands=new Set(['undo','redo','delete','select-all','select-artboard','deselect','cancel','fit-artboard','fit-all','actual-size','zoom-in','zoom-out','outline',
   'cut','copy','paste','paste-front','paste-back','paste-place','paste-all-artboards',
-  'send-to-cut','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
+  'send-to-cut','export-as','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
   'paint-focus','paint-swap','paint-none','paint-solid','default-paint','smart-guides','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','toggle-panels','toggle-panels-except-tools',
   ...PANEL_DEFINITIONS.map(p=>`panel.${p.id}`),...['left','right','up','down'].flatMap(d=>[`nudge-${d}`,`nudge-large-${d}`,`duplicate-${d}`])]);
-export function createDrawWorkspace(root,{paper=window.paper,state=createProjectDraw(),onError=console.warn,onImport=()=>{},onSendToCut=null,getPreferences=()=>({}),statusHost=null}={}) {
+export function createDrawWorkspace(root,{paper=window.paper,state=createProjectDraw(),onError=console.warn,onImport=()=>{},onSendToCut=null,onExport=null,getPreferences=()=>({}),statusHost=null}={}) {
   state.ui={tool:'select',flyout:null,layerId:state.document.data.layers[0]?.id,fill:'#FFFFFF',stroke:'#071411',strokeWidth:.5,paintFocus:'fill',...state.ui};
   state.ui.artboardId=activeArtboard(state).id;
   // The control bar's visibility is a per-user view preference, like Illustrator's Window > Control.
@@ -160,6 +161,37 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
         return node.type==='shape'?(parent?renderer.worldMatrix(parent.id):[1,0,0,1,0,0]):renderer.worldMatrix(id);},
       subpaths(id){const node=state.document.getNode(id);return node.type==='shape'?renderer.expandedShape(id)?.subpaths:node.subpaths;},
     }));
+  }
+  /** One artboard as an SVG document (text) or a PNG/JPEG data URL, drawn from the printable artwork. */
+  function exportBoard(boardId,format,{ppi=150,background='transparent',quality=.92}={}) {
+    const board=state.document.getArtboard(boardId);if(!board)throw new Error('Choose an artboard to export.');
+    if(!EXPORT_FORMATS[format])throw new Error('Choose SVG, PNG or JPEG.');
+    const fill=background==='white'?'#FFFFFF':background==='artboard'?board.background??'#FFFFFF':format==='jpg'?'#FFFFFF':null;
+    return withScope(()=>{
+      const art=renderer.exportArtwork();
+      try {
+        if(format==='svg'){
+          const inner=art.children.length?art.exportSVG({asString:true,precision:4}):'';
+          return svgDocument(board,`<g transform="translate(${-board.x} ${-board.y})">${inner}</g>`,{background:fill,title:board.name});
+        }
+        const {width,height}=rasterSize(board,ppi),canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
+        const ctx=canvas.getContext('2d');if(fill){ctx.fillStyle=fill;ctx.fillRect(0,0,width,height);}
+        const matrix=new scope.Matrix().scale(width/board.width,height/board.height).translate(-board.x,-board.y);
+        ctx.save();matrix.applyToContext(ctx);art.draw(ctx,new scope.Base({matrices:[matrix]}));ctx.restore();
+        return canvas.toDataURL(EXPORT_FORMATS[format].mime,quality);
+      } finally {art.remove();}
+    });
+  }
+  let exportOptions={format:'png',ppi:150,background:'transparent'};
+  async function exportAs(boardId=state.ui.artboardId) {
+    if(!onExport)throw new Error('Export is not available here.');
+    interactions?.cancel();paths?.finish();
+    const options=await exportDialog({boards:state.document.data.artboards,boardId,...exportOptions});
+    if(!options||destroyed)return;
+    exportOptions={format:options.format,ppi:options.ppi,background:options.background};
+    const board=state.document.getArtboard(options.boardId),data=exportBoard(board.id,options.format,options);
+    const name=exportFileName(state.document.data.name,board,options.format,{single:state.document.data.artboards.length===1});
+    await onExport({name,format:options.format,data,width:board.width,height:board.height});
   }
   async function sendToCut(boardId=state.ui.artboardId) {
     if(!onSendToCut)throw new Error('Send to Cut is not available here.');
@@ -307,6 +339,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     if(command==='select-artboard'){const a=activeArtboard(state),rect=new scope.Rectangle(a.x,a.y,a.width,a.height);return select(state.document.data.layers.flatMap(l=>l.children).filter(n=>renderer.bounds(n.id)?.intersects(rect)).map(n=>n.id));}
       if(command==='toggle-panels'||command==='toggle-panels-except-tools'){shell.classList.toggle('draw-shell--panels-hidden');shell.classList.toggle('draw-shell--all-hidden',command==='toggle-panels' && shell.classList.contains('draw-shell--panels-hidden'));return;}
     if(command==='send-to-cut')return void workspace.sendToCut();
+    if(command==='export-as')return void workspace.exportAs();
     if(command==='toggle-control-bar'){state.ui.controlBar=state.ui.controlBar===false;try{globalThis.localStorage?.setItem(CONTROL_BAR_KEY,state.ui.controlBar?'shown':'hidden');}catch{}panels.render();return resize();}
     if(state.document.readOnly)return;
     if(command==='transform-again')return transforms.again();
@@ -361,7 +394,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   boardSelect.addEventListener('change',()=>artboards.choose(boardSelect.value,true));
   zoomInput.addEventListener('change',()=>{if(Number.isFinite(zoomInput.valueAsNumber)&&zoomInput.valueAsNumber>=.0001&&zoomInput.valueAsNumber<=10000)zoomAt(scope.view.center,zoomInput.valueAsNumber/100*(96/25.4)/scope.view.zoom);else status();});
   outlineButton.addEventListener('click',()=>handle('outline'));fitButton.addEventListener('click',()=>fit());
-  const workspace={state,scope,renderer,isolate,cutSvg,sendToCut:boardId=>sendToCut(boardId).catch(error=>onError(error.message)),exitIsolation,statusElement:controls,artboards,transforms,resize,select,setTool,handle,availableTool:id=>implementedTools.has(id),canHandle:command=>commands.has(command),
+  const workspace={state,scope,renderer,isolate,cutSvg,exportBoard,exportAs:boardId=>exportAs(boardId).catch(error=>onError(error.message)),sendToCut:boardId=>sendToCut(boardId).catch(error=>onError(error.message)),exitIsolation,statusElement:controls,artboards,transforms,resize,select,setTool,handle,availableTool:id=>implementedTools.has(id),canHandle:command=>commands.has(command),
     setTemporaryTool(value){temporary=value;canvas.dataset.tool=temporary?.id || state.ui.tool;canvas.style.cursor=cursor();status();},
     async import(prepared,name,options={}){const result=await importArtwork(scope,state,prepared,name,layerId(),{...options,alive:()=>!destroyed});select(options.template?[]:result.ids);if(options.fitArtboard)fit();return result;},
     destroy(){destroyed=true;ownedTransformModal?.querySelector('[data-x=cancel]').click();paths.destroy();interactions.destroy();toolbar.destroy();unsubscribe();observer.disconnect();window.removeEventListener('modcut-theme-change',syncTheme);workspaces.delete(root);withScope(()=>{renderer.destroy();scope.remove();});controls.remove();root.replaceChildren();},

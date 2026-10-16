@@ -322,7 +322,7 @@ function setWorkspace(mode) {
     tab.drawRoot.className = "draw-project";
     tab.drawRoot.dataset.tabId = tab.id;
     $("drawWorkspace").append(tab.drawRoot);
-    tab.draw = createDrawWorkspace(tab.drawRoot, { state: drawState, onError: message => toast(message,"err"), onImport: () => importDrawFiles(), onSendToCut: sendDrawToCut, getPreferences:()=>preferences, statusHost: $("drawStatus") });
+    tab.draw = createDrawWorkspace(tab.drawRoot, { state: drawState, onError: message => toast(message,"err"), onImport: () => importDrawFiles(), onSendToCut: sendDrawToCut, onExport: exportDrawFile, getPreferences:()=>preferences, statusHost: $("drawStatus") });
   }
   drawKeymap.reset();
   tab.workspace = mode;
@@ -370,6 +370,12 @@ async function sendDrawToCut({ svg, name, count, warnings, target, placement }) 
   markDirty();
   toast(`${name} sent to Cut (${count} path${count === 1 ? "" : "s"}). Undo in Cut removes the whole send.`, "ok");
   if (warnings.length) toast(warnings.join(" "), "info");
+}
+// Draw's Export As: SVG text or a PNG/JPEG data URL, written where the user chooses.
+async function exportDrawFile({ name, format, data }) {
+  const binary = format !== "svg";
+  const path = await window.modcut.exportFile({ name, format, data: binary ? data.slice(data.indexOf(",") + 1) : data, encoding: binary ? "base64" : "utf8" });
+  if (path) toast(`Exported ${pathBase(path)}.`, "ok");
 }
 $("sendToCut").addEventListener("click", () => activeTab()?.draw?.sendToCut());
 
