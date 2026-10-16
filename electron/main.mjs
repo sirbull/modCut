@@ -215,6 +215,7 @@ function buildMenu(mode = "cut") {
     fileMenu.submenu.splice(saveAsIndex + 1, 0, { type: "separator" },
       { label: "Save Document Properties as Template…", click: () => send("save-document-template") },
       { type: "separator" }, { label: "Export", submenu: [
+        { label: "Export for Screens…", accelerator: acceleratorFor("export-screens", { isMac }), click: () => send("export-screens") },
         { label: "Export As…", accelerator: acceleratorFor("export-as", { isMac }), click: () => send("export-as") },
       ] },
       { label: "Send Artboard to Cut…", click: () => send("send-to-cut") });

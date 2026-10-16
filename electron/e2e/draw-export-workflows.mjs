@@ -96,7 +96,39 @@ export async function runDrawExportWorkflows(client) {
   assert.equal(image.name, 'Export proof.png');
   const size = await evaluate(`(async()=>{const img=new Image();img.src='data:image/png;base64,${image.data}';await img.decode();return [img.width,img.height];})()`);
   assert.deepEqual(size, [340, 227]);
+
+  // Export for Screens: thumbnails, rows of scale + suffix + format, sub-folders and a prefix, into one folder.
+  await evaluate(`(async()=>{${active}.artboards.add();})()`);
+  assert.equal(await evaluate(`(async()=>${active}.state.document.data.artboards.length)()`), 2);
+  assert.equal(await evaluate("window.modcut.clickE2EMenuItem('File','Export for Screens…')"), true);
+  await until("!!document.querySelector('.draw-screens-dialog form')", 'Export for Screens dialog');
+  const dlg = (js) => evaluate(`(()=>{const d=document.querySelector('.draw-screens-dialog');${js}})()`);
+  assert.equal(await dlg("return d.querySelectorAll('.draw-screens__card').length"), 2);
+  assert.equal(await dlg("return d.querySelector('.draw-screens__count').textContent"), 'Selected: 2, Total export: 2');
+  await until("[...document.querySelectorAll('.draw-screens__thumb img')].every(i=>i.complete&&i.naturalWidth>0)", 'Artboard thumbnails');
+  await dlg("[...d.querySelectorAll('button')].find(b=>b.textContent==='Choose…').click()");
+  await until("!!document.querySelector('.draw-screens-dialog [name=folder]').value", 'Chosen folder');
+  await dlg("d.querySelector('.draw-screens__add').click()");
+  assert.deepEqual(await dlg("return [...d.querySelectorAll('.draw-screens__row:not(.draw-screens__row--head)')].map(r=>[...r.querySelectorAll('[data-k]')].map(e=>e.value))"), [['1x', '', 'png'], ['2x', '@2x', 'png']]);
+  assert.equal(await dlg("return d.querySelector('.draw-screens__count').textContent"), 'Selected: 2, Total export: 4');
+  // Two rows writing the same names are refused.
+  await dlg("const r=d.querySelectorAll('.draw-screens__row')[2];r.querySelector('[data-k=scale]').value='1x';r.querySelector('[data-k=suffix]').value='';d.querySelector('form').requestSubmit()");
+  assert.match(await dlg("return d.querySelector('.draw-export-error').textContent"), /same files/);
+  await dlg("const r=d.querySelectorAll('.draw-screens__row')[2];r.querySelector('[data-k=scale]').value='2x';r.querySelector('[data-k=suffix]').value='@2x'");
+  await dlg("d.querySelector('.draw-screens__add').click();const r=d.querySelectorAll('.draw-screens__row')[3],f=r.querySelector('[data-k=format]');f.value='svg';f.dispatchEvent(new Event('change',{bubbles:true}))");
+  assert.equal(await dlg("return d.querySelectorAll('.draw-screens__row')[3].querySelector('[data-k=scale]').disabled"), true, 'Vector rows have no scale');
+  // Unticking an artboard switches to a range.
+  await dlg("const c=d.querySelectorAll('.draw-screens__check')[1];c.click()");
+  assert.deepEqual(await dlg("return [d.querySelector('[name=range]').value,d.querySelector('.draw-screens__count').textContent]"), ['1', 'Selected: 1, Total export: 3']);
+  await dlg("d.querySelector('[name=prefix]').value='app-'");
+  await writeFile(join(tmpdir(), 'modcut-draw-export-screens.png'), Buffer.from((await client.command('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
+  await dlg("d.querySelector('form').requestSubmit()");
+  let screens = [];
+  for (let i = 0; i < 200 && screens.length < 3; i++) { screens = [...screens, ...await evaluate('window.modcut.getE2EExports()')]; if (screens.length < 3) await wait(50); }
+  assert.deepEqual(screens.map((f) => f.path.split('/screens/').pop()).sort(), ['1x/app-Artboard 1.png', '2x/app-Artboard 1@2x.png', 'app-Artboard 1@3x.svg']);
+  const sizes = await evaluate(`(async()=>Promise.all(${JSON.stringify(screens.filter((f) => f.format === 'png').map((f) => [f.name, f.data]))}.map(async([n,d])=>{const i=new Image();i.src='data:image/png;base64,'+d;await i.decode();return [n,i.width];})))()`);
+  assert.deepEqual(Object.fromEntries(sizes), { 'app-Artboard 1.png': 340, 'app-Artboard 1@2x.png': 680 });
   await evaluate(`(async()=>{${active}.handle('outline')})()`);
   await restoreTabs();
-  console.log('PASS Draw export: SVG in millimetres without templates, preview from Outline view, PNG transparency and size, JPEG on white, Export As via File > Export with PDF (Save PDF presets, editable reopen), DXF and PNG');
+  console.log('PASS Draw export: SVG in millimetres without templates, preview from Outline view, PNG transparency and size, JPEG on white, Export As via File > Export with PDF (Save PDF presets, editable reopen), DXF and PNG; Export for Screens with thumbnails, scale rows, sub-folders and prefix');
 }

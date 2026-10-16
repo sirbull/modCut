@@ -1044,3 +1044,17 @@ Verifisering: 4 nye enhetstester (`export-plan.test.mjs`); `--draw-export` dekke
 gjenåpning som redigerbart dokument, DXF og PNG; eksportert PDF og dialogen er kontrollert visuelt.
 `--draw`, `--draw-control/objects/cut/place/text/panels` passerer. Fire enhetstester i
 Send to Cut/tekst feiler i arbeidstreet, men de hører til den andre øktens uferdige endringer.
+
+## 2026-10-16: Eksport del 3 — Export for Screens
+
+- **File › Export › Export for Screens…** (Ctrl+Alt+E), som i Illustrator: miniatyrer av alle
+  artboards med avkrysning, All/Range (avkrysning skriver området), Clear Selection og telling
+  «Selected: n, Total export: m». Export to: mappe (Choose…), Open location after export, Create
+  sub-folders by Scale/Format. Formatrader med Scale (0.5x–4x eller ppi; 1x = 72 ppi), Suffix og
+  Format (PNG, JPG 100/80/50, SVG, PDF, DXF), + Add Scale, × fjerner rad, og Prefix.
+- Rader som ville skrive samme filnavn avvises i dialogen. Vektorrader har ingen skala.
+- Mappen huskes bare i økten (hovedprosessen godtar bare mapper valgt i egen dialog); radene, prefiks
+  og valg huskes i localStorage. «Full Document» og «Assets»-fanen er ikke med.
+
+Verifisering: `--draw-export` dekker dialogen, duplikatvalidering, range ved avkrysning, filstier
+med undermapper/prefiks/suffiks og PNG-størrelser for 1x/2x; skjermbildet er kontrollert.

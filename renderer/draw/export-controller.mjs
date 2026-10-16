@@ -6,15 +6,16 @@
  * notify(message,kind). `exportBoard` is the workspace's SVG/PNG/JPEG renderer for one artboard.
  */
 import { artworkModel } from './io/vector-model.mjs';
-import { pdfDocument, JPEG_QUALITY } from './io/pdf.mjs';
+import { pdfDocument, JPEG_QUALITY, PDF_PRESETS } from './io/pdf.mjs';
 import { epsDocument } from './io/eps.mjs';
 import { dxfDocument } from './io/dxf.mjs';
-import { exportTarget, artboardFilePath } from './io/export-plan.mjs';
+import { exportTarget, artboardFilePath, scalePpi, screensFilePath } from './io/export-plan.mjs';
 import { exportFileName } from './io/export.mjs';
 import { exportOptionsDialog, pdfOptionsDialog } from './ui/export-dialogs.mjs';
+import { exportScreensDialog } from './ui/screens-dialog.mjs';
 
 export const DRAW_ATTACHMENT = 'modcut-draw.json';
-const THUMBNAIL_PIXELS = 106;
+const THUMBNAIL_PIXELS = 106, SCREENS_THUMBNAIL_PIXELS = 160;
 
 export function base64(bytes) {
   let text = '';
@@ -124,5 +125,27 @@ export function createExportController({ state, scope, renderer, withScope, expo
     for (const warning of warnings) bridge.notify?.(warning, 'info');
     return written;
   }
-  return { exportAs, build, model, available };
+  /** File > Export > Export for Screens…: every chosen artboard in every format row, into one folder. */
+  async function exportScreens() {
+    if (!available()) throw new Error('Export is not available here.');
+    const boards = state.document.data.artboards;
+    const choice = await exportScreensDialog({ boards,
+      thumbnail: (board) => exportBoard(board.id, 'png', { ppi: SCREENS_THUMBNAIL_PIXELS / (Math.max(board.width, board.height) / 25.4), background: 'white' }),
+      chooseFolder: (current) => bridge.chooseFolder({ defaultPath: current }) });
+    if (!choice) return null;
+    // Screens PDFs are plain pages: no editing data, layers or marks.
+    const pdf = { ...PDF_PRESETS.find((p) => p.id === 'print').options }, files = [], warnings = new Set();
+    for (const index of choice.indices) for (const row of choice.rows) {
+      const board = boards[index], path = `${choice.folder}/${screensFilePath({ board, index, prefix: choice.prefix, suffix: row.suffix, scale: row.scale, format: row.target, subfolders: choice.subfolders })}`;
+      const options = row.target === 'pdf' ? pdf : row.target === 'dxf' ? { tolerance: 0.01 }
+        : { ppi: scalePpi(row.scale), background: row.target === 'png' ? 'transparent' : 'white', quality: row.quality ?? 8 };
+      const result = await build(row.target, path, [index], options);
+      files.push(...result.files); result.warnings.forEach((w) => warnings.add(w));
+    }
+    const written = await bridge.write({ files, open: choice.openAfter ? choice.folder : null });
+    bridge.notify?.(`Exported ${written.length} file${written.length === 1 ? '' : 's'} to ${fileName(choice.folder)}.`, 'ok');
+    for (const warning of warnings) bridge.notify?.(warning, 'info');
+    return written;
+  }
+  return { exportAs, exportScreens, build, model, available };
 }

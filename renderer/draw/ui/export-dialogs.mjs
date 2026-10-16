@@ -282,3 +282,6 @@ export function pdfOptionsDialog({ boards, defaults = null, storage = globalThis
   show('general');
   return ui.open(() => { const values = read(); return { ...values, preset: values.preset.replace(/:modified$/, '') }; });
 }
+
+// Building blocks shared with the Export for Screens dialog.
+export { frame, make, option, control, checkbox };
