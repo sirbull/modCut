@@ -816,6 +816,11 @@ Overløp bevarer teksten og markeres med rødt pluss. Eksport bruker synlige gly
 Outlines krever at all tekst får plass. Reflow med canvas-håndtak, tekst i vilkårlige former,
 lenkede rammer og språkavhengig orddeling gjenstår; se [status](draw/STATUS.md#28-rektangulær-områdetekst-d21c-2026-10-16).
 
+Brukerbestilt tillegg: Google Fonts-katalog med nedlasting av komplette fonter/lisenser, lokal
+cache, versjonslåste referanser, numeriske vekter, variable akser og navngitte instanser.
+Send to Cut bruker glyfkonturene automatisk og lar Draw-teksten forbli redigerbar. Manglende
+konturer og overløp blokkerer sending; se [status](draw/STATUS.md#29-google-fonts-og-automatisk-tekst-til-cut-brukerønske-2026-10-16).
+
 * Fonter: main-prosessen lister systemfonter (filbaner, familie, stil) og leser fontfiler på
   forespørsel. Renderer bruker `FontFace` for visning og HarfBuzz for shaping og glyfkonturer.
   Fonter som brukes i dokumentet kan bygges inn (`assets`) hvis lisensen tillater det
@@ -1420,7 +1425,7 @@ Oversikt over hva som er gjort og gjenstår, inkludert delvis ferdige oppgaver: 
 * [x] D1.10 Group, Arrange, Clipboard
 * [x] D1.11 Place bitmap og template-lag (høyreklikkmeny, Crop Image og Links gjenstår, se [STATUS.md](draw/STATUS.md))
 * [x] D1.12 Send til Cut v1 (se [STATUS.md](draw/STATUS.md) for hva v1 dekker)
-* [ ] D2.1 Tekst — punkttekst, systemfonter, shaping, Create Outlines og rektangulær områdetekst (D2.1a/b/c) ferdig.
+* [ ] D2.1 Tekst — punkt-/områdetekst, system-/Google-fonter, shaping, variable akser og Create Outlines ferdig.
   Path-tekst, videre områdetekst, flere tekstegenskaper og Character/Paragraph gjenstår; se [STATUS.md](draw/STATUS.md).
 * [ ] D2.2 Pathfinder, Compound, Clipping
 * [ ] D2.3 Gradienter og Swatches
@@ -1430,7 +1435,7 @@ Oversikt over hva som er gjort og gjenstår, inkludert delvis ferdige oppgaver: 
 * [ ] D2.7 Raster-eksport (PNG og JPEG ferdig; WebP, Export for Screens og skala gjenstår)
 * [ ] D2.8 Pencil, Shear, Eyedropper m.fl.
 * [ ] D2.9 Transparency, History, Info, kommandosøk
-* [ ] D2.10 Send til Cut v2
+* [ ] D2.10 Send til Cut v2 — automatisk tekst til outlines, direkte sending til tom Cut og kopier/lim inn mellom Draw og Cut ferdig; øvrige v2-deler gjenstår.
 * [ ] D3.1 Outline Stroke og Expand
 * [ ] D3.2 Appearance og effekter
 * [ ] D3.3 Image Trace

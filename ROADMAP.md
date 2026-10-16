@@ -116,6 +116,12 @@ the same commit that completes an item.
   D2.1c adds rectangular area text: Type drag, live wrapping through frame dimensions,
   preserved overset text and an overflow marker. Path text, further area-text features
   and Character/Paragraph panels remain in D2.1.
+  Google Fonts adds the full searchable catalog, local font/license downloads,
+  version-pinned references, numeric weights and variable axes. Send to Cut now
+  sends editable text as outlines automatically; the Draw text stays editable.
+  With an empty Cut and one artboard, Send to Cut goes straight through without a dialog.
+  Copy and paste work between Cut and Draw in both directions; Paste takes the newest copy.
+  Unsupported non-vector glyphs and overset text block incomplete text output.
 - [ ] Phase 3 — Advanced editing: stroke expansion, effects, Image Trace,
   additional editing tools and AI/DXF export.
 - [ ] Phase 4 — Full feature set: Width, Blend, brushes, additional export

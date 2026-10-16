@@ -86,7 +86,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
       const v = textValues(node);
       return new scope.PointText({ insert: false, point: [0, 0], content: v.text,
         fontFamily: v.fontFamily, fontSize: v.fontSize * PT_TO_MM, leading: v.leading * PT_TO_MM,
-        fontWeight: [v.fontStyle === 'italic' ? 'italic' : '', v.fontWeight === 'bold' ? 'bold' : 'normal'].filter(Boolean).join(' '), justification: v.alignment });
+        fontWeight: [v.fontStyle === 'italic' ? 'italic' : '', String(v.fontWeight)].filter(Boolean).join(' '), justification: v.alignment });
     }
     if (node.type === 'path') return node.subpaths.length === 1 ? path(node.subpaths[0])
       : new scope.CompoundPath({ insert: false, children: node.subpaths.map(path) });
@@ -482,6 +482,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     thumbnails.set(id, { key, url }); return url;
   }
   return { render, select: updateView, updateView, bounds, selectionBounds, hit, items, setOutline, thumbnail, exportArtwork, booleanOperand, selectionHandle:point=>selection.hit(point),
+    glyphBounds(id,subpaths) {const item=new scope.CompoundPath({insert:false,children:subpaths.map(path)});try{return item.getBounds(records.get(id).worldMatrix).clone();}finally{item.remove();}},
     previewText(node, parentId = null) {
       textPreview?.remove(); textPreview = null;textPreviewFrame?.remove();textPreviewFrame=null;
       render();

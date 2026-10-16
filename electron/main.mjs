@@ -12,6 +12,7 @@ import { writeProject } from "./project-store.mjs";
 import { IMAGE_FORMATS, PDF_FORMATS, TEXT_FORMATS, TIFF_FORMATS, importIssueFor } from "./import-formats.mjs";
 import { createFontService } from './font-service.mjs';
 import { registerExportFiles } from './export-files.mjs';
+import { createGoogleFonts } from './google-fonts.mjs';
 
 app.name = "modCut"; // makes the macOS app menu read "modCut", not "Electron"
 
@@ -33,7 +34,7 @@ const isE2E = process.env.MODCUT_E2E === "1";
 const e2eImportResults = [];
 const e2eExports = [];
 const gunzipAsync = promisify(gunzip);
-const fonts = createFontService();
+let fonts,googleFonts;
 
 // Keep local development and an installed build from sharing Chromium state,
 // recovery files, and machine settings. E2E supplies its own user-data-dir.
@@ -265,6 +266,8 @@ function buildMenu(mode = "cut") {
 }
 
 app.whenReady().then(() => {
+  googleFonts=createGoogleFonts({directory:join(app.getPath('userData'),'google-fonts')});
+  fonts=createFontService({google:googleFonts});
   recoveryStore = createRecoveryStore(app.getPath("userData"));
   const appIcon = nativeImage.createFromPath(appIconPath);
   appIcon.setTemplateImage?.(false);
@@ -289,6 +292,8 @@ app.whenReady().then(() => {
   sidecar = createSidecar({ command: java, args: ["-jar", sidecarJar] });
   ipcMain.handle("sidecar", (_e, method, params) => sidecar.call(method, params));
   ipcMain.handle('listSystemFonts', event => {if(event.sender!==win?.webContents)throw new Error('Unavailable font session.');return fonts.list();});
+  ipcMain.handle('listGoogleFonts', (event,options) => {if(event.sender!==win?.webContents)throw new Error('Unavailable font session.');return googleFonts.list({refresh:options?.refresh===true});});
+  ipcMain.handle('googleFontFamily', (event,name) => {if(event.sender!==win?.webContents)throw new Error('Unavailable font session.');return googleFonts.details(name);});
   ipcMain.handle('shapeText', (event, values) => {if(event.sender!==win?.webContents)throw new Error('Unavailable font session.');return fonts.shape(values);});
   ipcMain.handle("setTheme", (event, preference) => {
     if (!BrowserWindow.fromWebContents(event.sender) || !["system", "light", "dark"].includes(preference)) return false;

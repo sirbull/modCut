@@ -139,7 +139,7 @@ The remaining drawing and editing tools are being built in stages; see the
 Type (T) places point text on click and rectangular area text on drag. Area Type in
 the same tool group also opens a default frame on click. Edit Text offers frame width
 and height in mm, with live wrapping. Text that does not fit remains editable and is
-marked with a red plus; export includes visible text, and Create Outlines requires all
+marked with a red plus; export includes visible text, and Create Outlines / Send to Cut require all
 text to fit. Use Edit Text to reflow the frame; ordinary transforms scale the object.
 Click text with Type, double-click it with Selection,
 or use **Edit Text…** in Properties to edit it. The dialog previews text on the
@@ -148,9 +148,20 @@ paragraph alignment. Apply creates one undo step; Cancel discards the preview.
 Text persists in projects and appears in SVG, PNG and JPEG exports. The font field
 lists installed vector font families. New text keeps its shaped glyph outlines in
 the document, so its appearance and export remain stable without the font installed.
-Use **Type > Create Outlines** (Ctrl/Cmd+Shift+O) to convert text to editable paths
-before **Send to Cut**. This is one undo step. Editing text requires the original
+**Send to Cut** sends text as vector outlines automatically, keeping the original
+Draw text editable. **Type > Create Outlines** (Ctrl/Cmd+Shift+O) also remains available
+to convert the Draw text to editable paths in one undo step. Editing text requires the original
 font or choosing an installed replacement; font files are not embedded.
+
+Choose **Google Fonts** under **Font source** to search the full catalog (1,950
+families in the bundled snapshot). Selecting a family downloads its complete font
+files and licenses to the app cache for offline use, without installing OS fonts or
+requiring an API key. Numeric weights, available styles, variable axes and named
+instances preview on the canvas. Google font references retain the exact download
+URL, checksum and license so another computer can fetch the same version. Text is
+shaped locally. **Refresh Google Fonts catalog** updates the list. Fonts whose glyphs
+have no supported monochrome vector contours cannot be used for laser output;
+missing contours and text overflow block sending instead of omitting lettering.
 
 The file does not copy local machine profiles, connection details, drivers,
 material libraries or process-profile libraries. A receiving computer must

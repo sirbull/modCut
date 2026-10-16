@@ -19,6 +19,9 @@ const target=mkdtempSync(join(tmpdir(),'modcut-font-package-'));
 try {
   asar.extractAll(archive,target);
   const {createFontService}=await import(pathToFileURL(join(target,'electron','font-service.mjs')));
+  const {createGoogleFonts}=await import(pathToFileURL(join(target,'electron','google-fonts.mjs')));
+  const google=createGoogleFonts({directory:join(target,'font-cache'),fetcher:async()=>{throw new Error('Packaged catalog must work offline.');}});
+  const googleCatalog=await google.list();if(googleCatalog.families.length<1900)throw new Error('The packaged Google Fonts catalog is missing.');
   const fonts=createFontService(),catalog=await fonts.list();
   const face=catalog.find(f=>['Arial','Helvetica','DejaVu Sans','Liberation Sans'].includes(f.family)&&f.fontWeight==='normal'&&f.fontStyle==='normal');
   if(face) {
@@ -27,7 +30,7 @@ try {
     const area=await fonts.shape({text:'AV fi Horten Horten',kind:'area',frameWidth:25,frameHeight:100,fontFamily:face.family,fontPostscriptName:face.postscriptName,fontWeight:'normal',fontStyle:'normal',fontSize:24,leading:28.8,alignment:'left'});
     if(area.overflow||area.lineWidths.length<2||!area.glyphs.length)throw new Error('Packaged area text wrapping failed.');
   }
-  console.log(`Packaged font engine passed (${catalog.length} installed faces${face?', glyph layout verified':''}).`);
+  console.log(`Packaged font engine passed (${catalog.length} installed faces, ${googleCatalog.families.length} Google families${face?', glyph layout verified':''}).`);
 } finally {
   const absolute=resolve(target),temporary=resolve(tmpdir())+sep;
   if(!absolute.startsWith(temporary)||!basename(absolute).startsWith('modcut-font-package-'))throw new Error('Refusing to remove an unexpected extraction path.');

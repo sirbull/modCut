@@ -6,17 +6,19 @@ import { dialogOperation } from '../geom/transforms.mjs';
 import { NAMED_LAYER_COLORS, layerColorName } from '../doc/layers.mjs';
 import { enhanceNumberFields } from './number-field.mjs';
 import { textProperties } from '../doc/text.mjs';
+import { createFontPicker } from './font-picker.mjs';
 
 let dialogId=0;
 /** Uniform text editor. Preview is detached; Apply is a single document command. */
-export function textDialog(defaults, onPreview = () => {}, {fonts=[],resolve=patch=>patch}={}) {
+export function textDialog(defaults, onPreview = () => {}, {fonts=[],resolve=patch=>patch,...fontOptions}={}) {
   const choices = values => values.map(value => ({ value, label: value[0].toUpperCase() + value.slice(1) }));
   const fields = [
     {key:'text',label:'Text',value:defaults.text,required:true},
-    {key:'fontFamily',label:'Font family',value:defaults.fontFamily,required:true,description:'Choose an installed font. Saved glyph outlines preserve appearance and export without the font file.'},
+    {key:'fontSource',label:'Font source',type:'select',value:defaults.fontSource??'system',options:[{value:'system',label:'Installed fonts'},{value:'google',label:'Google Fonts'}]},
+    {key:'fontFamily',label:'Font family',value:defaults.fontFamily,required:true,description:'Search the family name. Google fonts download on selection and are kept for offline use.'},
     {key:'fontSize',label:'Size (pt)',type:'number',value:defaults.fontSize,min:.1,max:10000,step:'any',required:true},
     {key:'leading',label:'Leading (pt)',type:'number',value:defaults.leading,min:.1,max:10000,step:'any',required:true},
-    {key:'fontWeight',label:'Weight',type:'select',value:defaults.fontWeight,options:choices(['normal','bold'])},
+    {key:'fontWeight',label:'Weight',type:'select',value:String(defaults.fontWeight),options:[...choices(['normal','bold']),...[100,200,300,400,500,600,700,800,900].map(value=>({value:String(value),label:String(value)})),...(typeof defaults.fontWeight==='number'&&defaults.fontWeight%100?[{value:String(defaults.fontWeight),label:String(defaults.fontWeight)}]:[])]},
     {key:'fontStyle',label:'Style',type:'select',value:defaults.fontStyle,options:choices(['normal','italic'])},
     {key:'alignment',label:'Paragraph alignment',type:'select',value:defaults.alignment,options:choices(['left','center','right'])},
   ];
@@ -25,29 +27,30 @@ export function textDialog(defaults, onPreview = () => {}, {fonts=[],resolve=pat
     {key:'frameHeight',label:'Frame height (mm)',type:'number',value:defaults.frameHeight,min:.1,max:100000,step:'any',required:true});
   const result = openDrawModal({title:defaults.kind==='area'?'Area Text':'Point Text',submitLabel:'Apply',className:'draw-text-dialog',fields});
   const form = document.querySelector('.draw-text-dialog form'), original = form.elements.text;
-  const families=document.createElement('datalist');families.id=`draw-fonts-${++dialogId}`;
-  for(const family of new Set(fonts.map(f=>f.family))){const option=document.createElement('option');option.value=family;families.append(option);}
-  form.append(families);form.elements.fontFamily.setAttribute('list',families.id);form.elements.fontFamily.autocomplete='off';
+  const picker=createFontPicker(form,defaults,{fonts,...fontOptions});
   const input = document.createElement('textarea'); input.name = 'text'; input.className = 'input'; input.required = true; input.rows = 3;
   input.value = defaults.text; original.replaceWith(input);
   const error = document.createElement('p'); error.setAttribute('role','alert'); form.insertBefore(error,form.querySelector('.modal-actions'));
-  const read = () => ({kind:defaults.kind??'point',...Object.fromEntries(fields.map(f => [f.key, f.type === 'number' ? form.elements[f.key].valueAsNumber : form.elements[f.key].value]))});
+  const read = () => ({kind:defaults.kind??'point',...Object.fromEntries(fields.map(f => {const el=form.elements[f.key];return [f.key,f.type==='number'?el.valueAsNumber:f.key==='fontWeight'&&!['normal','bold'].includes(el.value)?Number(el.value):el.value];})),
+    axisValues:[...form.querySelectorAll('[data-font-axis]')].map(el=>el.value)});
   const submit=form.querySelector('[type=submit]');let revision=0,alive=true,resolved=null,accepted=null,lastInput=null;
   const preview = async () => {
     if(!alive)return;
     const values=read(),key=JSON.stringify(values);if(key===lastInput)return;lastInput=key;
     const current=++revision;resolved=null;submit.disabled=true;form.dataset.textReady='false';input.setCustomValidity('Updating text preview…');
     try {
-      const patch=await resolve(textProperties(values));
+      const prepared=await picker.prepare(values);if(!alive||current!==revision)return;
+      const patch=await resolve(textProperties(prepared));
       if(!alive||current!==revision)return;
       resolved=patch;onPreview(patch);input.setCustomValidity('');submit.disabled=false;form.dataset.textReady='true';
+      lastInput=JSON.stringify(read());
       error.textContent=patch.layout?.overflow?`Text overflow: ${patch.layout.visibleLines} of ${patch.layout.lineWidths.length} lines fit. Enlarge the frame to show all text. Export includes only visible text; Create Outlines requires all text to fit.`:
-        fonts.length&&!fonts.some(f=>f.family.toLowerCase()===patch.character.fontFamily.toLowerCase())?'Font unavailable: saved outlines are preserved. Choose an installed font to change the text.':'';
+        patch.character.fontSource!=='google'&&fonts.length&&!fonts.some(f=>f.family.toLowerCase()===patch.character.fontFamily.toLowerCase())?'Font unavailable: saved outlines are preserved. Choose an installed font to change the text.':'';
     } catch (e) {if(alive&&current===revision){error.textContent=e.message;input.setCustomValidity(e.message);onPreview(null);}}
   };
   form.addEventListener('submit',event=>{if(!resolved||submit.disabled){event.preventDefault();event.stopImmediatePropagation();return;}accepted=resolved;alive=false;revision++;},true);
   form.addEventListener('input',preview); form.addEventListener('change',preview); preview(); input.focus(); input.select();
-  return result.then(values=>values?accepted:null).finally(() => {alive=false;revision++;form.removeEventListener('input',preview);form.removeEventListener('change',preview);});
+  return result.then(values=>values?accepted:null).finally(() => {alive=false;revision++;picker.destroy();form.removeEventListener('input',preview);form.removeEventListener('change',preview);});
 }
 function openDrawModal(options) {
   const previous=document.activeElement, result=openModal(options), overlay=document.querySelector('.modal-overlay:last-of-type'),modal=overlay.querySelector('.modal');
@@ -343,24 +346,28 @@ const escapeHtml=text=>String(text).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt
  * Send to Cut: artboard, target and placement, with a live summary of what will be sent.
  * `summary(boardId)` returns { count, warnings } for the chosen artboard.
  */
-export function sendToCutDialog({boards,boardId,summary}) {
+export function sendToCutDialog({boards,boardId,summary,cutEmpty=false}) {
+  // An empty Cut has nothing to replace or keep apart, so the artboard always goes into this tab's Cut.
+  const target=cutEmpty?[]:[{key:'target',label:'Target',type:'select',value:'new-tab',options:[{value:'new-tab',label:'New Cut tab'},{value:'replace',label:'Replace the design in this tab’s Cut'},{value:'add',label:'Add to this tab’s Cut'}]}];
   const result=openDrawModal({title:'Send to Cut',submitLabel:'Send',className:'draw-send-dialog',fields:[
     {key:'boardId',label:'Artboard',type:'select',value:boardId,options:boards.map((b,i)=>({value:b.id,label:escapeHtml(`${i+1}. ${b.name}`)}))},
-    {key:'target',label:'Target',type:'select',value:'new-tab',options:[{value:'new-tab',label:'New Cut tab'},{value:'replace',label:'Replace the design in this tab’s Cut'},{value:'add',label:'Add to this tab’s Cut'}]},
+    ...target,
     {key:'placement',label:'Placement',type:'select',value:'origin',options:[{value:'origin',label:'Artboard top left at the bed origin'},{value:'center',label:'Centered on the bed'}]},
   ]});
   const modal=document.querySelector('.draw-send-dialog'),form=modal.querySelector('form'),submit=form.querySelector('[type=submit]');
   const info=document.createElement('div');info.className='draw-send-dialog__summary';info.setAttribute('role','status');info.dataset.drawSendSummary='';
   form.querySelector('.modal-actions').before(info);
   const update=()=>{
-    let s;try{s=summary(form.elements.boardId.value);}catch(error){s={count:0,warnings:[error.message]};}
+      let s;try{s=summary(form.elements.boardId.value);}catch(error){s={count:0,warnings:[],errors:[error.message]};}
     info.replaceChildren();const p=document.createElement('p');info.append(p);
-    p.textContent=s.count?`${s.count} path${s.count===1?'':'s'} will be sent as centerline geometry. Colors become Cut layers.`:'Nothing on this artboard can be sent.';
+      p.textContent=s.count?`${s.count} path${s.count===1?'':'s'} will be sent as centerline geometry. Colors become Cut layers.`:'Nothing on this artboard can be sent.';
+      if(s.textCount){const note=document.createElement('p');note.textContent=`${s.textCount} text object${s.textCount===1?'':'s'} will be sent as outlines automatically. Text stays editable in Draw.`;info.append(note);}
+      if(s.errors?.length){const p=document.createElement('p');p.setAttribute('role','alert');p.textContent=s.errors.join(' ');info.append(p);}
     if(s.warnings.length){const list=document.createElement('ul');for(const w of s.warnings){const li=document.createElement('li');li.textContent=w;list.append(li);}info.append(list);}
-    submit.disabled=!s.count;
+      submit.disabled=!s.count||!!s.errors?.length;
   };
   form.elements.boardId.addEventListener('change',update);update();
-  return result;
+  return result.then(values=>values&&{target:'add',...values});
 }
 /** Place options shown after choosing images, like the Template checkbox in Illustrator's Place dialog. */
 export function placeOptionsDialog({template=false,count=1}={}) {

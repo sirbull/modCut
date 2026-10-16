@@ -1024,6 +1024,46 @@ delen legger bare skriverne, uten UI.
 Verifisering: 8 nye enhetstester; PDF-en leses tilbake med pdf.js (sider, størrelse, lag,
 vedlegg, metadata).
 
+## 2026-10-16: Send to Cut uten dialog når Cut er tom (Send to Cut v2, del 1)
+
+Brukeren ønsker at Send to Cut går rett gjennom når fanens Cut er tom, og at det etterpå skal gå
+an å kopiere og lime inn mellom Cut og Draw. Arbeidet deles i to deler; denne delen er den første.
+
+- `createDrawWorkspace` har fått `cutIsEmpty()`; app.js sender `() => !bed.getDesign()`.
+- Tom Cut og ett artboard: ingen dialog. Artboardet legges i denne fanens Cut med øvre venstre
+  hjørne på bed-origo. Dialogen åpnes likevel når noe hindrer sendingen (tomt artboard, manglende
+  font, tekstoverløp), slik at den kan forklare hvorfor.
+- Tom Cut og flere artboards: dialogen har bare Artboard og Placement. Uten noe i Cut er det ikke
+  noe å erstatte eller holde adskilt, så målet er alltid denne fanens Cut.
+- Cut med innhold: uendret dialog med ny Cut-fane som standard.
+
+Verifisering: 186 Draw-enhetstester. Electron `--draw-cut` (ny direkte vei, fallback ved tomt
+artboard og to artboards uten Target), `--draw-control`, `--draw-outlines`, `--draw-area-text` og
+`--draw-google-fonts` passerer.
+
+Neste: del 2, kopier og lim inn mellom Cut og Draw.
+
+## 2026-10-16: Kopier og lim inn mellom Cut og Draw (Send to Cut v2, del 2)
+
+- Én regel: **Paste tar den nyeste kopien**, enten den kom fra Cut eller Draw. `drawClipboard.time()`
+  og `bed.clipboardTime()` sammenlignes (`performance.now()`).
+- Draw → Cut: Copy/Cut i Draw lagrer også en cut-SVG av utvalget (`artboardCutSvg(..., { only })`,
+  samme rør som Send to Cut, tekst som glyfkonturer). Paste/Paste in Place i Cut legger den inn med
+  `bed.loadSVG(..., { placement: 'origin' })`: samme posisjon på bed som artboardet ville fått ved
+  Send to Cut. Ett angresteg. Feil/advarsler (f.eks. bilder, tekst uten utlegg) vises som toast.
+- Cut → Draw: `bed.clipboardSVG()` lager en mm-SVG med bed-origo i (0, 0), ett element per kopiert
+  objekt, prosessfargen som strekfarge. Rasterbilder utelates med advarsel. Paste i Draw sentrerer i
+  visningen; Paste in Place / Front / Back / All Artboards legger bed-posisjonen relativt til aktivt
+  artboard (det motsatte av Send to Cut). `importArtwork` har fått `offset`, `label` og `unwrap`, så
+  SVG-roten ikke blir en ekstra gruppe. Draw-kommandoen aktiverer Cuts paper-scope mens Cut bygger SVG-en.
+- Duplicate i Cut lar utklippstavlen være som den var (som i Illustrator), så den ikke tar over Paste.
+
+Verifisering: 191 Draw-enhetstester (ny test for `only`). Electron `--draw-cut` dekker Copy i Cut →
+Paste in Place i Draw (path, posisjon, farge, 0,1 mm strek) og Copy i Draw → Paste i Cut (posisjon,
+farge, ett angresteg).
+
+Gjenstår: lim inn mellom vinduer og via systemets utklippstavle; bilder fra Cut til Draw.
+
 ## 2026-10-16: Eksport del 2 — File › Export › Export As med PDF-dialog
 
 - Export er fjernet fra Properties og Artboards-panelet; **File › Export › Export As…**

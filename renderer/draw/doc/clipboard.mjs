@@ -50,6 +50,6 @@ export function pasteCommands(doc, clip, { parentId, index, offset = [0, 0], par
   });
   return { commands, ids };
 }
-let current = null;
-/** One clipboard for all Draw tabs in this window. */
-export const drawClipboard = { get: () => current, set: (clip) => { current = clip; } };
+let current = null, time = 0;
+/** One clipboard for all Draw tabs in this window. `time()` lets Cut and Draw tell which copy is newest. */
+export const drawClipboard = { get: () => current, set: (clip) => { current = clip; time = performance.now(); }, time: () => time };

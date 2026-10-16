@@ -1,10 +1,15 @@
-const { contextBridge, ipcRenderer, webUtils } = require("electron");
+const { contextBridge, ipcRenderer, webFrame, webUtils } = require("electron");
 
 // Only surface a narrow, safe bridge to the renderer.
 contextBridge.exposeInMainWorld("modcut", {
+  setUiScale: (scale) => {
+    if ([0.8, 0.9, 1, 1.1, 1.2].includes(scale)) webFrame.setZoomFactor(scale);
+  },
   setTheme: (preference) => ipcRenderer.invoke("setTheme", preference),
   call: (method, params) => ipcRenderer.invoke("sidecar", method, params),
   listSystemFonts: () => ipcRenderer.invoke('listSystemFonts'),
+  listGoogleFonts: options => ipcRenderer.invoke('listGoogleFonts',options),
+  googleFontFamily: name => ipcRenderer.invoke('googleFontFamily',name),
   shapeText: values => ipcRenderer.invoke('shapeText', values),
   openImport: (options) => ipcRenderer.invoke("importFile", options),
   getPathForFile: (file) => webUtils.getPathForFile(file),

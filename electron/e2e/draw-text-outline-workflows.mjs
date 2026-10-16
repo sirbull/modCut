@@ -36,8 +36,8 @@ export async function runDrawTextOutlineWorkflows(client) {
   await evaluate(`(async()=>{const w=${active};w.handle('undo');w.handle('undo')})()`);
   assert.equal(await evaluate(`(async()=>(${active}.state.document.getNode('${legacy}')) )()`),null);
   const shot=await command('Page.captureScreenshot',{format:'png'});await writeFile(join(tmpdir(),'modcut-draw-text-outlines.png'),Buffer.from(shot.data,'base64'));
-  await evaluate(`(async()=>{${active}.handle('send-to-cut')})()`);await until("!!document.querySelector('.draw-send-dialog form')");
-  await evaluate("document.querySelector('.draw-send-dialog form').requestSubmit()");await until("document.body.dataset.workspace==='cut'");
+  // An empty Cut with one artboard receives the artwork directly, without the Send to Cut dialog.
+  await evaluate(`(async()=>{${active}.handle('send-to-cut')})()`);await until("document.body.dataset.workspace==='cut'");
   const placed=await evaluate("(()=>{const items=paper.project.layers[1].children,b=items.reduce((box,item)=>box?box.unite(item.bounds):item.bounds.clone(),null);return {count:items.length,paths:items.every(i=>i.className==='Path'||i.className==='CompoundPath'),bounds:b?[b.x,b.y,b.width,b.height]:null};})()");
   assert.ok(placed.count>0&&placed.paths,'Send to Cut produces editable vector paths');
   const expected=[before.bounds[0]-before.board[0],before.bounds[1]-before.board[1],...before.bounds.slice(2)];

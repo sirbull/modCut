@@ -7,6 +7,7 @@
 import { isOutputNode } from '../doc/layers.mjs';
 import { paintHex } from '../doc/paint.mjs';
 import { multiply } from '../doc/arrange.mjs';
+import { hasTextLayout } from '../doc/text-layout.mjs';
 
 const fmt = (n) => { const v = Math.abs(n) < 5e-5 ? 0 : n; return String(Number(v.toFixed(4))); };
 const apply = ([a, b, c, d, e, f], [x, y]) => [a * x + c * y + e, b * x + d * y + f];
@@ -38,27 +39,25 @@ export function pathData(subpaths, m) {
  * @param geometry { worldMatrix(id), bounds(id) -> {x,y,width,height}, subpaths(id) -> local PathData for paths and shapes }
  * @returns {{ svg, count, warnings: string[], skipped: { images, outside, empty } }}
  */
-export function artboardCutSvg(doc, boardId, geometry) {
+export function artboardCutSvg(doc, boardId, geometry, { only = null } = {}) {
   const board = doc.getArtboard(boardId);
   if (!board) throw new Error('Choose an artboard to send.');
+  // `only`: copied objects and their descendants, sent whole wherever they are, for pasting in Cut.
+  const picked = (id) => !only || only.has(id) || doc.ancestors(id).some((a) => only.has(a.id));
+  const onBoard = (box) => !!box && (!!only || intersects(box, board));
   const toBoard = [1, 0, 0, 1, -board.x, -board.y], elements = [], skipped = { images: 0, outside: 0, empty: 0 };
-  let partly = 0, stacked = 0, openFilled = 0, text = 0;
-  for (const node of doc.descendants(null)) {
-    if (node.children || !isOutputNode(doc, node.id)) continue;
-    if (node.type === 'image') { skipped.images++; continue; }
-    if (node.type === 'text') { text++; continue; }
-    if (node.type !== 'path' && node.type !== 'shape') continue;
-    const box = geometry.bounds(node.id);
-    if (!box || !intersects(box, board)) { skipped.outside++; continue; }
-    if (!inside(box, board)) partly++;
+  let partly = 0, stacked = 0, openFilled = 0, textCount = 0;
+  const errors=[];
+  function emit(node,subpaths,box) {
+    if (!onBoard(box)) { skipped.outside++; return; }
+    if (!only && !inside(box, board)) partly++;
     const fills = shown(node.appearance?.fills), strokes = shown(node.appearance?.strokes);
     if (fills.length > 1 || strokes.length > 1) stacked++;
     const fill = paintHex(fills[0]), stroke = paintHex(strokes[0]);
-    if (!fill && !stroke) { skipped.empty++; continue; }
-    const subpaths = geometry.subpaths(node.id) ?? [];
+    if (!fill && !stroke) { skipped.empty++; return; }
     if (fill && subpaths.some((p) => !p.closed)) openFilled++;
     const m = multiply(toBoard, geometry.worldMatrix(node.id)), d = pathData(subpaths, m);
-    if (!d) { skipped.empty++; continue; }
+    if (!d) { skipped.empty++; return; }
     // Stroke widths are in local units unless the node stores world millimetres (strokeScaling: false).
     const scale = node.strokeScaling === false ? 1 : Math.sqrt(Math.abs(m[0] * m[3] - m[1] * m[2]));
     const attrs = [`d="${d}"`, `fill="${fill ?? 'none'}"`];
@@ -67,13 +66,24 @@ export function artboardCutSvg(doc, boardId, geometry) {
     else attrs.push('stroke="none"');
     elements.push(`  <path ${attrs.join(' ')}/>`);
   }
+  for (const original of doc.descendants(null)) {
+    if (original.children || !isOutputNode(doc, original.id) || !picked(original.id)) continue;
+    if (original.type === 'image') { skipped.images++; continue; }
+    if (original.type === 'text') {
+      const node=geometry.resolvedText?.(original.id)??original,box=geometry.bounds(node.id);
+      if(!onBoard(box)){skipped.outside++;continue;}
+      if(!hasTextLayout(node)){errors.push('Text needs a resolved font before sending. Open Edit Text and choose an available font.');continue;}
+      if(node.layout.overflow){errors.push('Text overflows its frame. Enlarge the frame before sending to Cut.');continue;}
+      textCount++;
+      for(const glyph of node.layout.glyphs)if(glyph.subpaths.length)emit(node,glyph.subpaths,geometry.glyphBounds?.(node.id,glyph.subpaths)??box);
+    } else if (original.type === 'path' || original.type === 'shape')emit(original,geometry.subpaths(original.id)??[],geometry.bounds(original.id));
+  }
   const warnings = [];
-  if (text) warnings.push(`${text} text object${text === 1 ? ' is' : 's are'} not sent yet. Use Type > Create Outlines before sending.`);
   if (skipped.images) warnings.push(`${skipped.images} image${skipped.images === 1 ? ' is' : 's are'} not sent yet (Send to Cut v2).`);
   if (partly) warnings.push(`${partly} object${partly === 1 ? ' extends' : 's extend'} past the artboard and ${partly === 1 ? 'is' : 'are'} sent whole.`);
   if (stacked) warnings.push(`${stacked} object${stacked === 1 ? ' has' : 's have'} several fills or strokes; only the first of each is sent.`);
   if (openFilled) warnings.push(`${openFilled} open path${openFilled === 1 ? ' has' : 's have'} a fill; Cut follows the open line.`);
   const W = fmt(board.width), H = fmt(board.height);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}mm" height="${H}mm" viewBox="0 0 ${W} ${H}">\n${elements.join('\n')}\n</svg>\n`;
-  return { svg, count: elements.length, warnings, skipped };
+  return { svg, count: elements.length, warnings, skipped, errors:[...new Set(errors)], textCount };
 }

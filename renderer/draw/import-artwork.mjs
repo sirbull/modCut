@@ -63,9 +63,9 @@ async function rasterize(vector) {
 
 /** Prepare everything before committing one atomic command per imported file. */
 /** `template: true` places the artwork on a new template layer below the active layer (Place > Template). */
-export async function importArtwork(scope, state, prepared, name, layerId, { fitArtboard = false, template = false, alive = () => true } = {}) {
+export async function importArtwork(scope, state, prepared, name, layerId, { fitArtboard = false, template = false, alive = () => true, offset: at = null, label = null, unwrap = false } = {}) {
   if (state.document.readOnly) throw new Error('This Draw document is read-only. Create a new document to import artwork.');
-  const board = activeArtboard(state), offset = fitArtboard ? [board.x,board.y] : [board.x+10,board.y+10];
+  const board = activeArtboard(state), offset = at ?? (fitArtboard ? [board.x,board.y] : [board.x+10,board.y+10]);
   const nodes = [], assets = {};
   let dimensions = null;
   let warning = prepared.warning;
@@ -108,7 +108,8 @@ export async function importArtwork(scope, state, prepared, name, layerId, { fit
         }
         const converted = convert(imported);
         if (!converted) throw new Error('No supported vector paths found.');
-        nodes.push(converted);
+        // `unwrap`: the SVG root is only a container (Paste from Cut), so its children are inserted as they are.
+        if (unwrap && converted.type === 'group') nodes.push(...converted.children); else nodes.push(converted);
       } finally { imported?.remove(); previous.activate(); }
     }
   }
@@ -117,7 +118,7 @@ export async function importArtwork(scope, state, prepared, name, layerId, { fit
   if (!alive()) throw new Error('The target Draw document was closed or replaced.');
   const layer = state.document.getNode(layerId);
   if (!template && (!layer || layer.type !== 'layer' || !state.document.isEditable(layerId))) throw new Error('Select a visible, unlocked layer before importing.');
-  state.history.transaction(`Import ${name}`, () => {
+  state.history.transaction(label ?? `Import ${name}`, () => {
     if (fitArtboard && dimensions?.width > 0 && dimensions?.height > 0) state.history.execute(updateArtboard(board.id,dimensions));
     if (Object.keys(assets).length) state.history.execute(updateDocument({ assets: { ...state.document.data.assets, ...assets } }));
     if (template) templateLayerCommands(state.document, layer ? layerId : state.document.data.layers.at(-1).id, { name, nodes }).commands.forEach(command => state.history.execute(command));

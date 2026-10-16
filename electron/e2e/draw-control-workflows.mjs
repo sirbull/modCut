@@ -57,10 +57,9 @@ export async function runDrawControlWorkflows(client) {
   assert.equal(await evaluate(`document.querySelector('${bar}').hidden`), false);
   assert.equal(await evaluate("localStorage.getItem('modcut.draw.controlBar')"), 'shown');
 
-  // File > Send Artboard to Cut… opens the Send to Cut dialog.
+  // File > Send Artboard to Cut… sends this tab's only artboard straight into its empty Cut.
   assert.equal(await evaluate("window.modcut.clickE2EMenuItem('File','Send Artboard to Cut…')"), true);
-  await until("!!document.querySelector('.draw-send-dialog form')", 'Send to Cut from the File menu');
-  await evaluate("document.querySelector('.draw-send-dialog [data-x=cancel]').click()");
+  await until("document.body.dataset.workspace==='cut' && paper.project.layers[1].children.length>0", 'Send to Cut from the File menu');
   await restoreTabs();
   console.log('PASS Draw control bar: paint for new objects, selection title, X/W/opacity/weight, align to artboard, artboard size, View > Control Bar remembered, File > Send Artboard to Cut');
 }

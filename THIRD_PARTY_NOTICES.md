@@ -88,3 +88,18 @@ or font outlines are copied.
   the existing `renderer/**/*` packaging rule.
 - No runtime library, webfont or CDN is used. The user-supplied CTA icons in
   `ICONS/` are separate assets.
+
+## Google Fonts — optional downloaded document fonts
+
+- Sources: https://fonts.google.com/ and https://github.com/google/fonts .
+- `assets/google-fonts-catalog.json` contains family names, categories, variant/axis
+  metadata and script coverage; it contains no font binaries. The update script
+  reads the same public metadata endpoint used by the Google Fonts website.
+- User-selected font families and original license texts are downloaded from
+  Google's family download manifest and fonts.gstatic.com into the app's private
+  user-data cache. Each font remains subject to its own included license.
+- The original license accompanies the local font and the version-pinned font
+  reference stored in document text. The editor can display that license.
+  This release does not embed font binaries in projects or application bundles.
+- Service reference: https://developers.google.com/fonts/faq . The app does not
+  use the API-key-based Developer API and does not send document text to Google.

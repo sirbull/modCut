@@ -27,7 +27,7 @@ import { shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog
 import { artboardCutSvg } from './io/cut-svg.mjs';
 import { EXPORT_FORMATS, rasterSize, svgDocument } from './io/export.mjs';
 import { createExportController } from './export-controller.mjs';
-import { layerOptionsPatch, templateLayerCommands } from './doc/layers.mjs';
+import { layerOptionsPatch, templateLayerCommands, isOutputNode } from './doc/layers.mjs';
 import { toolCursor } from './tools/cursors.mjs';
 import { alignReference, alignOffsets, distributeOffsets, spacingOffsets } from './geom/align.mjs';
 import { pointText, textValues, textProperties, textToOutlines, DEFAULT_CHARACTER } from './doc/text.mjs';
@@ -42,7 +42,7 @@ const commands=new Set(['undo','redo','delete','select-all','select-artboard','d
   'edit-text','create-outlines','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
   'paint-focus','paint-swap','paint-none','paint-solid','default-paint','smart-guides','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','toggle-panels','toggle-panels-except-tools',
   ...PANEL_DEFINITIONS.map(p=>`panel.${p.id}`),...['left','right','up','down'].flatMap(d=>[`nudge-${d}`,`nudge-large-${d}`,`duplicate-${d}`])]);
-export function createDrawWorkspace(root,{paper=window.paper,state=createProjectDraw(),onError=console.warn,onImport=()=>{},onSendToCut=null,onExport=null,getPreferences=()=>({}),statusHost=null}={}) {
+export function createDrawWorkspace(root,{paper=window.paper,state=createProjectDraw(),onError=console.warn,onImport=()=>{},onSendToCut=null,cutIsEmpty=()=>false,cutClipboard=()=>null,onExport=null,getPreferences=()=>({}),statusHost=null}={}) {
   state.ui={tool:'select',flyout:null,layerId:state.document.data.layers[0]?.id,fill:'#FFFFFF',stroke:'#071411',strokeWidth:.5,paintFocus:'fill',...state.ui};
   state.ui.artboardId=activeArtboard(state).id;
   // The control bar's visibility is a per-user view preference, like Illustrator's Window > Control.
@@ -159,13 +159,14 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     return world.every((v,i)=>v===[1,0,0,1,0,0][i])?node:{...node,transform:multiplyMatrix(invertMatrix(world),node.transform)};
   }
   /** The artboard as a cut SVG; shapes are expanded and placed with their parent's world matrix. */
-  function cutSvg(boardId) {
+  function cutSvg(boardId,resolved=new Map(),options={}) {
     return withScope(()=>artboardCutSvg(state.document,boardId,{
       bounds:id=>renderer.bounds(id),
       worldMatrix(id){const node=state.document.getNode(id),parent=state.document.ancestors(id)[0];
         return node.type==='shape'?(parent?renderer.worldMatrix(parent.id):[1,0,0,1,0,0]):renderer.worldMatrix(id);},
       subpaths(id){const node=state.document.getNode(id);return node.type==='shape'?renderer.expandedShape(id)?.subpaths:node.subpaths;},
-    }));
+      resolvedText:id=>resolved.get(id),glyphBounds:(id,paths)=>renderer.glyphBounds(id,paths),
+    },options));
   }
   /** One artboard as an SVG document (text) or a PNG/JPEG data URL, drawn from the printable artwork. */
   function exportBoard(boardId,format,{ppi=150,background='transparent',quality=.92}={}) {
@@ -209,14 +210,32 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     interactions?.cancel();paths?.finish();
     return exporter.exportScreens();
   }
+  let cutBusy=false;
   async function sendToCut(boardId=state.ui.artboardId) {
+    if(cutBusy||textBusy||document.querySelector('.modal-overlay'))return;
     if(!onSendToCut)throw new Error('Send to Cut is not available here.');
+    cutBusy=true;
+    try {
     interactions?.cancel();paths?.finish();
-    const options=await sendToCutDialog({boards:state.document.data.artboards,boardId,summary:id=>cutSvg(id)});
+    const before=state.document.data,resolved=new Map();
+    for(const node of state.document.descendants(null))if(node.type==='text'&&isOutputNode(state.document,node.id)&&!hasTextLayout(node)) {
+      try{resolved.set(node.id,{...node,...await resolveText(node,{})});}catch{/* The dialog reports unresolved text and blocks incomplete output. */}
+      if(destroyed)return;
+    }
+    if(destroyed)return;if(state.document.data!==before)throw new Error('The artwork changed while preparing text. Try sending again.');
+    // An empty Cut with one artboard needs no questions: the artboard goes straight into this tab's Cut.
+    // The dialog still opens when something blocks the send, so it can explain why.
+    const boards=state.document.data.artboards,empty=cutIsEmpty();
+    const direct=empty&&boards.length===1&&(()=>{try{const s=cutSvg(boards[0].id,resolved);return s.count>0&&!s.errors.length;}catch{return false;}})();
+    const options=direct?{boardId:boards[0].id,target:'add',placement:'origin'}
+      :await sendToCutDialog({boards,boardId,summary:id=>cutSvg(id,resolved),cutEmpty:empty});
     if(!options||destroyed)return;
-    const board=state.document.getArtboard(options.boardId),{svg,count,warnings}=cutSvg(board.id);
+    if(state.document.data!==before)throw new Error('The artwork changed while preparing the cut. Try sending again.');
+    const board=state.document.getArtboard(options.boardId),{svg,count,warnings,errors}=cutSvg(board.id,resolved);
+    if(errors.length)throw new Error(errors.join(' '));
     if(!count)throw new Error('Nothing on this artboard can be sent to Cut.');
     await onSendToCut({svg,count,warnings,name:board.name,width:board.width,height:board.height,target:options.target,placement:options.placement});
+    }finally{cutBusy=false;}
   }
   function isolate(id) {if(state.document.getNode(id)?.type!=='group')return;state.ui.isolation=id;select([]);isolationChanged();}
   function exitIsolation() {const id=isolation();if(!id)return false;state.ui.isolation=null;select([id]);isolationChanged();return true;}
@@ -241,10 +260,13 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   async function resolveText(node,patch) {
     patch=textProperties(textValues({...node,...patch}));
     const previous=node.character;
-    if(previous?.fontPostscriptName&&['fontFamily','fontWeight','fontStyle'].every(k=>patch.character[k]===previous[k]))patch.character.fontPostscriptName=previous.fontPostscriptName;
+    if(previous?.fontPostscriptName&&['fontFamily','fontWeight','fontStyle','fontSource'].every(k=>patch.character[k]===previous[k])) {
+      patch.character.fontPostscriptName=previous.fontPostscriptName;
+      if(previous.googleFont&&!patch.character.googleFont)patch.character.googleFont=previous.googleFont;
+    }
     if(hasTextLayout({...node,...patch}))return {...patch,layout:node.layout};
     const layout=await window.modcut.shapeText(textValues({...node,...patch}));
-    return {...patch,character:{...patch.character,fontPostscriptName:layout.font.postscriptName},layout};
+    return {...patch,character:{...patch.character,fontPostscriptName:layout.font.postscriptName,...(layout.font.reference?{googleFont:layout.font.reference}:{})},layout};
   }
   async function createTextOutlines() {
     if(destroyed||textBusy||state.document.readOnly||document.querySelector('.modal-overlay'))return;
@@ -268,19 +290,20 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     const before=state.document.data;
     textBusy=true;statusLine.textContent='Loading installed fonts…';
     try {
-      const fonts=await listFonts();if(destroyed)return;
+      const [fonts,googleCatalog]=await Promise.all([listFonts(),window.modcut.listGoogleFonts()]);if(destroyed)return;
       status();
       if(state.document.data!==before)throw new Error('The artwork changed while loading fonts. Try again.');
-      if(!original&&!fonts.some(f=>f.family===defaults.fontFamily)){const face=['Arial','Helvetica','DejaVu Sans','Liberation Sans','Noto Sans'].map(name=>fonts.find(f=>f.family===name&&f.fontWeight==='normal'&&f.fontStyle==='normal')).find(Boolean)??fonts[0];if(face)defaults={...defaults,fontFamily:face.family,fontWeight:face.fontWeight,fontStyle:face.fontStyle};}
+      if(!original&&defaults.fontSource!=='google'&&!fonts.some(f=>f.family===defaults.fontFamily)){const face=['Arial','Helvetica','DejaVu Sans','Liberation Sans','Noto Sans'].map(name=>fonts.find(f=>f.family===name&&f.fontWeight==='normal'&&f.fontStyle==='normal')).find(Boolean)??fonts[0];if(face)defaults={...defaults,fontFamily:face.family,fontWeight:face.fontWeight,fontStyle:face.fontStyle};}
       const node=original??toParentSpace(parent,pointText([point.x,point.y],defaults));
-      const pending=textDialog(defaults,patch=>run(()=>renderer.previewText(patch?{...node,...patch}:null,parent)),{fonts,resolve:patch=>resolveText(node,patch)});
+      const pending=textDialog(defaults,patch=>run(()=>renderer.previewText(patch?{...node,...patch}:null,parent)),{fonts,googleCatalog,fontMetadata:original?.layout?.font??state.ui.fontMetadata,
+        googleFamily:window.modcut.googleFontFamily,refreshGoogle:()=>window.modcut.listGoogleFonts({refresh:true}),resolve:patch=>resolveText(node,patch)});
       ownedTextModal=document.querySelector('.draw-text-dialog');
       const patch=await pending;ownedTextModal=null;if(destroyed)return;
       run(()=>{
         renderer.previewText(null);
         if(!patch)return;
         if(state.document.data!==before)throw new Error('The artwork changed while editing text. Open the editor again.');
-        state.ui.character=patch.character;state.ui.textAlignment=patch.paragraph.alignment;
+        state.ui.character=patch.character;state.ui.fontMetadata=patch.layout.font;state.ui.textAlignment=patch.paragraph.alignment;
         state.history.transaction(original?'Edit Text':frame?'Area Text':'Point Text',()=>state.history.execute(original?updateNode(id,patch):insertNode(parent,{...node,...patch})));
         select([node.id]);
       });
@@ -343,14 +366,23 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       state.history.transaction(label,()=>{for(const m of moves)transforms.apply([1,0,0,1,...m.offset],label,{ids:[m.id],remember:false});});select(ids);
     },
   });
-  // Clipboard: Cut, Copy and the Paste family. The clipboard is shared by all Draw tabs.
+  // Clipboard: Cut, Copy and the Paste family. The clipboard is shared by all Draw tabs and with Cut:
+  // a copy also carries a cut SVG for pasting in Cut, and Paste takes Cut's copy when that is newer.
   function clipboardCommand(command) {
     const doc=state.document,world=id=>renderer.worldMatrix(id);
-    const copy=()=>{const ids=selectedIds();drawClipboard.set(copyNodes(doc,ids,world,renderer.selectionBounds()));return ids;};
+    const copy=()=>{
+      const ids=selectedIds(),clip=copyNodes(doc,ids,world,renderer.selectionBounds());
+      const board=doc.data.artboards.find(b=>b.x===clip.board[0]&&b.y===clip.board[1]);
+      let cut=null;try{cut=board?cutSvg(board.id,new Map(),{only:new Set(ids)}):null;}catch{/* Paste in Cut reports that nothing could be converted. */}
+      drawClipboard.set(Object.freeze({...clip,cut}));return ids;
+    };
     if(command==='copy')return()=>{copy();};
     if(command==='cut')return()=>{const ids=copy();state.history.transaction('Cut',()=>{for(const id of ids)state.history.execute(removeNode(id));});select([]);};
     if(!command.startsWith('paste'))return null;
     return()=>{
+      // Cut builds its copy in its own paper scope.
+      let fromCut;try{paper.activate();fromCut=cutClipboard();}finally{scope.activate();}
+      if(fromCut&&fromCut.time>drawClipboard.time())return pasteFromCut(fromCut,command).catch(error=>{if(!destroyed)onError(error.message);});
       const clip=drawClipboard.get();if(!clip)throw new Error('Nothing to paste. Copy or cut objects first.');
       const layer=insertionParent(),top={parentId:layer,atTop:true};
       const placements=[];
@@ -373,6 +405,17 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       });
       select(created);
     };
+  }
+  // Cut's copy is a millimetre SVG with the bed origin at (0, 0). Paste centres it in the view; the other
+  // paste commands keep its bed position relative to the active artboard, the reverse of Send to Cut.
+  async function pasteFromCut({svg,bounds,warning},command) {
+    if(!svg)throw new Error(warning||'Nothing in the Cut copy can be pasted in Draw.');
+    const board=activeArtboard(state),center=scope.view.center;
+    const offset=command==='paste'?[center.x-(bounds.x+bounds.width/2),center.y-(bounds.y+bounds.height/2)]:[board.x,board.y];
+    const result=await importArtwork(scope,state,{kind:'vector',svgText:svg},'',layerId(),{offset,label:'Paste',unwrap:true,alive:()=>!destroyed});
+    if(destroyed)return;
+    select(result.ids);
+    if(warning||result.warning)onError([warning,result.warning].filter(Boolean).join(' '));
   }
   // Object menu: Group, Ungroup, Arrange, Lock and Hide. Each is one undo step with a menu-style label.
   function objectCommand(command) {

@@ -1508,13 +1508,40 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   }
 
   let clipboardJSON = null;
+  let clipboardTime = 0; // lets Cut and Draw tell which copy is newest
   let pasteStep = 0;
   function copySelection() {
     const roots = selectedItems();
     if (!roots.length) return false;
     clipboardJSON = JSON.stringify(roots.map((it) => it.exportJSON({ asString: false })));
+    clipboardTime = performance.now();
     pasteStep = 0;
     return true;
+  }
+  // The copy as a millimetre SVG with the bed origin at (0, 0), for pasting in Draw. Rasters stay in Cut.
+  function clipboardSVG() {
+    if (!clipboardJSON) return null;
+    let defs;
+    try { defs = JSON.parse(clipboardJSON); } catch { return null; }
+    const group = new paper.Group({ insert: false });
+    designLayer.activate();
+    for (const def of defs) {
+      const item = designLayer.importJSON(def);
+      if (item?.className === "Layer") { group.addChildren(item.children.slice()); item.remove(); }
+      else if (item) group.addChild(item);
+    }
+    const rasters = group.getItems({ class: paper.Raster });
+    for (const raster of rasters) raster.remove();
+    // The process layer color is what Cut shows in its layer list; Draw gets the same color.
+    for (const it of group.getItems({ match: (it) => it.data?.modcutColor && it.strokeColor })) it.strokeColor = it.data.modcutColor;
+    // Each copied item on its own, so Draw gets the same objects back, not a wrapping group.
+    const b = group.bounds, svg = group.children.map((it) => it.exportSVG({ asString: true, precision: 4 })).join("");
+    group.remove();
+    if (!svg) return { svg: null, bounds: null, time: clipboardTime, warning: rasters.length ? "Images in Cut cannot be pasted in Draw yet." : null };
+    const W = bedWmm, H = bedHmm;
+    return { svg: `<svg xmlns="http://www.w3.org/2000/svg" width="${W}mm" height="${H}mm" viewBox="0 0 ${W} ${H}">${svg}</svg>`,
+      bounds: { x: b.x, y: b.y, width: b.width, height: b.height }, time: clipboardTime,
+      warning: rasters.length ? `${rasters.length} image${rasters.length === 1 ? " was" : "s were"} left out: images in Cut cannot be pasted in Draw yet.` : null };
   }
   function pasteSelection({ inPlace = false } = {}) {
     if (!clipboardJSON) return false;
@@ -1546,8 +1573,12 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     return true;
   }
   function duplicateSelection() {
+    // Duplicate leaves the clipboard as it was, as in Illustrator.
+    const saved = [clipboardJSON, clipboardTime, pasteStep];
     if (!copySelection()) return false;
-    return pasteSelection({ inPlace: false });
+    const ok = pasteSelection({ inPlace: false });
+    [clipboardJSON, clipboardTime, pasteStep] = saved;
+    return ok;
   }
 
   // --- simulation (red dot tracing the real toolpath) ---------------------
@@ -2473,7 +2504,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     onChange: (cb) => (changeCb = cb),
     getDesign, geometryStats, getRect, getRef, applyRect, applyAngle, startSim, startSimProgram, stopSim, estimateTime, buildGcodeJob, outputQuality,
     setSelectionMode, undo, redo, resetHistory, exportDesign, importDesign, exportSession, importSession,
-    groupSelected, ungroupSelected, arrangeSelected, copySelection, pasteSelection, duplicateSelection,
+    groupSelected, ungroupSelected, arrangeSelected, copySelection, pasteSelection, duplicateSelection, clipboardSVG, clipboardTime: () => clipboardTime,
     canUngroup, selectAll, deleteSelection,
     setGrid, setViewPreferences, setTool, setPathOrder, getColors, addShape, finishDrawing,
     setDrawStyle, applyStyle, getStyle, setLayerVisibility,

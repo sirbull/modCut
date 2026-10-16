@@ -1,6 +1,7 @@
 /** Versioned JSON data in millimetres. No renderer or Paper.js dependencies. */
 import { resolveCorners } from '../geom/corners.mjs';
 import { textSignature } from './text-layout.mjs';
+import { validGoogleReference,validFontAxes } from './font-reference.mjs';
 export const DOCUMENT_VERSION = 1;
 export const IDENTITY = Object.freeze([1, 0, 0, 1, 0, 0]);
 export const NODE_TYPES = Object.freeze(['layer', 'group', 'path', 'shape', 'text', 'image', 'trace', 'blend', 'compoundPath']);
@@ -204,9 +205,12 @@ export function validateDocument(doc) {
           string(c.fontFamily, `${p}.fontFamily`);
           if (typeof c.fontFamily === 'string' && !c.fontFamily.trim()) fail(`${p}.fontFamily`, 'Expected a font family');
           number(c.fontSize, `${p}.fontSize`, .1, 10000); number(c.leading, `${p}.leading`, .1, 10000);
-          enumeration(c.fontWeight, ['normal', 'bold'], `${p}.fontWeight`);
+          if(typeof c.fontWeight==='number')number(c.fontWeight,`${p}.fontWeight`,1,1000);else enumeration(c.fontWeight, ['normal', 'bold'], `${p}.fontWeight`);
           enumeration(c.fontStyle, ['normal', 'italic'], `${p}.fontStyle`);
           if(c.fontPostscriptName!==undefined)string(c.fontPostscriptName,`${p}.fontPostscriptName`);
+          if(c.fontSource!==undefined)enumeration(c.fontSource,['system','google'],`${p}.fontSource`);
+          if(c.googleFont!==undefined&&(!validGoogleReference(c.googleFont)||c.fontSource!=='google'||c.googleFont.family!==c.fontFamily))fail(`${p}.googleFont`,'Invalid Google font reference');
+          if(c.fontAxes!==undefined&&!validFontAxes(c.fontAxes))fail(`${p}.fontAxes`,'Invalid variable font axes');
         }
       }
       if(value.layout!==undefined) {

@@ -29,11 +29,11 @@ test('invalid text and typography are rejected at the UI and document boundaries
   node.content.runs=[{text:23}]; assert.ok(validateDocument(doc).some(e=>e.path.endsWith('.text')));
   node.content.runs=[];node.character.fontSize=-5;assert.ok(validateDocument(doc).some(e=>e.path.endsWith('.fontSize')));
 });
-test('Send to Cut reports omitted text instead of silently losing lettering', () => {
+test('Send to Cut blocks unresolved text instead of silently losing lettering', () => {
   const state=createProjectDraw(),doc=state.document,node=pointText([10,10],values);
   state.history.execute(insertNode(doc.data.layers[0].id,node));
-  const result=artboardCutSvg(doc,doc.data.artboards[0].id,{});
-  assert.equal(result.count,0);assert.match(result.warnings.join(' '),/1 text object is not sent yet/);
+  const result=artboardCutSvg(doc,doc.data.artboards[0].id,{bounds:()=>({x:10,y:10,width:20,height:20})});
+  assert.equal(result.count,0);assert.match(result.errors.join(' '),/resolved font/);
 });
 
 test('area frame dimensions are validated and unresolved area layouts cannot be saved',()=>{

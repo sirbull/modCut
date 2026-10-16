@@ -22,6 +22,30 @@ Create Outlines** og **D2.1c rektangulær områdetekst med linjebryting** er fer
 **Neste del er tekst på path i D2.1**, deretter egne Character/Paragraph-paneler.
 Se STATUS.md 2.7–2.8. Ikke marker hele D2.1 som ferdig.
 
+**Brukerstyrt tillegg etter D2.1c:** Google Fonts og automatisk tekst til outlines ved Send to Cut
+er implementert (STATUS.md 2.9). Tekst på path er fortsatt neste ordinære del.
+Tekstdialogen har Installed / Google Fonts, søk i hele katalogen, vekter, tilgjengelige stiler,
+variable akser og navngitte instanser. `assets/google-fonts-catalog.json` er et metadata-snapshot
+(1 950 familier); oppdater med `npm run update:google-fonts` eller katalogknappen i appen.
+Google Fonts bruker samme offentlige metadata-/nedlastingsendepunkter som fonts.google.com,
+ikke Developer API med nøkkel. Endepunktformatene er ikke en stabil API-kontrakt; behold
+snapshot/cache ved nettfeil og rapporter endret format. `google-fonts.mjs` laster komplette
+TTF/OTF-filer og lisenser fra Googles manifest til userData/google-fonts. Ingen fontbinærer i repoet.
+`character.googleFont` lagrer en versjonslåst URL, SHA-256 og lisens; dokumentet kan hente nøyaktig
+samme font på en ny maskin. Visning/outlines/Cut fungerer fra lagret glyfgeometri også uten nett.
+`fontAxes` og numerisk fontWeight er validert og inngår i utleggssignaturen.
+Farge-/bitmapfonter uten støttede monokrome konturer avvises; ikke kall dette full COLRv1/emoji-støtte.
+
+Send to Cut bruker glyfkonturene direkte, én compound path per synlig glyf, uten å endre Draw
+eller historikken. Eldre punkttekst uten utlegg beregnes i en midlertidig kopi. Manglende font,
+uavklart utlegg eller tekstoverløp på valgt artboard gir `summary.errors` og deaktiverer Send,
+også hvis andre objekter er gyldige. `cutBusy` hindrer overlappende forberedelser/dialoger.
+Create Outlines er fortsatt et eget destruktivt dokumentvalg med ett angresteg.
+Tom Cut og ett artboard sender direkte uten dialog (`cutIsEmpty` fra app.js); dialogen åpnes likevel
+ved feil eller tomt artboard, og har ingen Target når Cut er tom. Kopier/lim inn mellom
+Cut og Draw: Paste tar nyeste kopi (`drawClipboard.time()` mot `bed.clipboardTime()`); Draw-kopier bærer
+en cut-SVG (`artboardCutSvg` med `only`), Cut-kopier blir mm-SVG via `bed.clipboardSVG()` (WORK_LOG 2026-10-16).
+
 Type (T): klikk lager punkttekst, dra lager en rektangulær tekstramme med live kant under drag.
 Area Type finnes i Type-gruppen og har egen markør; klikk åpner en ramme på 60 × 30 mm.
 Edit Text har bredde/høyde i mm for områdetekst; endringene bryter teksten på nytt i preview.
@@ -29,7 +53,7 @@ Edit Text har bredde/høyde i mm for områdetekst; endringene bryter teksten på
 `node.frame` inngår i utleggssignaturen, og områdetekst krever et ferdig utlegg ved lagring.
 `layout.visibleLines/overflow` beskriver hvilke linjer som får plass. Skjult tekst beholdes i
 `content`; overløp vises i dialogen og som rødt pluss på canvas. Eksport tar synlige glyfer;
-Create Outlines avviser overløp, slik at skjult tekst ikke slettes ved konvertering.
+Create Outlines og Send to Cut avviser overløp, slik at skjult tekst ikke forsvinner.
 Rammegrenser brukes til valg/hit-test, også under transformerte foreldre; UI-kant/pluss er
 utenfor eksporten. Endre rammedimensjoner i Edit Text for reflow. Vanlige resize-/Transform-
 kommandoer skalerer fortsatt hele objektet. Tekst i vilkårlig lukket form, lenkede rammer,
@@ -46,11 +70,13 @@ gammel geometri etter en tekstendring. Eldre tekst uten cache vises fortsatt med
 `textDialog()` venter på riktig asynkrone forhåndsvisning før Apply aktiveres. Forsinkede svar
 etter nye tastetrykk/Cancel/destruert workspace ignoreres. `createTextOutlines()` venter på alle
 fonter før én atomisk historikktransaksjon; én glyf blir én path med flere subpaths ved behov,
-gruppert per linje/objekt. Deretter virker vanlig Send to Cut. SVG bruker outlines for beregnet tekst.
+gruppert per linje/objekt. Send to Cut gjør nå samme konvertering midlertidig for redigerbar tekst.
+SVG bruker outlines for beregnet tekst.
 `scripts/verify-font-package.mjs` kontrollerer fontmotoren fra app.asar; kjøres av `npm run pack`.
 
 E2E-flagg for de nye delene: `--draw-cut`, `--draw-place`, `--draw-control`, `--draw-export`,
-`--draw-text`, `--draw-outlines`, `--draw-area-text`.
+`--draw-text`, `--draw-outlines`, `--draw-area-text`, `--draw-google-fonts` (sistnevnte krever nett
+ved første fontnedlasting; holdes utenfor den vanlige offline Draw-suiten).
 
 Historikk for D1.9: commit `d337a8f` (en annen agent) flyttet allerede visningskontrollene
 (posisjon, artboard, zoom, Outline, Fit) til appens nederste statuslinje (`#drawStatus`) og

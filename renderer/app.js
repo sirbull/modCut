@@ -1,5 +1,6 @@
 import { createKeymap, shortcutLabel } from "./draw/keymap.mjs";
 import { createDrawWorkspace } from "./draw/index.mjs";
+import { drawClipboard } from "./draw/doc/clipboard.mjs";
 import { PROJECT_VERSION, validateProject, createProjectDraw } from "./draw/io/project.mjs";
 import { newDrawDocument } from "./draw/doc/artboards.mjs";
 import { newDocumentDialog, placeOptionsDialog, saveTemplateDialog } from "./draw/ui/dialogs.mjs";
@@ -325,7 +326,7 @@ function setWorkspace(mode) {
     tab.drawRoot.className = "draw-project";
     tab.drawRoot.dataset.tabId = tab.id;
     $("drawWorkspace").append(tab.drawRoot);
-    tab.draw = createDrawWorkspace(tab.drawRoot, { state: drawState, onError: message => toast(message,"err"), onImport: () => importDrawFiles(), onSendToCut: sendDrawToCut, onExport: drawExportBridge, getPreferences:()=>preferences, statusHost: $("drawStatus") });
+    tab.draw = createDrawWorkspace(tab.drawRoot, { state: drawState, onError: message => toast(message,"err"), onImport: () => importDrawFiles(), onSendToCut: sendDrawToCut, cutIsEmpty: () => !bed.getDesign(), cutClipboard: () => bed.clipboardTime() ? bed.clipboardSVG() : null, onExport: drawExportBridge, getPreferences:()=>preferences, statusHost: $("drawStatus") });
   }
   drawKeymap.reset();
   tab.workspace = mode;
@@ -2101,6 +2102,7 @@ async function importSettings() {
 $("settings").addEventListener("click", () => openSettings());
 async function openSettings() {
   const gu = state.gridUnit;
+  const uiScaleLabels = ["Smallest", "Small", "Default", "Large", "Largest"];
   const v = await openModal({
     title: "Preferences", submitLabel: "Save", className: "preferences-modal",
     fields: [
@@ -2108,6 +2110,10 @@ async function openSettings() {
         onChange: (value) => window.modcutTheme.setPreference(value),
         description: "System follows your device’s appearance automatically. Light and Dark keep a fixed theme. Changes apply and save immediately.",
         options: [{ value: "system", label: "System", icon: "system" }, { value: "light", label: "Light", icon: "light" }, { value: "dark", label: "Dark", icon: "dark" }] },
+      { key: "uiScale", label: "Interface size", type: "select", value: window.modcutUiScale.preference,
+        description: "Scale menus, icons, text and panels. Smaller sizes leave more room for the workspace. Applies and saves immediately.",
+        options: window.modcutUiScale.levels.map((value, index) => ({ value, label: `${uiScaleLabels[index]} (${Math.round(value * 100)}%)` })),
+        onChange: (value) => window.modcutUiScale.setPreference(value) },
       { key: "units", section: "Units & grid", label: "Display units", description: "Units used for the design’s position, width and height. Changing units keeps its physical size.", type: "select", value: state.units, options: [{ value: "mm", label: "Millimetres (mm)" }, { value: "cm", label: "Centimetres (cm)" }, { value: "in", label: "Inches (in)" }] },
       { key: "showGrid", label: "Show grid", type: "checkbox", value: preferences.showGrid, description: "Show grid lines on the Cut material preview. Applies immediately; artwork and output stay unchanged.", onChange: (value) => updatePreferences({ showGrid: value }) },
       { key: "gridUnit", label: "Grid unit", description: "Units used for the grid spacing below, independently of the display units.", type: "select", value: gu, options: [{ value: "mm", label: "Millimetres (mm)" }, { value: "cm", label: "Centimetres (cm)" }, { value: "in", label: "Inches (in)" }] },
@@ -2195,11 +2201,25 @@ $("filename").addEventListener("input", (e) => {
   markDirty();
 });
 
+// Cut and Draw share copy and paste: Paste takes whichever copy is newest. A Draw copy arrives as its
+// cut SVG, placed relative to the bed origin as its artboard would be by Send to Cut.
+function pasteFromDraw() {
+  const clip = drawClipboard.get();
+  if (!clip || drawClipboard.time() <= bed.clipboardTime()) return null;
+  if (!clip.cut?.count) { toast(clip.cut?.errors?.join(" ") || "Nothing in the Draw copy can be pasted in Cut.", "err"); return false; }
+  const prepared = prepareSVG(clip.cut.svg);
+  bed.finishDrawing();
+  bed.loadSVG(prepared.node, prepared.widthMm, prepared.heightMm, prepared.viewBox, { placement: "origin" });
+  markDirty();
+  const notes = [...clip.cut.errors, ...clip.cut.warnings];
+  if (notes.length) toast(notes.join(" "), "info");
+  return true;
+}
 function editAction(action) {
   const ok = ({
     copy: () => bed.copySelection(),
-    paste: () => bed.pasteSelection(),
-    "paste-in-place": () => bed.pasteSelection({ inPlace: true }),
+    paste: () => pasteFromDraw() ?? bed.pasteSelection(),
+    "paste-in-place": () => pasteFromDraw() ?? bed.pasteSelection({ inPlace: true }),
     duplicate: () => bed.duplicateSelection(),
     "select-all": () => bed.selectAll(),
     delete: () => bed.deleteSelection(),

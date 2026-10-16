@@ -4,7 +4,7 @@
 > Detaljer: [hovedplanen](../DRAW_WORKSPACE.md) (spesifikasjon og byggeplan),
 > [RIGHT_PANELS.md](RIGHT_PANELS.md) (høyresiden), [WORK_LOG.md](WORK_LOG.md) (hva som er gjort, dag for dag)
 > og [HANDOFF.md](HANDOFF.md) (overlevering til neste agent).
-> Sist oppdatert: 2026-10-16 (fase 1 ferdig; D2.1c rektangulær områdetekst). Arbeidsgren: `feat/vector-draw`.
+> Sist oppdatert: 2026-10-16 (Google Fonts og automatisk tekst til Cut). Arbeidsgren: `feat/vector-draw`.
 
 ## 1. Kort oppsummert
 
@@ -13,7 +13,8 @@ grunnformer med live hjørner, transformasjoner, lag med template-lag, farger, s
 gjennomsiktighet, flere fyll og streker (Appearance), Pathfinder, gruppering, rekkefølge, låsing,
 utklippstavle, isolasjonsmodus, kontrollinje og Place med Template. Et artboard kan sendes til Cut
 med **Send to Cut** (D1.12 v1), så det man tegner kan kuttes. Fase 1 er ferdig. SVG-, PNG- og
-JPEG-eksport, punkt-/rektangulær områdetekst med systemfonter og **Create Outlines** finnes. Path-tekst,
+JPEG-eksport, punkt-/rektangulær områdetekst med systemfonter, Google Fonts og **Create Outlines** finnes.
+Send to Cut gjør tekst til konturer automatisk uten å endre Draw-teksten. Path-tekst,
 Image Trace og effekter gjenstår.
 
 ## 2. Høyresiden sammenlignet med Illustrator
@@ -58,6 +59,13 @@ Hva som virker:
   eller **legg til**) og plassering (artboardets øvre venstre hjørne på bed-origo som standard, eller
   sentrert). Den viser hvor mange paths som sendes og advarsler før noe skjer; Send er deaktivert når
   artboardet er tomt.
+* **Tom Cut (2026-10-16):** Er fanens Cut tom og dokumentet har ett artboard, går Send to Cut rett
+  gjennom uten dialog til denne fanens Cut, øvre venstre hjørne på bed-origo. Dialogen åpnes likevel
+  når noe hindrer sendingen. Med flere artboards og tom Cut viser dialogen bare Artboard og Placement.
+* **Kopier og lim inn mellom Cut og Draw (2026-10-16):** Paste tar den nyeste kopien fra Cut eller Draw.
+  Fra Draw til Cut kommer objektene som cut-paths på samme bed-posisjon som Send to Cut ville gitt.
+  Fra Cut til Draw: Paste sentrerer i visningen, Paste in Place beholder posisjonen relativt til
+  aktivt artboard. Bilder fra Cut limes ikke inn i Draw ennå. Duplicate i Cut endrer ikke utklippstavlen.
 * `renderer/draw/io/cut-svg.mjs` lager en kanonisk SVG i millimeter: bare `<path>` med hex-farger,
   artboard-lokale koordinater, transformasjoner og grupper bakt inn, former ekspandert, strekbredde
   skalert med transformen (unntatt når strokeScaling er av). Template-lag, skjulte og ikke-utskrivbare
@@ -68,7 +76,7 @@ Hva som virker:
 * Advarsler: bilder sendes ikke ennå, objekter som stikker utenfor artboardet sendes hele, bare første
   fyll og strek sendes når en figur har flere, åpne paths med fyll.
 
-Gjenstår til Send til Cut v2 (D2.10): bilder som rastergravering, tekst til outlines (etter D2.1),
+Automatisk tekst til outlines er nå ferdig (2.9). Gjenstår til Send til Cut v2 (D2.10): bilder som rastergravering,
 Outline Stroke som valg, klipping til artboard, flere artboards samtidig, validering av små segmenter
 og duplikater, `cutLinks` med **Oppdater i Cut**.
 
@@ -147,14 +155,14 @@ Dette var første del av D2.1. Fontvalg, shaping og outlines er senere utvidet i
 * **Type > Create Outlines**, **Mod+Shift+O** og knappen i Properties lager én compound path per
   synlig glyf, gruppert per linje og objekt. Plassering, transformasjon, farger og opacity beholdes;
   hele konverteringen er ett angresteg. Tekst inne i valgte grupper kan også konverteres.
-* Etter konverteringen sendes banene med vanlig **Send to Cut**. Redigerbar tekst utelates fortsatt
-  med en beskjed om å bruke Create Outlines først. SVG-eksport av beregnet tekst bruker konturer og
+* Etter konverteringen sendes banene med vanlig **Send to Cut**. Send to Cut kan nå også bruke
+  redigerbar tekst direkte (2.9). SVG-eksport av beregnet tekst bruker konturer og
   trenger derfor ingen font på mottakerens maskin.
 * Eldre punkttekst uten glyfutlegg vises fortsatt med systemets tekstmotor. Edit Text > Apply eller
   Create Outlines beregner et nytt utlegg med den valgte fonten.
 
 Gjenstår i D2.1: videre områdetekst (se 2.8), tekst på path, blandede tekststiler, egne Character/Paragraph-paneler,
-flere tegn-/avsnittsegenskaper, finere fontvarianter og variabel-font-akser. Full fontembedding og
+flere tegn-/avsnittsegenskaper. Fontvarianter og variable akser er lagt til i 2.9. Full fontembedding og
 rosa markering av manglende fonter i selve canvas er heller ikke bygget.
 
 ### 2.8 Rektangulær områdetekst (D2.1c, 2026-10-16)
@@ -177,6 +185,32 @@ Avgrensning: reflow gjøres med rammefeltene i Edit Text. Vanlige resize-/Transf
 skalerer hele objektet. Reflow med canvas-håndtak, tekst i vilkårlig lukket form, lenkede rammer,
 automatisk orddeling og full språkavhengig Unicode-linjebryting gjenstår.
 
+### 2.9 Google Fonts og automatisk tekst til Cut (brukerønske, 2026-10-16)
+
+* **Edit Text > Font source > Google Fonts** gir søk i hele katalogen (snapshot med 1 950 familier).
+  Første valg laster komplette TTF/OTF-filer og lisens til appens lokale cache; senere valg fungerer
+  uten nett. **Refresh Google Fonts catalog** henter en ny katalog. Ingen API-nøkkel eller
+  OS-installasjon av fonten kreves. Dokumenttekst sendes ikke til Google; shaping skjer lokalt.
+* Numeriske vekter, faktiske normal-/kursivvarianter, alle tilgjengelige variable akser og navngitte
+  instanser støttes. Valgene viser bare tilgjengelige vekter/stiler. Forhåndsvisning, eksport,
+  Create Outlines og Send to Cut bruker samme Fontkit-beregnede Bézier-konturer.
+* Prosjektet beholder Google-fontens versjonslåste URL, SHA-256 og lisens sammen med teksten.
+  En annen maskin kan laste den eksakte fontfilen ved redigering. Uendrede dokumenter vises og
+  konverteres til konturer uten fontfil eller nett. Fontbinærer bygges foreløpig ikke inn i prosjektet.
+* **Send to Cut** omgjør tekst til paths i utdata, én compound path per glyf med hull og kurver
+  beholdt. Draw-tekst, utvalg og historikk endres ikke. Manuell **Create Outlines** finnes fortsatt.
+  Eldre punkttekst uten cache beregnes midlertidig. Manglende/ugyldige konturer eller overløp på
+  valgt artboard blokkerer Send, også når resten av designet kan sendes.
+* Google-manifester leverer også lisensen, som lagres lokalt og kan leses i fontvelgeren. Nettfeil
+  ødelegger ikke lagret katalog eller allerede nedlastede fonter. Kontrollerte nedlastingsverter,
+  størrelsesgrenser og sjekksum beskytter mot feil filer/versjoner.
+
+Avgrensning: hele katalogen kan søkes, men dette er støtte for fonter som gir monokrome
+vektorkonturer. Bitmap-/fargeglyfer uten støttede konturer (bl.a. visse COLRv1-/emoji-fonter) får
+en tydelig feil; full fargefontgjengivelse er ikke bygget. Googles offentlige metadata-/manifest-
+endepunkter kan endres; appen har et bundlet metadata-snapshot og bevarer lokal cache ved feil.
+Google Fonts-innføringen endrer ikke status for tekst på path, blandede stiler eller Character/Paragraph.
+
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
 | Oppgave | Status |
@@ -187,7 +221,7 @@ automatisk orddeling og full språkavhengig Unicode-linjebryting gjenstår.
 | D1.10 Group, Arrange, Clipboard, isolasjon | Ferdig |
 | D1.11 Place bitmap og template-lag | Ferdig (se 2.3); høyreklikkmeny, Crop Image og Links gjenstår |
 | D1.12 Send til Cut v1 | Ferdig (se 2.2) |
-| D2.1 Tekst | Punkttekst, systemfonter, shaping, outlines og rektangulær områdetekst ferdig (D2.1a/b/c); resten gjenstår, se 2.7–2.8 |
+| D2.1 Tekst | Punkt-/områdetekst, system-/Google-fonter, shaping, variable akser og outlines; path-tekst/paneler gjenstår, se 2.7–2.9 |
 | D2.2 Pathfinder, Compound, Clipping | Pathfinder ferdig; compound paths og clipping masks gjenstår |
 | D2.3 Gradienter og Swatches | Swatches ferdig (solide); gradienter og globale swatches gjenstår |
 | D2.4 Path-kommandoer | Gjenstår |
@@ -196,7 +230,7 @@ automatisk orddeling og full språkavhengig Unicode-linjebryting gjenstår.
 | D2.7 Raster-eksport | PNG og JPEG ferdig (se 2.5); WebP, Export for Screens og skala gjenstår |
 | D2.8 Pencil, Shear, Eyedropper m.fl. | Gjenstår |
 | D2.9 Transparency, History, Info, kommandosøk | Transparency ferdig; resten gjenstår |
-| D2.10 Send til Cut v2 | Gjenstår |
+| D2.10 Send til Cut v2 | Automatisk tekst til outlines ferdig (2.9); øvrige v2-deler gjenstår |
 | D3.1 Outline Stroke og Expand | Gjenstår (Expand Shape finnes) |
 | D3.2 Appearance og effekter | Appearance ferdig; effekter gjenstår |
 | D3.3 til D3.8, fase 4 og 5 | Gjenstår |
@@ -207,7 +241,7 @@ Fase 1 er ferdig. Neste er fase 2, i denne rekkefølgen:
 
 SVG-, PNG- og JPEG-eksport er gjort (2.5).
 
-1. **D2.1 Tekst**: punkttekst, systemfonter, Create Outlines og rektangulær områdetekst er ferdig (2.7–2.8).
+1. **D2.1 Tekst**: punkttekst, system-/Google-fonter, variable akser, Create Outlines og rektangulær områdetekst er ferdig (2.7–2.9).
    Neste del er tekst på path, deretter Character/Paragraph-paneler og videre områdetekst.
 2. D2.2 Compound paths og clipping masks (Make Clipping Mask i Layers-menyen venter på dette).
 3. D2.4 Path-kommandoer (Join, Average, Offset Path, Simplify).

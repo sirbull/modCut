@@ -7,6 +7,7 @@ import { create } from 'fontkit';
 import { textProperties, textValues, PT_TO_MM } from '../renderer/draw/doc/text.mjs';
 import { glyphSubpaths, textSignature } from '../renderer/draw/doc/text-layout.mjs';
 import { wrapText } from '../renderer/draw/doc/text-wrap.mjs';
+import { variableMetadata } from './font-metadata.mjs';
 
 export function systemFontDirectories(platform=process.platform, env=process.env, home=homedir()) {
   if(platform==='win32')return [join(env.WINDIR||'C:/Windows','Fonts'),...(env.LOCALAPPDATA?[join(env.LOCALAPPDATA,'Microsoft','Windows','Fonts')]:[])];
@@ -14,7 +15,7 @@ export function systemFontDirectories(platform=process.platform, env=process.env
   return ['/usr/share/fonts','/usr/local/share/fonts',join(home,'.local','share','fonts'),join(home,'.fonts')];
 }
 /** Paths stay private to main. The renderer can only request an enumerated face, never an arbitrary file. */
-export function createFontService({directories=systemFontDirectories()}={}) {
+export function createFontService({directories=systemFontDirectories(),google}={}) {
   let catalogPromise; const entries=new Map(), cache=new Map();
   async function *files(directory,depth=0) {
     if(depth>12)return;
@@ -36,7 +37,7 @@ export function createFontService({directories=systemFontDirectories()}={}) {
             const id=createHash('sha256').update(path+'\0'+font.postscriptName).digest('hex').slice(0,24);
             const style=font.subfamilyName||'Regular',weight=font['OS/2']?.usWeightClass??(/bold/i.test(style)?700:400);
             const entry={id,family:font.familyName,style,postscriptName:font.postscriptName,format:extname(path).slice(1).toLowerCase(),
-              fontWeight:weight>=600?'bold':'normal',fontStyle:font.italicAngle||/italic|oblique/i.test(style)?'italic':'normal',weight};
+              fontWeight:weight>=600?'bold':'normal',fontStyle:font.italicAngle||/italic|oblique/i.test(style)?'italic':'normal',weight,...variableMetadata(font)};
             // User fonts, scanned last, override an older system copy of the same face.
             faces.set(font.postscriptName,{...entry,path});
           }
@@ -51,16 +52,28 @@ export function createFontService({directories=systemFontDirectories()}={}) {
   async function shape(values) {
     const patch=textProperties(values),v=textValues(patch);
     if(v.text.length>10000)throw new Error('Text is limited to 10,000 characters per object.');
-    const catalog=await list();
-    const candidates=catalog.filter(f=>f.family.toLowerCase()===v.fontFamily.toLowerCase()&&f.fontWeight===v.fontWeight&&f.fontStyle===v.fontStyle);
-    const face=v.fontPostscriptName?candidates.find(f=>f.postscriptName===v.fontPostscriptName):candidates.sort((a,b)=>Math.abs(a.weight-(v.fontWeight==='bold'?700:400))-Math.abs(b.weight-(v.fontWeight==='bold'?700:400)))[0];
-    if(!face)throw new Error(`The font “${v.fontFamily}” (${v.fontWeight}, ${v.fontStyle}) is not installed. Choose an available font or style.`);
-    patch.character.fontPostscriptName=face.postscriptName;
-    let font=cache.get(face.id);
-    if(!font) {
-      const source=create(await readFile(entries.get(face.id).path));font=source.fonts?source.getFont(face.postscriptName):source;
-      if(cache.size>=12)cache.delete(cache.keys().next().value);cache.set(face.id,font);
+    const targetWeight=v.fontWeight==='bold'?700:v.fontWeight==='normal'?400:v.fontWeight;
+    let face,font;
+    if(v.fontSource==='google') {
+      if(!google)throw new Error('Google Fonts is unavailable.');
+      ({face,font}=await google.resolve(v));patch.character.googleFont=face.reference;
+    } else {
+      const catalog=await list();
+      const candidates=catalog.filter(f=>f.family.toLowerCase()===v.fontFamily.toLowerCase()&&f.fontStyle===v.fontStyle&&
+        (f.axes.wght&&targetWeight>=f.axes.wght.min&&targetWeight<=f.axes.wght.max || (typeof v.fontWeight==='number'?f.weight===targetWeight:f.fontWeight===v.fontWeight)));
+      face=v.fontPostscriptName?candidates.find(f=>f.postscriptName===v.fontPostscriptName):candidates.sort((a,b)=>Math.abs(a.weight-targetWeight)-Math.abs(b.weight-targetWeight))[0];
+      if(!face)throw new Error(`The font “${v.fontFamily}” (${v.fontWeight}, ${v.fontStyle}) is not installed. Choose an available font or style.`);
+      font=cache.get(face.id);
+      if(!font) {
+        const source=create(await readFile(entries.get(face.id).path));font=source.fonts?source.getFont(face.postscriptName):source;
+        if(cache.size>=12)cache.delete(cache.keys().next().value);cache.set(face.id,font);
+      }
     }
+    patch.character.fontPostscriptName=face.postscriptName;
+    const {axes,instances}=variableMetadata(font),settings={...v.fontAxes};
+    if(axes.wght&&settings.wght===undefined)settings.wght=targetWeight;
+    for(const [tag,value] of Object.entries(settings))if(!axes[tag]||value<axes[tag].min||value>axes[tag].max)throw new Error(`The ${tag} axis is outside this font’s range.`);
+    if(Object.keys(settings).length)font=font.getVariation(settings);
     const scale=v.fontSize*PT_TO_MM/font.unitsPerEm,glyphs=[],lineWidths=[],area=v.kind==='area';
     const width=run=>run.positions.reduce((sum,p)=>sum+p.xAdvance,0);
     const lines=area?wrapText(v.text,v.frameWidth/scale,text=>width(font.layout(text.replace(/\t/g,'    ')))):v.text.split('\n');
@@ -75,7 +88,7 @@ export function createFontService({directories=systemFontDirectories()}={}) {
       for(let i=0;i<run.glyphs.length;i++) {
         const glyph=run.glyphs[i],pos=run.positions[i];
         if(glyph.id===0)throw new Error(`The font “${face.family}” does not contain every character in the text.`);
-        const commands=glyph.path.commands;
+        let commands;try{commands=glyph.path.commands;}catch{throw new Error('This font cannot provide vector outlines for the text. Choose a monochrome vector font.');}
         if(!commands.length&&glyph.codePoints.some(cp=>!/[\s\u200B-\u200F\u202A-\u202E\u2060-\u206F]/u.test(String.fromCodePoint(cp))))throw new Error('This font uses a glyph without vector outlines. Choose a vector font.');
         if(line<visibleLines) {
           const subpaths=glyphSubpaths(commands,(gx,gy)=>[(offset+x+pos.xOffset+gx)*scale,ascent+line*v.leading*PT_TO_MM-(y+pos.yOffset+gy)*scale]);
@@ -85,7 +98,7 @@ export function createFontService({directories=systemFontDirectories()}={}) {
       }
       await yieldEventLoop();
     }
-    return {version:1,signature:textSignature(patch),font:{family:face.family,style:face.style,postscriptName:face.postscriptName},glyphs,lineWidths,
+    return {version:1,signature:textSignature(patch),font:{family:face.family,style:face.style,postscriptName:face.postscriptName,...(face.source==='google'?{source:'google',reference:face.reference}:{}),axes,instances},glyphs,lineWidths,
       ...(area?{visibleLines,overflow:visibleLines<lines.length}:{})};
   }
   return {list,shape};

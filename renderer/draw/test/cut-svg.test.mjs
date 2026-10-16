@@ -40,3 +40,12 @@ test('curves become cubic commands and open paths stay open', () => {
   const d = pathData([{ closed: false, segments: [{ p: [0, 0], in: [0, 0], out: [1, 0] }, { p: [2, 2], in: [0, -1], out: [0, 0] }] }], [1, 0, 0, 1, 0, 0]);
   assert.equal(d, 'M0 0C1 0 2 1 2 2');
 });
+
+test('copied objects become a cut SVG for pasting in Cut, sent whole wherever they are', () => {
+  const { doc, geometry } = setup();
+  const { count, svg, skipped, warnings } = artboardCutSvg(doc, 'B', geometry, { only: new Set(['G', 'off']) });
+  assert.equal(count, 2, 'the group child and the off-board path; red is not copied');
+  assert.doesNotMatch(svg, /stroke-width="0.1"/);
+  assert.match(svg, /d="M495 495/, 'off-board objects keep their position relative to the artboard');
+  assert.equal(skipped.outside, 0); assert.ok(!warnings.some((w) => /past the artboard/.test(w)));
+});

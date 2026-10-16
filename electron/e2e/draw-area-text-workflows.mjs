@@ -41,6 +41,10 @@ export async function runDrawAreaTextWorkflows(client) {
   await evaluate(`(async()=>{${active}.handle('create-outlines')})()`);await wait(80);
   assert.equal(await evaluate(`(async()=>(${active}.state.document.getNode('${node.id}').type))()`),'text','Outlines never discard hidden overset text');
   assert.match(await evaluate("[...document.querySelectorAll('.toast')].map(t=>t.textContent).join(' ')"),/overflows its frame/);
+  await evaluate(`(async()=>{${active}.handle('send-to-cut')})()`);
+  for(let i=0;i<100&&!await evaluate("!!document.querySelector('.draw-send-dialog')");i++)await wait(30);
+  assert.equal(await evaluate("document.querySelector('.draw-send-dialog [type=submit]').disabled"),true,'Overset text blocks incomplete laser output');
+  assert.match(await evaluate("document.querySelector('[data-draw-send-summary]').textContent"),/overflows/);await key('Escape');
   // Empty frames can still be opened with Type. The lower corner contains no painted glyphs.
   await click(await at(52,12.5));await ready();assert.equal(await evaluate("document.querySelector('.draw-text-dialog form').elements.frameHeight.value"),'1');
   await set({frameWidth:85,frameHeight:63});await apply();

@@ -38,7 +38,7 @@ export async function runDrawTextWorkflows(client) {
   assert.ok(extents[0][2]>extents[0][0]&&extents[0][3]>extents[0][1],'Raster export contains painted glyphs');
   extents[0].forEach((value,i)=>assert.ok(Math.abs(value-extents[1][i])<=2,`SVG/raster glyph extents agree: ${JSON.stringify(extents)}`));
   for(const format of ['png','jpg']) assert.match(await evaluate(`(async()=>{const w=${active};return w.exportBoard(w.state.ui.artboardId,'${format}',{ppi:72})})()`),format==='png'?/^data:image\/png/:/^data:image\/jpeg/);
-  assert.match(await evaluate(`(async()=>{const w=${active};return w.cutSvg(w.state.ui.artboardId).warnings.join(' ')})()`),/text object is not sent/);
+  assert.ok(await evaluate(`(async()=>{const w=${active},cut=w.cutSvg(w.state.ui.artboardId);return cut.textCount===1&&cut.count>0&&!cut.errors.length&&!/<text[\\s>]/.test(cut.svg)})()`),'Editable text is sent as vector paths automatically');
   await evaluate(`(async()=>{const w=${active};w.setTool('select');w.handle('undo')})()`); assert.equal(await snapshot(),before);
   await evaluate(`(async()=>{const w=${active};w.handle('redo');w.select(['${node.id}'])})()`);
   const saved=await snapshot();
@@ -48,6 +48,7 @@ export async function runDrawTextWorkflows(client) {
   assert.ok(Math.abs((await evaluate(`(async()=>(${active}.state.document.getNode('${node.id}').transform[4]))()`))-node.transform[4]-1)<1e-8,'Text uses the existing move commands');
   await evaluate(`(async()=>{${active}.handle('undo')})()`);assert.equal(await snapshot(),saved);
   await evaluate("document.querySelector('.draw-project[style*=block] [data-draw-quick=edit-text]').click()");
+  await ready();
   await command('Input.insertText',{text:'Cancelled'}); await key('Escape'); await wait(50);
   assert.equal(await snapshot(),saved,'Escape restores the original text');
   // Hit testing with Type edits the existing object, rather than creating a second object.
@@ -55,11 +56,12 @@ export async function runDrawTextWorkflows(client) {
   assert.equal(await evaluate("document.querySelector('.draw-text-dialog form')?.elements.text.value"),'Horten ÆØÅ\nmodCut');
   await key('Escape');await wait(50);
   await evaluate("document.querySelector('.draw-project[style*=block] [data-draw-quick=edit-text]').click()");
+  await ready();
   await command('Input.insertText',{text:'Revised'});await ready();await evaluate("document.querySelector('.draw-text-dialog form').requestSubmit()");await wait(50);
-  assert.equal(await evaluate(`(async()=>(${active}.state.document.getNode('${node.id}').content.runs[0].text))()`),'Revised');
+  assert.equal(await evaluate(`(async()=>(${active}.state.document.getNode('${node.id}').content.runs[0].text))()`),'Revised',await evaluate("JSON.stringify({modal:document.querySelector('.draw-text-dialog')?.textContent,text:document.querySelector('.draw-text-dialog textarea')?.value,ready:document.querySelector('.draw-text-dialog form')?.dataset.textReady,toasts:[...document.querySelectorAll('.toast')].map(t=>t.textContent)})"));
   await evaluate(`(async()=>{${active}.handle('undo')})()`);assert.equal(await snapshot(),saved);
   // Same model after reload, including character and paragraph fields.
   assert.equal(await evaluate(`(async()=>{const w=${active},{createProjectDraw}=await import('./draw/io/project.mjs');return createProjectDraw(JSON.parse(w.state.document.serialize())).document.serialize()===w.state.document.serialize()})()`),true);
   await restore();
-  console.log('PASS Draw point text: live canvas preview, Unicode/multiline, style, SVG/raster export, cancel, save/reload, single-step undo and Cut warning');
+  console.log('PASS Draw point text: live canvas preview, Unicode/multiline, style, SVG/raster export, cancel, save/reload, single-step undo and automatic Cut outlines');
 }
