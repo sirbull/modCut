@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import { inputHelpers, wait } from './cdp.mjs';
-import { activeDraw as active, submitNewDrawDialog } from './draw-test-helpers.mjs';
+import { activeDraw as active, submitNewDrawDialog, enterDraw } from './draw-test-helpers.mjs';
 
 const root = '.draw-project[style*=block]';
 export async function runDrawObjectWorkflows(client) {
   const { evaluate } = client, { drag, click } = inputHelpers(client), command = id => evaluate(`(async()=>{${active}.handle('${id}')})()`);
   const mod = process.platform === 'darwin' ? { metaKey: true } : { ctrlKey: true };
   const shortcut = (key, code, extra = {}) => evaluate(`(()=>{window.dispatchEvent(new KeyboardEvent('keydown',{key:${JSON.stringify(key)},code:${JSON.stringify(code)},bubbles:true,cancelable:true,...${JSON.stringify({ ...mod, ...extra })}}));window.dispatchEvent(new KeyboardEvent('keyup',{key:${JSON.stringify(key)},code:${JSON.stringify(code)},bubbles:true,cancelable:true}))})()`);
-  await evaluate("document.querySelector('#workspaceToggle').click();document.querySelector('#newDoc').click()");
+  await enterDraw(evaluate); await evaluate("document.querySelector('#newDoc').click()");
   await submitNewDrawDialog(evaluate, { preset: 'custom', width: 120, height: 80, name: 'Object proof' });
   const scratch = await evaluate("document.querySelector('.doc-tab.is-active').dataset.tabId");
   const screen = p => evaluate(`(async()=>{const w=${active},p=w.scope.view.projectToView(new w.scope.Point(${p})),b=w.scope.view.element.getBoundingClientRect();return{x:p.x+b.x,y:p.y+b.y}})()`);

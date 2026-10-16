@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { writeFile } from "node:fs/promises";
 import { connectToPage, inputHelpers, wait } from "./cdp.mjs";
+import { enterDraw } from "./draw-test-helpers.mjs";
 
 export async function runThemeWorkflows(client, port) {
   const theme = () => client.evaluate("document.documentElement.dataset.theme");
@@ -101,7 +102,7 @@ export async function runThemeWorkflows(client, port) {
   await emulate("light");
   await emulate("dark");
   assert.equal(await client.evaluate("paper.project.layers[1].exportJSON({asString:true})"), artwork, "theme redraws preserve artwork and output colours");
-  await client.evaluate("document.getElementById('workspaceToggle').click()");
+  await enterDraw(client.evaluate);
   await wait(100);
   assert.equal(await client.evaluate("getComputedStyle(document.getElementById('drawWorkspace')).backgroundColor"), "rgb(20, 53, 47)");
   await snapshot("dark-draw");

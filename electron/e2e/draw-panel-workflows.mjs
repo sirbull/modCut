@@ -3,13 +3,13 @@ import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { inputHelpers, wait } from './cdp.mjs';
-import { activeDraw as active, submitNewDrawDialog, submitPlaceDialog } from './draw-test-helpers.mjs';
+import { activeDraw as active, submitNewDrawDialog, submitPlaceDialog, enterDraw } from './draw-test-helpers.mjs';
 
 const root = ".draw-project[style*=block]";
 export async function runDrawPanelWorkflows(client) {
   const { evaluate } = client, { click, drag } = inputHelpers(client);
   const original = await evaluate("({id:document.querySelector('.doc-tab.is-active').dataset.tabId,cut:paper.project.layers[1].exportJSON({asString:true})})");
-  await evaluate("document.querySelector('#workspaceToggle').click();document.querySelector('#newDoc').click()");
+  await enterDraw(evaluate); await evaluate("document.querySelector('#newDoc').click()");
   await submitNewDrawDialog(evaluate, { preset: 'custom', width: 120, height: 80, name: 'Panel proof' });
   const scratch = await evaluate("document.querySelector('.doc-tab.is-active').dataset.tabId");
   const model = () => evaluate(`(async()=>(${active}.state.snapshot()))()`);
@@ -139,8 +139,27 @@ export async function runDrawPanelWorkflows(client) {
   await evaluate(`(()=>{const s=document.querySelector('${root} [data-draw-field=layer-filter]');s.value='layers';s.dispatchEvent(new Event('change',{bubbles:true}))})()`);
   assert.ok((await rowIds()).every(id => [first.id, second.id].includes(id)), 'Only layers');
   await evaluate(`(()=>{const s=document.querySelector('${root} [data-draw-field=layer-filter]');s.value='all';s.dispatchEvent(new Event('change',{bubbles:true}))})()`);
+  // A real double-click on a layer name renames it in place, although the first click rebuilds the list.
+  const nameBox = await evaluate(`(()=>{const r=document.querySelector('${row(second.id)} .draw-layer-name').getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2};})()`);
+  for (const clickCount of [1, 2]) for (const type of ['mousePressed', 'mouseReleased'])
+    await client.command('Input.dispatchMouseEvent', { type, ...nameBox, button: 'left', buttons: type === 'mousePressed' ? 1 : 0, clickCount });
+  await wait(50);
+  assert.equal(await evaluate("document.activeElement.className"), 'draw-layer-rename', 'Double-clicking a layer name edits it');
+  await evaluate("(()=>{const i=document.activeElement;i.value='Renamed';i.dispatchEvent(new Event('change',{bubbles:true}));})()"); await wait(50);
+  assert.equal((await model()).layers[1].name, 'Renamed', 'The new layer name is committed');
   await evaluate(`document.querySelector('${row(second.id)} .draw-layer-colorbar').dispatchEvent(new MouseEvent('dblclick',{bubbles:true}))`); await wait(50);
   assert.equal(await evaluate("document.activeElement.name"), 'colorName', 'The color bar opens Layer Options at Color');
+  // Each named color shows its swatch to the right of its name; the list keeps the dialog open on Escape.
+  await evaluate("document.querySelector('.draw-layer-dialog [name=colorName]').click()");
+  assert.deepEqual(await evaluate(`(()=>{const items=[...document.querySelectorAll('.draw-color-menu__option')];
+    return {count:items.length,swatched:items.every(li=>li.lastElementChild.classList.contains('draw-color-menu__swatch')&&getComputedStyle(li.lastElementChild).backgroundImage+getComputedStyle(li.lastElementChild).backgroundColor!=='nonergba(0, 0, 0, 0)'),
+      green:getComputedStyle(items.find(li=>li.textContent==='Green').lastElementChild).backgroundColor};})()`), {count:28,swatched:true,green:'rgb(79, 210, 79)'});
+  await writeFile(join(tmpdir(), 'modcut-draw-layer-colors.png'), Buffer.from((await client.command('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
+  await evaluate("document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}))");
+  assert.deepEqual(await evaluate("[!!document.querySelector('.draw-layer-dialog'),!!document.querySelector('.draw-color-menu__list')]"), [true,false], 'Escape closes only the color list');
+  await evaluate("document.querySelector('.draw-layer-dialog [name=colorName]').click()");
+  await evaluate("[...document.querySelectorAll('.draw-color-menu__option')].find(li=>li.textContent==='Green').click()");
+  assert.deepEqual(await evaluate("[document.querySelector('.draw-layer-dialog [name=color]').value,document.querySelector('.draw-color-menu .draw-color-menu__name').textContent]"), ['#4fd24f','Green']);
   assert.equal(await evaluate("document.querySelectorAll('.draw-layer-dialog__options input[type=checkbox]').length"), 6, 'Template, Lock, Show, Print, Preview and Dim Images in two columns');
   await evaluate("(()=>{const f=document.querySelector('.draw-layer-dialog form'),m=f.elements.colorName;m.value='#FF4F4F';m.dispatchEvent(new Event('change',{bubbles:true}));f.requestSubmit();})()"); await wait(50);
   assert.equal((await model()).layers[1].color, '#FF4F4F', 'Choosing Red sets the layer color');

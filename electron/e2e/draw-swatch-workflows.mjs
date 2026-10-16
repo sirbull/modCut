@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { inputHelpers, wait } from './cdp.mjs';
-import { activeDraw as active, submitNewDrawDialog } from './draw-test-helpers.mjs';
+import { activeDraw as active, submitNewDrawDialog, enterDraw } from './draw-test-helpers.mjs';
 
 const root = '.draw-project[style*=block]';
 export async function runDrawSwatchWorkflows(client) {
   const { evaluate } = client, { drag } = inputHelpers(client), command = id => evaluate(`(async()=>{${active}.handle('${id}')})()`);
-  await evaluate("document.querySelector('#workspaceToggle').click();document.querySelector('#newDoc').click()");
+  await enterDraw(evaluate); await evaluate("document.querySelector('#newDoc').click()");
   await submitNewDrawDialog(evaluate, { preset: 'custom', width: 120, height: 80, name: 'Swatch proof' });
   const scratch = await evaluate("document.querySelector('.doc-tab.is-active').dataset.tabId");
   const screen = p => evaluate(`(async()=>{const w=${active},p=w.scope.view.projectToView(new w.scope.Point(${p})),b=w.scope.view.element.getBoundingClientRect();return{x:p.x+b.x,y:p.y+b.y}})()`);

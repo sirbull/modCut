@@ -285,9 +285,12 @@ export function createPanels(shell, state, api) {
           if (isLayer) render();
           else api.select(event.shiftKey ? (selected.has(node.id) ? [...selected].filter(id => id !== node.id) : [...selected,node.id]) : [node.id]);
         });
-        choose.addEventListener('click',pick); thumb.addEventListener('click',pick);
+        // A click rebuilds the list, so the second click of a double-click lands on a new row: rename by click count.
+        choose.addEventListener('click',event => { pick(event); if (event.detail === 2 && !readOnly) renameRow(node.id); });
+        thumb.addEventListener('click',pick);
+        // A double-click that did not rebuild the list (or a keyboard/assistive dblclick) still renames.
+        choose.addEventListener('dblclick',() => { if (!readOnly && choose.isConnected) rename(choose,node); });
         if (isLayer) { thumb.addEventListener('dblclick',() => api.layerOptions(node.id)); item.classList.toggle('is-picked',!!state.ui.pickedLayers?.has(node.id) && state.ui.pickedLayers.size > 1); }
-        choose.addEventListener('dblclick',() => { if (!readOnly) rename(choose,node); });
         const target = iconButton(`Select ${name}`,null,event => {
           const ids = isLayer ? doc.descendants(node.id).filter(n => n.type !== 'layer' && doc.getNode(doc.locate(n.id).parentId).type === 'layer' && doc.isEditable(n.id)).map(n => n.id) : [node.id];
           api.select(event.shiftKey ? [...new Set([...selected,...ids])] : ids);
@@ -333,6 +336,11 @@ export function createPanels(shell, state, api) {
       if (!tree.children.length) { const empty = document.createElement('p'); empty.className = 'draw-panel__hint'; empty.textContent = 'No matches'; tree.append(empty); }
       return tree;
     }
+    function renameRow(id) {
+      const button = [...host.querySelectorAll('.draw-layer-row')].find(row => row.dataset.drawNode === id)?.querySelector('.draw-layer-name');
+      const node = state.document.getNode(id);
+      if (button && node) rename(button,node);
+    }
     function rename(button, node) {
       const input = document.createElement('input'); input.className = 'draw-layer-rename'; input.value = node.name; input.setAttribute('aria-label','Name');
       let done = false;
@@ -340,6 +348,8 @@ export function createPanels(shell, state, api) {
       // Draw's window keymap captures keydown, so Enter/blur commit through the native change event.
       input.addEventListener('change',() => finish(true));
       input.addEventListener('blur',() => finish(false));
+      // Dragging inside the field selects text instead of moving the row.
+      const row = button.closest('.draw-layer-row'); if (row) row.draggable = false;
       button.replaceWith(input); input.focus(); input.select();
     }
   }
@@ -739,7 +749,7 @@ export function createPanels(shell, state, api) {
     const node = state.document.getNode(ids[0]);
     if (ids.length === 1) field(host,'Name',node.name,value => state.history.execute(updateNode(node.id,{name:value})),{type:'text'});
     if (ids.length === 1 && node.type === 'text') {
-      section(host,'Type'); quickActions(host,[['Edit Text…',() => api.command('edit-text'),'edit-text',state.document.readOnly || !state.document.isEditable(node.id)]]);
+      section(host,'Type'); quickActions(host,[['Edit Text…',() => api.command('edit-text'),'edit-text',state.document.readOnly || !state.document.isEditable(node.id)],['Create Outlines',()=>api.command('create-outlines'),'create-outlines',state.document.readOnly || !state.document.isEditable(node.id)]]);
     }
     section(host,'Transform'); transform(host,{ compact: true });
     // Appearance: the same fill, stroke, weight and opacity Illustrator shows; the buttons open the full panels.

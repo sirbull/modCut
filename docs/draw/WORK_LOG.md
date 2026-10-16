@@ -908,3 +908,16 @@ denne kjøringen. De etterfølgende delene av det samlede løpet ble derfor ikke
 
 Neste: D2.1b systemfontliste/-filer, shaping og Create Outlines. Ikke marker D2.1 som ferdig
 før de resterende tekstkravene i hovedplanen er implementert.
+
+## 2026-10-16: Dokumentoppsett ved start, lagfarger med prøve og omdøping av lag
+
+- **Draw starter med New document-dialogen.** Når en fane ikke har et Draw-dokument, viser
+  overgangen til Draw dialogen midt på skjermen før noe artboard finnes. OK oppretter dokumentet
+  i fanen; Cancel går tilbake til Cut. Et dokument som aldri ble satt opp (`blank` i
+  `createProjectDraw`) lagres som `draw: null` i prosjekt og gjenoppretting, så det spør igjen.
+  Eldre prosjektfiler med et lagret standarddokument åpnes som før uten dialog.
+- **Layer Options › Color** er en egen liste i stedet for native select: hvert navn har en
+  fargeprøve til høyre, både i knappen og i listen. Piltaster, Home/End, bokstavsøk, Enter og
+  Escape (lukker bare listen) virker. Knappen er fortsatt skjemafeltet `colorName`.
+- **Dobbeltklikk på lagnavn** gir omdøping i panelet. Første klikk bygger listen på nytt, så
+  den native `dblclick` traff aldri; omdøping utløses nå av klikkantallet (`event.detail === 2`).

@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import {inputHelpers,wait} from './cdp.mjs';
-import {activeDraw as active,submitNewDrawDialog} from './draw-test-helpers.mjs';
+import { activeDraw as active,submitNewDrawDialog, enterDraw } from './draw-test-helpers.mjs';
 import {writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 export async function runDrawPathWorkflows(client){
   const {evaluate}=client,{click,drag,key,mouse}=inputHelpers(client);
   const original=await evaluate("({id:document.querySelector('.doc-tab.is-active').dataset.tabId,cut:paper.project.layers[1].exportJSON({asString:true})})");
-  await evaluate("document.querySelector('#workspaceToggle').click();document.querySelector('#newDoc').click()");
+  await enterDraw(evaluate); await evaluate("document.querySelector('#newDoc').click()");
   await submitNewDrawDialog(evaluate,{preset:'custom',width:120,height:80,name:'Path editing proof'});
   const scratch=await evaluate("document.querySelector('.doc-tab.is-active').dataset.tabId");
   const tool=id=>evaluate(`(async()=>(${active}.setTool('${id}')))()`);

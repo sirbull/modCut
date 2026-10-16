@@ -294,6 +294,16 @@ body.draw-scrubbing, body.draw-scrubbing * { cursor: ew-resize !important; user-
 .draw-layer-count { font-size: var(--fs-xs); color: var(--text-muted); white-space: nowrap; }
 /* Layer Options dialog (name, named color + swatch, two columns of options). */
 .draw-layer-dialog__color { display: grid; grid-template-columns: minmax(0, 1fr) 44px; gap: 8px; align-items: center; }
+/* Named layer colors: each name has its swatch on the right, in the button and in the list. */
+.draw-color-menu { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; cursor: pointer; }
+.draw-color-menu::after { content: ""; flex: none; width: 7px; height: 7px; margin: -3px 2px 0 0; border: solid var(--text-muted); border-width: 0 1.5px 1.5px 0; transform: rotate(45deg); }
+.draw-color-menu__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.draw-color-menu__swatch { flex: none; width: 28px; height: 16px; border: 1px solid var(--border); border-radius: 3px; }
+.draw-color-menu__swatch.is-other { background: conic-gradient(#FF4F4F, #FFC800, #4FD24F, #4FD2FF, #4F4FFF, #FF4FFF, #FF4F4F); }
+.draw-color-menu__list { position: fixed; z-index: 60; margin: 0; padding: 4px; list-style: none; overflow: auto; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; box-shadow: var(--shadow-2); outline: none; }
+.draw-color-menu__option { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 4px; cursor: pointer; }
+.draw-color-menu__option.is-active { background: var(--brand-fill); color: var(--on-brand); }
+.draw-color-menu__option.is-active .draw-color-menu__swatch { border-color: var(--on-brand); }
 .draw-layer-dialog__color input[type=color] { width: 44px; height: 34px; padding: 2px; border: 1px solid var(--border); border-radius: 5px; background: var(--bg); cursor: pointer; }
 .draw-layer-dialog__options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 18px; margin: 4px 0 16px; }
 .draw-layer-dialog__options > .field { margin: 0; }

@@ -1,5 +1,10 @@
 import { wait } from './cdp.mjs';
 export const activeDraw = `(await import('./draw/index.mjs')).getDrawWorkspace(document.querySelector('.draw-project[data-tab-id="'+document.querySelector('.doc-tab.is-active').dataset.tabId+'"]'))`;
+/** Enter Draw; a tab without a Draw document first asks for its setup, which is accepted with defaults. */
+export async function enterDraw(evaluate, values={}) {
+  if (await evaluate("document.body.dataset.workspace") !== 'draw') await evaluate("document.querySelector('#workspaceToggle').click()");
+  if (await evaluate("!!document.querySelector('.draw-document-dialog')")) await submitNewDrawDialog(evaluate, values);
+}
 export async function submitNewDrawDialog(evaluate, values={}) {
   // New may open after async machine/template lookups; wait for the form before filling it.
   for (let i=0;i<100&&!(await evaluate("!!document.querySelector('.draw-document-dialog form')"));i++) await wait(50);

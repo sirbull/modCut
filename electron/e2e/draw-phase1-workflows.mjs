@@ -3,7 +3,7 @@ import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { wait, inputHelpers } from './cdp.mjs';
-import { activeDraw as active, submitNewDrawDialog } from './draw-test-helpers.mjs';
+import { activeDraw as active, submitNewDrawDialog, enterDraw } from './draw-test-helpers.mjs';
 
 export async function runDrawPhaseOneWorkflows(client) {
   const {evaluate}=client,{drag,click,key}=inputHelpers(client);
@@ -18,7 +18,7 @@ export async function runDrawPhaseOneWorkflows(client) {
   // Properties and Layers are always docked; other panels open as rail flyouts.
   const panel=id=>['properties','layers'].includes(id)?null:evaluate(`(()=>{const b=document.querySelector('.draw-project[style*=block] [data-draw-panel=${id}]');if(b.getAttribute('aria-pressed')!=='true')b.click()})()`);
   const undo=()=>shortcut('z','KeyZ',{ctrlKey:process.platform!=='darwin',metaKey:process.platform==='darwin'});
-  await evaluate("document.querySelector('#workspaceToggle').click();document.querySelector('#newDoc').click()");
+  await enterDraw(evaluate); await evaluate("document.querySelector('#newDoc').click()");
   assert.equal(await evaluate("document.querySelector('.draw-document-dialog [name=preset]').value"),'bed','New starts from the current machine bed');
   assert.deepEqual(await evaluate("[...document.querySelectorAll('.draw-document-dialog [role=tab]')].map(t=>t.textContent)"),['Recent','Templates','Saved']);
   await evaluate("(()=>{const t=document.querySelector('.draw-document-dialog [data-tab=templates]');t.click();document.querySelector('.draw-document-dialog [data-category=print]').click();document.querySelector('.draw-document-dialog [data-preset=a4]').click()})()");

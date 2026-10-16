@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { wait } from './cdp.mjs';
-import { submitNewDrawDialog } from './draw-test-helpers.mjs';
+import { submitNewDrawDialog, enterDraw } from './draw-test-helpers.mjs';
 
 const activeState = `(await import('./draw/index.mjs')).getDrawWorkspace(document.querySelector('.draw-project[data-tab-id="'+document.querySelector('.doc-tab.is-active').dataset.tabId+'"]')).state`;
 const snapshot = (evaluate) => evaluate(`(async()=>(${activeState}.snapshot()))()`);
@@ -53,7 +53,7 @@ export async function runProjectWorkflows({ evaluate }, directory) {
   await submitNewDrawDialog(evaluate);
   await openProject(evaluate, path, legacy);
   assert.equal(await evaluate("paper.project.layers[1].exportJSON({asString:true})"), design, 'v3 Cut geometry survives opening');
-  await evaluate("document.querySelector('#workspaceToggle').click()");
+  await enterDraw(evaluate);
   const empty = await snapshot(evaluate);
   assert.equal(empty.layers[0].children.length, 0);
   const savedEmpty = await save(evaluate, path);

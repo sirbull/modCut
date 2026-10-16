@@ -311,13 +311,16 @@ function attachDrawState(tab, drawState) {
     scheduleRecovery(2000);
   });
 }
+// A Draw document that was never set up is not stored, so it still asks for setup after reopening.
+function drawSnapshot(tab) { const draw = ensureDrawState(tab); return draw.blank ? null : draw.snapshot(); }
 function activeDocumentDirty() { return dirty || !!activeTab()?.drawState?.dirty; }
 function setWorkspace(mode) {
   if (!["cut", "draw"].includes(mode)) return;
   const tab = activeTab();
   if (!tab) return;
-  if (mode === "draw" && !tab.draw) {
-    const drawState = ensureDrawState(tab);
+  // A tab without Draw data asks for document setup before anything is mounted.
+  if (mode === "draw" && !tab.draw && !ensureDrawState(tab).blank) {
+    const drawState = tab.drawState;
     tab.drawRoot = document.createElement("div");
     tab.drawRoot.className = "draw-project";
     tab.drawRoot.dataset.tabId = tab.id;
@@ -352,6 +355,7 @@ function setWorkspace(mode) {
   closeContextMenu();
   void window.modcut.setWorkspace(mode);
   scheduleRecovery();
+  if (mode === "draw" && !tab.draw) void setupDrawDocument(tab);
 }
 $("workspaceToggle").addEventListener("click", () => {
   setWorkspace(activeTab()?.workspace === "draw" ? "cut" : "draw");
@@ -480,7 +484,7 @@ function recoveryPayload() {
       dirty: tab.dirty,
       session: { ...recoverySession(tab.session),
         workspace: tab.workspace || "cut",
-        draw: ensureDrawState(tab).snapshot(), drawDirty: tab.drawState.dirty,
+        draw: drawSnapshot(tab), drawDirty: tab.drawState.dirty,
         dirty: tab.dirty },
     })),
   };
@@ -593,7 +597,7 @@ function documentPayload() {
   return {
     app: "modCut",
     version: PROJECT_VERSION,
-    draw: ensureDrawState(activeTab()).snapshot(),
+    draw: drawSnapshot(activeTab()),
     workspace: activeTab()?.workspace || "cut",
     saved: new Date().toISOString(),
     design: bed.exportDesign(),
@@ -1179,16 +1183,33 @@ function initFileDrop() {
 }
 
 let creatingDrawDocument = false;
+function openNewDrawDialog() {
+  const m=machine();
+  return newDocumentDialog({name:m.name,width:m.bedW || 600,height:m.bedH || 400},
+    {machines:machines.map(item=>({name:item.name,width:item.bedW,height:item.bedH}))});
+}
 async function requestNewDocument() {
-  if (document.body.dataset.workspace !== "draw") return newDocument("cut");
   if (creatingDrawDocument) return;
+  if (document.body.dataset.workspace !== "draw") return newDocument("cut");
   creatingDrawDocument = true;
   try {
-    const m=machine(), data=await newDocumentDialog({name:m.name,width:m.bedW || 600,height:m.bedH || 400},
-      {machines:machines.map(item=>({name:item.name,width:item.bedW,height:item.bedH}))});
+    const data=await openNewDrawDialog();
     if(data) return newDocument("draw",data);
   } catch(error) {toast(error.message,"err");}
   finally {creatingDrawDocument=false;}
+}
+// Entering Draw on a tab with no Draw document: set it up first; Cancel returns to Cut.
+async function setupDrawDocument(tab) {
+  if (creatingDrawDocument) return;
+  creatingDrawDocument = true;
+  let data = null;
+  try { data = await openNewDrawDialog(); }
+  catch (error) { toast(error.message, "err"); }
+  finally { creatingDrawDocument = false; }
+  if (tab !== activeTab() || tab.workspace !== "draw" || tab.draw) return;
+  if (!data) return setWorkspace("cut");
+  attachDrawState(tab, createProjectDraw(data));
+  setWorkspace("draw");
 }
 async function saveDrawTemplate() {
   const draw = activeTab()?.drawState;

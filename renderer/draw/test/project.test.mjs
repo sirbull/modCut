@@ -85,3 +85,11 @@ test('unknown Draw versions are preserved verbatim with a compatibility warning'
   source.geometry.push(4);
   assert.deepEqual(state.snapshot().geometry, [1, 2, 3]);
 });
+
+test('a Draw document that was never set up is blank until it gets data or an edit', () => {
+  const state = createProjectDraw();
+  assert.equal(state.blank, true);
+  state.history.execute(updateNode(state.document.data.layers[0].id, { name: 'Edited' }));
+  assert.equal(state.blank, false);
+  assert.equal(createProjectDraw(createDocument()).blank, false);
+});

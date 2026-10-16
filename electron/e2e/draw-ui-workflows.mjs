@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { wait, inputHelpers } from './cdp.mjs';
 import { runDrawRenderWorkflows } from './draw-render-workflows.mjs';
-import { submitNewDrawDialog, submitPlaceDialog } from './draw-test-helpers.mjs';
+import { submitNewDrawDialog, submitPlaceDialog, enterDraw } from './draw-test-helpers.mjs';
 
 const active = `(await import('./draw/index.mjs')).getDrawWorkspace(document.querySelector('.draw-project[data-tab-id="'+document.querySelector('.doc-tab.is-active').dataset.tabId+'"]'))`;
 const model = evaluate => evaluate(`(async()=>(${active}.state.snapshot()))()`);
@@ -10,7 +10,7 @@ const svg = (name,width = 40) => ({name,ext:'svg',text:`<svg xmlns="http://www.w
 export async function runDrawUIWorkflows(client) {
   const {evaluate} = client, {drag} = inputHelpers(client);
   const original = await evaluate("({id:document.querySelector('.doc-tab.is-active').dataset.tabId,design:paper.project.layers[1].exportJSON({asString:true})})");
-  await evaluate("document.querySelector('#workspaceToggle').click()");
+  await enterDraw(evaluate);
   assert.deepEqual(await evaluate("['newDoc','import','add'].map(id=>document.getElementById(id).textContent)"),['New','Open','Import']);
   await evaluate("document.querySelector('#newDoc').click()");
   await submitNewDrawDialog(evaluate);

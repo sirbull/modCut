@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { wait } from './cdp.mjs';
-import { activeDraw as active, submitNewDrawDialog, rememberTabs } from './draw-test-helpers.mjs';
+import { activeDraw as active, submitNewDrawDialog, rememberTabs, enterDraw } from './draw-test-helpers.mjs';
 
 /** Send to Cut v1: an artboard reaches Cut's bed through the SVG import path, in millimetres, as one undo step. */
 export async function runDrawCutWorkflows(client) {
@@ -8,7 +8,7 @@ export async function runDrawCutWorkflows(client) {
   const until = async (expression, label) => { for (let i = 0; i < 100; i++) { if (await evaluate(expression)) return; await wait(50); } assert.fail(`Timed out: ${label}`); };
   // Later suites expect the tabs and workspace this one started with.
   const restoreTabs = await rememberTabs(evaluate);
-  await evaluate("document.body.dataset.workspace==='draw'||document.querySelector('#workspaceToggle').click();document.querySelector('#newDoc').click()");
+  await enterDraw(evaluate); await evaluate("document.querySelector('#newDoc').click()");
   await submitNewDrawDialog(evaluate, { preset: 'custom', width: 120, height: 80, name: 'Send proof' });
   const drawTab = await evaluate("document.querySelector('.doc-tab.is-active').dataset.tabId");
   // A red 20 mm square at (10, 10) on the artboard, a blue circle inside a scaled group, and a template reference.

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { wait } from './cdp.mjs';
-import { activeDraw as active, submitNewDrawDialog, rememberTabs } from './draw-test-helpers.mjs';
+import { activeDraw as active, submitNewDrawDialog, rememberTabs, enterDraw } from './draw-test-helpers.mjs';
 
 /** D1.9: the control bar follows the selection and the artboard tool, and View > Control Bar hides it. */
 export async function runDrawControlWorkflows(client) {
@@ -9,7 +9,7 @@ export async function runDrawControlWorkflows(client) {
   const until = async (expression, label) => { for (let i = 0; i < 100; i++) { if (await evaluate(expression)) return; await wait(50); } assert.fail(`Timed out: ${label}`); };
   // Later suites expect the tabs and workspace this one started with.
   const restoreTabs = await rememberTabs(evaluate);
-  await evaluate("document.body.dataset.workspace==='draw'||document.querySelector('#workspaceToggle').click();document.querySelector('#newDoc').click()");
+  await enterDraw(evaluate); await evaluate("document.querySelector('#newDoc').click()");
   await submitNewDrawDialog(evaluate, { preset: 'custom', width: 120, height: 80, name: 'Control proof' });
   const bar = `${root} .draw-control-bar`;
   const title = () => evaluate(`document.querySelector('${bar} [data-draw-cb-title]').textContent`);

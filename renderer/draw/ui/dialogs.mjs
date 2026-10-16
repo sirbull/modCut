@@ -234,6 +234,54 @@ export function transformDialog(tool,origin,defaults={},onPreview=()=>{}) {
   return result.finally(()=>{form.removeEventListener('input',preview);form.removeEventListener('change',preview);});
 }
 /** Layer Options laid out like Illustrator: name, named color with a swatch, then two columns of options. */
+/**
+ * A named-color list that shows each color's swatch to the right of its name, which a native select cannot.
+ * The button is the form control `colorName`; setting its value and dispatching change picks a color too.
+ */
+function colorNameMenu(colors,onPick) {
+  const make=(tag,className,parent,text)=>{const el=document.createElement(tag);if(className)el.className=className;if(text!=null)el.textContent=text;parent?.append(el);return el;};
+  const button=make('button','select draw-color-menu');button.type='button';button.name='colorName';
+  button.setAttribute('aria-haspopup','listbox');button.setAttribute('aria-expanded','false');button.setAttribute('aria-label','Layer color');
+  const label=make('span','draw-color-menu__name',button),chip=make('span','draw-color-menu__swatch',button);chip.setAttribute('aria-hidden','true');
+  const list=make('ul','draw-color-menu__list');list.setAttribute('role','listbox');list.setAttribute('aria-label','Layer colors');list.tabIndex=-1;list.id=`draw-color-menu-${++dialogId}`;
+  const entries=[...colors.map(({name,hex})=>({name,value:hex})),{name:'Other…',value:'other'}];
+  const items=entries.map((entry,i)=>{const li=make('li','draw-color-menu__option',list);li.id=`${list.id}-${i}`;li.setAttribute('role','option');li.dataset.value=entry.value;
+    make('span','draw-color-menu__name',li,entry.name);const sw=make('span','draw-color-menu__swatch',li);sw.setAttribute('aria-hidden','true');
+    if(entry.value==='other')sw.classList.add('is-other');else sw.style.background=entry.value;
+    li.addEventListener('pointerdown',event=>event.preventDefault());li.addEventListener('click',()=>{close();pick(entry.value);});
+    li.addEventListener('pointermove',()=>activate(i,false));return li;});
+  let active=0;
+  function activate(i,scroll=true){active=Math.max(0,Math.min(items.length-1,i));items.forEach((li,n)=>li.classList.toggle('is-active',n===active));
+    list.setAttribute('aria-activedescendant',items[active].id);if(scroll)items[active].scrollIntoView({block:'nearest'});}
+  function pick(value){button.value=value;onPick(value);button.focus();}
+  // The list is fixed to the viewport so the dialog's scrolling body never clips it; it opens where there is room.
+  function open(){
+    if(list.isConnected)return;
+    button.closest('.modal')?.append(list);button.setAttribute('aria-expanded','true');
+    const r=button.getBoundingClientRect(),below=innerHeight-r.bottom-8,above=r.top-8,height=Math.min(320,Math.max(below,above));
+    Object.assign(list.style,{left:`${r.left}px`,width:`${r.width}px`,maxHeight:`${height}px`,top:below>=Math.min(320,above)?`${r.bottom+4}px`:`${r.top-4-Math.min(height,list.scrollHeight)}px`});
+    activate(Math.max(0,entries.findIndex(e=>e.value===button.value)));list.focus();
+    document.addEventListener('pointerdown',outside,true);
+  }
+  function close(){if(!list.isConnected)return;list.remove();button.setAttribute('aria-expanded','false');document.removeEventListener('pointerdown',outside,true);}
+  const outside=event=>{if(!list.contains(event.target)&&!button.contains(event.target))close();};
+  button.addEventListener('click',()=>list.isConnected?close():open());
+  button.addEventListener('keydown',event=>{if(['ArrowDown','ArrowUp'].includes(event.key)){event.preventDefault();open();}});
+  button.addEventListener('change',()=>onPick(button.value));
+  list.addEventListener('keydown',event=>{
+    const step={ArrowDown:1,ArrowUp:-1,PageDown:8,PageUp:-8}[event.key];
+    if(step){event.preventDefault();activate(active+step);}
+    else if(event.key==='Home'||event.key==='End'){event.preventDefault();activate(event.key==='Home'?0:items.length-1);}
+    else if(event.key==='Enter'||event.key===' '){event.preventDefault();close();pick(entries[active].value);}
+    // Escape closes only the list, not the dialog.
+    else if(event.key==='Escape'){event.preventDefault();event.stopPropagation();close();button.focus();}
+    else if(event.key==='Tab'){close();}
+    else if(event.key.length===1){const k=event.key.toLowerCase(),from=active+1;
+      const hit=[...entries.slice(from),...entries.slice(0,from)].find(e=>e.name.toLowerCase().startsWith(k));if(hit)activate(entries.indexOf(hit));}
+  });
+  list.addEventListener('blur',()=>setTimeout(()=>{if(!list.contains(document.activeElement))close();}));
+  return {button,show(value,hex){button.value=value;label.textContent=entries.find(e=>e.value===value)?.name??'Other…';chip.style.background=hex;}};
+}
 export function layerOptionsDialog(layer,{focus='name'}={}) {
   const result=openDrawModal({title:'Layer Options',submitLabel:'OK',className:'draw-layer-dialog',fields:[
     {key:'name',label:'Name',value:layer.name,required:true},
@@ -249,13 +297,10 @@ export function layerOptionsDialog(layer,{focus='name'}={}) {
   const modal=document.querySelector('.draw-layer-dialog'),form=modal.querySelector('form'),el=form.elements;
   // Color: a named-color menu beside the swatch; the swatch (and "Other...") picks any color.
   const colorLabel=el.color.closest('label'),row=document.createElement('div');row.className='draw-layer-dialog__color';
-  const menu=document.createElement('select');menu.className='select';menu.name='colorName';menu.setAttribute('aria-label','Layer color');
-  for(const {name,hex} of NAMED_LAYER_COLORS){const o=new Option(name,hex);o.style.setProperty('--swatch',hex);menu.append(o);}
-  menu.append(new Option('Other…','other'));
-  const sync=()=>{menu.value=layerColorName(el.color.value)?el.color.value.toUpperCase():'other';menu.style.setProperty('--swatch',el.color.value);};
-  menu.addEventListener('change',()=>{if(menu.value==='other'){el.color.click();sync();return;}el.color.value=menu.value.toLowerCase();sync();});
+  const menu=colorNameMenu(NAMED_LAYER_COLORS,value=>{if(value==='other'){el.color.click();sync();return;}el.color.value=value.toLowerCase();sync();});
+  const sync=()=>menu.show(layerColorName(el.color.value)?el.color.value.toUpperCase():'other',el.color.value);
   el.color.addEventListener('input',sync);el.color.title='Choose any color';
-  el.color.parentNode.insertBefore(row,el.color);row.append(menu,el.color);sync();
+  el.color.parentNode.insertBefore(row,el.color);row.append(menu.button,el.color);sync();
   // Options in two columns: Template | Lock, Show | Print, Preview | Dim Images to [50] %.
   // The grid joins the form first, so the moved checkboxes stay form controls for submit.
   const grid=document.createElement('div');grid.className='draw-layer-dialog__options';colorLabel.after(grid);
@@ -268,7 +313,7 @@ export function layerOptionsDialog(layer,{focus='name'}={}) {
     if(t){el.locked.checked=true;el.printable.checked=false;el.preview.checked=true;}el.dimImagesTo.disabled=!el.dimImages.checked;};
   const onTemplate=()=>{if(el.template.checked)el.dimImages.checked=true;update();};
   for(const type of ['change','input']){el.template.addEventListener(type,onTemplate);el.dimImages.addEventListener(type,update);}update();
-  const target=focus==='color'?menu:el.name;setTimeout(()=>{target.focus();if(target===el.name)el.name.select();});
+  const target=focus==='color'?menu.button:el.name;setTimeout(()=>{target.focus();if(target===el.name)el.name.select();});
   return result.then(values=>values&&({...values,locked:el.template.checked||values.locked,printable:!el.template.checked&&values.printable,preview:el.template.checked||values.preview}));
 }
 /** Swatch Options: rename a swatch or change its color. */

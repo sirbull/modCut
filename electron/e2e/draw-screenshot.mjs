@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import electronPath from 'electron';
 import { connectToApp, inputHelpers, wait } from './cdp.mjs';
-import { activeDraw, submitNewDrawDialog } from './draw-test-helpers.mjs';
+import { activeDraw, submitNewDrawDialog, enterDraw } from './draw-test-helpers.mjs';
 
 const [out = 'draw.png', extra] = process.argv.slice(2);
 const port = 9600 + (process.pid % 200);
@@ -19,7 +19,7 @@ try {
   const { evaluate, command } = client, { drag } = inputHelpers(client);
   for (let i = 0; i < 100 && !(await evaluate("!!document.querySelector('.doc-tab.is-active')")); i++) await wait(100);
   await command('Emulation.setDeviceMetricsOverride', { width: 1500, height: 920, deviceScaleFactor: 1, mobile: false });
-  await evaluate("document.querySelector('#workspaceToggle').click();document.querySelector('#newDoc').click()");
+  await enterDraw(evaluate); await evaluate("document.querySelector('#newDoc').click()");
   await submitNewDrawDialog(evaluate, { preset: 'custom', width: 120, height: 80, name: 'Shot' });
   await wait(300);
   const screen = p => evaluate(`(async()=>{const w=${activeDraw},p=w.scope.view.projectToView(new w.scope.Point(${p})),b=w.scope.view.element.getBoundingClientRect();return{x:p.x+b.x,y:p.y+b.y}})()`);

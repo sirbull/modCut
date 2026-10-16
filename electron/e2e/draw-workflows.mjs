@@ -1,7 +1,7 @@
 import { acceleratorFor } from '../../renderer/draw/keymap.mjs';
 import assert from "node:assert/strict";
 import { wait } from "./cdp.mjs";
-import { submitNewDrawDialog } from './draw-test-helpers.mjs';
+import { submitNewDrawDialog, enterDraw } from './draw-test-helpers.mjs';
 
 export async function runDrawWorkflows({ evaluate }) {
   const before = await evaluate(`(() => {
@@ -10,7 +10,7 @@ export async function runDrawWorkflows({ evaluate }) {
       zoom: paper.view.zoom, center: [paper.view.center.x, paper.view.center.y],
       layers: document.querySelector('#layers').innerHTML };
   })()`);
-  await evaluate("document.querySelector('#workspaceToggle').click()");
+  await enterDraw(evaluate);
   await wait(200);
   assert.deepEqual(await evaluate(`(() => {
     const canvas=document.querySelector('.draw-canvas'), r=canvas.getBoundingClientRect();
@@ -45,8 +45,15 @@ export async function runDrawWorkflows({ evaluate }) {
 export async function runDrawTabWorkflows({ evaluate }) {
   // New preserves the current workspace; returning to an existing tab restores its mode.
   const originalTab = await evaluate("document.querySelector('.doc-tab.is-active').dataset.tabId");
+  // A tab without a Draw document asks for its setup first; Cancel returns to Cut.
+  await evaluate("document.querySelector('#workspaceToggle').click()");
+  assert.equal(await evaluate("document.querySelectorAll('.draw-document-dialog').length"), 1, "Draw opens New document setup");
+  assert.equal(await evaluate("document.querySelectorAll('.draw-canvas').length"), 0, "No artboard exists before setup");
+  await evaluate("document.querySelector('.draw-document-dialog [data-x=cancel]').click()");
+  await wait(50);
+  assert.equal(await evaluate("document.body.dataset.workspace"), "cut", "Cancelling setup returns to Cut");
+  await enterDraw(evaluate);
   await evaluate(`(() => {
-    document.querySelector('#workspaceToggle').click();
     const isMac=/Mac/.test(navigator.platform);
     window.dispatchEvent(new KeyboardEvent('keydown',{key:'n',code:'KeyN',metaKey:isMac,ctrlKey:!isMac,bubbles:true,cancelable:true}));
   })()`);

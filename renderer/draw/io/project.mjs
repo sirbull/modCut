@@ -38,6 +38,8 @@ export function createProjectDraw(input = null, { dirty = false } = {}) {
   return {
     document, history, selection: new Selection(document), warning, report,
     get dirty() { return recoveredDirty || history.dirty; },
+    // No Draw data was given and nothing has been drawn: the document has not been set up yet.
+    get blank() { return input == null && !history.canUndo && !history.canRedo; },
     // The immutable model snapshot is reused between edits; no clone on every autosave.
     snapshot() { return source ?? document.data; },
     captureSavepoint() {

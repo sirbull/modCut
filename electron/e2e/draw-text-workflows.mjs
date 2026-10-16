@@ -3,11 +3,11 @@ import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { inputHelpers, wait } from './cdp.mjs';
-import { activeDraw as active, submitNewDrawDialog, rememberTabs } from './draw-test-helpers.mjs';
+import { activeDraw as active, submitNewDrawDialog, rememberTabs, enterDraw } from './draw-test-helpers.mjs';
 
 export async function runDrawTextWorkflows(client) {
   const {evaluate,command}=client, {click,key}=inputHelpers(client), restore=await rememberTabs(evaluate);
-  await evaluate("document.body.dataset.workspace==='draw'||document.querySelector('#workspaceToggle').click();document.querySelector('#newDoc').click()");
+  await enterDraw(evaluate); await evaluate("document.querySelector('#newDoc').click()");
   await submitNewDrawDialog(evaluate,{preset:'custom',width:120,height:80,name:'Text proof'});
   const at=async(x,y)=>evaluate(`(async()=>{const w=${active},b=w.state.document.data.artboards[0],p=w.scope.view.projectToView(new w.scope.Point(b.x+${x},b.y+${y})),r=w.scope.view.element.getBoundingClientRect();return {x:r.x+p.x,y:r.y+p.y};})()`);
   const snapshot=()=>evaluate(`(async()=>(${active}.state.document.serialize()))()`);
