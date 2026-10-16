@@ -1165,5 +1165,8 @@ på path med ekte font: rett linje lik punkttekst, utside/innside av sirkel, Fli
 overløp, ugyldig signatur ved endret start). Ny E2E `draw-path-text-workflows.mjs` (`--draw-path-text`):
 klikk på sirkel, live forhåndsvisning, ett angresteg, Flip og startforskyvning, overløp med rødt
 pluss, blokkert Create Outlines og Send to Cut, banen som treffsone, lagre/åpne, SVG og Create Outlines.
+Samlet `node electron/e2e/run.mjs --draw` fra en fast kopi av 7af3af2: alle 24 Draw-suiter passerer;
+deretter feilet bare den kjente autolagringstesten (`project-workflows.mjs:113`, «recovery runs while
+edits continue»), som er ustabil i skymiljøet (se tidligere oppføringer).
 
 Neste: Character- og Paragraph-paneler.
