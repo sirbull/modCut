@@ -4,7 +4,7 @@
 > Detaljer: [hovedplanen](../DRAW_WORKSPACE.md) (spesifikasjon og byggeplan),
 > [RIGHT_PANELS.md](RIGHT_PANELS.md) (høyresiden), [WORK_LOG.md](WORK_LOG.md) (hva som er gjort, dag for dag)
 > og [HANDOFF.md](HANDOFF.md) (overlevering til neste agent).
-> Sist oppdatert: 2026-10-16 (fase 1 ferdig; D2.1a punkttekst). Arbeidsgren: `feat/vector-draw`.
+> Sist oppdatert: 2026-10-16 (fase 1 ferdig; D2.1b systemfonter og outlines). Arbeidsgren: `feat/vector-draw`.
 
 ## 1. Kort oppsummert
 
@@ -13,7 +13,8 @@ grunnformer med live hjørner, transformasjoner, lag med template-lag, farger, s
 gjennomsiktighet, flere fyll og streker (Appearance), Pathfinder, gruppering, rekkefølge, låsing,
 utklippstavle, isolasjonsmodus, kontrollinje og Place med Template. Et artboard kan sendes til Cut
 med **Send to Cut** (D1.12 v1), så det man tegner kan kuttes. Fase 1 er ferdig. SVG-, PNG- og
-JPEG-eksport og punkttekst finnes. Tekst til skjærebaner, Image Trace og effekter gjenstår.
+JPEG-eksport og punkttekst med systemfonter og **Create Outlines** finnes. Område-/path-tekst,
+Image Trace og effekter gjenstår.
 
 ## 2. Høyresiden sammenlignet med Illustrator
 
@@ -130,8 +131,31 @@ CSS-stil), og PDF (D2.6).
   ikke inn, og SVG-mottakeren trenger samme font. Systemfontliste og varsel for manglende font gjenstår.
 * **Send to Cut** varsler at tekst utelates inntil Create Outlines er implementert.
 
-Dette er første del av D2.1, ikke hele tekstfasen. Gjenstår: fontliste/-filer fra main, shaping og
-Create Outlines, områdetekst, tekst på path, blandede tekststiler og egne Character/Paragraph-paneler.
+Dette var første del av D2.1. Fontvalg, shaping og outlines er senere utvidet i D2.1b nedenfor.
+
+### 2.7 Systemfonter, shaping og Create Outlines (D2.1b, 2026-10-16)
+
+* Fontfamilie i tekstdialogen har en liste over installerte vektorfonter. System- og brukerfonter
+  skannes på Windows, macOS og Linux; TTF, OTF og fontsamlinger (TTC/OTC) støttes. Normal/fet og
+  normal/kursiv velger en faktisk fontvariant. Manglende font/stil eller tegn gir en tydelig feil.
+* Fontkit 2.0.4 beregner kerning, standard OpenType-ligaturer og glyfposisjoner i main-prosessen.
+  Kvadratiske og kubiske konturer beholdes som Bézier-geometri i millimeter. Den samme geometrien
+  brukes i forhåndsvisningen, SVG/PNG/JPEG-eksport og **Create Outlines**.
+* Dokumentet beholder både redigerbar tekst og et versjonert glyfutlegg. Geometrien bevarer
+  utseendet på maskiner uten fonten; selve fontfilen bygges ikke inn. Endret tekst må beregnes med
+  en tilgjengelig font. Utdatert eller ukjent utleggsdata avvises av dokumentvalideringen.
+* **Type > Create Outlines**, **Mod+Shift+O** og knappen i Properties lager én compound path per
+  synlig glyf, gruppert per linje og objekt. Plassering, transformasjon, farger og opacity beholdes;
+  hele konverteringen er ett angresteg. Tekst inne i valgte grupper kan også konverteres.
+* Etter konverteringen sendes banene med vanlig **Send to Cut**. Redigerbar tekst utelates fortsatt
+  med en beskjed om å bruke Create Outlines først. SVG-eksport av beregnet tekst bruker konturer og
+  trenger derfor ingen font på mottakerens maskin.
+* Eldre punkttekst uten glyfutlegg vises fortsatt med systemets tekstmotor. Edit Text > Apply eller
+  Create Outlines beregner et nytt utlegg med den valgte fonten.
+
+Gjenstår i D2.1: områdetekst, tekst på path, blandede tekststiler, egne Character/Paragraph-paneler,
+flere tegn-/avsnittsegenskaper, finere fontvarianter og variabel-font-akser. Full fontembedding og
+rosa markering av manglende fonter i selve canvas er heller ikke bygget.
 
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
@@ -143,7 +167,7 @@ Create Outlines, områdetekst, tekst på path, blandede tekststiler og egne Char
 | D1.10 Group, Arrange, Clipboard, isolasjon | Ferdig |
 | D1.11 Place bitmap og template-lag | Ferdig (se 2.3); høyreklikkmeny, Crop Image og Links gjenstår |
 | D1.12 Send til Cut v1 | Ferdig (se 2.2) |
-| D2.1 Tekst | Punkttekst med typografi, live preview og eksport ferdig (D2.1a); resten gjenstår, se 2.6 |
+| D2.1 Tekst | Punkttekst, systemfonter, shaping og Create Outlines ferdig (D2.1a/b); resten gjenstår, se 2.7 |
 | D2.2 Pathfinder, Compound, Clipping | Pathfinder ferdig; compound paths og clipping masks gjenstår |
 | D2.3 Gradienter og Swatches | Swatches ferdig (solide); gradienter og globale swatches gjenstår |
 | D2.4 Path-kommandoer | Gjenstår |
@@ -163,8 +187,8 @@ Fase 1 er ferdig. Neste er fase 2, i denne rekkefølgen:
 
 SVG-, PNG- og JPEG-eksport er gjort (2.5).
 
-1. **D2.1 Tekst**: punkttekst er ferdig (2.6). Neste del: systemfonter, shaping og Create Outlines;
-   deretter områdetekst, tekst på path og Character/Paragraph-paneler.
+1. **D2.1 Tekst**: punkttekst, systemfonter og Create Outlines er ferdig (2.7).
+   Neste del er områdetekst, deretter tekst på path og Character/Paragraph-paneler.
 2. D2.2 Compound paths og clipping masks (Make Clipping Mask i Layers-menyen venter på dette).
 3. D2.4 Path-kommandoer (Join, Average, Offset Path, Simplify).
 4. D2.6 PDF-eksport, D2.3 gradienter, D2.8 flere verktøy, D2.9 History/Info/kommandosøk.

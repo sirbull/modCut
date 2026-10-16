@@ -140,9 +140,12 @@ Type (T) now places point text. Click text with Type, double-click it with Selec
 or use **Edit Text…** in Properties to edit it. The dialog previews text on the
 canvas, with multiline content, font family, point size, leading, bold/italic and
 paragraph alignment. Apply creates one undo step; Cancel discards the preview.
-Text persists in projects and appears in SVG, PNG and JPEG exports. Fonts are
-specified by name and use the system fallback if unavailable; SVG recipients need
-the same font. Send to Cut warns that text is omitted until Create Outlines is built.
+Text persists in projects and appears in SVG, PNG and JPEG exports. The font field
+lists installed vector font families. New text keeps its shaped glyph outlines in
+the document, so its appearance and export remain stable without the font installed.
+Use **Type > Create Outlines** (Ctrl/Cmd+Shift+O) to convert text to editable paths
+before **Send to Cut**. This is one undo step. Editing text requires the original
+font or choosing an installed replacement; font files are not embedded.
 
 The file does not copy local machine profiles, connection details, drivers,
 material libraries or process-profile libraries. A receiving computer must

@@ -10,6 +10,7 @@ import { createWindowCommandRouter } from "./window-lifecycle.mjs";
 import { createRecoveryStore } from "./recovery-store.mjs";
 import { writeProject } from "./project-store.mjs";
 import { IMAGE_FORMATS, PDF_FORMATS, TEXT_FORMATS, TIFF_FORMATS, importIssueFor } from "./import-formats.mjs";
+import { createFontService } from './font-service.mjs';
 
 app.name = "modCut"; // makes the macOS app menu read "modCut", not "Electron"
 
@@ -31,6 +32,7 @@ const isE2E = process.env.MODCUT_E2E === "1";
 const e2eImportResults = [];
 const e2eExports = [];
 const gunzipAsync = promisify(gunzip);
+const fonts = createFontService();
 
 // Keep local development and an installed build from sharing Chromium state,
 // recovery files, and machine settings. E2E supplies its own user-data-dir.
@@ -247,6 +249,7 @@ function buildMenu(mode = "cut") {
       label, submenu: [{ label: "No commands available", enabled: false }],
     })));
     const objectItem=(label,command)=>({label,accelerator:acceleratorFor(command,{isMac}),click:()=>send(command)});
+    template.find(item=>item.label==='Type').submenu=[objectItem('Edit Text…','edit-text'),objectItem('Create Outlines','create-outlines')];
     template.find(item=>item.label==='Object').submenu=[{label:'Transform',submenu:[
       ...['Rotate','Reflect','Scale'].map(label=>({label:`${label}…`,click:()=>send(`${label.toLowerCase()}-dialog`)})),
       {type:'separator'},{label:'Transform Again',accelerator:acceleratorFor('transform-again',{isMac}),click:()=>send('transform-again')},
@@ -281,6 +284,8 @@ app.whenReady().then(() => {
     : join(root, "sidecar", "target", "modcut-sidecar.jar");
   sidecar = createSidecar({ command: java, args: ["-jar", sidecarJar] });
   ipcMain.handle("sidecar", (_e, method, params) => sidecar.call(method, params));
+  ipcMain.handle('listSystemFonts', event => {if(event.sender!==win?.webContents)throw new Error('Unavailable font session.');return fonts.list();});
+  ipcMain.handle('shapeText', (event, values) => {if(event.sender!==win?.webContents)throw new Error('Unavailable font session.');return fonts.shape(values);});
   ipcMain.handle("setTheme", (event, preference) => {
     if (!BrowserWindow.fromWebContents(event.sender) || !["system", "light", "dark"].includes(preference)) return false;
     nativeTheme.themeSource = preference;

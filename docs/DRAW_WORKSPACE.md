@@ -805,6 +805,11 @@ Effekter ligger i `appearance.effects` og kan redigeres, slås av og omorganiser
 
 ### 10.8 Tekst
 
+Implementert D2.1b: Fontkit 2.0.4 i main-prosessen brukes foreløpig i stedet for HarfBuzz/FontFace.
+Main sender fontmetadata og beregnet glyfgeometri, ikke fontfiler. Utlegget lagres med teksten og
+brukes direkte til visning, eksport og Create Outlines, slik at alle bruker de samme glyfposisjonene.
+Fontembedding og de øvrige tekstfunksjonene nedenfor gjenstår; se [status](draw/STATUS.md#27-systemfonter-shaping-og-create-outlines-d21b-2026-10-16).
+
 * Fonter: main-prosessen lister systemfonter (filbaner, familie, stil) og leser fontfiler på
   forespørsel. Renderer bruker `FontFace` for visning og HarfBuzz for shaping og glyfkonturer.
   Fonter som brukes i dokumentet kan bygges inn (`assets`) hvis lisensen tillater det
@@ -1409,8 +1414,8 @@ Oversikt over hva som er gjort og gjenstår, inkludert delvis ferdige oppgaver: 
 * [x] D1.10 Group, Arrange, Clipboard
 * [x] D1.11 Place bitmap og template-lag (høyreklikkmeny, Crop Image og Links gjenstår, se [STATUS.md](draw/STATUS.md))
 * [x] D1.12 Send til Cut v1 (se [STATUS.md](draw/STATUS.md) for hva v1 dekker)
-* [ ] D2.1 Tekst — punkttekst (D2.1a) ferdig: Type, live dialog, typografi, angring og eksport.
-  Systemfonter, shaping/outlines, område-/path-tekst og Character/Paragraph gjenstår; se [STATUS.md](draw/STATUS.md#26-punkttekst-d21a-2026-10-16).
+* [ ] D2.1 Tekst — punkttekst, systemfonter, shaping og Create Outlines (D2.1a/b) ferdig.
+  Område-/path-tekst, flere tekstegenskaper og Character/Paragraph gjenstår; se [STATUS.md](draw/STATUS.md#27-systemfonter-shaping-og-create-outlines-d21b-2026-10-16).
 * [ ] D2.2 Pathfinder, Compound, Clipping
 * [ ] D2.3 Gradienter og Swatches
 * [ ] D2.4 Path-kommandoer

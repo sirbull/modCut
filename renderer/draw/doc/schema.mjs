@@ -1,5 +1,6 @@
 /** Versioned JSON data in millimetres. No renderer or Paper.js dependencies. */
 import { resolveCorners } from '../geom/corners.mjs';
+import { textSignature } from './text-layout.mjs';
 export const DOCUMENT_VERSION = 1;
 export const IDENTITY = Object.freeze([1, 0, 0, 1, 0, 0]);
 export const NODE_TYPES = Object.freeze(['layer', 'group', 'path', 'shape', 'text', 'image', 'trace', 'blend', 'compoundPath']);
@@ -200,6 +201,33 @@ export function validateDocument(doc) {
           number(c.fontSize, `${p}.fontSize`, .1, 10000); number(c.leading, `${p}.leading`, .1, 10000);
           enumeration(c.fontWeight, ['normal', 'bold'], `${p}.fontWeight`);
           enumeration(c.fontStyle, ['normal', 'italic'], `${p}.fontStyle`);
+          if(c.fontPostscriptName!==undefined)string(c.fontPostscriptName,`${p}.fontPostscriptName`);
+        }
+      }
+      if(value.layout!==undefined) {
+        const l=value.layout,p=`${path}.layout`;
+        if(!object(l))fail(p,'Expected text layout');
+        else {
+          if(l.version!==1)fail(`${p}.version`,'Unsupported text layout');
+          if(l.signature!==textSignature(value))fail(`${p}.signature`,'Text layout does not match the text');
+          if(!object(l.font))fail(`${p}.font`,'Expected font metadata');
+          else for(const key of ['family','style','postscriptName'])string(l.font[key],`${p}.font.${key}`);
+          array(l.lineWidths,`${p}.lineWidths`).forEach((w,i)=>number(w,`${p}.lineWidths.${i}`));
+          array(l.glyphs,`${p}.glyphs`).forEach((g,i)=>{
+            const q=`${p}.glyphs.${i}`;
+            if(!object(g)){fail(q,'Expected a glyph');return;}
+            number(g.line,`${q}.line`,0);if(!Number.isInteger(g.line)||g.line>=l.lineWidths?.length)fail(`${q}.line`,'Expected a valid line index');
+            number(g.glyphId,`${q}.glyphId`,0);
+            array(g.subpaths,`${q}.subpaths`).forEach((s,j)=>{
+              const r=`${q}.subpaths.${j}`;
+              if(!object(s)){fail(r,'Expected a glyph contour');return;}
+              if(s.closed!==true)fail(`${r}.closed`,'Glyph contours must be closed');
+              array(s.segments,`${r}.segments`).forEach((a,k)=>{
+                if(!object(a)){fail(`${r}.segments.${k}`,'Expected a segment');return;}
+                for(const key of ['p','in','out'])vector(a[key],2,`${r}.segments.${k}.${key}`);
+              });
+            });
+          });
         }
       }
     }

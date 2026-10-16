@@ -10,11 +10,11 @@ import { textProperties } from '../doc/text.mjs';
 
 let dialogId=0;
 /** Uniform point-text editor. Preview is detached; Apply is a single document command. */
-export function textDialog(defaults, onPreview = () => {}) {
+export function textDialog(defaults, onPreview = () => {}, {fonts=[],resolve=patch=>patch}={}) {
   const choices = values => values.map(value => ({ value, label: value[0].toUpperCase() + value.slice(1) }));
   const fields = [
     {key:'text',label:'Text',value:defaults.text,required:true},
-    {key:'fontFamily',label:'Font family',value:defaults.fontFamily,required:true,description:'Use an installed font name. Unavailable fonts use the system fallback; SVG text needs the same font on the receiving computer.'},
+    {key:'fontFamily',label:'Font family',value:defaults.fontFamily,required:true,description:'Choose an installed font. Saved glyph outlines preserve appearance and export without the font file.'},
     {key:'fontSize',label:'Size (pt)',type:'number',value:defaults.fontSize,min:.1,max:10000,step:'any',required:true},
     {key:'leading',label:'Leading (pt)',type:'number',value:defaults.leading,min:.1,max:10000,step:'any',required:true},
     {key:'fontWeight',label:'Weight',type:'select',value:defaults.fontWeight,options:choices(['normal','bold'])},
@@ -23,16 +23,28 @@ export function textDialog(defaults, onPreview = () => {}) {
   ];
   const result = openDrawModal({title:'Point Text',submitLabel:'Apply',className:'draw-text-dialog',fields});
   const form = document.querySelector('.draw-text-dialog form'), original = form.elements.text;
+  const families=document.createElement('datalist');families.id=`draw-fonts-${++dialogId}`;
+  for(const family of new Set(fonts.map(f=>f.family))){const option=document.createElement('option');option.value=family;families.append(option);}
+  form.append(families);form.elements.fontFamily.setAttribute('list',families.id);form.elements.fontFamily.autocomplete='off';
   const input = document.createElement('textarea'); input.name = 'text'; input.className = 'input'; input.required = true; input.rows = 3;
   input.value = defaults.text; original.replaceWith(input);
   const error = document.createElement('p'); error.setAttribute('role','alert'); form.insertBefore(error,form.querySelector('.modal-actions'));
   const read = () => Object.fromEntries(fields.map(f => [f.key, f.type === 'number' ? form.elements[f.key].valueAsNumber : form.elements[f.key].value]));
-  const preview = () => {
-    try { const patch = textProperties(read()); error.textContent = ''; input.setCustomValidity(''); onPreview(patch); }
-    catch (e) { error.textContent = e.message; input.setCustomValidity(e.message); onPreview(null); }
+  const submit=form.querySelector('[type=submit]');let revision=0,alive=true,resolved=null,accepted=null,lastInput=null;
+  const preview = async () => {
+    if(!alive)return;
+    const values=read(),key=JSON.stringify(values);if(key===lastInput)return;lastInput=key;
+    const current=++revision;resolved=null;submit.disabled=true;form.dataset.textReady='false';input.setCustomValidity('Updating text preview…');
+    try {
+      const patch=await resolve(textProperties(values));
+      if(!alive||current!==revision)return;
+      resolved=patch;onPreview(patch);input.setCustomValidity('');submit.disabled=false;form.dataset.textReady='true';
+      error.textContent=fonts.length&&!fonts.some(f=>f.family.toLowerCase()===patch.character.fontFamily.toLowerCase())?'Font unavailable: saved outlines are preserved. Choose an installed font to change the text.':'';
+    } catch (e) {if(alive&&current===revision){error.textContent=e.message;input.setCustomValidity(e.message);onPreview(null);}}
   };
+  form.addEventListener('submit',event=>{if(!resolved||submit.disabled){event.preventDefault();event.stopImmediatePropagation();return;}accepted=resolved;alive=false;revision++;},true);
   form.addEventListener('input',preview); form.addEventListener('change',preview); preview(); input.focus(); input.select();
-  return result.finally(() => {form.removeEventListener('input',preview);form.removeEventListener('change',preview);});
+  return result.then(values=>values?accepted:null).finally(() => {alive=false;revision++;form.removeEventListener('input',preview);form.removeEventListener('change',preview);});
 }
 function openDrawModal(options) {
   const previous=document.activeElement, result=openModal(options), overlay=document.querySelector('.modal-overlay:last-of-type'),modal=overlay.querySelector('.modal');

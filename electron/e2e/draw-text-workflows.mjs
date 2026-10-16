@@ -12,23 +12,27 @@ export async function runDrawTextWorkflows(client) {
   const at=async(x,y)=>evaluate(`(async()=>{const w=${active},b=w.state.document.data.artboards[0],p=w.scope.view.projectToView(new w.scope.Point(b.x+${x},b.y+${y})),r=w.scope.view.element.getBoundingClientRect();return {x:r.x+p.x,y:r.y+p.y};})()`);
   const snapshot=()=>evaluate(`(async()=>(${active}.state.document.serialize()))()`);
   const before=await snapshot();
+  const ready=async()=>{for(let i=0;i<200;i++){if(await evaluate("document.querySelector('.draw-text-dialog form')?.dataset.textReady==='true'"))return;await wait(50);}assert.fail('Text preview did not resolve');};
   await key('t'); assert.equal(await evaluate(`(async()=>(${active}.state.ui.tool))()`),'type'); await click(await at(15,25));
+  await ready();
   assert.ok(await evaluate("!!document.querySelector('.draw-text-dialog')"));
   await evaluate("document.querySelector('.draw-text-dialog textarea').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',isComposing:true,bubbles:true,cancelable:true}))");
   assert.ok(await evaluate("!!document.querySelector('.draw-text-dialog')"),'IME Escape keeps the editor open');
   await command('Input.insertText',{text:'Horten ÆØÅ\nmodCut'});
   await evaluate("(()=>{const f=document.querySelector('.draw-text-dialog form');f.elements.fontWeight.value='bold';f.elements.fontStyle.value='italic';f.elements.fontStyle.dispatchEvent(new Event('change',{bubbles:true}));})()");
+  await ready();
   assert.equal(await snapshot(),before,'Typing previews without changing the document or dirty state');
-  assert.ok(await evaluate(`(async()=>{const w=${active};return w.scope.project.getItems({class:w.scope.PointText}).some(i=>i.content===${JSON.stringify('Horten ÆØÅ\nmodCut')}&&i.fontWeight==='italic bold'&&i.bounds.width>1)})()`),'Canvas shows the live text before Apply');
+  assert.ok(await evaluate(`(async()=>{const w=${active};return w.scope.project.getItems({class:w.scope.CompoundPath}).some(i=>!i.data.nodeId&&i.bounds.width>1)})()`),'Canvas shows resolved glyphs before Apply');
   const proof=await command('Page.captureScreenshot',{format:'png'});await writeFile(join(tmpdir(),'modcut-draw-text-preview.png'),Buffer.from(proof.data,'base64'));
   await evaluate("document.querySelector('.draw-text-dialog form').requestSubmit()"); await wait(50);
   const node=await evaluate(`(async()=>{const w=${active};return w.state.document.getNode(w.state.selection.ids[0])})()`);
+  assert.ok(node,await evaluate("document.querySelector('.modal')?.textContent || document.querySelector('.toast--err')?.textContent || 'Text was not inserted'"));
   assert.equal(node.type,'text'); assert.equal(node.content.runs[0].text,'Horten ÆØÅ\nmodCut');
   assert.equal(await evaluate(`(async()=>(${active}.state.history.entries.filter(e=>e.applied).length))()`),1);
   const svg=await evaluate(`(async()=>{const w=${active};return w.exportBoard(w.state.ui.artboardId,'svg')})()`);
-  const exported=await evaluate(`(()=>{const d=new DOMParser().parseFromString(${JSON.stringify(svg)},'image/svg+xml'),t=d.querySelector('text');return {weight:t.getAttribute('font-weight'),style:t.getAttribute('font-style'),lines:[...t.querySelectorAll('tspan')].map(s=>({text:s.textContent,x:+s.getAttribute('x'),y:+s.getAttribute('y')}))}})()`);
-  assert.equal(exported.weight,'bold');assert.equal(exported.style,'italic');assert.equal(exported.lines.length,2);
-  assert.equal(exported.lines[0].text,'Horten ÆØÅ');assert.ok(exported.lines[1].y>exported.lines[0].y);
+  assert.doesNotMatch(svg,/<text[\s>]/);assert.match(svg,/<path[\s>]/,'SVG contains portable glyph outlines');
+  assert.equal(node.character.fontWeight,'bold');assert.equal(node.character.fontStyle,'italic');
+  assert.equal(node.layout.lineWidths.length,2);assert.ok(node.layout.glyphs.some(g=>g.line===1));
   const extents=await evaluate(`(async()=>{const w=${active},board=w.state.ui.artboardId,urls=[w.exportBoard(board,'png',{ppi:72}),'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(${JSON.stringify(svg)})];
     return Promise.all(urls.map(async url=>{const image=new Image();image.src=url;await image.decode();const c=document.createElement('canvas');c.width=340;c.height=227;const g=c.getContext('2d');g.drawImage(image,0,0,340,227);const p=g.getImageData(0,0,340,227).data;let x0=340,y0=227,x1=-1,y1=-1;for(let y=0;y<227;y++)for(let x=0;x<340;x++)if(p[(y*340+x)*4+3]>64){x0=Math.min(x0,x);y0=Math.min(y0,y);x1=Math.max(x1,x);y1=Math.max(y1,y);}return [x0,y0,x1,y1];}));})()`);
   assert.ok(extents[0][2]>extents[0][0]&&extents[0][3]>extents[0][1],'Raster export contains painted glyphs');
@@ -47,11 +51,11 @@ export async function runDrawTextWorkflows(client) {
   await command('Input.insertText',{text:'Cancelled'}); await key('Escape'); await wait(50);
   assert.equal(await snapshot(),saved,'Escape restores the original text');
   // Hit testing with Type edits the existing object, rather than creating a second object.
-  await evaluate(`(async()=>{${active}.setTool('type')})()`);await click(await at(20,22));
+  await evaluate(`(async()=>{${active}.setTool('type')})()`);await click(await at(20,22));await ready();
   assert.equal(await evaluate("document.querySelector('.draw-text-dialog form')?.elements.text.value"),'Horten ÆØÅ\nmodCut');
   await key('Escape');await wait(50);
   await evaluate("document.querySelector('.draw-project[style*=block] [data-draw-quick=edit-text]').click()");
-  await command('Input.insertText',{text:'Revised'});await evaluate("document.querySelector('.draw-text-dialog form').requestSubmit()");await wait(50);
+  await command('Input.insertText',{text:'Revised'});await ready();await evaluate("document.querySelector('.draw-text-dialog form').requestSubmit()");await wait(50);
   assert.equal(await evaluate(`(async()=>(${active}.state.document.getNode('${node.id}').content.runs[0].text))()`),'Revised');
   await evaluate(`(async()=>{${active}.handle('undo')})()`);assert.equal(await snapshot(),saved);
   // Same model after reload, including character and paragraph fields.

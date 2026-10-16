@@ -1,7 +1,25 @@
 # Third-party notices
 
-This file records Draw geometry/icon dependencies and the experimental D0.3 spike.
+This file records Draw geometry, icon and text dependencies and the experimental D0.3 spike.
 It is not a complete inventory of modCut's pre-existing dependencies.
+
+## Fontkit — Draw text shaping and outlines (D2.1b)
+
+- Source: https://github.com/foliojs/fontkit/tree/v2.0.4
+- npm package: `fontkit` 2.0.4, pinned in package.json and package-lock.json.
+- Author: Devon Govett. Upstream README and package.json declare the MIT license;
+  the published package has no separate LICENSE file. Its original README,
+  package metadata, source and distribution files are retained in the app archive.
+- Used in Electron main to enumerate installed vector fonts, perform OpenType/AAT
+  shaping and obtain quadratic/cubic glyph contours. No upstream UI or font assets
+  are copied. Font files stay on the user's computer; projects store glyph geometry.
+- Runtime dependencies are included with their original notices: @swc/helpers
+  (Apache-2.0, including LICENSE), tslib (0BSD, including LICENSE.txt and
+  CopyrightNotice.txt), and the MIT packages brotli, base64-js, clone, dfa,
+  fast-deep-equal, restructure, tiny-inflate, unicode-properties, unicode-trie
+  and pako. Exact versions and integrity hashes are recorded in package-lock.json.
+- `scripts/verify-font-package.mjs` imports the service from the built app archive
+  to verify that its transitive dependencies ship with the application.
 
 ## VectorCraft — development experiment only
 

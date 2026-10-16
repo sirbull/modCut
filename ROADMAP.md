@@ -110,9 +110,10 @@ the same commit that completes an item.
   control bar, Place with Template and Send to Cut v1. Status: docs/draw/STATUS.md.
 - [ ] Phase 2 — Core vector editing: text, Pathfinder, gradients, import/export
   and Send to Cut v2.
-  SVG/PNG/JPEG export and D2.1a point text are implemented. Type (T) provides live
-  preview, uniform typography and multiline text. System font discovery, shaping,
-  outlines, area/path text and Character/Paragraph panels remain in D2.1.
+  SVG/PNG/JPEG export and D2.1a/b point text are implemented. Type (T) provides live
+  preview, installed vector fonts, kerning/ligatures and multiline text. Create
+  Outlines converts glyphs into editable Cut-ready paths in one undo step.
+  Area/path text and Character/Paragraph panels remain in D2.1.
 - [ ] Phase 3 — Advanced editing: stroke expansion, effects, Image Trace,
   additional editing tools and AI/DXF export.
 - [ ] Phase 4 — Full feature set: Width, Blend, brushes, additional export

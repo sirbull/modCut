@@ -9,6 +9,7 @@ import { scaledStrokeProperties } from '../geom/transforms.mjs';
 import { isOutputNode, layerContext, ROOT_CONTEXT } from '../doc/layers.mjs';
 import { arrowShapes } from '../geom/arrows.mjs';
 import { PT_TO_MM, textValues } from '../doc/text.mjs';
+import { textSubpaths } from '../doc/text-layout.mjs';
 
 export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withScope = fn => fn() } = {}) {
   const boards = new scope.Layer({ name: 'Artboards' });
@@ -79,6 +80,8 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
   function make(node) {
     if (node.children) return new scope.Group({ insert: false });
     if (node.type === 'text') {
+      const geometry=textSubpaths(node);
+      if(geometry)return new scope.CompoundPath({insert:false,children:geometry.map(path)});
       const v = textValues(node);
       return new scope.PointText({ insert: false, point: [0, 0], content: v.text,
         fontFamily: v.fontFamily, fontSize: v.fontSize * PT_TO_MM, leading: v.leading * PT_TO_MM,
@@ -125,7 +128,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     return new scope.Group({ insert: false });
   }
   function geometryKey(node) {
-    if (node.type === 'text') return JSON.stringify([node.content, node.character, node.paragraph]);
+    if (node.type === 'text') return JSON.stringify([node.content, node.character, node.paragraph,node.layout]);
     if (node.type === 'path') return JSON.stringify([node.subpaths, node.fillRule]);
     if (node.type === 'shape') return JSON.stringify([node.shape, node.params]);
     if (node.type === 'image') return JSON.stringify([node.assetId, state.document.data.assets[node.assetId]]);
@@ -160,8 +163,8 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
   }
   // Paint stack: one geometry clone per visible fill, then per visible stroke, drawn in that order
   // (later entries on top). It shares the node's transform and id, so hit-testing finds the node.
-  function paintStack(item, node) {
-    if (!stacked(node) || outlineFor(node.id)) return null;
+  function paintStack(item, node, asOutline = outlineFor(node.id)) {
+    if (!stacked(node) || asOutline) return null;
     const group = new scope.Group({ insert: false });
     group.applyMatrix = false; group.matrix = new scope.Matrix(...node.transform); group.data.nodeId = node.id; group.data.stack = true;
     group.opacity = node.opacity; group.data.baseOpacity = node.opacity; group.blendMode = node.blendMode;
@@ -457,13 +460,16 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     thumbnails.set(id, { key, url }); return url;
   }
   return { render, select: updateView, updateView, bounds, selectionBounds, hit, items, setOutline, thumbnail, exportArtwork, booleanOperand, selectionHandle:point=>selection.hit(point),
-    previewText(node, parentMatrix = [1,0,0,1,0,0]) {
+    previewText(node, parentId = null) {
       textPreview?.remove(); textPreview = null;
       render();
       if (node) {
-        textPreview = make(node); textPreview.applyMatrix = false;
-        textPreview.matrix = new scope.Matrix(...parentMatrix).append(new scope.Matrix(...node.transform));
-        style(textPreview, node, false); overlay.addChild(textPreview);
+        textPreview = new scope.Group({insert:false});textPreview.applyMatrix=false;
+        textPreview.matrix = records.get(parentId)?.worldMatrix.clone() ?? new scope.Matrix();
+        if(parentId)textPreview.opacity=[state.document.getNode(parentId),...state.document.ancestors(parentId)].reduce((alpha,n)=>alpha*n.opacity,1);
+        const item=make(node);item.applyMatrix=false;item.matrix=new scope.Matrix(...node.transform);style(item,node,false,true);textPreview.addChild(item);
+        const stack=paintStack(item,node,false);if(stack)textPreview.addChild(stack);
+        overlay.addChild(textPreview);
         for (const item of [items.get(node.id), records.get(node.id)?.stack, records.get(node.id)?.arrows]) if (item) item.visible = false;
       }
       scope.view.update();

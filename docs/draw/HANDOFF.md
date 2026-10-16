@@ -17,14 +17,26 @@ D1.8 (Transform, Align, Color, Stroke, Fill/Stroke-boks og Properties) ble fullf
 
 ## Status og neste oppgave
 
-Fase 0 og fase 1 er fullført. Export As (SVG, PNG, JPEG) og **D2.1a punkttekst** er ferdige.
-**Neste del er systemfonter, shaping og Create Outlines i D2.1**, deretter områdetekst,
-tekst på path og egne Character/Paragraph-paneler. Se STATUS.md 2.6 for avgrensningen.
-Punkttekst bruker foreløpig systemets canvas-tekst; fontfamilie skrives manuelt. Ingen fontfiler
-bygges inn. Send to Cut varsler at tekst utelates. Ikke marker hele D2.1 som ferdig.
-Kode: `doc/text.mjs`, `textDialog()` i `ui/dialogs.mjs`, `editText()` i `index.mjs`, PointText i
-Paper-adapteren. SVG-eksport retter Papers font-weight og legger til tspan per tekstlinje.
-E2E-flagg for de nye delene: `--draw-cut`, `--draw-place`, `--draw-control`, `--draw-export`, `--draw-text`.
+Fase 0 og fase 1 er fullført. Export As og **D2.1a/b punkttekst med systemfonter, shaping og
+Create Outlines** er ferdige. **Neste del er områdetekst i D2.1**, deretter tekst på path og egne
+Character/Paragraph-paneler. Se STATUS.md 2.7. Ikke marker hele D2.1 som ferdig.
+
+`electron/font-service.mjs` skanner system-/brukerfonter og bruker Fontkit 2.0.4 til å beregne
+kerning, ligaturer og Bézier-konturer. IPC sender metadata og geometri, aldri vilkårlige fontfiler.
+`doc/text-layout.mjs` inneholder ren konturkonvertering og signaturkontroll. `node.layout` inneholder
+et versjonert glyfutlegg med koordinater i mm. Renderer, eksport og Create Outlines bruker dette
+samme utlegget. Fontfilen bygges ikke inn; lagret tekst kan vises og konverteres uten fonten.
+Endret tekst krever en tilgjengelig font. Utlegget valideres mot tekst/typografi; gjenbruk aldri
+gammel geometri etter en tekstendring. Eldre tekst uten cache vises fortsatt med Paper PointText.
+
+`textDialog()` venter på riktig asynkrone forhåndsvisning før Apply aktiveres. Forsinkede svar
+etter nye tastetrykk/Cancel/destruert workspace ignoreres. `createTextOutlines()` venter på alle
+fonter før én atomisk historikktransaksjon; én glyf blir én path med flere subpaths ved behov,
+gruppert per linje/objekt. Deretter virker vanlig Send to Cut. SVG bruker outlines for beregnet tekst.
+`scripts/verify-font-package.mjs` kontrollerer fontmotoren fra app.asar; kjøres av `npm run pack`.
+
+E2E-flagg for de nye delene: `--draw-cut`, `--draw-place`, `--draw-control`, `--draw-export`,
+`--draw-text`, `--draw-outlines`.
 
 Historikk for D1.9: commit `d337a8f` (en annen agent) flyttet allerede visningskontrollene
 (posisjon, artboard, zoom, Outline, Fit) til appens nederste statuslinje (`#drawStatus`) og
@@ -111,7 +123,23 @@ Les hovedplanen (kapittel 3, 8, 18 og sjekklisten i kapittel 23) og
 | `electron/e2e/draw-panel-workflows.mjs` | E2E for alle D1.8-paneler (`--draw-panels`) |
 | `electron/e2e/draw-feedback-workflows.mjs` | E2E for markører og live Pen-forhåndsvisning (`--draw-feedback`) |
 
-## Verifisert 2026-10-16 (D2.1a)
+## Verifisert 2026-10-16 (D2.1b)
+
+- **173 Draw-enhetstester og 18 main-tester passerer** (`npm run test:draw`, `npm run test:main`).
+  Fonttestene dekker TrueType, OpenType/CFF, fontsamlinger, kerning, fi-ligatur, multiline/
+  alignment, manglende fonter og lagret geometri uten tilgang til originalfonten.
+- **Electron `--draw-text`, `--draw-outlines` og `--draw-export` passerer**. Outlines-testen
+  kontrollerer uendrede glyph-konturer og mål innen 0,01 mm, rasterlikhet før/etter, transform/
+  opacity, Type-meny, ett angresteg og reell overføring til Cut med samme mål/plassering.
+- Windows-pakken (`electron-builder --dir --win --publish never`) og sidecar-smoketesten
+  passerer. Fontmotoren er importert fra den bygde app.asar og beregner glyfer korrekt med
+  de medfølgende avhengighetene (`node scripts/verify-font-package.mjs`).
+- Tekstforhåndsvisning og outlines er visuelt kontrollert i `%TEMP%/modcut-draw-text-preview.png`
+  og `%TEMP%/modcut-draw-text-outlines.png`.
+- Det komplette Draw-løpet ble ikke kjørt på nytt her. Se tidligere helkjøringsfeil nedenfor;
+  denne delen er kontrollert med de målrettede testene over.
+
+## Tidligere verifisering 2026-10-16 (D2.1a)
 
 - **168 Draw-enhetstester passerer** (`npm run test:draw`).
 - **Punkttekst-E2E passerer** (`node electron/e2e/run.mjs --draw-text`); skjermbildet

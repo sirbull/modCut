@@ -4,6 +4,8 @@ const { contextBridge, ipcRenderer, webUtils } = require("electron");
 contextBridge.exposeInMainWorld("modcut", {
   setTheme: (preference) => ipcRenderer.invoke("setTheme", preference),
   call: (method, params) => ipcRenderer.invoke("sidecar", method, params),
+  listSystemFonts: () => ipcRenderer.invoke('listSystemFonts'),
+  shapeText: values => ipcRenderer.invoke('shapeText', values),
   openImport: (options) => ipcRenderer.invoke("importFile", options),
   getPathForFile: (file) => webUtils.getPathForFile(file),
   saveDocument: (json, path, saveAs, name) => ipcRenderer.invoke("saveDocument", { json, path, saveAs, name }),

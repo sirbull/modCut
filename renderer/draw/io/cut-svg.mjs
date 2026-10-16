@@ -68,7 +68,7 @@ export function artboardCutSvg(doc, boardId, geometry) {
     elements.push(`  <path ${attrs.join(' ')}/>`);
   }
   const warnings = [];
-  if (text) warnings.push(`${text} text object${text === 1 ? ' is' : 's are'} not sent yet. Text outlines are planned in D2.1.`);
+  if (text) warnings.push(`${text} text object${text === 1 ? ' is' : 's are'} not sent yet. Use Type > Create Outlines before sending.`);
   if (skipped.images) warnings.push(`${skipped.images} image${skipped.images === 1 ? ' is' : 's are'} not sent yet (Send to Cut v2).`);
   if (partly) warnings.push(`${partly} object${partly === 1 ? ' extends' : 's extend'} past the artboard and ${partly === 1 ? 'is' : 'are'} sent whole.`);
   if (stacked) warnings.push(`${stacked} object${stacked === 1 ? ' has' : 's have'} several fills or strokes; only the first of each is sent.`);

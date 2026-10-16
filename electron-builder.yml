@@ -22,11 +22,23 @@ files:
   - THIRD_PARTY_NOTICES.md
   - node_modules/paper/**/*
   - node_modules/clipper-lib/**/*
+  - node_modules/fontkit/**/*
+  - node_modules/@swc/helpers/**/*
+  - node_modules/tslib/**/*
+  - node_modules/brotli/**/*
+  - node_modules/base64-js/**/*
+  - node_modules/clone/**/*
+  - node_modules/dfa/**/*
+  - node_modules/fast-deep-equal/**/*
+  - node_modules/restructure/**/*
+  - node_modules/tiny-inflate/**/*
+  - node_modules/unicode-properties/**/*
+  - node_modules/unicode-trie/**/*
+  - node_modules/pako/**/*
   - node_modules/pdfjs-dist/build/**/*
   - node_modules/pdfjs-dist/cmaps/**/*
   - node_modules/pdfjs-dist/standard_fonts/**/*
   - node_modules/pdfjs-dist/wasm/**/*
-  - node_modules/pako/dist/pako.min.js
   - node_modules/utif/UTIF.js
 
 extraResources:

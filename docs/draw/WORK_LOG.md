@@ -921,3 +921,48 @@ før de resterende tekstkravene i hovedplanen er implementert.
   Escape (lukker bare listen) virker. Knappen er fortsatt skjemafeltet `colorName`.
 - **Dobbeltklikk på lagnavn** gir omdøping i panelet. Første klikk bygger listen på nytt, så
   den native `dblclick` traff aldri; omdøping utløses nå av klikkantallet (`event.detail === 2`).
+
+## 2026-10-16: D2.1b systemfonter, shaping og Create Outlines
+
+- Ny `electron/font-service.mjs` med smal IPC (`listSystemFonts`, `shapeText`). Skanner system-
+  og brukerfontmapper på Windows/macOS/Linux og leser TTF/OTF/TTC/OTC. Filbaner er private i
+  main; renderer kan velge kjente fontfamilier/varianter, ikke lese vilkårlige filer.
+- Fontkit er låst til **2.0.4**. Standard OpenType/AAT-shaping, kerning og ligaturer brukes.
+  Konturer i fontens koordinater konverteres til millimeter og nedovervendt Y; kvadratiske
+  kurver blir eksakte kubiske Bézier-kurver. Ingen flattening eller rasterisering.
+- Ny ren `doc/text-layout.mjs`; signert/versjonert `node.layout` med glyph-geometri og faktiske
+  fontmetadata. Signaturen er uavhengig av JSON-nøkkelrekkefølge og valideres mot tekst,
+  tegnstil og avsnitt. Feil/utdaterte/fremtidige cachedata går gjennom eksisterende safe mode.
+- Renderer og SVG/PNG/JPEG bruker samme lagrede konturer. Dokumentet bevarer redigerbar tekst
+  og utseende uten originalfonten. Ny/endrede tekst krever tilgjengelig font og tegn; fontfiler
+  bygges ikke inn. Eldre punkttekst får utlegg ved Edit Text > Apply eller Create Outlines.
+- Tekstdialogen har installerte fontfamilier og asynkron live preview. Forsinkede svar etter
+  nye innskrivinger, Cancel og destruksjon ignoreres. Apply aktiveres bare for riktig ferdig
+  utlegg. App-testen avdekket at blur/change ved lukking kunne starte en ny beregning; duplikate
+  verdier ignoreres nå, og ferdig utlegg fanges før dialogen fjernes.
+- **Create Outlines** i Type-meny, Mod+Shift+O og Properties. Ett angresteg gjør synlige glyfer
+  til paths med flere subpaths ved behov, gruppert per linje og objekt. Identitet, plassering,
+  transform, farger, opacity og opprinnelig utvalg beholdes. Tekst inne i valgte grupper støttes.
+  Resultatet bruker vanlig Send to Cut. Redigerbar tekst varsler fortsatt om konvertering først.
+- Windows-pakkingen inkluderer fontmotoren og alle runtime-avhengigheter. `npm run pack` kjører
+  nå også `verify-font-package.mjs`, som importerer fonttjenesten fra den faktiske app-arkivkopien
+  og verifiserer glyph-layout. Tredjepartsnotater oppdatert. Ingen fontfiler kopieres til repoet.
+
+Avvik fra den opprinnelige planen: Fontkit i main brukes i stedet for HarfBuzz/FontFace i renderer.
+Samme beregnede geometri brukes overalt. Rå fontfiler/fontembedding er ikke nødvendig for denne
+delen og er ikke implementert. Områdetekst, tekst på path, egne Character/Paragraph-paneler,
+flere tekstegenskaper og variabel-font-kontroller gjenstår i D2.1.
+
+Verifisert: 173 Draw-enhetstester, 18 main-tester, Electron `--draw-text`, `--draw-outlines` og
+`--draw-export`. Testene dekker TTF, CFF/OTF og fontsamlinger, fi-ligatur, AV-kerning, æ/ø/å,
+multiline, lagring uten fonten, avbryt/rask innskriving, utseende og konturer før/etter outlines,
+transform/opacity, angring og faktisk Send to Cut med mål/plassering innen 0,01 mm.
+Windows unpacked-build, sidecar-smoketest og fontmotoren fra app.asar passerer. Skjermbildene
+for tekst og outlines er visuelt kontrollert. Komplett Draw-E2E ble ikke kjørt på nytt i denne delen.
+Første sidecar-smoketest etter siste pakking feilet uten forklarende stderr; direkte ping og
+samme smoketest passerte ved omkjøring uten endring av pakken. Årsaken er ikke fastslått.
+
+Arbeidet ble gjort samtidig med dokumentoppsett-/lagarbeidet, som er lagret separat i `8a98e74`.
+Eksisterende endringer er bevart; Electron-kjøringene ble holdt adskilt.
+
+Neste: D2.1c områdetekst med automatisk linjebryting, basert på samme fontutlegg.

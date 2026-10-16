@@ -29,7 +29,8 @@ import { EXPORT_FORMATS, exportFileName, rasterSize, svgDocument } from './io/ex
 import { layerOptionsPatch, templateLayerCommands } from './doc/layers.mjs';
 import { toolCursor } from './tools/cursors.mjs';
 import { alignReference, alignOffsets, distributeOffsets, spacingOffsets } from './geom/align.mjs';
-import { pointText, textValues, textProperties, DEFAULT_CHARACTER } from './doc/text.mjs';
+import { pointText, textValues, textProperties, textToOutlines, DEFAULT_CHARACTER } from './doc/text.mjs';
+import { hasTextLayout } from './doc/text-layout.mjs';
 import { textDialog } from './ui/dialogs.mjs';
 
 const workspaces=new WeakMap();
@@ -37,7 +38,7 @@ export function getDrawWorkspace(root) {return workspaces.get(root) || null;}
 const implementedTools=new Set(['select','hand','zoom','artboard','type',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
 const commands=new Set(['undo','redo','delete','select-all','select-artboard','deselect','cancel','fit-artboard','fit-all','actual-size','zoom-in','zoom-out','outline',
   'cut','copy','paste','paste-front','paste-back','paste-place','paste-all-artboards',
-  'edit-text','send-to-cut','export-as','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
+  'edit-text','create-outlines','send-to-cut','export-as','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
   'paint-focus','paint-swap','paint-none','paint-solid','default-paint','smart-guides','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','toggle-panels','toggle-panels-except-tools',
   ...PANEL_DEFINITIONS.map(p=>`panel.${p.id}`),...['left','right','up','down'].flatMap(d=>[`nudge-${d}`,`nudge-large-${d}`,`duplicate-${d}`])]);
 export function createDrawWorkspace(root,{paper=window.paper,state=createProjectDraw(),onError=console.warn,onImport=()=>{},onSendToCut=null,onExport=null,getPreferences=()=>({}),statusHost=null}={}) {
@@ -63,7 +64,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   const scope=new paper.PaperScope();try {scope.setup(canvas);} finally {paper.activate();}scope.view.autoUpdate=false;
   function withScope(fn) {try {scope.activate();return fn();} finally {paper.activate();}}
   function run(fn) {try {return withScope(fn);}catch(error){onError(error.message);}}
-  let panels,toolbar,interactions,paths,artboards,temporary=null,destroyed=false,fitted=false,lastPoint=null,ownedTransformModal=null,ownedTextModal=null;
+  let panels,toolbar,interactions,paths,artboards,temporary=null,destroyed=false,fitted=false,lastPoint=null,ownedTransformModal=null,ownedTextModal=null,textBusy=false,fontCatalog;
   const renderer=withScope(()=>createDrawRenderer(scope,state,{withScope,onImageLoad:()=>panels?.render()}));
   const selectedIds=()=>state.selection.ids.filter(id=>!state.document.ancestors(id).some(n=>state.selection.ids.includes(n.id)));
   const paintIds=()=>[...new Set(selectedIds().flatMap(id=>{
@@ -234,27 +235,53 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     });
   }
   function insertShape(node) {const parent=insertionParent();state.history.execute(insertNode(parent,toParentSpace(parent,node)));select([node.id]);}
+  const listFonts=()=>fontCatalog??=(window.modcut.listSystemFonts().catch(error=>{fontCatalog=null;throw error;}));
+  async function resolveText(node,patch) {
+    patch=textProperties(textValues({...node,...patch}));
+    const previous=node.character;
+    if(previous?.fontPostscriptName&&['fontFamily','fontWeight','fontStyle'].every(k=>patch.character[k]===previous[k]))patch.character.fontPostscriptName=previous.fontPostscriptName;
+    if(hasTextLayout({...node,...patch}))return {...patch,layout:node.layout};
+    const layout=await window.modcut.shapeText(textValues({...node,...patch}));
+    return {...patch,character:{...patch.character,fontPostscriptName:layout.font.postscriptName},layout};
+  }
+  async function createTextOutlines() {
+    if(destroyed||textBusy||state.document.readOnly||document.querySelector('.modal-overlay'))return;
+    const previousSelection=selectedIds();
+    const ids=[...new Set(previousSelection.flatMap(id=>{const n=state.document.getNode(id);return n.children?state.document.descendants(id).map(n=>n.id):[id];}))].filter(id=>state.document.getNode(id)?.type==='text'&&state.document.isEditable(id));
+    if(!ids.length)throw new Error('Select text to create outlines.');
+    textBusy=true;statusLine.textContent='Creating text outlines…';const before=state.document.data;
+    try {
+      const groups=await Promise.all(ids.map(async id=>{const node=state.document.getNode(id);return textToOutlines(hasTextLayout(node)?node:{...node,...await resolveText(node,{content:node.content,character:node.character??DEFAULT_CHARACTER,paragraph:node.paragraph})});}));
+      if(destroyed)return;if(state.document.data!==before)throw new Error('The artwork changed while creating outlines. Try again.');
+      run(()=>{state.history.transaction('Create Outlines',()=>{for(const group of groups){const {parentId,index}=state.document.locate(group.id);state.history.execute(removeNode(group.id));state.history.execute(insertNode(parentId,group,index));}});select(previousSelection);});
+    }finally{textBusy=false;if(!destroyed)status();}
+  }
   async function editText(point = scope.view.center, id = null) {
-    if(destroyed||state.document.readOnly||document.querySelector('.modal-overlay'))return;
+    if(destroyed||textBusy||state.document.readOnly||document.querySelector('.modal-overlay'))return;
     const original=id?state.document.getNode(id):null;
     if(id&&(original?.type!=='text'||!state.document.isEditable(id)))return;
     const parent=id?state.document.locate(id).parentId:insertionParent();
-    const defaults=original?textValues(original):{text:'Text',...DEFAULT_CHARACTER,...state.ui.character,alignment:state.ui.textAlignment??'left'};
-    const node=original??toParentSpace(parent,pointText([point.x,point.y],defaults));
+    let defaults=original?textValues(original):{text:'Text',...DEFAULT_CHARACTER,...state.ui.character,alignment:state.ui.textAlignment??'left'};
     const before=state.document.data;
+    textBusy=true;statusLine.textContent='Loading installed fonts…';
     try {
-      const pending=textDialog(defaults,patch=>run(()=>renderer.previewText(patch?{...node,...patch}:null,renderer.worldMatrix(parent))));
+      const fonts=await listFonts();if(destroyed)return;
+      status();
+      if(state.document.data!==before)throw new Error('The artwork changed while loading fonts. Try again.');
+      if(!original&&!fonts.some(f=>f.family===defaults.fontFamily)){const face=['Arial','Helvetica','DejaVu Sans','Liberation Sans','Noto Sans'].map(name=>fonts.find(f=>f.family===name&&f.fontWeight==='normal'&&f.fontStyle==='normal')).find(Boolean)??fonts[0];if(face)defaults={...defaults,fontFamily:face.family,fontWeight:face.fontWeight,fontStyle:face.fontStyle};}
+      const node=original??toParentSpace(parent,pointText([point.x,point.y],defaults));
+      const pending=textDialog(defaults,patch=>run(()=>renderer.previewText(patch?{...node,...patch}:null,parent)),{fonts,resolve:patch=>resolveText(node,patch)});
       ownedTextModal=document.querySelector('.draw-text-dialog');
-      const values=await pending;ownedTextModal=null;if(destroyed)return;
+      const patch=await pending;ownedTextModal=null;if(destroyed)return;
       run(()=>{
         renderer.previewText(null);
-        if(!values)return;
+        if(!patch)return;
         if(state.document.data!==before)throw new Error('The artwork changed while editing text. Open the editor again.');
-        const patch=textProperties(values);state.ui.character=patch.character;state.ui.textAlignment=patch.paragraph.alignment;
+        state.ui.character=patch.character;state.ui.textAlignment=patch.paragraph.alignment;
         state.history.transaction(original?'Edit Text':'Point Text',()=>state.history.execute(original?updateNode(id,patch):insertNode(parent,{...node,...patch})));
         select([node.id]);
       });
-    }catch(error){ownedTextModal=null;if(!destroyed)run(()=>renderer.previewText(null));onError(error.message);}
+    }catch(error){ownedTextModal=null;if(!destroyed){run(()=>renderer.previewText(null));onError(error.message);}}finally{textBusy=false;if(!destroyed)status();}
   }
   const shapeOptions=()=>({fill:state.ui.fill,stroke:state.ui.stroke,strokeWidth:state.ui.strokeWidth,points:state.ui.points,cornerRadius:state.ui.cornerRadius ?? 5});
   async function shapeDialog(tool,p=scope.view.center) {
@@ -378,6 +405,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     if(command==='toggle-control-bar'){state.ui.controlBar=state.ui.controlBar===false;try{globalThis.localStorage?.setItem(CONTROL_BAR_KEY,state.ui.controlBar?'shown':'hidden');}catch{}panels.render();return resize();}
     if(state.document.readOnly)return;
     if(command==='edit-text')return void editText(undefined,selectedIds()[0]);
+    if(command==='create-outlines')return void createTextOutlines().catch(error=>{if(!destroyed)onError(error.message);});
     if(command==='transform-again')return transforms.again();
     if(command==='use-as-template'){const images=selectedIds().filter(id=>state.document.getNode(id)?.type==='image'&&state.document.isEditable(id));
       if(!images.length)throw new Error('Select a placed image to use as a template.');
