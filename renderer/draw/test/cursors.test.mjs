@@ -6,7 +6,7 @@ import { TOOL_DEFINITIONS } from '../tools/registry.mjs';
 test('every tool and state has a visible cursor with a CSS fallback', () => {
   for (const tool of TOOL_DEFINITIONS) {
     const cursor = toolCursor(tool.id);
-    assert.match(cursor, /, (default|crosshair|grab|zoom-in)$/, tool.id);
+    assert.match(cursor, /, (default|crosshair|grab|zoom-in|text)$/, tool.id);
     assert.doesNotMatch(cursor, /, none$/);
   }
   assert.equal(toolCursor('zoom', { zoomOut: true }), CURSORS['zoom-out']);

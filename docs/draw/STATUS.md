@@ -4,7 +4,7 @@
 > Detaljer: [hovedplanen](../DRAW_WORKSPACE.md) (spesifikasjon og byggeplan),
 > [RIGHT_PANELS.md](RIGHT_PANELS.md) (høyresiden), [WORK_LOG.md](WORK_LOG.md) (hva som er gjort, dag for dag)
 > og [HANDOFF.md](HANDOFF.md) (overlevering til neste agent).
-> Sist oppdatert: 2026-10-15 (fase 1 ferdig). Arbeidsgren: `claude/draw-properties-layers-panels`.
+> Sist oppdatert: 2026-10-16 (fase 1 ferdig; D2.1a punkttekst). Arbeidsgren: `feat/vector-draw`.
 
 ## 1. Kort oppsummert
 
@@ -12,7 +12,8 @@ Draw kan i dag brukes til å tegne enkle logoer og former: artboards, utvalg, Pe
 grunnformer med live hjørner, transformasjoner, lag med template-lag, farger, swatches, strek,
 gjennomsiktighet, flere fyll og streker (Appearance), Pathfinder, gruppering, rekkefølge, låsing,
 utklippstavle, isolasjonsmodus, kontrollinje og Place med Template. Et artboard kan sendes til Cut
-med **Send to Cut** (D1.12 v1), så det man tegner kan kuttes. Fase 1 er ferdig. Tekst, eksport, Image Trace og effekter er ikke bygget.
+med **Send to Cut** (D1.12 v1), så det man tegner kan kuttes. Fase 1 er ferdig. SVG-, PNG- og
+JPEG-eksport og punkttekst finnes. Tekst til skjærebaner, Image Trace og effekter gjenstår.
 
 ## 2. Høyresiden sammenlignet med Illustrator
 
@@ -116,6 +117,22 @@ Show in Folder), Crop Image, lenkede bilder og Links-panelet, liming av bilder f
 Gjenstår: alle artboards i én eksport, Export for Screens, WebP, skala i prosent, SVG-valg (tekst,
 CSS-stil), og PDF (D2.6).
 
+### 2.6 Punkttekst (D2.1a, 2026-10-16)
+
+* **Type (T)**: klikk på canvas for punkttekst. Klikk på tekst med Type eller dobbeltklikk med
+  Selection for å redigere. **Edit Text…** finnes også i Properties.
+* Dialogen har flere linjer, fontfamilie, størrelse og linjeavstand i pt, normal/fet, normal/kursiv
+  og venstre/sentrert/høyre avsnitt. Canvas viser endringene mens man skriver. **Apply** er ett
+  angresteg; **Cancel/Escape** forkaster forhåndsvisningen uten å endre dokumentet.
+* Tekst lagres som dokumentdata og kan flyttes, skaleres, grupperes og fargelegges med eksisterende
+  verktøy og paneler. SVG bevarer tekst, linjeskift og stil; PNG/JPEG tegner teksten som i Preview.
+* Fontnavn skrives manuelt; systemet bruker erstatningsfont dersom navnet ikke finnes. Fonter bygges
+  ikke inn, og SVG-mottakeren trenger samme font. Systemfontliste og varsel for manglende font gjenstår.
+* **Send to Cut** varsler at tekst utelates inntil Create Outlines er implementert.
+
+Dette er første del av D2.1, ikke hele tekstfasen. Gjenstår: fontliste/-filer fra main, shaping og
+Create Outlines, områdetekst, tekst på path, blandede tekststiler og egne Character/Paragraph-paneler.
+
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
 | Oppgave | Status |
@@ -126,7 +143,7 @@ CSS-stil), og PDF (D2.6).
 | D1.10 Group, Arrange, Clipboard, isolasjon | Ferdig |
 | D1.11 Place bitmap og template-lag | Ferdig (se 2.3); høyreklikkmeny, Crop Image og Links gjenstår |
 | D1.12 Send til Cut v1 | Ferdig (se 2.2) |
-| D2.1 Tekst | Gjenstår |
+| D2.1 Tekst | Punkttekst med typografi, live preview og eksport ferdig (D2.1a); resten gjenstår, se 2.6 |
 | D2.2 Pathfinder, Compound, Clipping | Pathfinder ferdig; compound paths og clipping masks gjenstår |
 | D2.3 Gradienter og Swatches | Swatches ferdig (solide); gradienter og globale swatches gjenstår |
 | D2.4 Path-kommandoer | Gjenstår |
@@ -146,7 +163,8 @@ Fase 1 er ferdig. Neste er fase 2, i denne rekkefølgen:
 
 SVG-, PNG- og JPEG-eksport er gjort (2.5).
 
-1. **D2.1 Tekst** (Type-verktøy, Character/Paragraph, Create Outlines). Neste.
+1. **D2.1 Tekst**: punkttekst er ferdig (2.6). Neste del: systemfonter, shaping og Create Outlines;
+   deretter områdetekst, tekst på path og Character/Paragraph-paneler.
 2. D2.2 Compound paths og clipping masks (Make Clipping Mask i Layers-menyen venter på dette).
 3. D2.4 Path-kommandoer (Join, Average, Offset Path, Simplify).
 4. D2.6 PDF-eksport, D2.3 gradienter, D2.8 flere verktøy, D2.9 History/Info/kommandosøk.
@@ -154,6 +172,8 @@ SVG-, PNG- og JPEG-eksport er gjort (2.5).
 
 ## 5. Kjente begrensninger og risiko
 
+* Samlet Draw-E2E stoppet 2026-10-16 i Pen-markørtesten (`draw-feedback-workflows.mjs:43`,
+  `pen-active` i stedet for `pen-close`); separat markørtest passerer. Årsaken er uavklart.
 * Color, Stroke og Swatches endrer første fyll og første strek når en figur har flere.
 * Autolagringstesten (`project-workflows.mjs:113`) er ustabil i skymiljøet; se WORK_LOG.
 * Cut/sidecar-tester kan ikke kjøres i skymiljøet (jitpack.io er blokkert).

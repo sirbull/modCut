@@ -6,8 +6,34 @@ import { dialogOperation } from '../geom/transforms.mjs';
 import { NAMED_LAYER_COLORS, layerColorName } from '../doc/layers.mjs';
 import { enhanceNumberFields } from './number-field.mjs';
 import { EXPORT_FORMATS, EXPORT_RESOLUTIONS } from '../io/export.mjs';
+import { textProperties } from '../doc/text.mjs';
 
 let dialogId=0;
+/** Uniform point-text editor. Preview is detached; Apply is a single document command. */
+export function textDialog(defaults, onPreview = () => {}) {
+  const choices = values => values.map(value => ({ value, label: value[0].toUpperCase() + value.slice(1) }));
+  const fields = [
+    {key:'text',label:'Text',value:defaults.text,required:true},
+    {key:'fontFamily',label:'Font family',value:defaults.fontFamily,required:true,description:'Use an installed font name. Unavailable fonts use the system fallback; SVG text needs the same font on the receiving computer.'},
+    {key:'fontSize',label:'Size (pt)',type:'number',value:defaults.fontSize,min:.1,max:10000,step:'any',required:true},
+    {key:'leading',label:'Leading (pt)',type:'number',value:defaults.leading,min:.1,max:10000,step:'any',required:true},
+    {key:'fontWeight',label:'Weight',type:'select',value:defaults.fontWeight,options:choices(['normal','bold'])},
+    {key:'fontStyle',label:'Style',type:'select',value:defaults.fontStyle,options:choices(['normal','italic'])},
+    {key:'alignment',label:'Paragraph alignment',type:'select',value:defaults.alignment,options:choices(['left','center','right'])},
+  ];
+  const result = openDrawModal({title:'Point Text',submitLabel:'Apply',className:'draw-text-dialog',fields});
+  const form = document.querySelector('.draw-text-dialog form'), original = form.elements.text;
+  const input = document.createElement('textarea'); input.name = 'text'; input.className = 'input'; input.required = true; input.rows = 3;
+  input.value = defaults.text; original.replaceWith(input);
+  const error = document.createElement('p'); error.setAttribute('role','alert'); form.insertBefore(error,form.querySelector('.modal-actions'));
+  const read = () => Object.fromEntries(fields.map(f => [f.key, f.type === 'number' ? form.elements[f.key].valueAsNumber : form.elements[f.key].value]));
+  const preview = () => {
+    try { const patch = textProperties(read()); error.textContent = ''; input.setCustomValidity(''); onPreview(patch); }
+    catch (e) { error.textContent = e.message; input.setCustomValidity(e.message); onPreview(null); }
+  };
+  form.addEventListener('input',preview); form.addEventListener('change',preview); preview(); input.focus(); input.select();
+  return result.finally(() => {form.removeEventListener('input',preview);form.removeEventListener('change',preview);});
+}
 function openDrawModal(options) {
   const previous=document.activeElement, result=openModal(options), overlay=document.querySelector('.modal-overlay:last-of-type'),modal=overlay.querySelector('.modal');
   modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');enhanceNumberFields(modal);
@@ -19,9 +45,10 @@ function openDrawModal(options) {
 
 function trapDialogKeys(modal,cancel) {
   return event=>{
+    if(event.isComposing)return;
     if(event.key==='Escape'){event.preventDefault();event.stopPropagation();cancel();}
     if(event.key==='Tab'){
-      const items=[...modal.querySelectorAll('input:not(:disabled):not([type=hidden]),select:not(:disabled),button:not(:disabled)')].filter(el=>el.getClientRects().length);
+      const items=[...modal.querySelectorAll('input:not(:disabled):not([type=hidden]),textarea:not(:disabled),select:not(:disabled),button:not(:disabled)')].filter(el=>el.getClientRects().length);
       if(event.shiftKey && document.activeElement===items[0]){event.preventDefault();items.at(-1).focus();}
       else if(!event.shiftKey && document.activeElement===items.at(-1)){event.preventDefault();items[0].focus();}
     }

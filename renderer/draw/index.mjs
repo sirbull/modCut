@@ -29,13 +29,15 @@ import { EXPORT_FORMATS, exportFileName, rasterSize, svgDocument } from './io/ex
 import { layerOptionsPatch, templateLayerCommands } from './doc/layers.mjs';
 import { toolCursor } from './tools/cursors.mjs';
 import { alignReference, alignOffsets, distributeOffsets, spacingOffsets } from './geom/align.mjs';
+import { pointText, textValues, textProperties, DEFAULT_CHARACTER } from './doc/text.mjs';
+import { textDialog } from './ui/dialogs.mjs';
 
 const workspaces=new WeakMap();
 export function getDrawWorkspace(root) {return workspaces.get(root) || null;}
-const implementedTools=new Set(['select','hand','zoom','artboard',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
+const implementedTools=new Set(['select','hand','zoom','artboard','type',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
 const commands=new Set(['undo','redo','delete','select-all','select-artboard','deselect','cancel','fit-artboard','fit-all','actual-size','zoom-in','zoom-out','outline',
   'cut','copy','paste','paste-front','paste-back','paste-place','paste-all-artboards',
-  'send-to-cut','export-as','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
+  'edit-text','send-to-cut','export-as','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
   'paint-focus','paint-swap','paint-none','paint-solid','default-paint','smart-guides','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','toggle-panels','toggle-panels-except-tools',
   ...PANEL_DEFINITIONS.map(p=>`panel.${p.id}`),...['left','right','up','down'].flatMap(d=>[`nudge-${d}`,`nudge-large-${d}`,`duplicate-${d}`])]);
 export function createDrawWorkspace(root,{paper=window.paper,state=createProjectDraw(),onError=console.warn,onImport=()=>{},onSendToCut=null,onExport=null,getPreferences=()=>({}),statusHost=null}={}) {
@@ -61,12 +63,12 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   const scope=new paper.PaperScope();try {scope.setup(canvas);} finally {paper.activate();}scope.view.autoUpdate=false;
   function withScope(fn) {try {scope.activate();return fn();} finally {paper.activate();}}
   function run(fn) {try {return withScope(fn);}catch(error){onError(error.message);}}
-  let panels,toolbar,interactions,paths,artboards,temporary=null,destroyed=false,fitted=false,lastPoint=null,ownedTransformModal=null;
+  let panels,toolbar,interactions,paths,artboards,temporary=null,destroyed=false,fitted=false,lastPoint=null,ownedTransformModal=null,ownedTextModal=null;
   const renderer=withScope(()=>createDrawRenderer(scope,state,{withScope,onImageLoad:()=>panels?.render()}));
   const selectedIds=()=>state.selection.ids.filter(id=>!state.document.ancestors(id).some(n=>state.selection.ids.includes(n.id)));
   const paintIds=()=>[...new Set(selectedIds().flatMap(id=>{
     const node=state.document.getNode(id);return node.children ? state.document.descendants(id).map(n=>n.id) : [id];
-  }))].filter(id=>['path','shape'].includes(state.document.getNode(id)?.type) && state.document.isEditable(id));
+  }))].filter(id=>['path','shape','text'].includes(state.document.getNode(id)?.type) && state.document.isEditable(id));
   const transforms=createTransformController(state,{selectedIds,bounds:()=>renderer.selectionBounds(),localMatrix:(id,m)=>renderer.localMatrix(id,m),worldMatrix:id=>renderer.worldMatrix(id),select,update:()=>withScope(()=>renderer.select())});
   function syncPaint() {
     const node=state.document.getNode(paintIds()[0]);if(!node)return;
@@ -81,6 +83,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       SHAPE_TOOLS.includes(tool.id) ? 'Shift: constrain · Alt: from center · Space: move · Click: exact size' :
       TRANSFORM_TOOLS.includes(tool.id) ? 'Click: reference point · Drag: transform · Shift: constrain · Alt: copy · Enter: dialog' :
       tool.id==='pen' ? 'Click: corner · Drag: curve · Alt: break handles · Space: move anchor · Enter/Esc: finish' :
+      tool.id==='type' ? 'Click: point text · Click existing text: edit · Apply: one undo step' :
       tool.id==='direct-selection' ? 'Drag dots: round corners · Alt: one corner / break handles · Shift: add anchors/constrain' :
       tool.id==='anchor-point' ? 'Click anchor: corner/smooth · Drag: handles · Click shape: expand to path' :
       tool.id==='artboard' ? 'Drag: create/move · Edges: resize · Alt+drag: duplicate' :
@@ -171,7 +174,17 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       const art=renderer.exportArtwork();
       try {
         if(format==='svg'){
-          const inner=art.children.length?art.exportSVG({asString:true,precision:4}):'';
+          const textWeights=new Map();
+          const svg=art.children.length?art.exportSVG({asString:false,precision:4,onExport(item,element){
+            if(item.className!=='PointText')return;
+            // Paper writes canvas font shorthand as font-weight, and collapses multiline text.
+            element.setAttribute('font-style',item.fontWeight.includes('italic')?'italic':'normal');
+            textWeights.set(element,item.fontWeight.includes('bold')?'bold':'normal');
+            const lines=item.content.split('\n');
+            if(lines.length>1){element.textContent='';lines.forEach((line,i)=>{const span=document.createElementNS('http://www.w3.org/2000/svg','tspan');span.setAttribute('x',element.getAttribute('x')??'0');span.setAttribute('y',String(Number(element.getAttribute('y')??0)+i*item.leading));span.textContent=line;element.append(span);});}
+          }}):null;
+          for(const [text,weight] of textWeights)text.setAttribute('font-weight',weight);
+          const inner=svg?new XMLSerializer().serializeToString(svg):'';
           return svgDocument(board,`<g transform="translate(${-board.x} ${-board.y})">${inner}</g>`,{background:fill,title:board.name});
         }
         const {width,height}=rasterSize(board,ppi),canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
@@ -221,6 +234,28 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     });
   }
   function insertShape(node) {const parent=insertionParent();state.history.execute(insertNode(parent,toParentSpace(parent,node)));select([node.id]);}
+  async function editText(point = scope.view.center, id = null) {
+    if(destroyed||state.document.readOnly||document.querySelector('.modal-overlay'))return;
+    const original=id?state.document.getNode(id):null;
+    if(id&&(original?.type!=='text'||!state.document.isEditable(id)))return;
+    const parent=id?state.document.locate(id).parentId:insertionParent();
+    const defaults=original?textValues(original):{text:'Text',...DEFAULT_CHARACTER,...state.ui.character,alignment:state.ui.textAlignment??'left'};
+    const node=original??toParentSpace(parent,pointText([point.x,point.y],defaults));
+    const before=state.document.data;
+    try {
+      const pending=textDialog(defaults,patch=>run(()=>renderer.previewText(patch?{...node,...patch}:null,renderer.worldMatrix(parent))));
+      ownedTextModal=document.querySelector('.draw-text-dialog');
+      const values=await pending;ownedTextModal=null;if(destroyed)return;
+      run(()=>{
+        renderer.previewText(null);
+        if(!values)return;
+        if(state.document.data!==before)throw new Error('The artwork changed while editing text. Open the editor again.');
+        const patch=textProperties(values);state.ui.character=patch.character;state.ui.textAlignment=patch.paragraph.alignment;
+        state.history.transaction(original?'Edit Text':'Point Text',()=>state.history.execute(original?updateNode(id,patch):insertNode(parent,{...node,...patch})));
+        select([node.id]);
+      });
+    }catch(error){ownedTextModal=null;if(!destroyed)run(()=>renderer.previewText(null));onError(error.message);}
+  }
   const shapeOptions=()=>({fill:state.ui.fill,stroke:state.ui.stroke,strokeWidth:state.ui.strokeWidth,points:state.ui.points,cornerRadius:state.ui.cornerRadius ?? 5});
   async function shapeDialog(tool,p=scope.view.center) {
     const options=await shapeSizeDialog(tool,shapeOptions());if(!options || destroyed)return;
@@ -342,6 +377,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     if(command==='export-as')return void workspace.exportAs();
     if(command==='toggle-control-bar'){state.ui.controlBar=state.ui.controlBar===false;try{globalThis.localStorage?.setItem(CONTROL_BAR_KEY,state.ui.controlBar?'shown':'hidden');}catch{}panels.render();return resize();}
     if(state.document.readOnly)return;
+    if(command==='edit-text')return void editText(undefined,selectedIds()[0]);
     if(command==='transform-again')return transforms.again();
     if(command==='use-as-template'){const images=selectedIds().filter(id=>state.document.getNode(id)?.type==='image'&&state.document.isEditable(id));
       if(!images.length)throw new Error('Select a placed image to use as a template.');
@@ -370,6 +406,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       });state.ui.fill=fill;state.ui.stroke=stroke;toolbar.update();panels.render();return;
     }
     if(command==='tool-dialog'&&SHAPE_TOOLS.includes(state.ui.tool))return void shapeDialog(state.ui.tool);
+    if(command==='tool-dialog'&&state.ui.tool==='type')return void editText();
     if(command==='tool-dialog'&&TRANSFORM_TOOLS.includes(state.ui.tool))return void transformToolDialog(state.ui.tool);
     const match=command.match(/^(nudge-large|nudge|duplicate)-(left|right|up|down)$/);
     if(match){const [,kind,direction]=match;if(interactions.adjust(direction==='up'?1:direction==='down'?-1:0))return;
@@ -383,7 +420,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   paths=createPathInteractions(canvas,state,{scope,renderer,withScope,run,select,selectionChanged,layerId:insertionParent,status,
     tool:()=>temporary?.id || state.ui.tool,closeMenus:()=>toolbar.close()});
   interactions=createInteractions(canvas,state,{scope,renderer,withScope,run,select,selectedIds,transform,artboards,status,shapeOptions,insertShape,shapeDialog,zoomAt,isolate,exitIsolation,
-    transforms,transformDialog:transformToolDialog,cursor,
+    transforms,transformDialog:transformToolDialog,editText,cursor,
     tool:()=>temporary?.id || state.ui.tool,zoomOut:()=>!!temporary?.zoomOut,preferences:getPreferences,closeMenus:()=>toolbar.close()});
   const unsubscribe=state.subscribe(()=>{interactions.cancel();paths.documentChanged();refresh();if(state.ui.isolation&&!isolation())isolationChanged();else renderIsolationBar();});
   function resize(){const {width,height}=stage.getBoundingClientRect();if(width<=0||height<=0)return;
@@ -397,7 +434,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   const workspace={state,scope,renderer,isolate,cutSvg,exportBoard,exportAs:boardId=>exportAs(boardId).catch(error=>onError(error.message)),sendToCut:boardId=>sendToCut(boardId).catch(error=>onError(error.message)),exitIsolation,statusElement:controls,artboards,transforms,resize,select,setTool,handle,availableTool:id=>implementedTools.has(id),canHandle:command=>commands.has(command),
     setTemporaryTool(value){temporary=value;canvas.dataset.tool=temporary?.id || state.ui.tool;canvas.style.cursor=cursor();status();},
     async import(prepared,name,options={}){const result=await importArtwork(scope,state,prepared,name,layerId(),{...options,alive:()=>!destroyed});select(options.template?[]:result.ids);if(options.fitArtboard)fit();return result;},
-    destroy(){destroyed=true;ownedTransformModal?.querySelector('[data-x=cancel]').click();paths.destroy();interactions.destroy();toolbar.destroy();unsubscribe();observer.disconnect();window.removeEventListener('modcut-theme-change',syncTheme);workspaces.delete(root);withScope(()=>{renderer.destroy();scope.remove();});controls.remove();root.replaceChildren();},
+    destroy(){destroyed=true;ownedTextModal?.querySelector('[data-x=cancel]').click();ownedTransformModal?.querySelector('[data-x=cancel]').click();paths.destroy();interactions.destroy();toolbar.destroy();unsubscribe();observer.disconnect();window.removeEventListener('modcut-theme-change',syncTheme);workspaces.delete(root);withScope(()=>{renderer.destroy();scope.remove();});controls.remove();root.replaceChildren();},
   };
   workspaces.set(root,workspace);refresh();syncTheme();setTool(state.ui.tool);resize();return workspace;
 }

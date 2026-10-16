@@ -108,6 +108,7 @@ export function createInteractions(canvas, state, api) {
     if (state.document.readOnly) {
       if (tool==='select') {const id=renderer.hit(p),t=id&&targetId(id);api.select(t ? [t] : []);} return;
     }
+    if(tool==='type') { const hit=renderer.hit(p); void api.editText(p,state.document.getNode(hit)?.type==='text'?hit:null); return; }
     if(TRANSFORM_TOOLS.includes(tool)){
       if(!api.selectedIds().length){const hit=renderer.hit(p),t=hit&&targetId(hit);if(t)api.select([t]);}
       const origin=api.transforms.origin(),box=renderer.selectionBounds();if(!origin||!box)return;
@@ -168,6 +169,7 @@ export function createInteractions(canvas, state, api) {
     // Selection tool: double-click a group to isolate it; double-click empty canvas to leave isolation.
     if(api.tool()!=='select')return;
     const hit=renderer.hit(point(event)),id=hit&&targetId(hit);
+    if(id&&state.document.getNode(id)?.type==='text'){void api.editText(point(event),id);return;}
     if(id&&state.document.getNode(id)?.type==='group')api.isolate(id);else if(!hit)api.exitIsolation();
   },events);
   canvas.addEventListener('wheel',event=>{

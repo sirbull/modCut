@@ -2,7 +2,7 @@
 
 **Start med [STATUS.md](STATUS.md)**: én side med hva som er gjort og hva som gjenstår.
 
-Oppdatert 2026-10-15. Arbeidsgren: `claude/draw-properties-layers-panels` (bygger på `feat/vector-draw`).
+Oppdatert 2026-10-16. Arbeidsgren: `feat/vector-draw`.
 
 **Høyrepanelet følger nå [RIGHT_PANELS.md](RIGHT_PANELS.md).** Trinn 1 (dokk med Properties over
 Layers, dragbar delelinje, panelgrupper som flyout med faner) trinn 2 (scrubby labels) og trinn 3
@@ -17,14 +17,20 @@ D1.8 (Transform, Align, Color, Stroke, Fill/Stroke-boks og Properties) ble fullf
 
 ## Status og neste oppgave
 
-Fase 0 og fase 1 er fullført. **Neste oppgave er fase 2, se STATUS.md kapittel 4.** Export As (SVG, PNG, JPEG) er ferdig; neste er D2.1 Tekst.
-E2E-flagg for de nye delene: `--draw-cut`, `--draw-place`, `--draw-control`, `--draw-export`.
+Fase 0 og fase 1 er fullført. Export As (SVG, PNG, JPEG) og **D2.1a punkttekst** er ferdige.
+**Neste del er systemfonter, shaping og Create Outlines i D2.1**, deretter områdetekst,
+tekst på path og egne Character/Paragraph-paneler. Se STATUS.md 2.6 for avgrensningen.
+Punkttekst bruker foreløpig systemets canvas-tekst; fontfamilie skrives manuelt. Ingen fontfiler
+bygges inn. Send to Cut varsler at tekst utelates. Ikke marker hele D2.1 som ferdig.
+Kode: `doc/text.mjs`, `textDialog()` i `ui/dialogs.mjs`, `editText()` i `index.mjs`, PointText i
+Paper-adapteren. SVG-eksport retter Papers font-weight og legger til tspan per tekstlinje.
+E2E-flagg for de nye delene: `--draw-cut`, `--draw-place`, `--draw-control`, `--draw-export`, `--draw-text`.
 
-Før du starter D1.9: commit `d337a8f` (en annen agent) flyttet allerede visningskontrollene
+Historikk for D1.9: commit `d337a8f` (en annen agent) flyttet allerede visningskontrollene
 (posisjon, artboard, zoom, Outline, Fit) til appens nederste statuslinje (`#drawStatus`) og
 la til ny New Document-dialog med maler. Sammenlign dette med kapittel 3.2 i
 [hovedplanen](../DRAW_WORKSPACE.md) og bygg videre i stedet for å lage nye kopier.
-Kontrollinjen (kontekstuelle felt øverst) finnes ikke ennå.
+Kontrollinjen (kontekstuelle felt øverst) ble senere fullført.
 
 Les hovedplanen (kapittel 3, 8, 18 og sjekklisten i kapittel 23) og
 [arbeidsloggen](WORK_LOG.md). Eldre «neste oppgave»-notater i loggen er historiske.
@@ -105,7 +111,18 @@ Les hovedplanen (kapittel 3, 8, 18 og sjekklisten i kapittel 23) og
 | `electron/e2e/draw-panel-workflows.mjs` | E2E for alle D1.8-paneler (`--draw-panels`) |
 | `electron/e2e/draw-feedback-workflows.mjs` | E2E for markører og live Pen-forhåndsvisning (`--draw-feedback`) |
 
-## Verifisert ved stoppunktet
+## Verifisert 2026-10-16 (D2.1a)
+
+- **168 Draw-enhetstester passerer** (`npm run test:draw`).
+- **Punkttekst-E2E passerer** (`node electron/e2e/run.mjs --draw-text`); skjermbildet
+  `%TEMP%/modcut-draw-text-preview.png` er visuelt kontrollert.
+- **Eksport-E2E og markør-E2E passerer separat** (`--draw-export`, `--draw-feedback`).
+- Det samlede `--draw`-løpet passerte til og med panelene, men stoppet i
+  `draw-feedback-workflows.mjs:43`: forventet `pen-close`, fikk `pen-active`. Separat
+  `--draw-feedback` passerte uten kodeendringer. Årsaken er ikke fastslått, og hele
+  Draw-løpet er derfor ikke verifisert grønt ved dette stoppunktet.
+
+## Tidligere verifisering (historikk)
 
 - **126 Draw-enhetstester passerer** (`npm run test:draw`).
 - **Komplett Draw Electron-E2E passerer** (`node electron/e2e/run.mjs --draw`), inkludert

@@ -42,10 +42,11 @@ export function artboardCutSvg(doc, boardId, geometry) {
   const board = doc.getArtboard(boardId);
   if (!board) throw new Error('Choose an artboard to send.');
   const toBoard = [1, 0, 0, 1, -board.x, -board.y], elements = [], skipped = { images: 0, outside: 0, empty: 0 };
-  let partly = 0, stacked = 0, openFilled = 0;
+  let partly = 0, stacked = 0, openFilled = 0, text = 0;
   for (const node of doc.descendants(null)) {
     if (node.children || !isOutputNode(doc, node.id)) continue;
     if (node.type === 'image') { skipped.images++; continue; }
+    if (node.type === 'text') { text++; continue; }
     if (node.type !== 'path' && node.type !== 'shape') continue;
     const box = geometry.bounds(node.id);
     if (!box || !intersects(box, board)) { skipped.outside++; continue; }
@@ -67,6 +68,7 @@ export function artboardCutSvg(doc, boardId, geometry) {
     elements.push(`  <path ${attrs.join(' ')}/>`);
   }
   const warnings = [];
+  if (text) warnings.push(`${text} text object${text === 1 ? ' is' : 's are'} not sent yet. Text outlines are planned in D2.1.`);
   if (skipped.images) warnings.push(`${skipped.images} image${skipped.images === 1 ? ' is' : 's are'} not sent yet (Send to Cut v2).`);
   if (partly) warnings.push(`${partly} object${partly === 1 ? ' extends' : 's extend'} past the artboard and ${partly === 1 ? 'is' : 'are'} sent whole.`);
   if (stacked) warnings.push(`${stacked} object${stacked === 1 ? ' has' : 's have'} several fills or strokes; only the first of each is sent.`);

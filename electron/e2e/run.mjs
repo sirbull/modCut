@@ -21,6 +21,7 @@ import { runDrawCutWorkflows } from './draw-cut-workflows.mjs';
 import { runDrawPlaceWorkflows } from './draw-place-workflows.mjs';
 import { runDrawControlWorkflows } from './draw-control-workflows.mjs';
 import { runDrawExportWorkflows } from './draw-export-workflows.mjs';
+import { runDrawTextWorkflows } from './draw-text-workflows.mjs';
 import { runDrawFeedbackWorkflows } from './draw-feedback-workflows.mjs';
 import { runWorkflows, verifyRecoveredSession } from "./workflows.mjs";
 import { runThemeWorkflows } from "./theme-workflows.mjs";
@@ -73,6 +74,9 @@ try {
   } else if (process.argv.includes('--draw-feedback')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawFeedbackWorkflows(first);first.socket.close();
+  } else if (process.argv.includes('--draw-text')) {
+    for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
+    await runDrawTextWorkflows(first);first.socket.close();
   } else if (process.argv.includes('--draw-export')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawExportWorkflows(first);first.socket.close();
@@ -141,6 +145,7 @@ try {
     await runDrawPlaceWorkflows(first);
     await runDrawControlWorkflows(first);
     await runDrawExportWorkflows(first);
+    await runDrawTextWorkflows(first);
     const expected = await runProjectWorkflows(first, profile);
     first.socket.close();
     await stop("SIGKILL");

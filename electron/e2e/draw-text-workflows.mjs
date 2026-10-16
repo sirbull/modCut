@@ -1,0 +1,61 @@
+import assert from 'node:assert/strict';
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { inputHelpers, wait } from './cdp.mjs';
+import { activeDraw as active, submitNewDrawDialog, rememberTabs } from './draw-test-helpers.mjs';
+
+export async function runDrawTextWorkflows(client) {
+  const {evaluate,command}=client, {click,key}=inputHelpers(client), restore=await rememberTabs(evaluate);
+  await evaluate("document.body.dataset.workspace==='draw'||document.querySelector('#workspaceToggle').click();document.querySelector('#newDoc').click()");
+  await submitNewDrawDialog(evaluate,{preset:'custom',width:120,height:80,name:'Text proof'});
+  const at=async(x,y)=>evaluate(`(async()=>{const w=${active},b=w.state.document.data.artboards[0],p=w.scope.view.projectToView(new w.scope.Point(b.x+${x},b.y+${y})),r=w.scope.view.element.getBoundingClientRect();return {x:r.x+p.x,y:r.y+p.y};})()`);
+  const snapshot=()=>evaluate(`(async()=>(${active}.state.document.serialize()))()`);
+  const before=await snapshot();
+  await key('t'); assert.equal(await evaluate(`(async()=>(${active}.state.ui.tool))()`),'type'); await click(await at(15,25));
+  assert.ok(await evaluate("!!document.querySelector('.draw-text-dialog')"));
+  await evaluate("document.querySelector('.draw-text-dialog textarea').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',isComposing:true,bubbles:true,cancelable:true}))");
+  assert.ok(await evaluate("!!document.querySelector('.draw-text-dialog')"),'IME Escape keeps the editor open');
+  await command('Input.insertText',{text:'Horten ÆØÅ\nmodCut'});
+  await evaluate("(()=>{const f=document.querySelector('.draw-text-dialog form');f.elements.fontWeight.value='bold';f.elements.fontStyle.value='italic';f.elements.fontStyle.dispatchEvent(new Event('change',{bubbles:true}));})()");
+  assert.equal(await snapshot(),before,'Typing previews without changing the document or dirty state');
+  assert.ok(await evaluate(`(async()=>{const w=${active};return w.scope.project.getItems({class:w.scope.PointText}).some(i=>i.content===${JSON.stringify('Horten ÆØÅ\nmodCut')}&&i.fontWeight==='italic bold'&&i.bounds.width>1)})()`),'Canvas shows the live text before Apply');
+  const proof=await command('Page.captureScreenshot',{format:'png'});await writeFile(join(tmpdir(),'modcut-draw-text-preview.png'),Buffer.from(proof.data,'base64'));
+  await evaluate("document.querySelector('.draw-text-dialog form').requestSubmit()"); await wait(50);
+  const node=await evaluate(`(async()=>{const w=${active};return w.state.document.getNode(w.state.selection.ids[0])})()`);
+  assert.equal(node.type,'text'); assert.equal(node.content.runs[0].text,'Horten ÆØÅ\nmodCut');
+  assert.equal(await evaluate(`(async()=>(${active}.state.history.entries.filter(e=>e.applied).length))()`),1);
+  const svg=await evaluate(`(async()=>{const w=${active};return w.exportBoard(w.state.ui.artboardId,'svg')})()`);
+  const exported=await evaluate(`(()=>{const d=new DOMParser().parseFromString(${JSON.stringify(svg)},'image/svg+xml'),t=d.querySelector('text');return {weight:t.getAttribute('font-weight'),style:t.getAttribute('font-style'),lines:[...t.querySelectorAll('tspan')].map(s=>({text:s.textContent,x:+s.getAttribute('x'),y:+s.getAttribute('y')}))}})()`);
+  assert.equal(exported.weight,'bold');assert.equal(exported.style,'italic');assert.equal(exported.lines.length,2);
+  assert.equal(exported.lines[0].text,'Horten ÆØÅ');assert.ok(exported.lines[1].y>exported.lines[0].y);
+  const extents=await evaluate(`(async()=>{const w=${active},board=w.state.ui.artboardId,urls=[w.exportBoard(board,'png',{ppi:72}),'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(${JSON.stringify(svg)})];
+    return Promise.all(urls.map(async url=>{const image=new Image();image.src=url;await image.decode();const c=document.createElement('canvas');c.width=340;c.height=227;const g=c.getContext('2d');g.drawImage(image,0,0,340,227);const p=g.getImageData(0,0,340,227).data;let x0=340,y0=227,x1=-1,y1=-1;for(let y=0;y<227;y++)for(let x=0;x<340;x++)if(p[(y*340+x)*4+3]>64){x0=Math.min(x0,x);y0=Math.min(y0,y);x1=Math.max(x1,x);y1=Math.max(y1,y);}return [x0,y0,x1,y1];}));})()`);
+  assert.ok(extents[0][2]>extents[0][0]&&extents[0][3]>extents[0][1],'Raster export contains painted glyphs');
+  extents[0].forEach((value,i)=>assert.ok(Math.abs(value-extents[1][i])<=2,`SVG/raster glyph extents agree: ${JSON.stringify(extents)}`));
+  for(const format of ['png','jpg']) assert.match(await evaluate(`(async()=>{const w=${active};return w.exportBoard(w.state.ui.artboardId,'${format}',{ppi:72})})()`),format==='png'?/^data:image\/png/:/^data:image\/jpeg/);
+  assert.match(await evaluate(`(async()=>{const w=${active};return w.cutSvg(w.state.ui.artboardId).warnings.join(' ')})()`),/text object is not sent/);
+  await evaluate(`(async()=>{const w=${active};w.setTool('select');w.handle('undo')})()`); assert.equal(await snapshot(),before);
+  await evaluate(`(async()=>{const w=${active};w.handle('redo');w.select(['${node.id}'])})()`);
+  const saved=await snapshot();
+  await evaluate(`(async()=>{const w=${active};w.handle('paint-swap')})()`);
+  assert.equal(await evaluate(`(async()=>(${active}.state.document.getNode('${node.id}').appearance.strokes.length))()`),1,'Text uses the existing paint commands');
+  await evaluate(`(async()=>{const w=${active};w.handle('undo');w.handle('nudge-right')})()`);
+  assert.ok(Math.abs((await evaluate(`(async()=>(${active}.state.document.getNode('${node.id}').transform[4]))()`))-node.transform[4]-1)<1e-8,'Text uses the existing move commands');
+  await evaluate(`(async()=>{${active}.handle('undo')})()`);assert.equal(await snapshot(),saved);
+  await evaluate("document.querySelector('.draw-project[style*=block] [data-draw-quick=edit-text]').click()");
+  await command('Input.insertText',{text:'Cancelled'}); await key('Escape'); await wait(50);
+  assert.equal(await snapshot(),saved,'Escape restores the original text');
+  // Hit testing with Type edits the existing object, rather than creating a second object.
+  await evaluate(`(async()=>{${active}.setTool('type')})()`);await click(await at(20,22));
+  assert.equal(await evaluate("document.querySelector('.draw-text-dialog form')?.elements.text.value"),'Horten ÆØÅ\nmodCut');
+  await key('Escape');await wait(50);
+  await evaluate("document.querySelector('.draw-project[style*=block] [data-draw-quick=edit-text]').click()");
+  await command('Input.insertText',{text:'Revised'});await evaluate("document.querySelector('.draw-text-dialog form').requestSubmit()");await wait(50);
+  assert.equal(await evaluate(`(async()=>(${active}.state.document.getNode('${node.id}').content.runs[0].text))()`),'Revised');
+  await evaluate(`(async()=>{${active}.handle('undo')})()`);assert.equal(await snapshot(),saved);
+  // Same model after reload, including character and paragraph fields.
+  assert.equal(await evaluate(`(async()=>{const w=${active},{createProjectDraw}=await import('./draw/io/project.mjs');return createProjectDraw(JSON.parse(w.state.document.serialize())).document.serialize()===w.state.document.serialize()})()`),true);
+  await restore();
+  console.log('PASS Draw point text: live canvas preview, Unicode/multiline, style, SVG/raster export, cancel, save/reload, single-step undo and Cut warning');
+}

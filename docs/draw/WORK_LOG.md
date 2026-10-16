@@ -869,3 +869,42 @@ Hele Draw-E2E (`node electron/e2e/run.mjs --draw`) passerer: 22 av 22, inkludert
 autolagring og gjenoppretting etter krasj.
 
 Neste: D2.1 Tekst.
+
+## 2026-10-16: D2.1a punkttekst
+
+Gjennomgang ved start: rent arbeidstre på `feat/vector-draw`, siste commit `404a1bf`
+(SVG/PNG/JPEG-eksport). STATUS og HANDOFF pekte på D2.1 som neste fase. Tekstfasen er delt
+opp; denne delen gjør punkttekst brukbar, mens systemfonter og outlines fortsatt gjenstår.
+
+- **Type (T)** plasserer punkttekst. Klikk med Type, dobbeltklikk med Selection eller
+  **Edit Text…** i Properties åpner en dialog med levende forhåndsvisning på canvas.
+- Flere linjer, Unicode, fontfamilie, størrelse og leading i pt, normal/fet, normal/kursiv
+  og venstre/sentrert/høyre avsnitt. Skriving og avbryt endrer ikke dokumentet; Apply er ett
+  angresteg. Forhåndsvisningen ryddes også når arbeidsflaten destrueres.
+- `doc/text.mjs` inneholder ren oppretting/normalisering. `content.runs[].text`, `character`
+  og `paragraph.alignment` lagres i modellen og valideres av schema. Typografiske pt
+  konverteres til mm ved rendering. Eksisterende transformasjoner og fargekommandoer kan
+  brukes på tekst. Ingen endringer i Cut, sidecar eller prosjektformatversjonen.
+- Paper-adapteren viser PointText og bruker samme geometri i SVG/PNG/JPEG-eksporten.
+  SVG-eksport retter canvas-fontshorthand til separate weight/style-attributter og lager
+  `tspan` med riktig leading for hver linje, fordi Paper ellers kollapser linjeskiftene.
+- Send to Cut varsler eksplisitt at tekst utelates inntil outlines finnes.
+- Fontfamilie skrives manuelt. Systemets fontsubstitusjon brukes foreløpig; fontfiler bygges
+  ikke inn og manglende font markeres ikke ennå. Områdetekst, tekst på path, blandede stiler,
+  shaping, Create Outlines og egne Character/Paragraph-paneler er fortsatt del av D2.1.
+
+Verifisering: 168 Draw-enhetstester passerer. Ny Electron-suite `--draw-text` dekker live
+canvas-forhåndsvisning før Apply, æ/ø/å, linjeskift, fet/kursiv, SVG/raster, avbryt, lagring/
+gjeninnlasting, ett angresteg og advarsel i Send to Cut. Skjermbildet
+`%TEMP%/modcut-draw-text-preview.png` er visuelt kontrollert.
+
+Den utvidede teksttesten sjekker også at synlige glyfgrenser i SVG og PNG stemmer innen to
+piksler, eksisterende fargebytte og nudging, klikk på eksisterende tekst og Escape under IME.
+Separat `--draw-export` og `--draw-feedback` passerer. Samlet `--draw` passerte arbeidsflater,
+rendering, UI, fase 1, paths, live corners, transformasjoner og paneler, men stoppet deretter i
+`draw-feedback-workflows.mjs:43` (`pen-active` der testen forventer `pen-close`). Markørtesten
+passerte alene uten kodeendringer. Årsaken er ikke fastslått; full Draw-E2E er ikke grønn i
+denne kjøringen. De etterfølgende delene av det samlede løpet ble derfor ikke kjørt.
+
+Neste: D2.1b systemfontliste/-filer, shaping og Create Outlines. Ikke marker D2.1 som ferdig
+før de resterende tekstkravene i hovedplanen er implementert.

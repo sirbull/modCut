@@ -8,6 +8,7 @@ import { shapeSelectionKey } from '../doc/selection.mjs';
 import { scaledStrokeProperties } from '../geom/transforms.mjs';
 import { isOutputNode, layerContext, ROOT_CONTEXT } from '../doc/layers.mjs';
 import { arrowShapes } from '../geom/arrows.mjs';
+import { PT_TO_MM, textValues } from '../doc/text.mjs';
 
 export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withScope = fn => fn() } = {}) {
   const boards = new scope.Layer({ name: 'Artboards' });
@@ -20,6 +21,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
   const editPreviews=new Map();
   const transformPreviewIds=new Set();let transformPreview=null,transformPreviewOptions=null;
   let destroyed = false, outline = !!state.ui?.outline;
+  let textPreview = null;
   let labelColor='#435A50',labelBackground='#E7F5EF';
   const selection = createSelectionOverlay(scope, overlay, state, id => bounds(id), id => records.get(id)?.context.color);
   // Template layers stay previewed in Outline view; other layers may request Outline individually.
@@ -76,6 +78,12 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
   }
   function make(node) {
     if (node.children) return new scope.Group({ insert: false });
+    if (node.type === 'text') {
+      const v = textValues(node);
+      return new scope.PointText({ insert: false, point: [0, 0], content: v.text,
+        fontFamily: v.fontFamily, fontSize: v.fontSize * PT_TO_MM, leading: v.leading * PT_TO_MM,
+        fontWeight: [v.fontStyle === 'italic' ? 'italic' : '', v.fontWeight === 'bold' ? 'bold' : 'normal'].filter(Boolean).join(' '), justification: v.alignment });
+    }
     if (node.type === 'path') return node.subpaths.length === 1 ? path(node.subpaths[0])
       : new scope.CompoundPath({ insert: false, children: node.subpaths.map(path) });
     if (node.type === 'shape') {
@@ -117,6 +125,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     return new scope.Group({ insert: false });
   }
   function geometryKey(node) {
+    if (node.type === 'text') return JSON.stringify([node.content, node.character, node.paragraph]);
     if (node.type === 'path') return JSON.stringify([node.subpaths, node.fillRule]);
     if (node.type === 'shape') return JSON.stringify([node.shape, node.params]);
     if (node.type === 'image') return JSON.stringify([node.assetId, state.document.data.assets[node.assetId]]);
@@ -448,6 +457,17 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     thumbnails.set(id, { key, url }); return url;
   }
   return { render, select: updateView, updateView, bounds, selectionBounds, hit, items, setOutline, thumbnail, exportArtwork, booleanOperand, selectionHandle:point=>selection.hit(point),
+    previewText(node, parentMatrix = [1,0,0,1,0,0]) {
+      textPreview?.remove(); textPreview = null;
+      render();
+      if (node) {
+        textPreview = make(node); textPreview.applyMatrix = false;
+        textPreview.matrix = new scope.Matrix(...parentMatrix).append(new scope.Matrix(...node.transform));
+        style(textPreview, node, false); overlay.addChild(textPreview);
+        for (const item of [items.get(node.id), records.get(node.id)?.stack, records.get(node.id)?.arrows]) if (item) item.visible = false;
+      }
+      scope.view.update();
+    },
     setTheme({muted,background=labelBackground}) {labelColor=muted;labelBackground=background;for(const {label,labelRect} of boardItems.values()){label.fillColor=muted;labelRect.fillColor=background;}updateView();},
     shapePreview(node,sourceId=null) { const item=make(node);item.applyMatrix=false;style(item,node,false);item.opacity=.6;
       if(sourceId)item.matrix=records.get(sourceId).worldMatrix.clone();overlay.addChild(item);return item; },
@@ -499,7 +519,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
       scope.view.center = b.center; updateView();
     },
     destroy() {
-      destroyed = true; selection.destroy();anchors.destroy();clearTransformPreview();
+      destroyed = true; textPreview?.remove(); selection.destroy();anchors.destroy();clearTransformPreview();
       for (const record of records.values()) if (record.node.type === 'image') items.get(record.node.id).onLoad = null;
       boards.remove(); artwork.remove(); overlay.remove();
       items.clear(); records.clear(); boardItems.clear(); thumbnails.clear(); worldBounds.clear(); paintedBounds.clear();

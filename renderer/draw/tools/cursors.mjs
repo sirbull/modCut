@@ -16,6 +16,7 @@ const hand = (closed) => url(halo(closed
 
 export const CURSORS = Object.freeze({
   select: arrow('#111'),
+  type: url(halo('M12 5h8M16 5v22M12 27h8',1.4),16,16,'text'),
   'select-anchor': arrow('#111', box(18, 18, '#111')),
   'select-move': arrow('#111', halo('M22 18v8M18 22h8', 1.4)),
   'select-copy': arrow('#111', `${halo('M22 15v5M22 24v5', 1.4)}${halo('M17 22h10', 1.4)}`),
@@ -45,6 +46,7 @@ export const CURSORS = Object.freeze({
   corner: arrow('white', `<circle cx='22' cy='22' r='4' fill='white' stroke='#111' stroke-width='1.4' stroke-dasharray='2 1.5'/>`),
 });
 const TOOL_CURSORS = {
+  type: 'type',
   select: 'select', 'direct-selection': 'direct', 'group-selection': 'direct', pen: 'pen-new', 'add-anchor': 'anchor-add', 'delete-anchor': 'anchor-remove',
   'anchor-point': 'anchor-convert', hand: 'hand', zoom: 'zoom-in', artboard: 'artboard', rotate: 'transform', reflect: 'transform', scale: 'transform',
   rectangle: 'shape', 'rounded-rectangle': 'shape', ellipse: 'shape', polygon: 'shape', star: 'shape', line: 'shape',

@@ -1409,7 +1409,8 @@ Oversikt over hva som er gjort og gjenstår, inkludert delvis ferdige oppgaver: 
 * [x] D1.10 Group, Arrange, Clipboard
 * [x] D1.11 Place bitmap og template-lag (høyreklikkmeny, Crop Image og Links gjenstår, se [STATUS.md](draw/STATUS.md))
 * [x] D1.12 Send til Cut v1 (se [STATUS.md](draw/STATUS.md) for hva v1 dekker)
-* [ ] D2.1 Tekst
+* [ ] D2.1 Tekst — punkttekst (D2.1a) ferdig: Type, live dialog, typografi, angring og eksport.
+  Systemfonter, shaping/outlines, område-/path-tekst og Character/Paragraph gjenstår; se [STATUS.md](draw/STATUS.md#26-punkttekst-d21a-2026-10-16).
 * [ ] D2.2 Pathfinder, Compound, Clipping
 * [ ] D2.3 Gradienter og Swatches
 * [ ] D2.4 Path-kommandoer

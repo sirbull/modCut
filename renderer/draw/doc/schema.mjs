@@ -182,7 +182,27 @@ export function validateDocument(doc) {
         if ((key==='sides' || key==='points') && (!Number.isInteger(v) || v<(key==='sides'?3:2))) fail(`${path}.params.${key}`,'Expected a whole number of vertices');
       }
     }
-    if (value.type === 'text') { enumeration(value.kind, ['point', 'area', 'onPath'], `${path}.kind`); if (!object(value.content)) fail(`${path}.content`, 'Expected rich text'); }
+    if (value.type === 'text') {
+      enumeration(value.kind, ['point', 'area', 'onPath'], `${path}.kind`);
+      if (!object(value.content)) fail(`${path}.content`, 'Expected rich text');
+      else array(value.content.runs, `${path}.content.runs`).forEach((run, i) => {
+        if (!object(run)) fail(`${path}.content.runs.${i}`, 'Expected a text run');
+        else string(run.text, `${path}.content.runs.${i}.text`);
+      });
+      if (!object(value.paragraph)) fail(`${path}.paragraph`, 'Expected paragraph settings');
+      else if (value.paragraph.alignment !== undefined) enumeration(value.paragraph.alignment, ['left', 'center', 'right'], `${path}.paragraph.alignment`);
+      if (value.character !== undefined) {
+        const c = value.character, p = `${path}.character`;
+        if (!object(c)) fail(p, 'Expected character settings');
+        else {
+          string(c.fontFamily, `${p}.fontFamily`);
+          if (typeof c.fontFamily === 'string' && !c.fontFamily.trim()) fail(`${p}.fontFamily`, 'Expected a font family');
+          number(c.fontSize, `${p}.fontSize`, .1, 10000); number(c.leading, `${p}.leading`, .1, 10000);
+          enumeration(c.fontWeight, ['normal', 'bold'], `${p}.fontWeight`);
+          enumeration(c.fontStyle, ['normal', 'italic'], `${p}.fontStyle`);
+        }
+      }
+    }
     if (value.type === 'image') {
       if (!Object.hasOwn(doc.assets, value.assetId)) fail(`${path}.assetId`, 'Missing embedded asset');
       number(value.ppiEffective, `${path}.ppiEffective`, Number.MIN_VALUE); bool(value.reference, `${path}.reference`);

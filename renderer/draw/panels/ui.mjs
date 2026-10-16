@@ -738,6 +738,9 @@ export function createPanels(shell, state, api) {
     if (!ids.length) return documentProperties(host);
     const node = state.document.getNode(ids[0]);
     if (ids.length === 1) field(host,'Name',node.name,value => state.history.execute(updateNode(node.id,{name:value})),{type:'text'});
+    if (ids.length === 1 && node.type === 'text') {
+      section(host,'Type'); quickActions(host,[['Edit Text…',() => api.command('edit-text'),'edit-text',state.document.readOnly || !state.document.isEditable(node.id)]]);
+    }
     section(host,'Transform'); transform(host,{ compact: true });
     // Appearance: the same fill, stroke, weight and opacity Illustrator shows; the buttons open the full panels.
     section(host,'Appearance');

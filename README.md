@@ -136,6 +136,14 @@ shows vector hairlines and image frames without changing the saved artwork.
 The remaining drawing and editing tools are being built in stages; see the
 [Draw implementation plan](docs/DRAW_WORKSPACE.md).
 
+Type (T) now places point text. Click text with Type, double-click it with Selection,
+or use **Edit Text…** in Properties to edit it. The dialog previews text on the
+canvas, with multiline content, font family, point size, leading, bold/italic and
+paragraph alignment. Apply creates one undo step; Cancel discards the preview.
+Text persists in projects and appears in SVG, PNG and JPEG exports. Fonts are
+specified by name and use the system fallback if unavailable; SVG recipients need
+the same font. Send to Cut warns that text is omitted until Create Outlines is built.
+
 The file does not copy local machine profiles, connection details, drivers,
 material libraries or process-profile libraries. A receiving computer must
 therefore have the intended machine/material configured locally and the user
