@@ -151,7 +151,7 @@ the document, so its appearance and export remain stable without the font instal
 **Send to Cut** sends text as vector outlines automatically, keeping the original
 Draw text editable. **Type > Create Outlines** (Ctrl/Cmd+Shift+O) also remains available
 to convert the Draw text to editable paths in one undo step. Editing text requires the original
-font or choosing an installed replacement; font files are not embedded.
+font or choosing an available replacement; font files are not embedded.
 
 Choose **Google Fonts** under **Font source** to search the full catalog (1,950
 families in the bundled snapshot). Selecting a family downloads its complete font

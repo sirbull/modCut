@@ -41,6 +41,11 @@ eller historikken. Eldre punkttekst uten utlegg beregnes i en midlertidig kopi. 
 uavklart utlegg eller tekstoverløp på valgt artboard gir `summary.errors` og deaktiverer Send,
 også hvis andre objekter er gyldige. `cutBusy` hindrer overlappende forberedelser/dialoger.
 Create Outlines er fortsatt et eget destruktivt dokumentvalg med ett angresteg.
+
+Sluttkontroll av samlet `88b3f47`: 191 Draw-tester, 23 main-tester og Electron `--draw-google-fonts`,
+`--draw-text`, `--draw-area-text`, `--draw-outlines`, `--draw-cut`, `--draw-export` passerer.
+Windows-pakke, medfølgende Java-runtime og fontmotor/katalog fra faktisk app.asar er verifisert.
+Bygg fra et fast kildeøyeblikksbilde når andre økter endrer filer; se siste WORK_LOG-oppføring.
 Tom Cut og ett artboard sender direkte uten dialog (`cutIsEmpty` fra app.js); dialogen åpnes likevel
 ved feil eller tomt artboard, og har ingen Target når Cut er tom. Kopier/lim inn mellom
 Cut og Draw: Paste tar nyeste kopi (`drawClipboard.time()` mot `bed.clipboardTime()`); Draw-kopier bærer

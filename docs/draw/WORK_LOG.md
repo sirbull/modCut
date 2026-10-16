@@ -1098,3 +1098,45 @@ Send to Cut/tekst feiler i arbeidstreet, men de hører til den andre øktens ufe
 
 Verifisering: `--draw-export` dekker dialogen, duplikatvalidering, range ved avkrysning, filstier
 med undermapper/prefiks/suffiks og PNG-størrelser for 1x/2x; skjermbildet er kontrollert.
+
+## 2026-10-16: Google Fonts og automatisk tekst til Cut — sluttkontroll
+
+Brukerens font-/Cut-del er ferdig og samlet i `88b3f47`. Hele D2.1 og D2.10 er fortsatt åpne
+for de øvrige planlagte funksjonene; dette avslutter Google Fonts og automatisk outlining.
+
+- Hele Google Fonts-katalogen kan søkes (1 950 familier i snapshotet). Valg laster komplette
+  fontfiler og opprinnelige lisenser til appens private cache. Ingen API-nøkkel eller installasjon
+  av systemfonter kreves. Nett brukes til katalog/fontnedlasting; dokumenttekst formes lokalt.
+- Fontreferansen i prosjektet beholder URL, SHA-256 og lisens. Lagrede glyfkonturer virker uten
+  fonten eller nett; en annen maskin kan hente den nøyaktige filen ved redigering.
+- Numeriske vekter, tilgjengelige stiler, variable akser og navngitte instanser inngår i samme
+  utlegg som canvas, eksport og Create Outlines. Manglende engelske instansnavn i fvar-tabellen
+  håndteres uten at hele fontfamilien forsvinner eller fontmotoren krasjer.
+- Send to Cut sender konturene automatisk, én compound path per glyf med hull og Bézier-kurver
+  beholdt. Draw-dokument og historikk endres ikke. Eldre punkttekst uten cache beregnes midlertidig.
+  Overløp og uavklart font/geometri blokkerer sending også når andre objekter er gyldige.
+  Manuell Create Outlines beholdes. Den sammenslåtte versjonen har også den direkte veien til
+  tom Cut og utklippstavlen som ble laget i den parallelle økten.
+
+Avgrensning: monokrome vektorkonturer. Farge-/bitmapglyfer uten støttede konturer, blant annet
+visse COLRv1-/emoji-fonter, avvises med melding. Fontbinærer bygges ikke inn i prosjektet eller
+app-pakken. Google-endepunktenes format kan endres; snapshot og eksisterende cache beholdes ved feil.
+
+Verifisert mot et fast git-øyeblikksbilde av `88b3f47`: 191 Draw-enhetstester, 23 main-tester,
+Electron `--draw-google-fonts`, `--draw-text`, `--draw-area-text`, `--draw-outlines`, `--draw-cut`
+og `--draw-export`. Google-testen laster faktisk ned Roboto og Tinos, kontrollerer variable
+konturer og faste varianter, lisenser, live preview, save/reload, identisk Cut-SVG før/etter
+Create Outlines, faktisk Cut-import, uendret Draw-data, midlertidig legacy-layout og blokkering
+ved manglende font. Enhetstestene dekker også offline-cache, versjonspinning, feil sjekksum,
+uønskede nedlastingsverter og størrelsesgrenser. Google-fontvelgeren er visuelt kontrollert.
+Komplett Draw-E2E er ikke kjørt på nytt i denne sluttkontrollen.
+
+Samtidige økter endret tema, eksport og Send to Cut under arbeidet. Funksjonaliteten ble samlet
+i `88b3f47` av en annen økt. Sluttkontrollen bruker derfor en uforanderlig kildekopi av denne
+commiten. En tidligere app.asar-kontroll fant ugyldig innhold under samtidig filendring; årsaken
+er ikke endelig fastslått. Byggingen ble kjørt på nytt fra det faste øyeblikksbildet.
+
+Den endelige Windows unpacked-pakken passerer sidecar-smoketest med medfølgende Java-runtime.
+Fontmotoren importert fra faktisk app.asar passerer med 367 installerte fontvarianter,
+1 950 Google-familier fra bundlet katalog uten nett, glyfkonturer og områdetekstutlegg.
+Fasen Google Fonts / automatisk tekst til Cut er dermed avsluttet og dokumentert.
