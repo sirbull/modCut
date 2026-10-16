@@ -129,7 +129,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     return new scope.Group({ insert: false });
   }
   function geometryKey(node) {
-    if (node.type === 'text') return JSON.stringify([node.kind,node.frame,node.content, node.character, node.paragraph,node.layout]);
+    if (node.type === 'text') return JSON.stringify([node.kind,node.frame,node.onPath,node.content, node.character, node.paragraph,node.layout]);
     if (node.type === 'path') return JSON.stringify([node.subpaths, node.fillRule]);
     if (node.type === 'shape') return JSON.stringify([node.shape, node.params]);
     if (node.type === 'image') return JSON.stringify([node.assetId, state.document.data.assets[node.assetId]]);
@@ -306,6 +306,21 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     }
     return dimmed;
   }
+  const segmentsOf=subpath=>subpath.segments.map(s=>new scope.Segment(new scope.Point(...s.p),new scope.Point(...s.in),new scope.Point(...s.out)));
+  /** The unpainted path of Type on a Path, drawn like Illustrator's path guide, with an overflow plus at its end. */
+  function pathGuide(node,matrix) {
+    const group=new scope.Group({insert:false});group.data.textFrame=true;group.data.textId=node.id;
+    const color=node.layout?.overflow?'#C0392B':records.get(node.id)?.context.color??'#006B5C';
+    const line=new scope.Path({insert:false,segments:segmentsOf(node.onPath.subpath),closed:node.onPath.subpath.closed});line.transform(matrix);
+    Object.assign(line,{strokeColor:color,strokeWidth:1/scope.view.zoom});group.addChild(line);
+    if(node.layout?.overflow) {
+      const p=line.closed?line.firstSegment.point:line.lastSegment.point,r=4/scope.view.zoom;
+      group.addChild(new scope.Path.Rectangle({insert:false,rectangle:[p.x-r,p.y-r,2*r,2*r],strokeColor:color,fillColor:'#FFFFFF',strokeWidth:1/scope.view.zoom}));
+      for(const [from,to] of [[[p.x-r/2,p.y],[p.x+r/2,p.y]],[[p.x,p.y-r/2],[p.x,p.y+r/2]]])group.addChild(new scope.Path.Line({insert:false,from,to,strokeColor:color,strokeWidth:1/scope.view.zoom}));
+    }
+    return group;
+  }
+  const textGuide=(node,matrix)=>node.kind==='onPath'?pathGuide(node,matrix):areaFrame(node,matrix);
   function areaFrame(node,matrix) {
     const group=new scope.Group({insert:false});group.data.textFrame=true;group.data.textId=node.id;
     const {width:w,height:h}=node.frame,color=node.layout?.overflow?'#C0392B':records.get(node.id)?.context.color??'#006B5C';
@@ -329,8 +344,8 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
       item.visible = visible && !(asOutline && node.type === 'image') && !editPreviews.has(id) && !transformPreviewIds.has(id);
       if (asOutline && !node.children && node.type !== 'image') item.strokeWidth = 1 / scope.view.zoom;
       if (record.frame) { record.frame.visible = visible && asOutline && node.type==='image'; record.frame.strokeWidth = 1 / scope.view.zoom; }
-      if(node.type==='text'&&node.kind==='area'&&visible&&!transformPreviewIds.has(id)&&state.document.ancestors(id).every(n=>n.visible)&&
-        (state.selection.ids.includes(id)||asOutline||node.layout?.overflow))textFrames.addChild(areaFrame(node,record.worldMatrix));
+      if(node.type==='text'&&['area','onPath'].includes(node.kind)&&visible&&!transformPreviewIds.has(id)&&state.document.ancestors(id).every(n=>n.visible)&&
+        (state.selection.ids.includes(id)||asOutline||node.layout?.overflow))textFrames.addChild(textGuide(node,record.worldMatrix));
       if (record.arrows) record.arrows.visible = item.visible && !asOutline;
       if (record.stack) record.stack.visible = item.visible && !asOutline;
       const factor = dimmed?.has(id) ? ISOLATION_DIM : 1;
@@ -396,8 +411,15 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
       if (item?.data.nodeId && state.document.getNode(item.data.nodeId)?.type !== 'layer' && state.document.isEditable(item.data.nodeId)) return item.data.nodeId;
     }
     // Empty and overset frames remain editable even when no glyph can be hit.
-    for(const [id,record] of [...records].reverse())if(record.node.type==='text'&&record.node.kind==='area'&&state.document.isEditable(id)&&
+    for(const [id,record] of [...records].reverse())if(record.node.type==='text'&&['area','onPath'].includes(record.node.kind)&&state.document.isEditable(id)&&
       (!state.ui?.isolation||state.document.ancestors(id).some(n=>n.id===state.ui.isolation))) {
+      if(record.node.kind==='onPath') {
+        // The text's path is a hit target too, so short or overset text stays easy to pick.
+        const guide=new scope.Path({insert:false,segments:segmentsOf(record.node.onPath.subpath),closed:record.node.onPath.subpath.closed});guide.transform(record.worldMatrix);
+        const near=guide.getNearestPoint(new scope.Point(point));guide.remove();
+        if(near&&near.getDistance(new scope.Point(point))<=4/scope.view.zoom)return id;
+        continue;
+      }
       const local=new scope.Point(point).transform(record.worldMatrix.inverted()),{width,height}=record.node.frame;
       if(local.x>=0&&local.y>=0&&local.x<=width&&local.y<=height)return id;
     }
@@ -493,9 +515,9 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
         const item=make(node);item.applyMatrix=false;item.matrix=new scope.Matrix(...node.transform);style(item,node,false,true);textPreview.addChild(item);
         const stack=paintStack(item,node,false);if(stack)textPreview.addChild(stack);
         overlay.addChild(textPreview);
-        if(node.kind==='area') {
+        if(['area','onPath'].includes(node.kind)) {
           for(const frame of textFrames.children)if(frame.data.textId===node.id)frame.visible=false;
-          textPreviewFrame=areaFrame(node,new scope.Matrix(...node.transform).prepend(textPreview.matrix));overlay.addChild(textPreviewFrame);
+          textPreviewFrame=textGuide(node,new scope.Matrix(...node.transform).prepend(textPreview.matrix));overlay.addChild(textPreviewFrame);
         }
         for (const item of [items.get(node.id), records.get(node.id)?.stack, records.get(node.id)?.arrows]) if (item) item.visible = false;
       }

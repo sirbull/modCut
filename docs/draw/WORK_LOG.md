@@ -1140,3 +1140,30 @@ Den endelige Windows unpacked-pakken passerer sidecar-smoketest med medfølgende
 Fontmotoren importert fra faktisk app.asar passerer med 367 installerte fontvarianter,
 1 950 Google-familier fra bundlet katalog uten nett, glyfkonturer og områdetekstutlegg.
 Fasen Google Fonts / automatisk tekst til Cut er dermed avsluttet og dokumentert.
+
+## 2026-10-16: D2.1d Type on a Path (Claude overtar etter Codex)
+
+Claude overtok etter Codex' Google Fonts-del. Grenen `claude/draw-properties-layers-panels` er
+spolt fram til `origin/feat/vector-draw` (05611d9) før arbeidet startet; `npm ci` trengs for fontkit.
+
+- Ny teksttype `onPath` (`onPath: { subpath, offset, flip }`) i `doc/text.mjs`, med validering i
+  `doc/schema.mjs` og i utleggssignaturen (`doc/text-layout.mjs`, `validPathSubpath`).
+- `geom/path-measure.mjs`: buelengde langs Bézier-delbaner (48 prøver per kurvesegment), punkt og
+  tangent ved lengde, reversering (Flip), startpunkt for venstre/sentrert/høyre, og en stiv glyframme.
+- `electron/font-service.mjs`: for `onPath` formes teksten som én linje; hver glyf sentreres på sin
+  buelengde og roteres etter tangenten. Glyfer som ikke får plass gir `layout.overflow`. Feilsjekkene
+  for glyfer er samlet i `outlines()`, og fontmetadata i `fontInfo`.
+- Verktøyet `type-on-path` er aktivert med egen markør. Klikk på path eller live form åpner dialogen
+  Type on a Path (Start offset, Flip). Apply erstatter banen med teksten i ett angresteg.
+- Rendereren tegner banen som hjelpelinje (rød med pluss ved overløp), og banen er treffsone.
+- Meldinger for overløp i Create Outlines og Send to Cut sier «path» i stedet for «frame».
+- `draw-text-workflows.mjs` velger nå en installert familie med Fet Kursiv. Testen feilet i skymiljøet
+  fordi standardfonten (DejaVu Sans) mangler kursiv og picker-en faller tilbake til normal.
+
+Verifisering: 196 Draw-enhetstester (5 nye i `path-measure.test.mjs`), 24 main-tester (ny test for tekst
+på path med ekte font: rett linje lik punkttekst, utside/innside av sirkel, Flip, høyrejustering,
+overløp, ugyldig signatur ved endret start). Ny E2E `draw-path-text-workflows.mjs` (`--draw-path-text`):
+klikk på sirkel, live forhåndsvisning, ett angresteg, Flip og startforskyvning, overløp med rødt
+pluss, blokkert Create Outlines og Send to Cut, banen som treffsone, lagre/åpne, SVG og Create Outlines.
+
+Neste: Character- og Paragraph-paneler.

@@ -1,6 +1,6 @@
 /** Versioned JSON data in millimetres. No renderer or Paper.js dependencies. */
 import { resolveCorners } from '../geom/corners.mjs';
-import { textSignature } from './text-layout.mjs';
+import { textSignature, validPathSubpath } from './text-layout.mjs';
 import { validGoogleReference,validFontAxes } from './font-reference.mjs';
 export const DOCUMENT_VERSION = 1;
 export const IDENTITY = Object.freeze([1, 0, 0, 1, 0, 0]);
@@ -191,6 +191,15 @@ export function validateDocument(doc) {
         else for(const key of ['width','height'])number(value.frame[key],`${path}.frame.${key}`,.1,100000);
         if(value.layout===undefined)fail(`${path}.layout`,'Area text requires a resolved layout');
       }
+      if(value.kind==='onPath') {
+        const o=value.onPath;
+        if(!object(o))fail(`${path}.onPath`,'Expected a text path');
+        else {
+          if(!validPathSubpath(o.subpath))fail(`${path}.onPath.subpath`,'Expected a path with at least two points');
+          number(o.offset,`${path}.onPath.offset`,0,100000);bool(o.flip,`${path}.onPath.flip`);
+        }
+        if(value.layout===undefined)fail(`${path}.layout`,'Type on a Path requires a resolved layout');
+      }
       if (!object(value.content)) fail(`${path}.content`, 'Expected rich text');
       else array(value.content.runs, `${path}.content.runs`).forEach((run, i) => {
         if (!object(run)) fail(`${path}.content.runs.${i}`, 'Expected a text run');
@@ -222,6 +231,7 @@ export function validateDocument(doc) {
           if(!object(l.font))fail(`${p}.font`,'Expected font metadata');
           else for(const key of ['family','style','postscriptName'])string(l.font[key],`${p}.font.${key}`);
           array(l.lineWidths,`${p}.lineWidths`).forEach((w,i)=>number(w,`${p}.lineWidths.${i}`));
+          if(value.kind==='onPath')bool(l.overflow,`${p}.overflow`);
           if(value.kind==='area') {
             number(l.visibleLines,`${p}.visibleLines`,0,l.lineWidths?.length??0);
             if(!Number.isInteger(l.visibleLines))fail(`${p}.visibleLines`,'Expected a whole number of visible lines');

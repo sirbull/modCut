@@ -109,6 +109,13 @@ export function createInteractions(canvas, state, api) {
     if (state.document.readOnly) {
       if (tool==='select') {const id=renderer.hit(p),t=id&&targetId(id);api.select(t ? [t] : []);} return;
     }
+    if(tool==='type-on-path') {
+      const hit=renderer.hit(p),type=state.document.getNode(hit)?.type;
+      if(type==='text')void api.editText(p,hit);
+      else if(type==='path'||type==='shape')void api.typeOnPath(hit);
+      else api.notify?.('Click a path or shape to type along it.');
+      return;
+    }
     if(['type','area-type'].includes(tool)) {
       const hit=renderer.hit(p);
       if(state.document.getNode(hit)?.type==='text')void api.editText(p,hit);

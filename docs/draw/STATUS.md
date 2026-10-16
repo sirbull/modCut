@@ -4,7 +4,8 @@
 > Detaljer: [hovedplanen](../DRAW_WORKSPACE.md) (spesifikasjon og byggeplan),
 > [RIGHT_PANELS.md](RIGHT_PANELS.md) (høyresiden), [WORK_LOG.md](WORK_LOG.md) (hva som er gjort, dag for dag)
 > og [HANDOFF.md](HANDOFF.md) (overlevering til neste agent).
-> Sist oppdatert: 2026-10-16 (Google Fonts og automatisk tekst til Cut). Arbeidsgren: `feat/vector-draw`.
+> Sist oppdatert: 2026-10-16 (Type on a Path). Arbeidsgren: `feat/vector-draw` (Claude pusher til
+> `claude/draw-properties-layers-panels`, som bygger på den).
 
 ## 1. Kort oppsummert
 
@@ -13,9 +14,9 @@ grunnformer med live hjørner, transformasjoner, lag med template-lag, farger, s
 gjennomsiktighet, flere fyll og streker (Appearance), Pathfinder, gruppering, rekkefølge, låsing,
 utklippstavle, isolasjonsmodus, kontrollinje og Place med Template. Et artboard kan sendes til Cut
 med **Send to Cut** (D1.12 v1), så det man tegner kan kuttes. Fase 1 er ferdig. SVG-, PNG- og
-JPEG-eksport, punkt-/rektangulær områdetekst med systemfonter, Google Fonts og **Create Outlines** finnes.
-Send to Cut gjør tekst til konturer automatisk uten å endre Draw-teksten. Path-tekst,
-Image Trace og effekter gjenstår.
+JPEG-eksport, PDF/EPS/DXF-eksport, Export for Screens, punkttekst, rektangulær områdetekst, **tekst på path**,
+systemfonter, Google Fonts og **Create Outlines** finnes. Send to Cut gjør tekst til konturer automatisk
+uten å endre Draw-teksten. Image Trace og effekter gjenstår.
 
 ## 2. Høyresiden sammenlignet med Illustrator
 
@@ -211,6 +212,29 @@ en tydelig feil; full fargefontgjengivelse er ikke bygget. Googles offentlige me
 endepunkter kan endres; appen har et bundlet metadata-snapshot og bevarer lokal cache ved feil.
 Google Fonts-innføringen endrer ikke status for tekst på path, blandede stiler eller Character/Paragraph.
 
+### 2.10 Type on a Path (D2.1d, 2026-10-16)
+
+* Verktøyet **Type on a Path** (i Type-gruppen, egen markør): klikk på en path eller en live form, og
+  banen blir tekstbane, som i Illustrator. Klikk på eksisterende tekst redigerer den. Med en bane valgt
+  åpner Enter dialogen direkte.
+* Dialogen **Type on a Path** har de vanlige tekstvalgene pluss **Start offset (mm)** og **Flip to the
+  other side**. Avsnittsjustering (venstre, sentrert, høyre) gjelder lengden fra startforskyvningen til
+  banens slutt. Forhåndsvisningen er live; Apply er ett angresteg som erstatter banen med teksten.
+* Glyfene plasseres i fontmotoren (`electron/font-service.mjs`) med samme Fontkit-shaping som annen
+  tekst: hver glyf sentreres på sin buelengde og roteres etter tangenten, grunnlinjen ligger på banen.
+  Linjeskift blir mellomrom. Ren geometri i `geom/path-measure.mjs` (buelengde, punkt og tangent,
+  reversering for Flip).
+* Banen vises som hjelpelinje når teksten er valgt eller i Outline, og kan klikkes, også når ingen glyf
+  er tegnet. Glyfer som ikke får plass gir **overløp**: rødt pluss ved banens ende, melding i dialogen,
+  og Create Outlines og Send to Cut nekter (slik at tekst ikke forsvinner). Eksport tar glyfene som får plass.
+* Lagring, SVG/PNG/PDF-eksport, Create Outlines og Send to Cut bruker det samme lagrede utlegget.
+  Teksttypen er `kind: "onPath"` med `onPath: { subpath, offset, flip }`, og den inngår i utleggssignaturen.
+
+Avgrensning: bare banens første delbane brukes. Start-, slutt- og midtklammer som kan dras på canvas,
+Type on a Path Options (Rainbow, Skew, 3D, Stair Step, Gravity, justering mot ascender/descender) og
+Vertical Type on a Path er ikke bygget. Banen kan ikke redigeres med Direct Selection etterpå; endre
+teksten med Edit Text, eller angre og tegn banen på nytt.
+
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
 | Oppgave | Status |
@@ -221,13 +245,13 @@ Google Fonts-innføringen endrer ikke status for tekst på path, blandede stiler
 | D1.10 Group, Arrange, Clipboard, isolasjon | Ferdig |
 | D1.11 Place bitmap og template-lag | Ferdig (se 2.3); høyreklikkmeny, Crop Image og Links gjenstår |
 | D1.12 Send til Cut v1 | Ferdig (se 2.2) |
-| D2.1 Tekst | Punkt-/områdetekst, system-/Google-fonter, shaping, variable akser og outlines; path-tekst/paneler gjenstår, se 2.7–2.9 |
+| D2.1 Tekst | Punkt-, område- og path-tekst, system-/Google-fonter, shaping, variable akser og outlines (2.6 til 2.10); Character/Paragraph-paneler gjenstår |
 | D2.2 Pathfinder, Compound, Clipping | Pathfinder ferdig; compound paths og clipping masks gjenstår |
 | D2.3 Gradienter og Swatches | Swatches ferdig (solide); gradienter og globale swatches gjenstår |
 | D2.4 Path-kommandoer | Gjenstår |
 | D2.5 SVG eksport/import | SVG-eksport ferdig (se 2.5); SVG-import finnes i enkel form |
-| D2.6 PDF-eksport | Gjenstår |
-| D2.7 Raster-eksport | PNG og JPEG ferdig (se 2.5); WebP, Export for Screens og skala gjenstår |
+| D2.6 PDF-eksport | Ferdig (Codex): Save PDF-dialog med forhåndsinnstillinger, lag, merker, bevar redigering; også EPS og DXF. Se WORK_LOG «Eksport del 1 og 2» |
+| D2.7 Raster-eksport | PNG og JPEG (2.5) og Export for Screens med skala og suffiks (WORK_LOG «Eksport del 3») ferdig; WebP gjenstår |
 | D2.8 Pencil, Shear, Eyedropper m.fl. | Gjenstår |
 | D2.9 Transparency, History, Info, kommandosøk | Transparency ferdig; resten gjenstår |
 | D2.10 Send til Cut v2 | Automatisk tekst til outlines ferdig (2.9); øvrige v2-deler gjenstår |
@@ -241,8 +265,9 @@ Fase 1 er ferdig. Neste er fase 2, i denne rekkefølgen:
 
 SVG-, PNG- og JPEG-eksport er gjort (2.5).
 
-1. **D2.1 Tekst**: punkttekst, system-/Google-fonter, variable akser, Create Outlines og rektangulær områdetekst er ferdig (2.7–2.9).
-   Neste del er tekst på path, deretter Character/Paragraph-paneler og videre områdetekst.
+1. **D2.1 Tekst**: punkt-, område- og path-tekst er ferdig (2.6 til 2.10).
+   **Neste del er egne Character- og Paragraph-paneler** (og tekstseksjoner i Properties), deretter
+   klammer for tekst på path og reflow av områdetekst med canvas-håndtak.
 2. D2.2 Compound paths og clipping masks (Make Clipping Mask i Layers-menyen venter på dette).
 3. D2.4 Path-kommandoer (Join, Average, Offset Path, Simplify).
 4. D2.6 PDF-eksport, D2.3 gradienter, D2.8 flere verktøy, D2.9 History/Info/kommandosøk.
@@ -250,8 +275,10 @@ SVG-, PNG- og JPEG-eksport er gjort (2.5).
 
 ## 5. Kjente begrensninger og risiko
 
-* Samlet Draw-E2E stoppet 2026-10-16 i Pen-markørtesten (`draw-feedback-workflows.mjs:43`,
-  `pen-active` i stedet for `pen-close`); separat markørtest passerer. Årsaken er uavklart.
+* Pen-markørtesten (`draw-feedback-workflows.mjs:43`) feilet én gang i en samlet kjøring hos Codex;
+  den passerte i Claudes samlede kjøring 2026-10-16. Hold øye med den.
+* Punkttekst-testen krever en installert familie med Fet Kursiv; den velger nå en slik familie selv
+  (skymiljøet har DejaVu Sans uten kursiv som standard).
 * Color, Stroke og Swatches endrer første fyll og første strek når en figur har flere.
 * Autolagringstesten (`project-workflows.mjs:113`) er ustabil i skymiljøet; se WORK_LOG.
 * Cut/sidecar-tester kan ikke kjøres i skymiljøet (jitpack.io er blokkert).

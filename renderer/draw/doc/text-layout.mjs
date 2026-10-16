@@ -1,7 +1,13 @@
 /** Portable glyph geometry. No font files, DOM or Paper dependencies. */
 const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(k=>[k,canonical(value[k])])):value;
 export const textSignature = node => JSON.stringify(canonical([node.kind, node.content, node.character ?? null, node.paragraph,
-  ...(node.kind==='area'?[node.frame]:[])]));
+  ...(node.kind==='area'?[node.frame]:[]),...(node.kind==='onPath'?[node.onPath]:[])]));
+const finite2=v=>Array.isArray(v)&&v.length===2&&v.every(Number.isFinite);
+/** One open or closed Bézier subpath to set type along. */
+export function validPathSubpath(subpath) {
+  return !!subpath&&typeof subpath==='object'&&typeof subpath.closed==='boolean'&&Array.isArray(subpath.segments)&&subpath.segments.length>=2&&
+    subpath.segments.length<=10000&&subpath.segments.every(s=>s&&finite2(s.p)&&finite2(s.in)&&finite2(s.out));
+}
 export const hasTextLayout = node => node?.layout?.version === 1 && node.layout.signature === textSignature(node);
 export const textSubpaths = node => hasTextLayout(node) ? node.layout.glyphs.flatMap(g => g.subpaths) : null;
 

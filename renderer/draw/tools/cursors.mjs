@@ -18,6 +18,7 @@ export const CURSORS = Object.freeze({
   select: arrow('#111'),
   type: url(halo('M12 5h8M16 5v22M12 27h8',1.4),16,16,'text'),
   'area-type': url(halo('M12 8h8M16 8v16M12 24h8M6 12V4h8M22 4h6v8M28 22v6h-8M14 28H6v-6',1.4),16,16,'text'),
+  'type-on-path': url(halo('M12 4h8M16 4v15M12 19h8M4 28c6-6 18-6 24 0',1.4),16,16,'text'),
   'select-anchor': arrow('#111', box(18, 18, '#111')),
   'select-move': arrow('#111', halo('M22 18v8M18 22h8', 1.4)),
   'select-copy': arrow('#111', `${halo('M22 15v5M22 24v5', 1.4)}${halo('M17 22h10', 1.4)}`),
@@ -49,6 +50,7 @@ export const CURSORS = Object.freeze({
 const TOOL_CURSORS = {
   type: 'type',
   'area-type': 'area-type',
+  'type-on-path': 'type-on-path',
   select: 'select', 'direct-selection': 'direct', 'group-selection': 'direct', pen: 'pen-new', 'add-anchor': 'anchor-add', 'delete-anchor': 'anchor-remove',
   'anchor-point': 'anchor-convert', hand: 'hand', zoom: 'zoom-in', artboard: 'artboard', rotate: 'transform', reflect: 'transform', scale: 'transform',
   rectangle: 'shape', 'rounded-rectangle': 'shape', ellipse: 'shape', polygon: 'shape', star: 'shape', line: 'shape',

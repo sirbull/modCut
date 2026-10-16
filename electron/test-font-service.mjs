@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createFontService,systemFontDirectories } from './font-service.mjs';
-import { DEFAULT_CHARACTER,pointText,textToOutlines } from '../renderer/draw/doc/text.mjs';
+import { DEFAULT_CHARACTER,pointText,pathText,textToOutlines } from '../renderer/draw/doc/text.mjs';
 import { createDocument,validateDocument } from '../renderer/draw/doc/schema.mjs';
 import { hasTextLayout } from '../renderer/draw/doc/text-layout.mjs';
 import { createProjectDraw } from '../renderer/draw/io/project.mjs';
@@ -60,6 +60,27 @@ test('area text wraps shaped words, fits lines vertically and preserves overset 
   assert.equal(overset.content.runs[0].text,v.text);
   node.frame.width++;assert.equal(hasTextLayout(node),false,'Changing frame dimensions invalidates old wrapping');
   assert.ok(validateDocument(data).some(e=>e.path.endsWith('.signature')));
+});
+test('type on a path follows the curve, flips, aligns and reports glyphs that do not fit',{skip:!latin},async()=>{
+  const seg=(p,i=[0,0],o=[0,0])=>({p,in:i,out:o}),line={closed:false,segments:[seg([0,0]),seg([200,0])]};
+  const v={...values(latin,'AV fi'),kind:'onPath',pathSubpath:line,pathOffset:10,pathFlip:false};
+  const layout=await service.shape(v),node=pathText(line,v);node.layout=layout;
+  const data=createDocument();data.layers[0].children=[node];assert.deepEqual(validateDocument(data),[]);assert.equal(hasTextLayout(node),true);
+  const point=await service.shape({...values(latin,'AV fi')}),xs=l=>l.glyphs.filter(g=>g.subpaths.length).map(g=>g.subpaths[0].segments[0].p);
+  // On a straight line the glyphs match point text moved to the offset and baseline.
+  const ascent=xs(point)[0][1]-xs(layout)[0][1];
+  xs(layout).forEach((p,i)=>{assert.ok(Math.abs(p[0]-10-xs(point)[i][0])<1e-6);assert.ok(Math.abs(p[1]+ascent-xs(point)[i][1])<1e-6);});
+  assert.ok(layout.glyphs.flatMap(g=>g.subpaths.flatMap(p=>p.segments)).every(s=>s.p[1]<=1e-9),'glyphs stand above a left-to-right path');
+  const flipped=await service.shape({...v,pathFlip:true});
+  assert.ok(flipped.glyphs.flatMap(g=>g.subpaths.flatMap(p=>p.segments)).every(s=>s.p[1]>=-1e-9),'Flip puts the text on the other side');
+  const right=await service.shape({...v,alignment:'right'});assert.ok(Math.abs(xs(right)[0][0]-xs(layout)[0][0]-(190-layout.lineWidths[0]))<1e-6);
+  const short=await service.shape({...v,pathSubpath:{closed:false,segments:[seg([0,0]),seg([12,0])]}});
+  assert.equal(short.overflow,true);assert.ok(short.glyphs.length<layout.glyphs.length);assert.throws(()=>textToOutlines({...node,onPath:{...node.onPath,subpath:{closed:false,segments:[seg([0,0]),seg([12,0])]}},layout:short}),/overflow/);
+  const k=10*0.5522847498,circle={closed:true,segments:[seg([0,-10],[-k,0],[k,0]),seg([10,0],[0,-k],[0,k]),seg([0,10],[k,0],[-k,0]),seg([-10,0],[0,k],[0,-k])]};
+  const ring=await service.shape({...v,pathSubpath:circle,pathOffset:0});
+  for(const g of ring.glyphs)for(const s of g.subpaths.flatMap(p=>p.segments)){const r=Math.hypot(...s.p);assert.ok(r>=10-1e-6&&r<=10+v.fontSize*25.4/72,`outside the circle: ${r}`);}
+  node.onPath.offset=11;assert.equal(hasTextLayout(node),false,'Moving the start invalidates the layout');
+  await assert.rejects(service.shape({...v,pathSubpath:{closed:false,segments:[seg([0,0])]}}),/two points/);
 });
 test('installed OpenType/CFF fonts can produce editable glyph outlines',{skip:!otf},async()=>{
   const layout=await service.shape(values(otf,'AV fi'));assert.ok(layout.glyphs.some(g=>g.subpaths.length));

@@ -30,13 +30,13 @@ import { createExportController } from './export-controller.mjs';
 import { layerOptionsPatch, templateLayerCommands, isOutputNode } from './doc/layers.mjs';
 import { toolCursor } from './tools/cursors.mjs';
 import { alignReference, alignOffsets, distributeOffsets, spacingOffsets } from './geom/align.mjs';
-import { pointText, textValues, textProperties, textToOutlines, DEFAULT_CHARACTER } from './doc/text.mjs';
+import { pointText, pathText, textValues, textProperties, textToOutlines, DEFAULT_CHARACTER } from './doc/text.mjs';
 import { hasTextLayout } from './doc/text-layout.mjs';
 import { textDialog } from './ui/dialogs.mjs';
 
 const workspaces=new WeakMap();
 export function getDrawWorkspace(root) {return workspaces.get(root) || null;}
-const implementedTools=new Set(['select','hand','zoom','artboard','type','area-type',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
+const implementedTools=new Set(['select','hand','zoom','artboard','type','area-type','type-on-path',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
 const commands=new Set(['undo','redo','delete','select-all','select-artboard','deselect','cancel','fit-artboard','fit-all','actual-size','zoom-in','zoom-out','outline',
   'cut','copy','paste','paste-front','paste-back','paste-place','paste-all-artboards',
   'edit-text','create-outlines','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
@@ -86,6 +86,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       TRANSFORM_TOOLS.includes(tool.id) ? 'Click: reference point · Drag: transform · Shift: constrain · Alt: copy · Enter: dialog' :
       tool.id==='pen' ? 'Click: corner · Drag: curve · Alt: break handles · Space: move anchor · Enter/Esc: finish' :
       ['type','area-type'].includes(tool.id) ? 'Click: '+(tool.id==='type'?'point text':'area text')+' · Drag: text frame · Click existing text: edit' :
+      tool.id==='type-on-path' ? 'Click a path or shape: type along it · Click existing text: edit' :
       tool.id==='direct-selection' ? 'Drag dots: round corners · Alt: one corner / break handles · Shift: add anchors/constrain' :
       tool.id==='anchor-point' ? 'Click anchor: corner/smooth · Drag: handles · Click shape: expand to path' :
       tool.id==='artboard' ? 'Drag: create/move · Edges: resize · Alt+drag: duplicate' :
@@ -280,13 +281,23 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       run(()=>{state.history.transaction('Create Outlines',()=>{for(const group of groups){const {parentId,index}=state.document.locate(group.id);state.history.execute(removeNode(group.id));state.history.execute(insertNode(parentId,group,index));}});select(previousSelection);});
     }finally{textBusy=false;if(!destroyed)status();}
   }
-  async function editText(point = scope.view.center, id = null, frame = null) {
+  /** The first subpath of a path or live shape, in its parent's coordinates, for Type on a Path. */
+  function textPathFrom(id) {
+    const source=state.document.getNode(id);
+    if(!['path','shape'].includes(source?.type)||!state.document.isEditable(id))throw new Error('Click a path or shape to type along it.');
+    const subpath=(source.type==='shape'?withScope(()=>renderer.expandedShape(id)):source).subpaths[0];
+    if(!subpath||subpath.segments.length<2)throw new Error('Type on a Path needs a path with at least two points.');
+    return structuredClone(subpath);
+  }
+  async function editText(point = scope.view.center, id = null, frame = null, {pathFrom = null} = {}) {
     if(destroyed||textBusy||state.document.readOnly||document.querySelector('.modal-overlay'))return;
     const original=id?state.document.getNode(id):null;
     if(id&&(original?.type!=='text'||!state.document.isEditable(id)))return;
-    const parent=id?state.document.locate(id).parentId:insertionParent();
+    let subpath=null;
+    try{if(pathFrom)subpath=textPathFrom(pathFrom);}catch(error){onError(error.message);return;}
+    const parent=id?state.document.locate(id).parentId:pathFrom?state.document.locate(pathFrom).parentId:insertionParent();
     let defaults=original?textValues(original):{text:'Text',...DEFAULT_CHARACTER,...state.ui.character,alignment:state.ui.textAlignment??'left',
-      kind:frame?'area':'point',...(frame?{frameWidth:frame.width,frameHeight:frame.height}:{})};
+      kind:pathFrom?'onPath':frame?'area':'point',...(frame?{frameWidth:frame.width,frameHeight:frame.height}:{}),...(pathFrom?{pathSubpath:subpath,pathOffset:0,pathFlip:false}:{})};
     const before=state.document.data;
     textBusy=true;statusLine.textContent='Loading installed fonts…';
     try {
@@ -294,7 +305,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       status();
       if(state.document.data!==before)throw new Error('The artwork changed while loading fonts. Try again.');
       if(!original&&defaults.fontSource!=='google'&&!fonts.some(f=>f.family===defaults.fontFamily)){const face=['Arial','Helvetica','DejaVu Sans','Liberation Sans','Noto Sans'].map(name=>fonts.find(f=>f.family===name&&f.fontWeight==='normal'&&f.fontStyle==='normal')).find(Boolean)??fonts[0];if(face)defaults={...defaults,fontFamily:face.family,fontWeight:face.fontWeight,fontStyle:face.fontStyle};}
-      const node=original??toParentSpace(parent,pointText([point.x,point.y],defaults));
+      const node=original??(pathFrom?pathText(subpath,defaults):toParentSpace(parent,pointText([point.x,point.y],defaults)));
       const pending=textDialog(defaults,patch=>run(()=>renderer.previewText(patch?{...node,...patch}:null,parent)),{fonts,googleCatalog,fontMetadata:original?.layout?.font??state.ui.fontMetadata,
         googleFamily:window.modcut.googleFontFamily,refreshGoogle:()=>window.modcut.listGoogleFonts({refresh:true}),resolve:patch=>resolveText(node,patch)});
       ownedTextModal=document.querySelector('.draw-text-dialog');
@@ -304,7 +315,12 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
         if(!patch)return;
         if(state.document.data!==before)throw new Error('The artwork changed while editing text. Open the editor again.');
         state.ui.character=patch.character;state.ui.fontMetadata=patch.layout.font;state.ui.textAlignment=patch.paragraph.alignment;
-        state.history.transaction(original?'Edit Text':frame?'Area Text':'Point Text',()=>state.history.execute(original?updateNode(id,patch):insertNode(parent,{...node,...patch})));
+        // Type on a Path turns the clicked path into the text's path, as in Illustrator.
+        state.history.transaction(original?'Edit Text':pathFrom?'Type on a Path':frame?'Area Text':'Point Text',()=>{
+          if(original)return state.history.execute(updateNode(id,patch));
+          if(pathFrom){const {index}=state.document.locate(pathFrom);state.history.execute(removeNode(pathFrom));return state.history.execute(insertNode(parent,{...node,...patch},index));}
+          state.history.execute(insertNode(parent,{...node,...patch}));
+        });
         select([node.id]);
       });
     }catch(error){ownedTextModal=null;if(!destroyed){run(()=>renderer.previewText(null));onError(error.message);}}finally{textBusy=false;if(!destroyed)status();}
@@ -481,6 +497,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       });state.ui.fill=fill;state.ui.stroke=stroke;toolbar.update();panels.render();return;
     }
     if(command==='tool-dialog'&&SHAPE_TOOLS.includes(state.ui.tool))return void shapeDialog(state.ui.tool);
+    if(command==='tool-dialog'&&state.ui.tool==='type-on-path'){const id=selectedIds()[0];if(id)return void editText(undefined,null,null,{pathFrom:id});return;}
     if(command==='tool-dialog'&&['type','area-type'].includes(state.ui.tool))return void editText(undefined,null,state.ui.tool==='area-type'?{width:60,height:30}:null);
     if(command==='tool-dialog'&&TRANSFORM_TOOLS.includes(state.ui.tool))return void transformToolDialog(state.ui.tool);
     const match=command.match(/^(nudge-large|nudge|duplicate)-(left|right|up|down)$/);
@@ -495,8 +512,8 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   paths=createPathInteractions(canvas,state,{scope,renderer,withScope,run,select,selectionChanged,layerId:insertionParent,status,
     tool:()=>temporary?.id || state.ui.tool,closeMenus:()=>toolbar.close()});
   interactions=createInteractions(canvas,state,{scope,renderer,withScope,run,select,selectedIds,transform,artboards,status,shapeOptions,insertShape,shapeDialog,zoomAt,isolate,exitIsolation,
-    transforms,transformDialog:transformToolDialog,editText,cursor,
-    tool:()=>temporary?.id || state.ui.tool,zoomOut:()=>!!temporary?.zoomOut,preferences:getPreferences,closeMenus:()=>toolbar.close()});
+    transforms,transformDialog:transformToolDialog,editText,typeOnPath:id=>editText(undefined,null,null,{pathFrom:id}),cursor,
+    tool:()=>temporary?.id || state.ui.tool,zoomOut:()=>!!temporary?.zoomOut,preferences:getPreferences,closeMenus:()=>toolbar.close(),notify:message=>onError(message)});
   const unsubscribe=state.subscribe(()=>{interactions.cancel();paths.documentChanged();refresh();if(state.ui.isolation&&!isolation())isolationChanged();else renderIsolationBar();});
   function resize(){const {width,height}=stage.getBoundingClientRect();if(width<=0||height<=0)return;
     withScope(()=>{scope.view.viewSize=new scope.Size(width,height);if(!fitted){renderer.fit();fitted=true;}renderer.updateView();});status();}

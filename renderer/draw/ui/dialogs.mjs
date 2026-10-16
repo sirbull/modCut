@@ -25,13 +25,17 @@ export function textDialog(defaults, onPreview = () => {}, {fonts=[],resolve=pat
   if(defaults.kind==='area')fields.push(
     {key:'frameWidth',label:'Frame width (mm)',type:'number',value:defaults.frameWidth,min:.1,max:100000,step:'any',required:true},
     {key:'frameHeight',label:'Frame height (mm)',type:'number',value:defaults.frameHeight,min:.1,max:100000,step:'any',required:true});
-  const result = openDrawModal({title:defaults.kind==='area'?'Area Text':'Point Text',submitLabel:'Apply',className:'draw-text-dialog',fields});
+  if(defaults.kind==='onPath')fields.push(
+    {key:'pathOffset',label:'Start offset (mm)',type:'number',value:defaults.pathOffset??0,min:0,max:100000,step:'any',required:true},
+    {key:'pathFlip',label:'Flip to the other side',type:'checkbox',value:!!defaults.pathFlip});
+  const title={area:'Area Text',onPath:'Type on a Path'}[defaults.kind]??'Point Text';
+  const result = openDrawModal({title,submitLabel:'Apply',className:'draw-text-dialog',fields});
   const form = document.querySelector('.draw-text-dialog form'), original = form.elements.text;
   const picker=createFontPicker(form,defaults,{fonts,...fontOptions});
   const input = document.createElement('textarea'); input.name = 'text'; input.className = 'input'; input.required = true; input.rows = 3;
   input.value = defaults.text; original.replaceWith(input);
   const error = document.createElement('p'); error.setAttribute('role','alert'); form.insertBefore(error,form.querySelector('.modal-actions'));
-  const read = () => ({kind:defaults.kind??'point',...Object.fromEntries(fields.map(f => {const el=form.elements[f.key];return [f.key,f.type==='number'?el.valueAsNumber:f.key==='fontWeight'&&!['normal','bold'].includes(el.value)?Number(el.value):el.value];})),
+  const read = () => ({kind:defaults.kind??'point',...(defaults.kind==='onPath'?{pathSubpath:defaults.pathSubpath}:{}),...Object.fromEntries(fields.map(f => {const el=form.elements[f.key];return [f.key,f.type==='checkbox'?el.checked:f.type==='number'?el.valueAsNumber:f.key==='fontWeight'&&!['normal','bold'].includes(el.value)?Number(el.value):el.value];})),
     axisValues:[...form.querySelectorAll('[data-font-axis]')].map(el=>el.value)});
   const submit=form.querySelector('[type=submit]');let revision=0,alive=true,resolved=null,accepted=null,lastInput=null;
   const preview = async () => {
@@ -44,7 +48,8 @@ export function textDialog(defaults, onPreview = () => {}, {fonts=[],resolve=pat
       if(!alive||current!==revision)return;
       resolved=patch;onPreview(patch);input.setCustomValidity('');submit.disabled=false;form.dataset.textReady='true';
       lastInput=JSON.stringify(read());
-      error.textContent=patch.layout?.overflow?`Text overflow: ${patch.layout.visibleLines} of ${patch.layout.lineWidths.length} lines fit. Enlarge the frame to show all text. Export includes only visible text; Create Outlines requires all text to fit.`:
+      error.textContent=patch.layout?.overflow&&patch.kind==='onPath'?`Text overflow: ${patch.layout.glyphs.length} glyphs fit on the path. Use a smaller size or start offset, or a longer path. Export includes only the glyphs that fit; Create Outlines and Send to Cut require all text to fit.`:
+        patch.layout?.overflow?`Text overflow: ${patch.layout.visibleLines} of ${patch.layout.lineWidths.length} lines fit. Enlarge the frame to show all text. Export includes only visible text; Create Outlines requires all text to fit.`:
         patch.character.fontSource!=='google'&&fonts.length&&!fonts.some(f=>f.family.toLowerCase()===patch.character.fontFamily.toLowerCase())?'Font unavailable: saved outlines are preserved. Choose an installed font to change the text.':'';
     } catch (e) {if(alive&&current===revision){error.textContent=e.message;input.setCustomValidity(e.message);onPreview(null);}}
   };

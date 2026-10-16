@@ -825,7 +825,7 @@ konturer og overløp blokkerer sending; se [status](draw/STATUS.md#29-google-fon
   forespørsel. Renderer bruker `FontFace` for visning og HarfBuzz for shaping og glyfkonturer.
   Fonter som brukes i dokumentet kan bygges inn (`assets`) hvis lisensen tillater det
   (`fsType`-sjekk), ellers vises advarsel ved åpning på maskin uten fonten.
-* Punkttekst, områdetekst med automatisk bryting, tekst på path.
+* Punkttekst, områdetekst med automatisk bryting, tekst på path (ferdig, se [status](draw/STATUS.md); klammer og Type on a Path Options gjenstår).
 * Character: font, stil, størrelse, leading, kerning (metrics, optical = ut, manuell),
   tracking, horisontal/vertikal skalering, baseline shift, All Caps, Small Caps, understrek.
 * Paragraph: venstre, senter, høyre, justert (med siste linje), innrykk, avstand før/etter.

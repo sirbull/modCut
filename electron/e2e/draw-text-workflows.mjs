@@ -19,6 +19,10 @@ export async function runDrawTextWorkflows(client) {
   await evaluate("document.querySelector('.draw-text-dialog textarea').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',isComposing:true,bubbles:true,cancelable:true}))");
   assert.ok(await evaluate("!!document.querySelector('.draw-text-dialog')"),'IME Escape keeps the editor open');
   await command('Input.insertText',{text:'Horten ÆØÅ\nmodCut'});
+  // Use an installed family that really has Bold Italic; the picker falls back when a style is missing.
+  const family=await evaluate("(async()=>{const fonts=await window.modcut.listSystemFonts(),has=(f,w,s)=>fonts.some(x=>x.family===f&&x.fontWeight===w&&x.fontStyle===s);return [...new Set(fonts.map(f=>f.family))].find(f=>has(f,'normal','normal')&&has(f,'bold','italic'))})()");
+  assert.ok(family,'An installed font family with Bold Italic is needed for this test');
+  await evaluate(`(()=>{const f=document.querySelector('.draw-text-dialog form');f.elements.fontFamily.value=${JSON.stringify(family)};f.elements.fontFamily.dispatchEvent(new Event('input',{bubbles:true}));})()`);await ready();
   await evaluate("(()=>{const f=document.querySelector('.draw-text-dialog form');f.elements.fontWeight.value='bold';f.elements.fontStyle.value='italic';f.elements.fontStyle.dispatchEvent(new Event('change',{bubbles:true}));})()");
   await ready();
   assert.equal(await snapshot(),before,'Typing previews without changing the document or dirty state');

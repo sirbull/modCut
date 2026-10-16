@@ -73,7 +73,7 @@ export function artboardCutSvg(doc, boardId, geometry, { only = null } = {}) {
       const node=geometry.resolvedText?.(original.id)??original,box=geometry.bounds(node.id);
       if(!onBoard(box)){skipped.outside++;continue;}
       if(!hasTextLayout(node)){errors.push('Text needs a resolved font before sending. Open Edit Text and choose an available font.');continue;}
-      if(node.layout.overflow){errors.push('Text overflows its frame. Enlarge the frame before sending to Cut.');continue;}
+      if(node.layout.overflow){errors.push(node.kind==='onPath'?'Text does not fit on its path. Shorten the text or use a longer path before sending to Cut.':'Text overflows its frame. Enlarge the frame before sending to Cut.');continue;}
       textCount++;
       for(const glyph of node.layout.glyphs)if(glyph.subpaths.length)emit(node,glyph.subpaths,geometry.glyphBounds?.(node.id,glyph.subpaths)??box);
     } else if (original.type === 'path' || original.type === 'shape')emit(original,geometry.subpaths(original.id)??[],geometry.bounds(original.id));

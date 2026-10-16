@@ -7,6 +7,7 @@ import { create } from 'fontkit';
 import { textProperties, textValues, PT_TO_MM } from '../renderer/draw/doc/text.mjs';
 import { glyphSubpaths, textSignature } from '../renderer/draw/doc/text-layout.mjs';
 import { wrapText } from '../renderer/draw/doc/text-wrap.mjs';
+import { measurePath, reverseSubpath, pathRunStart, glyphFrame } from '../renderer/draw/geom/path-measure.mjs';
 import { variableMetadata } from './font-metadata.mjs';
 
 export function systemFontDirectories(platform=process.platform, env=process.env, home=homedir()) {
@@ -76,6 +77,26 @@ export function createFontService({directories=systemFontDirectories(),google}={
     if(Object.keys(settings).length)font=font.getVariation(settings);
     const scale=v.fontSize*PT_TO_MM/font.unitsPerEm,glyphs=[],lineWidths=[],area=v.kind==='area';
     const width=run=>run.positions.reduce((sum,p)=>sum+p.xAdvance,0);
+    const fontInfo={family:face.family,style:face.style,postscriptName:face.postscriptName,...(face.source==='google'?{source:'google',reference:face.reference}:{}),axes,instances};
+    const outlines=glyph=>{
+      if(glyph.id===0)throw new Error(`The font “${face.family}” does not contain every character in the text.`);
+      let commands;try{commands=glyph.path.commands;}catch{throw new Error('This font cannot provide vector outlines for the text. Choose a monochrome vector font.');}
+      if(!commands.length&&glyph.codePoints.some(cp=>!/[\s\u200B-\u200F\u202A-\u202E\u2060-\u206F]/u.test(String.fromCodePoint(cp))))throw new Error('This font uses a glyph without vector outlines. Choose a vector font.');
+      return commands;
+    };
+    if(v.kind==='onPath') {
+      // One line along the path: each glyph is centred on its arc length and turned to the tangent.
+      const run=font.layout(v.text.replace(/[ \t]*\n[ \t]*/g,' ').replace(/\t/g,'    ')),advance=width(run)*scale;
+      const measure=measurePath(v.pathFlip?reverseSubpath(v.pathSubpath):v.pathSubpath);
+      let pen=pathRunStart(measure.length,advance,{offset:v.pathOffset,alignment:v.alignment}),overflow=false;
+      for(let i=0;i<run.glyphs.length;i++) {
+        const glyph=run.glyphs[i],pos=run.positions[i],commands=outlines(glyph),step=pos.xAdvance*scale,centre=pen+step/2;
+        if(centre>measure.length+1e-9)overflow=true;
+        else {const map=glyphFrame(measure,centre);glyphs.push({line:0,glyphId:glyph.id,subpaths:glyphSubpaths(commands,(gx,gy)=>map((pos.xOffset+gx)*scale-step/2,(pos.yOffset+gy)*scale))});}
+        pen+=step;
+      }
+      return {version:1,signature:textSignature(patch),font:fontInfo,glyphs,lineWidths:[advance],overflow};
+    }
     const lines=area?wrapText(v.text,v.frameWidth/scale,text=>width(font.layout(text.replace(/\t/g,'    ')))):v.text.split('\n');
     const ascent=area?font.ascent*scale:0,lineHeight=area?(font.ascent-font.descent)*scale:0;
     let visibleLines=area?Math.max(0,Math.min(lines.length,Math.floor((v.frameHeight-lineHeight+1e-9)/(v.leading*PT_TO_MM))+1)):lines.length;
@@ -87,9 +108,7 @@ export function createFontService({directories=systemFontDirectories(),google}={
       let x=0,y=0;
       for(let i=0;i<run.glyphs.length;i++) {
         const glyph=run.glyphs[i],pos=run.positions[i];
-        if(glyph.id===0)throw new Error(`The font “${face.family}” does not contain every character in the text.`);
-        let commands;try{commands=glyph.path.commands;}catch{throw new Error('This font cannot provide vector outlines for the text. Choose a monochrome vector font.');}
-        if(!commands.length&&glyph.codePoints.some(cp=>!/[\s\u200B-\u200F\u202A-\u202E\u2060-\u206F]/u.test(String.fromCodePoint(cp))))throw new Error('This font uses a glyph without vector outlines. Choose a vector font.');
+        const commands=outlines(glyph);
         if(line<visibleLines) {
           const subpaths=glyphSubpaths(commands,(gx,gy)=>[(offset+x+pos.xOffset+gx)*scale,ascent+line*v.leading*PT_TO_MM-(y+pos.yOffset+gy)*scale]);
           glyphs.push({line,glyphId:glyph.id,subpaths});
@@ -98,7 +117,7 @@ export function createFontService({directories=systemFontDirectories(),google}={
       }
       await yieldEventLoop();
     }
-    return {version:1,signature:textSignature(patch),font:{family:face.family,style:face.style,postscriptName:face.postscriptName,...(face.source==='google'?{source:'google',reference:face.reference}:{}),axes,instances},glyphs,lineWidths,
+    return {version:1,signature:textSignature(patch),font:fontInfo,glyphs,lineWidths,
       ...(area?{visibleLines,overflow:visibleLines<lines.length}:{})};
   }
   return {list,shape};

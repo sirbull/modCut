@@ -1,7 +1,7 @@
 /** Type sizes/leading are stored in points; frames and glyph geometry stay in mm. */
 import { createNode } from './schema.mjs';
 import { appearance } from '../geometry.mjs';
-import { hasTextLayout } from './text-layout.mjs';
+import { hasTextLayout, validPathSubpath } from './text-layout.mjs';
 import { validGoogleReference,validFontAxes } from './font-reference.mjs';
 
 export const PT_TO_MM = 25.4 / 72;
@@ -9,14 +9,16 @@ export const DEFAULT_CHARACTER = Object.freeze({ fontFamily: 'Arial', fontSize: 
 export function textContent(node) { return node.content.runs.map(run => run.text).join(''); }
 export function textValues(node) {
   return { text: textContent(node), ...DEFAULT_CHARACTER, ...node.character, alignment: node.paragraph.alignment ?? 'left',
-    kind:node.kind??'point', ...(node.kind==='area'?{frameWidth:node.frame.width,frameHeight:node.frame.height}:{}) };
+    kind:node.kind??'point', ...(node.kind==='area'?{frameWidth:node.frame.width,frameHeight:node.frame.height}:{}),
+    ...(node.kind==='onPath'?{pathSubpath:node.onPath.subpath,pathOffset:node.onPath.offset??0,pathFlip:!!node.onPath.flip}:{}) };
 }
 export function textProperties(values) {
-  const { text, fontFamily, fontSize, leading, fontWeight, fontStyle, alignment, fontPostscriptName, kind='point', frameWidth, frameHeight,fontSource='system',googleFont,fontAxes } = values;
+  const { text, fontFamily, fontSize, leading, fontWeight, fontStyle, alignment, fontPostscriptName, kind='point', frameWidth, frameHeight,fontSource='system',googleFont,fontAxes,pathSubpath,pathOffset=0,pathFlip=false } = values;
   if(!['system','google'].includes(fontSource))throw new Error('Choose a font source.');
   if(googleFont!==undefined&&(!validGoogleReference(googleFont)||fontSource!=='google'||googleFont.family!==fontFamily))throw new Error('Invalid saved Google font reference.');
   if(fontAxes!==undefined&&!validFontAxes(fontAxes))throw new Error('Invalid variable font axes.');
-  if(!['point','area'].includes(kind))throw new Error('Unsupported text kind.');
+  if(!['point','area','onPath'].includes(kind))throw new Error('Unsupported text kind.');
+  if(kind==='onPath'){if(!validPathSubpath(pathSubpath))throw new Error('Type on a Path needs a path with at least two points.');if(!Number.isFinite(pathOffset)||pathOffset<0||pathOffset>100000)throw new Error('Start offset must be between 0 and 100,000 mm.');}
   if(kind==='area')for(const n of [frameWidth,frameHeight])if(!Number.isFinite(n)||n<.1||n>100000)throw new Error('Frame dimensions must be between 0.1 and 100,000 mm.');
   if (typeof text !== 'string' || !text.trim()) throw new Error('Enter some text.');
   if (typeof fontFamily !== 'string' || !fontFamily.trim()) throw new Error('Enter a font family.');
@@ -24,16 +26,22 @@ export function textProperties(values) {
     if (!Number.isFinite(n) || n < .1 || n > 10000) throw new Error(`${label} must be between 0.1 and 10,000 pt.`);
   }
   if ((!['normal', 'bold'].includes(fontWeight)&&!(Number.isFinite(fontWeight)&&fontWeight>=1&&fontWeight<=1000)) || !['normal', 'italic'].includes(fontStyle) || !['left', 'center', 'right'].includes(alignment)) throw new Error('Invalid text style.');
-  return { kind, ...(kind==='area'?{frame:{width:frameWidth,height:frameHeight}}:{}), content: { runs: [{ text: text.replace(/\r\n?/g, '\n') }] },
+  return { kind, ...(kind==='area'?{frame:{width:frameWidth,height:frameHeight}}:{}),
+    ...(kind==='onPath'?{onPath:{subpath:structuredClone(pathSubpath),offset:pathOffset,flip:!!pathFlip}}:{}), content: { runs: [{ text: text.replace(/\r\n?/g, '\n') }] },
     character: { fontFamily: fontFamily.trim(), fontSize, leading, fontWeight, fontStyle,
       ...(typeof fontPostscriptName==='string'&&fontPostscriptName?{fontPostscriptName}:{}),
       ...(fontSource==='google'?{fontSource,...(googleFont?{googleFont}:{})}:{}),
       ...(fontAxes&&Object.keys(fontAxes).length?{fontAxes}:{}) }, paragraph: { alignment } };
 }
+/** Type on a Path from a path's first subpath, in the same coordinate space as the path. */
+export function pathText(subpath, values, paint = {}) {
+  return createNode('text', { ...textProperties({ ...values, kind: 'onPath', pathSubpath: subpath }),
+    appearance: appearance(paint.fill ?? '#071411', paint.stroke ?? null, paint.strokeWidth ?? .5) });
+}
 /** One compound path per visible glyph, grouped per line. Group identity keeps selection stable. */
 export function textToOutlines(node) {
   if(node.type!=='text'||!hasTextLayout(node))throw new Error('Resolve the text font before creating outlines.');
-  if(node.layout.overflow)throw new Error('The text overflows its frame. Enlarge the frame before creating outlines.');
+  if(node.layout.overflow)throw new Error(node.kind==='onPath'?'The text does not fit on its path. Use a longer path, a smaller size or a smaller start offset before creating outlines.':'The text overflows its frame. Enlarge the frame before creating outlines.');
   const lines=new Map();
   for(const glyph of node.layout.glyphs) {
     if(!glyph.subpaths.length)continue;
