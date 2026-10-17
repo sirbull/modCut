@@ -21,8 +21,8 @@ Fase 0 og fase 1 er fullført. Export As, **D2.1a/b punkttekst med systemfonter,
 Create Outlines** og **D2.1c rektangulær områdetekst med linjebryting** er ferdige.
 **Tekst på path (STATUS.md 2.10) og Character/Paragraph (2.11) er ferdige.** D2.1 er ferdig i grunnform;
 resten står i 2.11. D2.2 compound paths og klippemasker er ferdige (2.12).
-D2.4 path-kommandoer er ferdige (2.13), inkludert Offset Path og Simplify.
-**Neste oppgave er D2.3 gradienter.** Kjør `npm ci` etter pull.
+D2.4 path-kommandoer (2.13) og D2.3 gradienter (2.14) er ferdige.
+**Neste oppgave er D2.8 flere verktøy** (Eyedropper, Pencil, Scissors, Knife, Shear). Kjør `npm ci` etter pull.
 
 **Brukerstyrt tillegg etter D2.1c:** Google Fonts og automatisk tekst til outlines ved Send to Cut
 er implementert (STATUS.md 2.9). Tekst på path er fortsatt neste ordinære del.
@@ -82,7 +82,7 @@ SVG bruker outlines for beregnet tekst.
 `scripts/verify-font-package.mjs` kontrollerer fontmotoren fra app.asar; kjøres av `npm run pack`.
 
 E2E-flagg for de nye delene: `--draw-cut`, `--draw-place`, `--draw-control`, `--draw-export`,
-`--draw-text`, `--draw-outlines`, `--draw-area-text`, `--draw-path-text`, `--draw-character`, `--draw-compound`, `--draw-path-commands`, `--draw-google-fonts` (sistnevnte krever nett
+`--draw-text`, `--draw-outlines`, `--draw-area-text`, `--draw-path-text`, `--draw-character`, `--draw-compound`, `--draw-path-commands`, `--draw-gradient`, `--draw-google-fonts` (sistnevnte krever nett
 ved første fontnedlasting; holdes utenfor den vanlige offline Draw-suiten).
 
 Historikk for D1.9: commit `d337a8f` (en annen agent) flyttet allerede visningskontrollene

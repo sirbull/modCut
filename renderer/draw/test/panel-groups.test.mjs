@@ -21,8 +21,8 @@ test('dock split keeps both halves usable', () => {
   assert.equal(clampDockSplit(.9, 200), .5, 'too short to split: even halves');
 });
 
-test('unbuilt tabs are listed but unavailable, and every group has an available tab', () => {
-  assert.equal(panelAvailable('gradient'), false);
+test('every listed tab is built now, and every group has an available tab', () => {
+  assert.equal(panelAvailable('gradient'), true, 'Gradient arrived in D2.3');
   assert.equal(panelAvailable('transparency'), true);
   assert.deepEqual(groupForPanel('transparency').tabs, ['stroke', 'gradient', 'transparency']);
   for (const group of PANEL_GROUPS) assert.ok(group.tabs.some(panelAvailable), `${group.id} has a usable tab`);

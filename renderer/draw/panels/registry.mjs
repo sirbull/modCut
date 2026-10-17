@@ -1,5 +1,5 @@
 // Tabs shown for structure but not built yet; they stay disabled with this explanation.
-const UNAVAILABLE = { gradient: 'Gradients arrive in D2.3' };
+const UNAVAILABLE = {};
 export const PANEL_DEFINITIONS = Object.freeze([
   ['properties', 'Properties', 'adjustments'], ['layers', 'Layers', 'layers-intersect'],
   ['artboards', 'Artboards', 'artboard'], ['swatches', 'Swatches', 'color-swatch'], ['color', 'Color', 'palette'],

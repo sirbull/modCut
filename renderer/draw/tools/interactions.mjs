@@ -82,6 +82,12 @@ export function createInteractions(canvas, state, api) {
           Object.assign(gesture.node.params,{outerRadius:gesture.innerControl.radius,innerRadius:gesture.innerControl.radius*ratio});
         } else gesture.innerControl=null;
         preview=renderer.shapePreview(gesture.node);
+      } else if (gesture.mode==='gradient') {
+        let end=p;
+        if(event.shiftKey){const d=p.subtract(gesture.start),a=Math.round(Math.atan2(d.y,d.x)/(Math.PI/4))*Math.PI/4;end=gesture.start.add(new scope.Point(Math.cos(a),Math.sin(a)).multiply(d.length));}
+        preview=new scope.Group([new scope.Path.Line({from:gesture.start,to:end,strokeColor:'#071411',strokeWidth:3/scope.view.zoom}),new scope.Path.Line({from:gesture.start,to:end,strokeColor:'#FFFFFF',strokeWidth:1/scope.view.zoom}),
+          new scope.Path.Circle({center:gesture.start,radius:4/scope.view.zoom,fillColor:'#FFFFFF',strokeColor:'#071411',strokeWidth:1/scope.view.zoom}),new scope.Path.Rectangle({point:end.subtract(3.5/scope.view.zoom),size:7/scope.view.zoom,fillColor:'#071411'})]);
+        if(gesture.start.getDistance(end)>1e-6){gesture.end=end;api.run(()=>api.gradientVector([gesture.start.x,gesture.start.y],[end.x,end.y],gesture.mergeKey));}
       } else if (gesture.mode==='text-frame' || gesture.mode==='marquee' || gesture.mode==='new-artboard') {
         gesture.rectangle=new scope.Rectangle(gesture.start,p);preview=boxPreview(gesture.rectangle);
         if(gesture.mode==='text-frame')preview.data.textFrame=true;
@@ -108,6 +114,12 @@ export function createInteractions(canvas, state, api) {
     if (tool==='hand' || tool==='zoom') {gesture=base;if(tool==='hand')canvas.style.cursor=CURSORS['hand-active'];return;}
     if (state.document.readOnly) {
       if (tool==='select') {const id=renderer.hit(p),t=id&&targetId(id);api.select(t ? [t] : []);} return;
+    }
+    if(tool==='gradient') {
+      // Drag sets the gradient vector on the selection; clicking an object selects it first.
+      if(!api.paintIds().length){const hit=renderer.hit(p),t=hit&&targetId(hit);if(t)api.select([t]);}
+      if(!api.paintIds().length){api.notify?.('Select artwork, then drag across it with the Gradient tool.');return;}
+      gesture={...base,mode:'gradient',mergeKey:`gradient-tool-${Date.now()}`};return;
     }
     if(tool==='type-on-path') {
       const hit=renderer.hit(p),type=state.document.getNode(hit)?.type;
@@ -157,7 +169,9 @@ export function createInteractions(canvas, state, api) {
     if (drag.tool==='zoom') {if(!drag.scrubbed)api.zoomAt(drag.start,event.altKey || api.zoomOut() ? .8 : 1.25);return;}
     run(()=>{
       if (state.document.readOnly)return;
-      if(drag.mode==='text-frame') {
+      if(drag.mode==='gradient') {
+        if(!moved)api.command('paint-gradient');
+      }else if(drag.mode==='text-frame') {
         const rectangle=drag.rectangle,frame=moved&&rectangle?.width>=.1&&rectangle?.height>=.1?rectangle:null;
         void api.editText(frame?frame.topLeft:drag.start,null,frame?{width:frame.width,height:frame.height}:drag.tool==='area-type'?{width:60,height:30}:null);
       }else if(TRANSFORM_TOOLS.includes(drag.tool)){

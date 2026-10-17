@@ -6,6 +6,7 @@
  */
 import { isOutputNode } from '../doc/layers.mjs';
 import { paintHex } from '../doc/paint.mjs';
+import { gradientHex } from '../doc/gradient.mjs';
 import { multiply } from '../doc/arrange.mjs';
 import { hasTextLayout } from '../doc/text-layout.mjs';
 
@@ -53,7 +54,8 @@ export function artboardCutSvg(doc, boardId, geometry, { only = null } = {}) {
     if (!only && !inside(box, board)) partly++;
     const fills = shown(node.appearance?.fills), strokes = shown(node.appearance?.strokes);
     if (fills.length > 1 || strokes.length > 1) stacked++;
-    const fill = paintHex(fills[0]), stroke = paintHex(strokes[0]);
+    // A gradient is one laser layer: its first stop's colour.
+    const fill = paintHex(fills[0]) ?? gradientHex(fills[0]?.paint), stroke = paintHex(strokes[0]) ?? gradientHex(strokes[0]?.paint);
     if (!fill && !stroke) { skipped.empty++; return; }
     if (fill && subpaths.some((p) => !p.closed)) openFilled++;
     const m = multiply(toBoard, geometry.worldMatrix(node.id)), d = pathData(subpaths, m);

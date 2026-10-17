@@ -327,12 +327,12 @@ export async function runDrawPanelWorkflows(client) {
   await writeFile(join(tmpdir(), 'modcut-draw-stroke-panel.png'), Buffer.from(arrowShot.data, 'base64'));
   await tool('select');
 
-  // Fill/Stroke box: Color (Comma), None (Slash), disabled Gradient; Properties summary opens Color/Stroke.
+  // Fill/Stroke box: Color (Comma), Gradient (Period), None (Slash); Properties summary opens Color/Stroke.
   await evaluate(`(async()=>(${active}.select(['${rect.id}'])))()`);
   const fillBefore = await fillHex(rect.id);
   await evaluate(`document.querySelector('${root} [data-paint=fill]').click()`);
   assert.equal(await evaluate(`document.querySelector('${root} [data-draw-panel=color]').getAttribute('aria-pressed')`), 'true', 'Fill swatch opens Color');
-  assert.equal(await evaluate(`document.querySelector('${root} [data-paint-action=paint-gradient]').disabled`), true);
+  assert.equal(await evaluate(`document.querySelector('${root} [data-paint-action=paint-gradient]').disabled`), false, 'Gradients are built (D2.3)');
   await evaluate(`document.querySelector('${root} [data-paint-action=paint-none]').click()`);
   assert.equal(await fillHex(rect.id), null, 'None removes the focused fill');
   await evaluate(`document.querySelector('${root} [data-paint-action=paint-solid]').click()`);

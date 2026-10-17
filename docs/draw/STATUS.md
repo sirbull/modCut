@@ -4,7 +4,7 @@
 > Detaljer: [hovedplanen](../DRAW_WORKSPACE.md) (spesifikasjon og byggeplan),
 > [RIGHT_PANELS.md](RIGHT_PANELS.md) (høyresiden), [WORK_LOG.md](WORK_LOG.md) (hva som er gjort, dag for dag)
 > og [HANDOFF.md](HANDOFF.md) (overlevering til neste agent).
-> Sist oppdatert: 2026-10-17 (path-kommandoer del A og B). Arbeidsgren: `feat/vector-draw` (Claude og Codex
+> Sist oppdatert: 2026-10-17 (gradienter). Arbeidsgren: `feat/vector-draw` (Claude og Codex
 > jobber begge der; hent alltid før du starter, og kjør `npm ci` ved endrede avhengigheter).
 
 ## 1. Kort oppsummert
@@ -23,7 +23,7 @@ uten å endre Draw-teksten. Image Trace og effekter gjenstår.
 | Del | Status | Som i Illustrator | Mangler |
 |---|---|---|---|
 | Dokk: Properties over Layers med delelinje | Ferdig | Ja | |
-| Panelstolpe med grupper og faner | Ferdig | Swatches, Color, Stroke/Gradient/Transparency, Appearance, Transform/Align/Pathfinder, Character/Paragraph, Artboards | Brushes, Symbols, Color Guide, Graphic Styles (ikke bygget). Gradient-fanen er deaktivert. |
+| Panelstolpe med grupper og faner | Ferdig | Swatches, Color, Stroke/Gradient/Transparency, Appearance, Transform/Align/Pathfinder, Character/Paragraph, Artboards | Brushes, Symbols, Color Guide, Graphic Styles (ikke bygget) |
 | Layers | Ferdig | Øye, lås, fargelinje, thumbnail, navn, målsirkel, søppelkasse, søk, filter, bunnlinje med teller, Layer Options, panelmeny (≡) med Make Clipping Mask, flervalg av lag, dra utvalg til lag | Paste Remembers Layers; klipping av et helt lag |
 | Properties | Ferdig | Tittel, navn, Character og Paragraph for tekst, Transform (referansepunkt, X, Y, B, H, lenke, rotasjon, Flip), Appearance (fyll, strek, vekt, opacity), form, Align, Quick Actions, Document uten utvalg | |
 | Swatches | Ferdig for solide farger | Bibliotek, laserfarger, Recent Colors, ny/rediger/slett, liste/rutenett | Swatch-grupper, globale swatches, mønstre |
@@ -302,6 +302,25 @@ Del B (2026-10-17):
 Gjenstår fra 10.3: Smooth, Split Into Grid, Divide Objects Below, hjørnevinkel i Simplify,
 Outline Stroke (D3.1) og Scissors/Knife-verktøy (D2.8).
 
+### 2.14 Gradienter (D2.3, 2026-10-17)
+
+* **Gradient-knappen** i Fill/Stroke-boksen og tasten **.** gir fyllet eller streken (etter fokus) en
+  gradient over hvert valgt objekt: siste gradient du brukte, ellers hvit til svart. Ett angresteg.
+* **Gradient-panelet** (fanen i Stroke-gruppen, Mod+F9): Fill/Stroke, type Linear eller Radial, vinkel,
+  gradientlinje med én markør per stopp, og for valgt stopp farge, posisjon og opasitet. Legg til stopp
+  (midt i største mellomrom, med fargen der), slett stopp (minst to) og Reverse.
+* **Gradient-verktøyet (G):** dra over utvalget for å sette retning og lengde, med linje og live
+  oppdatering; hele draget er ett angresteg. Shift låser til 45°. Klikk gir standardgradient.
+* Properties viser «Fill linear gradient» med gradientlinjen og åpner Gradient-panelet.
+* Canvas, PNG/JPEG og SVG viser ekte gradienter (Paper.js). **PDF, EPS og DXF** får foreløpig første
+  stopps farge (advarsel). **Send to Cut** bruker første stopps farge som Cut-lag.
+* Modellen: `paint: { type: 'linear'|'radial', stops, origin, angle, length, aspect }` i objektets egne
+  koordinater (`doc/gradient.mjs`).
+
+Gjenstår: gradient-annotator med flyttbare stopp på canvas, ellipse-aspekt for radial, midtpunkter,
+gradient på strek langs og på tvers, gradientswatches, ekte gradienter i PDF/EPS (shading), og globale
+swatches.
+
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
 | Oppgave | Status |
@@ -314,7 +333,7 @@ Outline Stroke (D3.1) og Scissors/Knife-verktøy (D2.8).
 | D1.12 Send til Cut v1 | Ferdig (se 2.2) |
 | D2.1 Tekst | Punkt-, område- og path-tekst, system-/Google-fonter, shaping, variable akser, outlines, Character og Paragraph (2.6 til 2.11); se 2.11 for det som gjenstår |
 | D2.2 Pathfinder, Compound, Clipping | Pathfinder, compound paths og klippemasker ferdig (2.12); Draw Inside og lagklipping gjenstår |
-| D2.3 Gradienter og Swatches | Swatches ferdig (solide); gradienter og globale swatches gjenstår |
+| D2.3 Gradienter og Swatches | Swatches (solide) og gradienter ferdig (2.14); globale swatches, gradientswatches og PDF-shading gjenstår |
 | D2.4 Path-kommandoer | Ferdig (2.13): Join, Average, Reverse, Add/Remove Anchor Points, Clean Up, Offset Path, Simplify; Smooth og Split Into Grid gjenstår |
 | D2.5 SVG eksport/import | SVG-eksport ferdig (se 2.5); SVG-import finnes i enkel form |
 | D2.6 PDF-eksport | Ferdig (Codex): Save PDF-dialog med forhåndsinnstillinger, lag, merker, bevar redigering; også EPS og DXF. Se WORK_LOG «Eksport del 1 og 2» |
@@ -335,7 +354,8 @@ SVG-, PNG- og JPEG-eksport er gjort (2.5).
 1. **D2.1 Tekst** er ferdig i grunnform (2.6 til 2.11). Resten (kerning-modus, justert tekst, innrykk,
    blandede stiler, klammer for tekst på path, reflow med canvas-håndtak) tas senere.
    D2.2 compound paths og klippemasker er gjort (2.12).
-2. D2.4 path-kommandoer er gjort (2.13). **Neste: D2.3 gradienter** (Gradient-panel og -verktøy, lineær og radiell), deretter D2.8 flere verktøy.
+2. D2.4 path-kommandoer (2.13) og D2.3 gradienter (2.14) er gjort. **Neste: D2.8 flere verktøy** (Eyedropper, Pencil,
+   Scissors, Knife, Shear), deretter D2.9 History, Info og kommandosøk.
 3. Draw Inside (rest av D2.2).
 4. D2.6 PDF-eksport, D2.3 gradienter, D2.8 flere verktøy, D2.9 History/Info/kommandosøk.
 5. D2.10 Send til Cut v2.

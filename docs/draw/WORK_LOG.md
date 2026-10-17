@@ -1252,3 +1252,22 @@ stjerne med -2 mm og round joins uten selvkryssing, åpen linje; kjernetesten kj
 ett angresteg) og Simplify (punkttelling, lukket bane, ett angresteg).
 
 Neste: D2.3 gradienter.
+
+## 2026-10-17: D2.3 gradienter
+
+- `doc/gradient.mjs`: standardgradient over en boks (lineær langs vinkelen, radiell fra midten),
+  gradientvektor, `vectorGradient` for verktøyet, stopp (legg til, fjern, oppdater, reverser),
+  type og vinkel, `changeGradient`, `gradientHex` (første stopp) og CSS for panelets gradientlinje.
+- `render/paper-adapter.mjs`: `color()` lager Paper-gradienter i objektets koordinater med stopp- og
+  fyllopasitet; pilspisser bruker første stopp. `localBounds(id)` for gradientgeometri.
+- Panelet `gradientPanel`, kommandoen `paint-gradient` (tasten `.`), verktøyet `gradient` (G) med egen
+  markør, linje under draget og `mergeKey` for ett angresteg. Properties viser gradienten.
+- `cut-svg.mjs` og `vector-model.mjs` bruker første stopp som farge (advarsel for PDF/EPS/DXF).
+- Testene som forventet en deaktivert Gradient-fane og -knapp er oppdatert.
+
+Verifisering: 215 Draw-enhetstester (4 nye i `gradient.test.mjs`), ny E2E `draw-gradient-workflows.mjs`
+(`--draw-gradient`): tasten `.`, PNG-piksler hvit til svart, Properties, stopp, farge, Reverse, radial,
+verktøydrag som ett angresteg, SVG `linearGradient`, første stopp i Send to Cut. Hele Draw-E2E for
+forrige commit (29da906) passerte uten feil.
+
+Neste: D2.8 flere verktøy.

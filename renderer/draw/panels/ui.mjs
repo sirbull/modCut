@@ -2,6 +2,7 @@ import { DOCK_PANELS, PANEL_DEFINITIONS, PANEL_GROUPS, clampDockSplit, groupForP
 import { insertNode, updateDocument, updateNode } from '../doc/commands.mjs';
 import { createId } from '../doc/schema.mjs';
 import { textValues } from '../doc/text.mjs';
+import { addStop, colorHex, gradientCss, isGradient, removeStop, reverseGradient, setGradientAngle, setGradientType, updateStop } from '../doc/gradient.mjs';
 import { addSwatch, documentSwatches, editSwatch, groupSwatches, rememberColor, removeSwatch } from '../doc/swatches.mjs';
 import { ROOT_CONTEXT, collectCommands, deleteLayerCommands, deleteRowCommands, duplicateCommands, filterLayerTree, flattenCommands, layerContext, mergeLayersCommands, moveCommand, moveToLayerCommands, newLayer, othersUpdates, releaseCommands, soloUpdates } from '../doc/layers.mjs';
 import { shortcutLabel } from '../keymap.mjs';
@@ -758,8 +759,11 @@ export function createPanels(shell, state, api) {
     const painted = state.document.getNode(api.paintIds()[0]), ro = state.document.readOnly;
     if (painted) {
       const summary = document.createElement('div'); summary.className = 'draw-appearance'; summary.setAttribute('aria-label','Appearance');
-      const fill = paintHex(painted.appearance.fills[0]), stroke = paintHex(painted.appearance.strokes[0]), weight = painted.appearance.strokes[0]?.width;
-      for (const [kind,label,value,panel] of [['fill','Fill',fill,'color'],['stroke','Stroke',stroke,'color'],['weight','Weight',stroke ? `${Number(weight.toFixed(3))} mm` : '—','stroke']]) {
+      // A gradient shows as its bar and opens the Gradient panel.
+      const paintOf = kind => (kind === 'fill' ? painted.appearance.fills : painted.appearance.strokes)[0]?.paint;
+      const grads = { fill: isGradient(paintOf('fill')) ? paintOf('fill') : null, stroke: isGradient(paintOf('stroke')) ? paintOf('stroke') : null };
+      const fill = paintHex(painted.appearance.fills[0]), stroke = paintHex(painted.appearance.strokes[0]) ?? (grads.stroke ? colorHex(grads.stroke.stops[0].color) : null), weight = painted.appearance.strokes[0]?.width;
+      for (const [kind,label,value,panel] of [['fill','Fill',fill,grads.fill ? 'gradient' : 'color'],['stroke','Stroke',stroke,grads.stroke ? 'gradient' : 'color'],['weight','Weight',stroke ? `${Number(weight.toFixed(3))} mm` : '—','stroke']]) {
         const line = document.createElement('div'); line.className = 'draw-appearance__line';
         if (kind !== 'weight') {
           const picker = document.createElement('input'); picker.type = 'color'; picker.className = 'draw-appearance-color'; picker.value = (value ?? '#ffffff').toLowerCase();
@@ -778,9 +782,11 @@ export function createPanels(shell, state, api) {
         }
         const b = document.createElement('button'); b.type = 'button'; b.className = 'draw-appearance__item'; b.dataset.drawOpen = kind;
         const chip = document.createElement('span'); chip.className = 'draw-appearance__chip'; chip.setAttribute('aria-hidden','true');
-        if (kind !== 'weight') { chip.style.setProperty('--paint-color',value || 'transparent'); chip.classList.toggle('is-none',!value); } else chip.classList.add('is-weight');
-        const name = document.createElement('span'); name.textContent = kind === 'weight' ? `${label} ${value}` : `${label} ${value ?? 'none'}`;
-        b.setAttribute('aria-label',`${name.textContent}: open ${panel === 'color' ? 'Color' : 'Stroke'} panel`);
+        const grad = kind === 'weight' ? null : grads[kind];
+        if (grad) chip.style.background = gradientCss(grad);
+        else if (kind !== 'weight') { chip.style.setProperty('--paint-color',value || 'transparent'); chip.classList.toggle('is-none',!value); } else chip.classList.add('is-weight');
+        const name = document.createElement('span'); name.textContent = kind === 'weight' ? `${label} ${value}` : grad ? `${label} ${grad.type === 'radial' ? 'radial' : 'linear'} gradient` : `${label} ${value ?? 'none'}`;
+        b.setAttribute('aria-label',`${name.textContent}: open ${{ color: 'Color', stroke: 'Stroke', gradient: 'Gradient' }[panel]} panel`);
         b.addEventListener('click',() => { if (kind !== 'weight') state.ui.paintFocus = kind; open(panel); if (kind !== 'weight') api.paintFocus(kind); });
         b.append(chip,name); line.append(b); summary.append(line);
       }
@@ -868,7 +874,48 @@ export function createPanels(shell, state, api) {
     host.append(row);
     if (node.kind === 'onPath') text(host,'On a path, alignment places the text between the start offset and the end of the path.');
   }
-  const PANEL_CONTENT = { character: host => characterPanel(host), paragraph: host => paragraphPanel(host), swatches: swatchesPanel, color: colorPanel, stroke: strokePanel, transparency: transparencyPanel, pathfinder: pathfinderPanel, appearance: appearancePanel, transform: host => transform(host), align: alignPanel, artboards: artboardPanel };
+  /** Gradient: type, angle, stops (colour, location, opacity), add, delete and reverse, on the focused fill or stroke. */
+  function gradientPanel(host) {
+    const target = state.ui.paintFocus === 'stroke' ? 'stroke' : 'fill', ro = state.document.readOnly;
+    paintTargets(host,target);
+    const node = state.document.getNode(api.paintIds()[0]);
+    if (!node) { text(host,'Select artwork to give its fill or stroke a gradient.'); return; }
+    const entry = (target === 'fill' ? node.appearance.fills : node.appearance.strokes)[0], g = isGradient(entry?.paint) ? entry.paint : null;
+    if (!g) {
+      const apply = button(`Apply Gradient to ${target === 'fill' ? 'Fill' : 'Stroke'}`,() => api.command('paint-gradient')); apply.dataset.drawGradientApply = ''; apply.disabled = ro; host.append(apply);
+      text(host,'Applies the last gradient you used, or white to black, across each selected object.'); return;
+    }
+    const edit = (fn, label, mergeKey = null) => api.gradient(target,fn,{ label, mergeKey });
+    const row = document.createElement('div'); row.className = 'draw-fields'; host.append(row);
+    const typeRow = document.createElement('label'); typeRow.className = 'draw-field'; const typeName = document.createElement('span'); typeName.textContent = 'Type';
+    const type = document.createElement('select'); type.className = 'select'; type.dataset.drawField = 'gradient-type'; type.disabled = ro;
+    for (const [value,label] of [['linear','Linear'],['radial','Radial']]) type.append(new Option(label,value));
+    type.value = g.type; type.addEventListener('change',() => api.run(() => edit((current,box) => setGradientType(current,type.value,box),'Gradient Type')));
+    typeRow.append(typeName,type); row.append(typeRow);
+    if (g.type === 'linear') field(row,'Angle (°)',g.angle,value => edit((current,box) => setGradientAngle(current,value,box),'Gradient Angle'),{ min:-360, max:360, key:'gradient-angle', disabled: ro });
+    // The gradient bar with one marker per stop; the selected stop is edited below.
+    const stops = g.stops, selected = Math.min(state.ui.gradientStop ?? 0, stops.length - 1);
+    const bar = document.createElement('div'); bar.className = 'draw-gradient-bar'; bar.style.background = gradientCss(g); bar.setAttribute('role','group'); bar.setAttribute('aria-label','Gradient stops');
+    stops.forEach((stop,i) => {
+      const marker = document.createElement('button'); marker.type = 'button'; marker.className = 'draw-gradient-stop'; marker.style.left = `${stop.offset * 100}%`;
+      marker.style.setProperty('--stop-color',colorHex(stop.color) ?? '#000000'); marker.dataset.drawGradientStop = String(i);
+      marker.setAttribute('aria-label',`Stop ${i + 1} at ${Math.round(stop.offset * 100)} %`); marker.setAttribute('aria-pressed',String(i === selected));
+      marker.addEventListener('click',() => { state.ui.gradientStop = i; render(); }); bar.append(marker);
+    });
+    host.append(bar);
+    const stop = stops[selected], fields = document.createElement('div'); fields.className = 'draw-fields'; host.append(fields);
+    field(fields,'Color',colorHex(stop.color)?.toLowerCase() ?? '#000000',value => edit(current => updateStop(current,selected,{ color: value.toUpperCase() }),'Gradient Stop'),{ type:'color', key:'gradient-stop-color', disabled: ro });
+    field(fields,'Location (%)',stop.offset * 100,value => { edit(current => updateStop(current,selected,{ offset: value / 100 }),'Gradient Stop',`gradient-location-${selected}`);
+      state.ui.gradientStop = [...state.document.getNode(api.paintIds()[0]).appearance[target === 'fill' ? 'fills' : 'strokes'][0].paint.stops].findIndex(s => Math.abs(s.offset - Math.min(1,Math.max(0,value / 100))) < 1e-9); },{ min:0, max:100, key:'gradient-stop-location', disabled: ro });
+    field(fields,'Opacity (%)',(stop.opacity ?? 1) * 100,value => edit(current => updateStop(current,selected,{ opacity: value / 100 }),'Gradient Stop',`gradient-opacity-${selected}`),{ min:0, max:100, key:'gradient-stop-opacity', disabled: ro });
+    const actions = document.createElement('div'); actions.className = 'draw-gradient-actions'; host.append(actions);
+    const add = iconButton('Add stop','plus',() => { edit(current => addStop(current),'Add Gradient Stop'); }); add.dataset.drawGradientAction = 'add';
+    const remove = iconButton('Delete stop','trash',() => { edit(current => removeStop(current,selected),'Delete Gradient Stop'); state.ui.gradientStop = Math.max(0,selected - 1); }); remove.dataset.drawGradientAction = 'delete'; remove.disabled = ro || stops.length <= 2;
+    const reverse = button('Reverse',() => edit(current => reverseGradient(current),'Reverse Gradient')); reverse.dataset.drawGradientAction = 'reverse';
+    add.disabled = reverse.disabled = ro; actions.append(add,remove,reverse);
+    text(host,g.type === 'linear' ? 'Angle turns the gradient around the object\'s centre. Drag with the Gradient tool to set it exactly.' : 'Radial gradients run from the centre outward.');
+  }
+  const PANEL_CONTENT = { gradient: gradientPanel, character: host => characterPanel(host), paragraph: host => paragraphPanel(host), swatches: swatchesPanel, color: colorPanel, stroke: strokePanel, transparency: transparencyPanel, pathfinder: pathfinderPanel, appearance: appearancePanel, transform: host => transform(host), align: alignPanel, artboards: artboardPanel };
   function renderFlyout() {
     const group = PANEL_GROUPS.find(g => g.id === state.ui.flyout);
     flyout.hidden = !group; if (!group) { flyoutTabs.replaceChildren(); flyoutBody.replaceChildren(); return; }

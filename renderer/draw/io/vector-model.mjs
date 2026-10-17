@@ -15,8 +15,10 @@ export const apply = (m, [x, y]) => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3]
 export const multiply = (m, n) => [m[0] * n[0] + m[2] * n[1], m[1] * n[0] + m[3] * n[1], m[0] * n[2] + m[2] * n[3], m[1] * n[2] + m[3] * n[3],
   m[0] * n[4] + m[2] * n[5] + m[4], m[1] * n[4] + m[3] * n[5] + m[5]];
 const values = (matrix) => matrix ? [matrix.a, matrix.b, matrix.c, matrix.d, matrix.tx, matrix.ty] : IDENTITY;
-const paint = (color) => color && color.type !== 'gradient' && color.alpha !== 0
-  ? { rgb: [color.red, color.green, color.blue].map((v) => Math.min(1, Math.max(0, v))), alpha: color.alpha ?? 1 } : null;
+// Gradients reach these writers as their first stop for now (PDF shadings are planned).
+const solid = (color) => color?.type === 'gradient' ? color.gradient?.stops?.[0]?.color ?? null : color;
+const paint = (value) => { const color = solid(value); return color && color.alpha !== 0
+  ? { rgb: [color.red, color.green, color.blue].map((v) => Math.min(1, Math.max(0, v))), alpha: color.alpha ?? 1 } : null; };
 
 /**
  * @param group detached Paper group (top-level children are layers when they carry a node id)
@@ -44,7 +46,7 @@ export function artworkModel(group, board, { layerName = () => null, image = nul
         }) };
       }).filter((sub) => sub.segments.length);
       const fill = paint(item.fillColor), strokeColor = paint(item.strokeColor);
-      if (item.fillColor?.type === 'gradient' || item.strokeColor?.type === 'gradient') warnings.add('Gradients are exported as no paint.');
+      if (item.fillColor?.type === 'gradient' || item.strokeColor?.type === 'gradient') warnings.add('Gradients are exported as their first colour in PDF, EPS and DXF.');
       const scale = Math.sqrt(Math.abs(m[0] * m[3] - m[1] * m[2])) || 1;
       const width = item.strokeScaling === false ? item.strokeWidth / viewZoom : item.strokeWidth * scale;
       const stroke = strokeColor && width > 0 ? { ...strokeColor, width, cap: item.strokeCap ?? 'butt', join: item.strokeJoin ?? 'miter', miter: item.miterLimit ?? 4,

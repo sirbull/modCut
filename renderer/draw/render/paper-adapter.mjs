@@ -56,7 +56,13 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
   }
   const anchors=createAnchorOverlay(scope,overlay,state,editPointToWorld,id=>editingNode(id,{logical:['direct-selection','anchor-point','delete-anchor'].includes(state.ui?.tool)}),cornerWidgets);
 
-  function color(paint) {
+  function color(paint, opacity = 1) {
+    if (paint?.type === 'linear' || paint?.type === 'radial') {
+      // Gradient geometry is in the item's own coordinates; entry opacity multiplies each stop's.
+      const stops = [...paint.stops].sort((a, b) => a.offset - b.offset).map(stop => { const c = color({ type: 'solid', color: stop.color }); c.alpha = (stop.opacity ?? 1) * opacity; return [c, stop.offset]; });
+      const a = paint.angle * Math.PI / 180, destination = [paint.origin[0] + Math.cos(a) * paint.length, paint.origin[1] - Math.sin(a) * paint.length];
+      return new scope.Color({ gradient: { stops, radial: paint.type === 'radial' }, origin: paint.origin, destination });
+    }
     if (!paint || paint.type !== 'solid') return null;
     const { space, values: v } = paint.color;
     if (space === 'rgb') return new scope.Color(...v);
@@ -149,10 +155,10 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     if (node.children || node.type === 'image') return;
     const bare = stackOwned && !asOutline && stacked(node);
     const fill = bare ? null : shown(node.appearance.fills)[0], stroke = bare ? null : shown(node.appearance.strokes)[0];
-    item.fillColor = asOutline ? null : color(fill?.paint);
-    item.strokeColor = asOutline ? '#071411' : color(stroke?.paint);
-    if (item.fillColor) item.fillColor.alpha = fill?.opacity ?? 1;
-    if (item.strokeColor && !asOutline) item.strokeColor.alpha = stroke?.opacity ?? 1;
+    item.fillColor = asOutline ? null : color(fill?.paint, fill?.opacity ?? 1);
+    item.strokeColor = asOutline ? '#071411' : color(stroke?.paint, stroke?.opacity ?? 1);
+    if (item.fillColor && fill?.paint?.type === 'solid') item.fillColor.alpha = fill?.opacity ?? 1;
+    if (item.strokeColor && !asOutline && stroke?.paint?.type === 'solid') item.strokeColor.alpha = stroke?.opacity ?? 1;
     const strokeZoom=!asOutline&&node.strokeScaling===false?scope.view.zoom:1;
     item.strokeWidth = asOutline ? 1 / scope.view.zoom : (stroke?.width ?? 0)*strokeZoom;
     item.strokeScaling = !asOutline && node.strokeScaling!==false;
@@ -184,7 +190,8 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     if (!stroke || (!stroke.startArrow && !stroke.endArrow) || node.children || node.type === 'image') return null;
     const path = item.children ? item.children[0] : item;
     if (!path?.segments?.length || path.closed || !(path.length > 0)) return null;
-    const group = new scope.Group({ insert: false }), paint = color(stroke.paint);
+    // Arrowheads take a gradient stroke's first stop as a solid colour.
+    const group = new scope.Group({ insert: false }), paint = color(stroke.paint?.stops ? { type: 'solid', color: [...stroke.paint.stops].sort((a, b) => a.offset - b.offset)[0].color } : stroke.paint);
     group.applyMatrix = false; group.matrix = new scope.Matrix(...node.transform); group.data.nodeId = node.id; group.data.arrows = true;
     if (paint) paint.alpha = stroke.opacity ?? 1;
     for (const [key, offset, sign] of [['startArrow', 0, -1], ['endArrow', path.length, 1]]) {
@@ -604,6 +611,8 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     },
     previewTransform,clearTransformPreview,
     layerColor(id){return records.get(id)?.context.color??'#006B5C';},
+    /** An object's bounds in its own coordinates, where its gradient geometry lives. */
+    localBounds(id){const node=state.document.getNode(id);if(!node||node.children)return null;const item=make(node),b=item.bounds;item.remove();return {x:b.x,y:b.y,width:b.width,height:b.height};},
     worldMatrix(id){return [...records.get(id).worldMatrix.values];},
     pointToLocal(id,point) {return new scope.Point(point).transform(records.get(id).worldMatrix.inverted());},
     pathHit(point,{handles=true,endpoints=false,shapes=false,logical=false}={}) {

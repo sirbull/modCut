@@ -21,6 +21,7 @@ import { transformedBox } from './tools/selection.mjs';
 import { SHAPE_TOOLS, shapeFromDrag } from './tools/shapes.mjs';
 import { insertNode, removeNode, replaceLeaf, updateNode, updateDocument } from './doc/commands.mjs';
 import { createNode } from './doc/schema.mjs';
+import { changeGradient, defaultGradient, isGradient, vectorGradient } from './doc/gradient.mjs';
 import { activeArtboard } from './doc/artboards.mjs';
 import { changePaint, changeStroke, paintHex } from './doc/paint.mjs';
 import { importArtwork } from './import-artwork.mjs';
@@ -40,11 +41,11 @@ import { textDialog } from './ui/dialogs.mjs';
 
 const workspaces=new WeakMap();
 export function getDrawWorkspace(root) {return workspaces.get(root) || null;}
-const implementedTools=new Set(['select','hand','zoom','artboard','type','area-type','type-on-path',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
+const implementedTools=new Set(['select','hand','zoom','artboard','gradient','type','area-type','type-on-path',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
 const commands=new Set(['undo','redo','delete','select-all','select-artboard','deselect','cancel','fit-artboard','fit-all','actual-size','zoom-in','zoom-out','outline',
   'cut','copy','paste','paste-front','paste-back','paste-place','paste-all-artboards',
   'edit-text','create-outlines','join','average','offset-path','simplify','reverse-path','add-anchors','remove-anchors','clean-up','compound-make','compound-release','clip-make','clip-release','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
-  'paint-focus','paint-swap','paint-none','paint-solid','default-paint','smart-guides','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','toggle-panels','toggle-panels-except-tools',
+  'paint-focus','paint-swap','paint-none','paint-solid','paint-gradient','default-paint','smart-guides','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','toggle-panels','toggle-panels-except-tools',
   ...PANEL_DEFINITIONS.map(p=>`panel.${p.id}`),...['left','right','up','down'].flatMap(d=>[`nudge-${d}`,`nudge-large-${d}`,`duplicate-${d}`])]);
 export function createDrawWorkspace(root,{paper=window.paper,state=createProjectDraw(),onError=console.warn,onNotice=()=>{},onImport=()=>{},onSendToCut=null,cutIsEmpty=()=>false,cutClipboard=()=>null,onExport=null,getPreferences=()=>({}),statusHost=null}={}) {
   state.ui={tool:'select',flyout:null,layerId:state.document.data.layers[0]?.id,fill:'#FFFFFF',stroke:'#071411',strokeWidth:.5,paintFocus:'fill',...state.ui};
@@ -91,6 +92,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       tool.id==='pen' ? 'Click: corner · Drag: curve · Alt: break handles · Space: move anchor · Enter/Esc: finish' :
       ['type','area-type'].includes(tool.id) ? 'Click: '+(tool.id==='type'?'point text':'area text')+' · Drag: text frame · Click existing text: edit' :
       tool.id==='type-on-path' ? 'Click a path or shape: type along it · Click existing text: edit' :
+      tool.id==='gradient' ? 'Drag across the selection: gradient direction and length · Shift: 45° steps · Click: apply gradient' :
       tool.id==='direct-selection' ? 'Drag dots: round corners · Alt: one corner / break handles · Shift: add anchors/constrain' :
       tool.id==='anchor-point' ? 'Click anchor: corner/smooth · Drag: handles · Click shape: expand to path' :
       tool.id==='artboard' ? 'Drag: create/move · Edges: resize · Alt+drag: duplicate' :
@@ -275,6 +277,19 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     const layout=await window.modcut.shapeText(textValues({...node,...patch}));
     return {...patch,character:{...patch.character,fontPostscriptName:layout.font.postscriptName,...(layout.font.reference?{googleFont:layout.font.reference}:{})},layout};
   }
+  /** Gradient edits on the first fill or stroke of each selected object; `edit(current, localBox)` returns the new gradient. */
+  function gradient(kind,edit,{label='Gradient',mergeKey=null}={}) {
+    if(state.document.readOnly)return;
+    const ids=paintIds();if(!ids.length)throw new Error('Select artwork to apply a gradient.');
+    let last=null;
+    state.history.transaction(label,()=>{for(const id of ids){
+      const node=state.document.getNode(id),entry=(kind==='stroke'?node.appearance.strokes:node.appearance.fills)[0];
+      const box=withScope(()=>renderer.localBounds(id))??{x:0,y:0,width:10,height:10},next=edit(isGradient(entry?.paint)?entry.paint:null,box,node);
+      if(next){last=next;state.history.execute(updateNode(id,{appearance:changeGradient(node.appearance,kind,next,state.ui)},{label}));}
+    }},{mergeKey});
+    if(last)state.ui.lastGradient={type:last.type,stops:structuredClone(last.stops),angle:last.angle};
+    panels?.render();
+  }
   /** Installed font families for the Character panel; loads once and re-renders the panels when ready. */
   let fontFamilyList=null;
   function fontFamilies() {
@@ -383,6 +398,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       state.history.transaction('Stroke',()=>{for(const id of ids)state.history.execute(updateNode(id,{appearance:changeStroke(state.document.getNode(id).appearance,props,state.ui)}));},{mergeKey});},
     paintFocus(kind){state.ui.paintFocus=kind;toolbar?.update();panels?.render();},
     thumbnail:id=>withScope(()=>renderer.thumbnail(id)),
+    gradient:(kind,edit,options)=>gradient(kind,edit,options),
     textStyle:(changes,label)=>textStyle(changes,label).catch(error=>{if(!destroyed)onError(error.message);}),
     fontFamilies,
     command:id=>handle(id),
@@ -622,6 +638,8 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     if(command==='smart-guides'){const settings=state.document.data.settings;state.history.execute(updateDocument({settings:{...settings,smartGuides:!settings.smartGuides}}));return;}
     if(command==='paint-focus'){state.ui.paintFocus=state.ui.paintFocus==='fill'?'stroke':'fill';toolbar.update();return;}
     if(command==='paint-none')return paint(state.ui.paintFocus,null);
+    if(command==='paint-gradient'){const kind=state.ui.paintFocus==='stroke'?'stroke':'fill',last=state.ui.lastGradient;
+      gradient(kind,(current,box)=>current??defaultGradient(box,last?{type:last.type,stops:last.stops,angle:last.angle}:{}),{label:'Gradient'});return openPanel('gradient');}
     if(command==='paint-solid'){const kind=state.ui.paintFocus==='stroke'?'stroke':'fill';return paint(kind,state.ui.lastSolid?.[kind]??(kind==='fill'?'#FFFFFF':'#071411'));}
     if(command==='default-paint'||command==='paint-swap') {
       const ids=paintIds(),swapped=command==='paint-swap';
@@ -651,7 +669,11 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   paths=createPathInteractions(canvas,state,{scope,renderer,withScope,run,select,selectionChanged,layerId:insertionParent,status,
     tool:()=>temporary?.id || state.ui.tool,closeMenus:()=>toolbar.close()});
   interactions=createInteractions(canvas,state,{scope,renderer,withScope,run,select,selectedIds,transform,artboards,status,shapeOptions,insertShape,shapeDialog,zoomAt,isolate,exitIsolation,
-    transforms,transformDialog:transformToolDialog,editText,typeOnPath:id=>editText(undefined,null,null,{pathFrom:id}),cursor,
+    transforms,transformDialog:transformToolDialog,editText,paintIds,command:id=>handle(id),
+    gradientVector(from,to,mergeKey){const kind=state.ui.paintFocus==='stroke'?'stroke':'fill',last=state.ui.lastGradient;
+      gradient(kind,(current,box,node)=>{const a=renderer.pointToLocal(node.id,from),b=renderer.pointToLocal(node.id,to);
+        return vectorGradient(current??defaultGradient(box,last?{type:last.type,stops:last.stops}:{}),[a.x,a.y],[b.x,b.y]);},{label:'Gradient',mergeKey});},
+typeOnPath:id=>editText(undefined,null,null,{pathFrom:id}),cursor,
     tool:()=>temporary?.id || state.ui.tool,zoomOut:()=>!!temporary?.zoomOut,preferences:getPreferences,closeMenus:()=>toolbar.close(),notify:message=>onError(message)});
   const unsubscribe=state.subscribe(()=>{interactions.cancel();paths.documentChanged();refresh();if(state.ui.isolation&&!isolation())isolationChanged();else renderIsolationBar();});
   function resize(){const {width,height}=stage.getBoundingClientRect();if(width<=0||height<=0)return;

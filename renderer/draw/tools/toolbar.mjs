@@ -74,7 +74,7 @@ export function createToolbar(host, state, { available, setTool, command, openPa
   const actions = document.createElement('div'); actions.className = 'draw-paint-actions'; paint.append(actions);
   const modes = document.createElement('div'); modes.className = 'draw-paint-actions draw-paint-modes'; paint.append(modes);
   for (const [id,label,glyph,host,later] of [['paint-swap','Swap fill and stroke','⇄',actions],['default-paint','Default fill and stroke','◩',actions],
-    ['paint-solid','Color','■',modes],['paint-gradient','Gradient','▤',modes,'Gradients arrive in phase 2.'],['paint-none','None','∅',modes]]) {
+    ['paint-solid','Color','■',modes],['paint-gradient','Gradient','▤',modes],['paint-none','None','∅',modes]]) {
     const button = document.createElement('button'); button.type = 'button'; button.textContent = glyph; button.setAttribute('aria-label',label); button.dataset.paintAction = id;
     button.dataset.tooltip = later ? `${label} · ${later}` : `${label} (${shortcutLabel(id,{isMac})})`; button.disabled = state.document.readOnly || !!later;
     button.addEventListener('click',() => run(() => command(id))); host.append(button);
