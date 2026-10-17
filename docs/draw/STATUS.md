@@ -484,6 +484,18 @@ Kode: `webp` i `EXPORT_FORMATS` (`io/export.mjs`), `EXPORT_TARGETS` (`io/export-
 * Kode: `addSwatch`, `swatchPaint`, `linkedPaints` og `editSwatch` i `doc/swatches.mjs`; `swatch`-argumentet
   i `changePaint` og `paint`.
 
+### 2.20 Expand og Expand Appearance (D3.1, 2026-10-17)
+
+* **Object > Expand…** med Fill og Stroke: hvert fyll blir egen bane (når det er flere), og hver strek blir
+  det fylte arealet den maler. Streker som ikke utvides, blir liggende på en bane over fyllene.
+* **Object > Expand Appearance:** for objekter med flere fyll og streker (eller fyll og strek). Delene ligger
+  i samme rekkefølge som de tegnes, med sin egen opasitet og blandingsmodus; objektets opasitet og
+  blandingsmodus flyttes til gruppen.
+* **Outline Stroke** bruker samme kode og utvider nå alle synlige streker, ikke bare den første.
+* Kode: `expanded` og `expandSelection` i `pathCommand` i `index.mjs`, `expandDialog` i `ui/dialogs.mjs`.
+
+Gjenstår i D3.1: utvidelse av effekter (kommer med D3.2), stiplede streker og pilspisser.
+
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
 | Oppgave | Status |
@@ -504,7 +516,7 @@ Kode: `webp` i `EXPORT_FORMATS` (`io/export.mjs`), `EXPORT_TARGETS` (`io/export-
 | D2.8 Pencil, Shear, Eyedropper m.fl. | Ferdig (2.15): Eyedropper, Measure, Group Selection, Scissors, Pencil, Shear, Arc |
 | D2.9 Transparency, History, Info, kommandosøk | Ferdig (2.16); snapshots i History gjenstår |
 | D2.10 Send til Cut v2 | Ferdig (2.9 og 2.18): tekst til outlines, Outline Stroke, kutt ved artboard, validering, Update in Cut, bilder og alle artboards; varsel om objekter utenfor bedet gjenstår |
-| D3.1 Outline Stroke og Expand | Outline Stroke (2.18) og Expand Shape finnes; Expand Appearance gjenstår |
+| D3.1 Outline Stroke og Expand | Ferdig (2.18, 2.20): Outline Stroke, Expand, Expand Appearance; effekter, stiplede streker og pilspisser gjenstår |
 | D3.2 Appearance og effekter | Appearance ferdig; effekter gjenstår |
 | D3.3 til D3.8, fase 4 og 5 | Gjenstår |
 
@@ -523,8 +535,8 @@ SVG-, PNG- og JPEG-eksport er gjort (2.5).
 4. D2.10 Send til Cut v2 (2.18) er gjort. Alle fase 2-oppgavene finnes nå i grunnform.
 5. Hullene i fase 2: D2.5 SVG-import, D2.7 WebP og D2.3 globale swatches og gradientswatches (2.19) er
    gjort. Fra D2.1 er skalering, baseline shift, kerning, avsnitt og blandede stiler gjort (2.11).
-6. **Neste: fase 3, i rekkefølgen D3.1 Expand Appearance, D3.5 Lasso og Select-meny, D3.4 Shape Builder,
-   Eraser og Knife, D3.6 Free Transform og Split Into Grid, D3.2 effekter.**
+6. Fase 3: D3.1 Expand og Expand Appearance (2.20) er gjort. **Neste: D3.5 Lasso og Select-meny, så D3.4
+   Shape Builder, Eraser og Knife, D3.6 Free Transform og Split Into Grid, D3.2 effekter.**
 
 
 ## 5. Kjente begrensninger og risiko

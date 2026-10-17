@@ -27,6 +27,24 @@ export async function runDrawCutTwoWorkflows(client) {
   assert.equal(outlined.steps, 1, 'Outline Stroke is one undo step');
   await evaluate(`(async()=>{${active}.handle('undo')})()`);
 
+  // Expand Appearance: two fills and a stroke become three paths in paint order; Expand with only Stroke
+  // outlines the stroke and keeps the fills on one path.
+  const expandedInfo=await evaluate(`(async()=>{const w=${active},{createNode}=await import('./draw/doc/schema.mjs'),{insertNode}=await import('./draw/doc/commands.mjs'),{appearance}=await import('./draw/geometry.mjs');
+    const b=w.state.document.data.artboards[0],L=w.state.document.data.layers[0].id,look=appearance('#00FF00','#0000FF',1),extra=appearance('#FF00FF',null).fills[0];look.fills=[look.fills[0],{...extra,opacity:.5}];
+    const n=createNode('path',{subpaths:[{closed:true,segments:[[60,40],[80,40],[80,60],[60,60]].map(p=>({p:[b.x+p[0],b.y+p[1]],in:[0,0],out:[0,0]}))}],appearance:look});
+    w.state.history.execute(insertNode(L,n));w.select([n.id]);await w.handle('expand-appearance');
+    for(let i=0;i<50&&w.state.document.getNode(n.id);i++)await new Promise(r=>setTimeout(r,20));
+    const g=w.state.document.getNode(w.state.selection.ids[0]),{paintHex}=await import('./draw/doc/paint.mjs');
+    const kids=g.children?.map(k=>[paintHex(k.appearance.fills[0]),k.appearance.fills[0]?.opacity,k.appearance.strokes.length]);
+    w.handle('undo');w.select([n.id]);await w.handle('expand');
+    for(let i=0;i<100&&!document.querySelector('.draw-expand-dialog form');i++)await new Promise(r=>setTimeout(r,20));
+    const f=document.querySelector('.draw-expand-dialog form');f.elements.fill.checked=false;f.requestSubmit();
+    for(let i=0;i<50&&w.state.document.getNode(n.id);i++)await new Promise(r=>setTimeout(r,20));
+    const h=w.state.document.getNode(w.state.selection.ids[0]),strokeOnly=h.children?.map(k=>[k.appearance.fills.map(e=>paintHex(e)),k.appearance.strokes.length]);
+    w.handle('undo');w.handle('undo');return {kids,strokeOnly};})()`);
+  assert.deepEqual(expandedInfo.kids,[['#00ff00',1,0],['#ff00ff',.5,0],['#0000ff',1,0]],'Each fill and the outlined stroke, in paint order');
+  assert.deepEqual(expandedInfo.strokeOnly,[[['#00ff00','#ff00ff'],0],[['#0000ff'],0]],'Stroke only: fills stay together, the stroke is outlined');
+
   // Art for the send: the square (stroke 2 mm), a line past the right edge, a line drawn twice and a path with a 0.01 mm segment.
   await evaluate(`(async()=>{const w=${active},{createNode}=await import('./draw/doc/schema.mjs'),{insertNode}=await import('./draw/doc/commands.mjs'),{appearance}=await import('./draw/geometry.mjs');
     const b=w.state.document.data.artboards[0],L=w.state.document.data.layers[0].id,line=(pts,color='#0000FF')=>createNode('path',{subpaths:[{closed:false,segments:pts.map(p=>({p:[b.x+p[0],b.y+p[1]],in:[0,0],out:[0,0]}))}],appearance:appearance(null,color,.1)});
@@ -108,5 +126,5 @@ export async function runDrawCutTwoWorkflows(client) {
   assert.ok(Math.abs(all.line[0] - 160) < .05 && Math.abs(all.line[1] - 20) < .05, `The second artboard keeps its place: ${all.line}`);
   // The new Cut tab has no Draw document; closing it returns to the Draw tab.
   await restoreTabs();
-  console.log('PASS Draw Send to Cut v2: Outline Stroke command, outline strokes and cut at the artboard in Send to Cut, duplicates left out, tiny segments and node count reported, artboard send status, Update in Cut keeps the choices, the move in Cut and other items, one undo, images as rotated engraving rasters, all artboards in one send');
+  console.log('PASS Draw Send to Cut v2: Outline Stroke, Expand and Expand Appearance, outline strokes and cut at the artboard in Send to Cut, duplicates left out, tiny segments and node count reported, artboard send status, Update in Cut keeps the choices, the move in Cut and other items, one undo, images as rotated engraving rasters, all artboards in one send');
 }

@@ -459,6 +459,13 @@ export function placeOptionsDialog({template=false,count=1}={}) {
   form.querySelector('.modal-actions').before(note);
   return result;
 }
+/** Object > Expand: which parts become plain filled paths. */
+export function expandDialog(defaults={}) {
+  return openDrawModal({title:'Expand',submitLabel:'OK',className:'draw-expand-dialog',fields:[
+    {key:'fill',label:'Fill',type:'checkbox',value:defaults.fill!==false},
+    {key:'stroke',label:'Stroke',type:'checkbox',value:defaults.stroke!==false},
+  ]}).then(values=>values&&{fill:!!values.fill,stroke:!!values.stroke});
+}
 /** Average: line the selected anchors up horizontally, vertically or on one point. */
 export function averageDialog(axis='both') {
   return openDrawModal({title:'Average',submitLabel:'OK',className:'draw-average-dialog',fields:[

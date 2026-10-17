@@ -30,7 +30,7 @@ import { activeArtboard } from './doc/artboards.mjs';
 import { DRAW_MODE_LABELS, insideTarget, nextDrawMode, placement } from './doc/draw-mode.mjs';
 import { changePaint, changeStroke, paintHex } from './doc/paint.mjs';
 import { importArtwork } from './import-artwork.mjs';
-import { shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog,layerOptionsDialog,swatchOptionsDialog,sendToCutDialog,averageDialog,offsetDialog,simplifyDialog,pencilDialog } from './ui/dialogs.mjs';
+import { shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog,layerOptionsDialog,swatchOptionsDialog,sendToCutDialog,averageDialog,offsetDialog,simplifyDialog,pencilDialog,expandDialog } from './ui/dialogs.mjs';
 import { ALL_ARTBOARDS, artboardCutSvg } from './io/cut-svg.mjs';
 import { EXPORT_FORMATS, rasterSize, svgDocument } from './io/export.mjs';
 import { createExportController } from './export-controller.mjs';
@@ -50,7 +50,7 @@ export function getDrawWorkspace(root) {return workspaces.get(root) || null;}
 const implementedTools=new Set(['select','group-selection','pencil','hand','zoom','artboard','gradient','eyedropper','measure','scissors','type','area-type','type-on-path',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
 const commands=new Set(['undo','redo','delete','select-all','select-artboard','deselect','cancel','fit-artboard','fit-all','actual-size','zoom-in','zoom-out','outline',
   'cut','copy','paste','paste-front','paste-back','paste-place','paste-all-artboards',
-  'edit-text','create-outlines','join','average','offset-path','outline-stroke','simplify','reverse-path','add-anchors','remove-anchors','clean-up','compound-make','compound-release','clip-make','clip-release','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
+  'edit-text','create-outlines','join','average','offset-path','outline-stroke','expand','expand-appearance','simplify','reverse-path','add-anchors','remove-anchors','clean-up','compound-make','compound-release','clip-make','clip-release','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
   'paint-focus','paint-swap','paint-none','paint-solid','paint-gradient','default-paint','smart-guides','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','shear-dialog','toggle-panels','toggle-panels-except-tools','command-search','draw-mode','draw-normal','draw-behind','draw-inside',
   ...PANEL_DEFINITIONS.map(p=>`panel.${p.id}`),...['left','right','up','down'].flatMap(d=>[`nudge-${d}`,`nudge-large-${d}`,`duplicate-${d}`])]);
 export function createDrawWorkspace(root,{paper=window.paper,state=createProjectDraw(),onError=console.warn,onNotice=()=>{},onImport=()=>{},onSendToCut=null,cutIsEmpty=()=>false,cutClipboard=()=>null,onExport=null,getPreferences=()=>({}),statusHost=null}={}) {
@@ -667,24 +667,42 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       // The offset path goes directly above its source, which stays, as in Illustrator.
       run(()=>{apply('Offset Path',[...made].reverse().map(({id,node})=>{const {parentId,index}=doc.locate(id);return insertNode(parentId,node,index+1);}));select(made.map(m=>m.node.id));});
     };
-    if(command==='outline-stroke')return async()=>{
-      const visible=list=>(list??[]).filter(e=>!e.hidden),ids=editable().filter(id=>visible(doc.getNode(id).appearance?.strokes).some(e=>e.width>0));
-      if(!ids.length)throw new Error('Select paths or shapes with a stroke.');
-      const made=[];
-      for(const id of ids){
-        const node=base(id),stroke=visible(node.appearance.strokes)[0],[a,b,c,d]=parentWorld(id);
+    const visible=list=>(list??[]).filter(e=>!e.hidden);
+    /**
+     * Expand: each fill becomes its own path (with `fill`), each stroke the filled area it paints (with
+     * `stroke`); strokes left as they are stay on a path above the fills. Parts keep their paint order;
+     * several parts become a group carrying the object's opacity and blending.
+     */
+    async function expanded(id,{fill=true,stroke=true}={}){
+      const node=base(id),fills=visible(node.appearance.fills),strokes=visible(node.appearance.strokes).filter(e=>e.width>0),[a,b,c,d]=parentWorld(id),parts=[];
+      const part=(look,subpaths=node.subpaths,fillRule=node.fillRule)=>createNode('path',{name:'',subpaths,fillRule,appearance:{...appearance(null,null),...look}});
+      if(fill&&fills.length>1)for(const entry of fills)parts.push(part({fills:[structuredClone(entry)],strokes:[]}));
+      else if(fills.length)parts.push(part({fills:structuredClone(fills),strokes:stroke?[]:structuredClone(strokes)}));
+      if(stroke)for(const entry of strokes){
         // A stroke that does not scale is in world millimetres; the outline is built in the parent's space.
-        const width=node.strokeScaling===false?stroke.width/Math.sqrt(Math.abs(a*d-b*c)||1):stroke.width;
-        const subpaths=await outlineStroke(node.subpaths,{width,join:stroke.join??'miter',cap:stroke.cap??'butt',miterLimit:stroke.miterLimit??4});
-        if(destroyed)return;if(!subpaths.length)continue;
-        const look=appearance('#000000',null);look.fills[0]={...look.fills[0],paint:structuredClone(stroke.paint),opacity:stroke.opacity??1,blendMode:stroke.blendMode??'normal'};
-        const outline=createNode('path',{name:'',subpaths,fillRule:'nonzero',appearance:look,opacity:node.opacity,blendMode:node.blendMode});
-        // A filled object becomes a group of its fill and the outlined stroke, as in Illustrator.
-        const filled=visible(node.appearance.fills).length?{...node,appearance:{...structuredClone(node.appearance),strokes:[]}}:null;
-        made.push({id,node:filled?createNode('group',{name:'',children:[filled,outline]}):outline});
+        const width=node.strokeScaling===false?entry.width/Math.sqrt(Math.abs(a*d-b*c)||1):entry.width;
+        const subpaths=await outlineStroke(node.subpaths,{width,join:entry.join??'miter',cap:entry.cap??'butt',miterLimit:entry.miterLimit??4});
+        if(subpaths.length)parts.push(part({fills:[{paint:structuredClone(entry.paint),opacity:entry.opacity??1,blendMode:entry.blendMode??'normal',effects:[]}],strokes:[]},subpaths,'nonzero'));
       }
-      if(!made.length)throw new Error('The strokes leave no outline.');
-      run(()=>{apply('Outline Stroke',made.flatMap(({id,node})=>{const {parentId,index}=doc.locate(id);return [removeNode(id),insertNode(parentId,node,index)];}));select(made.map(m=>m.node.id));});
+      else if(!fills.length&&strokes.length)parts.push(part({fills:[],strokes:structuredClone(strokes)}));
+      if(!parts.length)return null;
+      if(parts.length===1)return {...parts[0],name:node.name,opacity:node.opacity,blendMode:node.blendMode};
+      return createNode('group',{name:node.name,opacity:node.opacity,blendMode:node.blendMode,children:parts});
+    }
+    const expandSelection=async(label,ids,options,empty)=>{
+      if(!ids.length)throw new Error(empty);
+      const made=[];for(const id of ids){const node=await expanded(id,options);if(destroyed)return;if(node)made.push({id,node});}
+      if(!made.length)throw new Error('Nothing to expand.');
+      run(()=>{apply(label,made.flatMap(({id,node})=>{const {parentId,index}=doc.locate(id);return [removeNode(id),insertNode(parentId,node,index)];}));select(made.map(m=>m.node.id));});
+    };
+    if(command==='outline-stroke')return()=>expandSelection('Outline Stroke',editable().filter(id=>visible(doc.getNode(id).appearance?.strokes).some(e=>e.width>0)),{fill:false,stroke:true},'Select paths or shapes with a stroke.');
+    if(command==='expand-appearance')return()=>expandSelection('Expand Appearance',editable().filter(id=>visible(doc.getNode(id).appearance?.fills).length+visible(doc.getNode(id).appearance?.strokes).length>1),{fill:true,stroke:true},
+      'Select objects with several fills or strokes, or a fill and a stroke.');
+    if(command==='expand')return async()=>{
+      const ids=editable();if(!ids.length)throw new Error('Select paths or shapes to expand.');
+      const values=await expandDialog(state.ui.expandDefaults??{});if(!values||destroyed)return;state.ui.expandDefaults=values;
+      if(!values.fill&&!values.stroke)return;
+      return expandSelection('Expand',ids,values,'Select paths or shapes to expand.');
     };
     if(command==='simplify')return async()=>{
       const ids=editable();if(!ids.length)throw new Error('Select paths or shapes to simplify.');

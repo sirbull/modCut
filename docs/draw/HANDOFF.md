@@ -24,8 +24,8 @@ resten står i 2.11. D2.2 compound paths og klippemasker er ferdige (2.12).
 D2.4 path-kommandoer (2.13), D2.3 gradienter (2.14), D2.8 verktøy (2.15) og D2.9 History, Info og
 kommandosøk (2.16) og Draw Normal/Behind/Inside (2.17) er ferdige. D2.10 Send til Cut v2 (2.18) er ferdig, og fase 2 er ferdig i grunnform.
 D2.5 SVG-import, D2.7 WebP og D2.3 globale swatches og gradientswatches (2.19) er ferdige.
-Fra D2.1 er skalering, baseline shift, kerning, avsnitt og blandede stiler gjort. **Neste oppgave er
-fase 3, først D3.1 Expand Appearance; se rekkefølgen i STATUS.md kapittel 4.** Kjør `npm ci` etter pull.
+Fra D2.1 er skalering, baseline shift, kerning, avsnitt og blandede stiler gjort. D3.1 Expand og Expand
+Appearance (2.20) er ferdig. **Neste oppgave er D3.5 Lasso og Select-meny; se STATUS.md kapittel 4.** Kjør `npm ci` etter pull.
 
 **Brukerstyrt tillegg etter D2.1c:** Google Fonts og automatisk tekst til outlines ved Send to Cut
 er implementert (STATUS.md 2.9). Tekst på path er fortsatt neste ordinære del.

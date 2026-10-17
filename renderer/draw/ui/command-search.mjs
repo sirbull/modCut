@@ -10,7 +10,7 @@ const LABELS = {
   lock: 'Lock Selection', 'unlock-all': 'Unlock All', hide: 'Hide Selection', 'show-all': 'Show All',
   'edit-text': 'Edit Text', 'create-outlines': 'Create Outlines', 'send-to-cut': 'Send Artboard to Cut', 'export-as': 'Export As', 'export-screens': 'Export for Screens',
   'use-as-template': 'Use as Template', 'toggle-control-bar': 'Control Bar', 'smart-guides': 'Smart Guides',
-  join: 'Join', average: 'Average', 'offset-path': 'Offset Path', 'outline-stroke': 'Outline Stroke', simplify: 'Simplify', 'reverse-path': 'Reverse Path Direction', 'add-anchors': 'Add Anchor Points',
+  join: 'Join', average: 'Average', 'offset-path': 'Offset Path', 'outline-stroke': 'Outline Stroke', expand: 'Expand', 'expand-appearance': 'Expand Appearance', simplify: 'Simplify', 'reverse-path': 'Reverse Path Direction', 'add-anchors': 'Add Anchor Points',
   'remove-anchors': 'Remove Anchor Points', 'clean-up': 'Clean Up', 'compound-make': 'Make Compound Path', 'compound-release': 'Release Compound Path',
   'clip-make': 'Make Clipping Mask', 'clip-release': 'Release Clipping Mask', 'transform-again': 'Transform Again', 'rotate-dialog': 'Rotate', 'reflect-dialog': 'Reflect',
   'scale-dialog': 'Scale', 'shear-dialog': 'Shear', 'paint-swap': 'Swap Fill and Stroke', 'default-paint': 'Default Fill and Stroke', 'paint-none': 'None',

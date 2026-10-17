@@ -1476,3 +1476,15 @@ SVG-import-suitene passerer med den nye motoren. Hele Draw-E2E for 5090d92 (avsn
 passerte; bare autolagringsflaken stoppet.
 
 Neste: fase 3, først D3.1 Expand Appearance.
+
+## 2026-10-17: D3.1 Expand og Expand Appearance
+
+- `index.mjs`: `expanded(id,{fill,stroke})` lager delene (fyll for seg, omrissede streker) i tegnerekkefølge;
+  `expandSelection` bytter objektene i ett angresteg. Kommandoene `expand` (med `expandDialog`),
+  `expand-appearance` og `outline-stroke` bruker den. Object-menyen har Expand… og Expand Appearance.
+
+Verifisering: `--draw-cut-two` utvider et objekt med to fyll og en strek, og med bare Stroke valgt.
+Hele Draw-E2E for 5b8ff8d (blandede stiler): alle 33 Draw-suiter og prosjekttestene passerte; kjøringen stoppet
+i krasj- og relanseringstesten («DevTools connection closed»), som passerte sist den ble nådd (run 14).
+
+Neste: D3.5 Lasso og Select-meny.
