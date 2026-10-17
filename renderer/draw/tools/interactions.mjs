@@ -1,4 +1,5 @@
 import { shapeFromDrag, SHAPE_TOOLS } from './shapes.mjs';
+import { groupSelectionTarget } from '../doc/tool-rules.mjs';
 import { CURSORS, RESIZE_CURSORS } from './cursors.mjs';
 import { resizeMatrix, rotationMatrix, transformedBox, snapTranslation } from './selection.mjs';
 import { activeArtboard } from '../doc/artboards.mjs';
@@ -8,6 +9,12 @@ export function createInteractions(canvas, state, api) {
   const {scope,renderer,withScope,run}=api, controller=new AbortController(), events={signal:controller.signal};
   let gesture=null,preview=null;
   const point=event=>{const b=canvas.getBoundingClientRect();return scope.view.viewToProject(new scope.Point(event.clientX-b.left,event.clientY-b.top));};
+  /** The colour under the pointer on the canvas, for Shift+Eyedropper. */
+  function pixelHex(event) {
+    const box=canvas.getBoundingClientRect(),ratio=canvas.width/box.width,x=Math.floor((event.clientX-box.left)*ratio),y=Math.floor((event.clientY-box.top)*ratio);
+    const [r,g,b,a]=canvas.getContext('2d').getImageData(x,y,1,1).data;
+    return a?'#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('').toUpperCase():null;
+  }
   function clearPreview() {preview?.remove();preview=null;renderer.clearTransformPreview();state.ui.transformPreviewBox=null;}
   function cancel() {const previous=gesture;gesture=null;withScope(()=>{clearPreview();if(TRANSFORM_TOOLS.includes(previous?.tool))api.transforms.setOrigin(previous.originBefore);renderer.updateView();});api.status();}
   // Clicks select the outermost group around a hit, or, in isolation mode, the outermost group inside the isolated one.
@@ -82,6 +89,10 @@ export function createInteractions(canvas, state, api) {
           Object.assign(gesture.node.params,{outerRadius:gesture.innerControl.radius,innerRadius:gesture.innerControl.radius*ratio});
         } else gesture.innerControl=null;
         preview=renderer.shapePreview(gesture.node);
+      } else if (gesture.mode==='measure') {
+        let end=p;
+        if(event.shiftKey){const d=p.subtract(gesture.start),a=Math.round(Math.atan2(d.y,d.x)/(Math.PI/4))*Math.PI/4;end=gesture.start.add(new scope.Point(Math.cos(a),Math.sin(a)).multiply(d.length));}
+        gesture.end=end;api.setMeasure([gesture.start.x,gesture.start.y],[end.x,end.y]);
       } else if (gesture.mode==='gradient') {
         let end=p;
         if(event.shiftKey){const d=p.subtract(gesture.start),a=Math.round(Math.atan2(d.y,d.x)/(Math.PI/4))*Math.PI/4;end=gesture.start.add(new scope.Point(Math.cos(a),Math.sin(a)).multiply(d.length));}
@@ -114,6 +125,24 @@ export function createInteractions(canvas, state, api) {
     if (tool==='hand' || tool==='zoom') {gesture=base;if(tool==='hand')canvas.style.cursor=CURSORS['hand-active'];return;}
     if (state.document.readOnly) {
       if (tool==='select') {const id=renderer.hit(p),t=id&&targetId(id);api.select(t ? [t] : []);} return;
+    }
+    if(tool==='eyedropper') {
+      // Click: copy the clicked object's look to the selection (or to new objects). Alt: apply the selection's look to it. Shift: only the colour under the pointer.
+      if(event.shiftKey){api.run(()=>api.eyedropper({mode:'pixel',hex:pixelHex(event)}));return;}
+      const hit=renderer.hit(p);if(!hit){api.notify?.('Click a path, shape or text to sample its appearance.');return;}
+      api.run(()=>api.eyedropper({mode:event.altKey?'apply':'sample',hitId:hit}));return;
+    }
+    if(tool==='scissors') {
+      const hit=renderer.curveHit(p,{shapes:true});
+      if(!hit){api.notify?.('Click on a path or shape outline to cut it.');return;}
+      api.run(()=>api.scissors(hit));return;
+    }
+    if(tool==='measure'){api.setMeasure(null);gesture={...base,mode:'measure'};return;}
+    if(tool==='group-selection') {
+      const hit=renderer.hit(p);
+      if(hit){const id=groupSelectionTarget(state.document,hit,state.selection.ids,state.ui.isolation);api.select(event.shiftKey?[...new Set([...state.selection.ids,id])]:[id]);gesture={...base,box:renderer.selectionBounds()};gesture.targets=targets();}
+      else{if(!event.shiftKey)api.select([]);gesture={...base,mode:'marquee',initial:state.selection.ids};}
+      return;
     }
     if(tool==='gradient') {
       // Drag sets the gradient vector on the selection; clicking an object selects it first.
@@ -169,7 +198,9 @@ export function createInteractions(canvas, state, api) {
     if (drag.tool==='zoom') {if(!drag.scrubbed)api.zoomAt(drag.start,event.altKey || api.zoomOut() ? .8 : 1.25);return;}
     run(()=>{
       if (state.document.readOnly)return;
-      if(drag.mode==='gradient') {
+      if(drag.mode==='measure') {
+        if(drag.end)api.setMeasure([drag.start.x,drag.start.y],[drag.end.x,drag.end.y]);
+      }else if(drag.mode==='gradient') {
         if(!moved)api.command('paint-gradient');
       }else if(drag.mode==='text-frame') {
         const rectangle=drag.rectangle,frame=moved&&rectangle?.width>=.1&&rectangle?.height>=.1?rectangle:null;

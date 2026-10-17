@@ -22,6 +22,7 @@ import { SHAPE_TOOLS, shapeFromDrag } from './tools/shapes.mjs';
 import { insertNode, removeNode, replaceLeaf, updateNode, updateDocument } from './doc/commands.mjs';
 import { createNode } from './doc/schema.mjs';
 import { changeGradient, defaultGradient, isGradient, vectorGradient } from './doc/gradient.mjs';
+import { sampleAppearance, applySampleCommands, measure } from './doc/tool-rules.mjs';
 import { activeArtboard } from './doc/artboards.mjs';
 import { changePaint, changeStroke, paintHex } from './doc/paint.mjs';
 import { importArtwork } from './import-artwork.mjs';
@@ -32,6 +33,7 @@ import { createExportController } from './export-controller.mjs';
 import { layerOptionsPatch, templateLayerCommands, isOutputNode } from './doc/layers.mjs';
 import { compoundCommands, releaseCompoundCommands, clipCommands, releaseClipCommands } from './doc/compound.mjs';
 import { offsetPaths, flattenPath } from './geom/kernel-js.mjs';
+import { cutSubpath } from './geom/path-commands.mjs';
 import { addAnchorPoints, removeAnchorPoints, reverseSubpaths, averagePoints, joinSubpaths, closeSubpath, cleanUpTargets, mapSubpath } from './geom/path-commands.mjs';
 import { toolCursor } from './tools/cursors.mjs';
 import { alignReference, alignOffsets, distributeOffsets, spacingOffsets } from './geom/align.mjs';
@@ -41,7 +43,7 @@ import { textDialog } from './ui/dialogs.mjs';
 
 const workspaces=new WeakMap();
 export function getDrawWorkspace(root) {return workspaces.get(root) || null;}
-const implementedTools=new Set(['select','hand','zoom','artboard','gradient','type','area-type','type-on-path',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
+const implementedTools=new Set(['select','group-selection','hand','zoom','artboard','gradient','eyedropper','measure','scissors','type','area-type','type-on-path',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
 const commands=new Set(['undo','redo','delete','select-all','select-artboard','deselect','cancel','fit-artboard','fit-all','actual-size','zoom-in','zoom-out','outline',
   'cut','copy','paste','paste-front','paste-back','paste-place','paste-all-artboards',
   'edit-text','create-outlines','join','average','offset-path','simplify','reverse-path','add-anchors','remove-anchors','clean-up','compound-make','compound-release','clip-make','clip-release','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
@@ -93,6 +95,10 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       ['type','area-type'].includes(tool.id) ? 'Click: '+(tool.id==='type'?'point text':'area text')+' · Drag: text frame · Click existing text: edit' :
       tool.id==='type-on-path' ? 'Click a path or shape: type along it · Click existing text: edit' :
       tool.id==='gradient' ? 'Drag across the selection: gradient direction and length · Shift: 45° steps · Click: apply gradient' :
+      tool.id==='eyedropper' ? 'Click: copy appearance to the selection · Alt: apply the selection\'s appearance · Shift: colour under the pointer' :
+      tool.id==='measure' ? (state.ui.measurement?measurementText(state.ui.measurement):'Drag: distance and angle · Shift: 45° steps') :
+      tool.id==='scissors' ? 'Click a path: cut it there (a closed path opens, an open path splits)' :
+      tool.id==='group-selection' ? 'Click: object · Click again: its group, one level up per click · Shift: add' :
       tool.id==='direct-selection' ? 'Drag dots: round corners · Alt: one corner / break handles · Shift: add anchors/constrain' :
       tool.id==='anchor-point' ? 'Click anchor: corner/smooth · Drag: handles · Click shape: expand to path' :
       tool.id==='artboard' ? 'Drag: create/move · Edges: resize · Alt+drag: duplicate' :
@@ -277,6 +283,32 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     const layout=await window.modcut.shapeText(textValues({...node,...patch}));
     return {...patch,character:{...patch.character,fontPostscriptName:layout.font.postscriptName,...(layout.font.reference?{googleFont:layout.font.reference}:{})},layout};
   }
+  const measurementText=m=>`D ${m.distance.toFixed(2)} mm · W ${m.dx.toFixed(2)} · H ${(-m.dy).toFixed(2)} · ∠ ${m.angle.toFixed(1)}°`;
+  /** Measure: a line on the canvas and the distance, offsets and angle in the status bar. */
+  function setMeasure(from,to=null){state.ui.measurement=from&&to?measure(from,to):null;withScope(()=>renderer.setMeasure(from&&to?[from,to]:null));status();}
+  /** Eyedropper: `sample` copies the clicked object's look, `apply` gives it the selection's look, `pixel` takes a colour. */
+  function eyedropper({mode,hitId=null,hex=null}) {
+    if(state.document.readOnly)return;
+    const doc=state.document,kind=state.ui.paintFocus==='stroke'?'stroke':'fill',commit=(label,commands)=>{if(commands.length)state.history.transaction(label,()=>commands.forEach(c=>state.history.execute(c)));};
+    if(mode==='pixel'){if(!hex)throw new Error('There is no colour under the pointer.');return paint(kind,hex);}
+    if(mode==='apply'){const source=paintIds()[0];if(!source)throw new Error('Select the object whose appearance you want to apply, then Alt-click.');return commit('Eyedropper',applySampleCommands(doc,[hitId],sampleAppearance(doc.getNode(source))));}
+    const sample=sampleAppearance(doc.getNode(hitId)),targets=selectedIds().filter(id=>id!==hitId);
+    if(targets.length)return commit('Eyedropper',applySampleCommands(doc,targets,sample));
+    // Nothing selected: the sample becomes the paint for new objects.
+    state.ui.fill=paintHex(sample.appearance.fills[0])?.toUpperCase()??null;state.ui.stroke=paintHex(sample.appearance.strokes[0])?.toUpperCase()??null;
+    if(sample.appearance.strokes[0])state.ui.strokeWidth=sample.appearance.strokes[0].width;
+    toolbar?.update();panels?.render();
+  }
+  /** Scissors: cut at the clicked point; an open path splits into the original and a new path above it. */
+  function scissors(hit) {
+    if(state.document.readOnly)return;
+    const doc=state.document,node=doc.getNode(hit.nodeId),base=node.type==='shape'?withScope(()=>renderer.expandedShape(node.id)):node;
+    const parts=cutSubpath(base.subpaths[hit.subpath],hit.segment,hit.t),subpaths=[...base.subpaths];subpaths.splice(hit.subpath,1,parts[0]);
+    const commands=[node.type==='shape'?replaceLeaf(node.id,{...base,subpaths}):updateNode(node.id,{subpaths},{label:'Scissors'})],ids=[node.id];
+    if(parts[1]){const piece=createNode('path',{name:'',subpaths:[parts[1]],fillRule:base.fillRule,appearance:structuredClone(base.appearance),opacity:base.opacity,blendMode:base.blendMode,
+      ...(base.strokeScaling!==undefined?{strokeScaling:base.strokeScaling}:{})});const {parentId,index}=doc.locate(node.id);commands.push(insertNode(parentId,piece,index+1));ids.push(piece.id);}
+    state.history.transaction('Scissors',()=>commands.forEach(c=>state.history.execute(c)));select(ids);
+  }
   /** Gradient edits on the first fill or stroke of each selected object; `edit(current, localBox)` returns the new gradient. */
   function gradient(kind,edit,{label='Gradient',mergeKey=null}={}) {
     if(state.document.readOnly)return;
@@ -386,6 +418,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   function setTool(id) {
     if(!implementedTools.has(id) || state.document.readOnly && !['select','hand','zoom'].includes(id))return;
     if(id!==state.ui.tool&&['direct-selection','anchor-point','delete-anchor'].some(tool=>tool===id||tool===state.ui.tool))state.selection.set(state.selection.ids);
+    if(state.ui.tool==='measure'&&id!=='measure'&&state.ui.measurement)setMeasure(null);
     interactions?.cancel();paths?.finish();toolbar?.close();temporary=null;state.ui.tool=id;canvas.dataset.tool=id;canvas.style.cursor=cursor();
     withScope(()=>renderer.select());toolbar?.update();panels?.render();hint.hidden=state.document.data.layers.some(l=>l.children.length)||state.document.readOnly||id!=='select';status();
   }
@@ -670,6 +703,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     tool:()=>temporary?.id || state.ui.tool,closeMenus:()=>toolbar.close()});
   interactions=createInteractions(canvas,state,{scope,renderer,withScope,run,select,selectedIds,transform,artboards,status,shapeOptions,insertShape,shapeDialog,zoomAt,isolate,exitIsolation,
     transforms,transformDialog:transformToolDialog,editText,paintIds,command:id=>handle(id),
+    eyedropper,scissors,setMeasure,
     gradientVector(from,to,mergeKey){const kind=state.ui.paintFocus==='stroke'?'stroke':'fill',last=state.ui.lastGradient;
       gradient(kind,(current,box,node)=>{const a=renderer.pointToLocal(node.id,from),b=renderer.pointToLocal(node.id,to);
         return vectorGradient(current??defaultGradient(box,last?{type:last.type,stops:last.stops}:{}),[a.x,a.y],[b.x,b.y]);},{label:'Gradient',mergeKey});},

@@ -21,7 +21,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
   const items = new Map(), records = new Map(), boardItems = new Map(), thumbnails = new Map();
   const worldBounds = new Map(), paintedBounds = new Map();
   const editPreviews=new Map(),pathPreviewHidden=new Set();
-  let pathPreview=null;
+  let pathPreview=null,measureLine=null;
   const transformPreviewIds=new Set();let transformPreview=null,transformPreviewOptions=null;
   let destroyed = false, outline = !!state.ui?.outline;
   let textPreview = null, textPreviewFrame=null;
@@ -596,6 +596,12 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     cornerHandle(point){return cornerWidgets().find(c=>c.point.getDistance(point)<=7/scope.view.zoom)??null;},
     editSpaceId(id){return state.document.getNode(id)?.type==='shape'?state.document.locate(id).parentId:id;},
     setEditPreview(nodes=[]){editPreviews.clear();for(const node of nodes)editPreviews.set(node.id,node);updateView();},
+    /** Measure tool line in the overlay; null clears it. */
+    setMeasure(points){measureLine?.remove();measureLine=null;if(!points)return scope.view.update();
+      const [a,b]=points.map(p=>new scope.Point(...p)),w=1/scope.view.zoom;
+      measureLine=new scope.Group({insert:false,children:[new scope.Path.Line({from:a,to:b,strokeColor:'#FFFFFF',strokeWidth:3*w}),new scope.Path.Line({from:a,to:b,strokeColor:'#C0392B',strokeWidth:w}),
+        ...[a,b].map(center=>new scope.Path.Circle({center,radius:3*w,fillColor:'#FFFFFF',strokeColor:'#C0392B',strokeWidth:w}))]});
+      overlay.addChild(measureLine);scope.view.update();},
     /** Proposed paths for Offset Path and Simplify: drawn with their paint over the artwork; `hide` lists originals to hide meanwhile. */
     previewPaths(entries=[],hide=[]){
       pathPreview?.remove();pathPreview=null;pathPreviewHidden.clear();for(const id of hide)pathPreviewHidden.add(id);

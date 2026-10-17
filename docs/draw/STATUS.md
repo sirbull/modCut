@@ -4,7 +4,7 @@
 > Detaljer: [hovedplanen](../DRAW_WORKSPACE.md) (spesifikasjon og byggeplan),
 > [RIGHT_PANELS.md](RIGHT_PANELS.md) (høyresiden), [WORK_LOG.md](WORK_LOG.md) (hva som er gjort, dag for dag)
 > og [HANDOFF.md](HANDOFF.md) (overlevering til neste agent).
-> Sist oppdatert: 2026-10-17 (gradienter). Arbeidsgren: `feat/vector-draw` (Claude og Codex
+> Sist oppdatert: 2026-10-17 (verktøy, D2.8 del A). Arbeidsgren: `feat/vector-draw` (Claude og Codex
 > jobber begge der; hent alltid før du starter, og kjør `npm ci` ved endrede avhengigheter).
 
 ## 1. Kort oppsummert
@@ -321,6 +321,23 @@ Gjenstår: gradient-annotator med flyttbare stopp på canvas, ellipse-aspekt for
 gradient på strek langs og på tvers, gradientswatches, ekte gradienter i PDF/EPS (shading), og globale
 swatches.
 
+### 2.15 Verktøy, del A (D2.8, 2026-10-17)
+
+* **Eyedropper (I):** klikk på et objekt kopierer fyll, strek, opasitet og blandingsmodus til utvalget
+  (ett angresteg, også inn i grupper); uten utvalg blir det fyll og strek for nye objekter. **Alt-klikk**
+  gir objektet du klikker utvalgets utseende. **Shift-klikk** henter fargen under pekeren (også fra
+  bilder og gradienter) til fyll eller strek etter fokus.
+* **Measure (i Eyedropper-gruppen):** dra for avstand, bredde, høyde og vinkel (mot klokka) i
+  statuslinjen, med en rød linje på canvas. Shift låser til 45°. Linjen forsvinner ved verktøybytte.
+* **Group Selection (i Direct Selection-gruppen):** første klikk velger objektet, hvert nytt klikk ett
+  gruppenivå opp (aldri laget; innenfor en isolert gruppe). Dra flytter, Shift legger til.
+* **Scissors (C):** klikk på en bane eller form. En lukket bane åpnes der (begge ender i klikkpunktet);
+  en åpen bane deles i to, og den nye delen legges rett over. Ett angresteg.
+* Kode: `doc/tool-rules.mjs` (Eyedropper, Measure, Group Selection) og `cutSubpath` i
+  `geom/path-commands.mjs`. Hvert verktøy har egen markør.
+
+Del B (neste): Pencil (N), Shear og Arc.
+
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
 | Oppgave | Status |
@@ -338,7 +355,7 @@ swatches.
 | D2.5 SVG eksport/import | SVG-eksport ferdig (se 2.5); SVG-import finnes i enkel form |
 | D2.6 PDF-eksport | Ferdig (Codex): Save PDF-dialog med forhåndsinnstillinger, lag, merker, bevar redigering; også EPS og DXF. Se WORK_LOG «Eksport del 1 og 2» |
 | D2.7 Raster-eksport | PNG og JPEG (2.5) og Export for Screens med skala og suffiks (WORK_LOG «Eksport del 3») ferdig; WebP gjenstår |
-| D2.8 Pencil, Shear, Eyedropper m.fl. | Gjenstår |
+| D2.8 Pencil, Shear, Eyedropper m.fl. | Del A ferdig (2.15): Eyedropper, Measure, Group Selection, Scissors; Pencil, Shear og Arc gjenstår |
 | D2.9 Transparency, History, Info, kommandosøk | Transparency ferdig; resten gjenstår |
 | D2.10 Send til Cut v2 | Automatisk tekst til outlines ferdig (2.9); øvrige v2-deler gjenstår |
 | D3.1 Outline Stroke og Expand | Gjenstår (Expand Shape finnes) |
@@ -354,8 +371,8 @@ SVG-, PNG- og JPEG-eksport er gjort (2.5).
 1. **D2.1 Tekst** er ferdig i grunnform (2.6 til 2.11). Resten (kerning-modus, justert tekst, innrykk,
    blandede stiler, klammer for tekst på path, reflow med canvas-håndtak) tas senere.
    D2.2 compound paths og klippemasker er gjort (2.12).
-2. D2.4 path-kommandoer (2.13) og D2.3 gradienter (2.14) er gjort. **Neste: D2.8 flere verktøy** (Eyedropper, Pencil,
-   Scissors, Knife, Shear), deretter D2.9 History, Info og kommandosøk.
+2. D2.4 path-kommandoer (2.13), D2.3 gradienter (2.14) og D2.8 del A (2.15) er gjort. **Neste: D2.8 del B**
+   (Pencil, Shear, Arc), deretter D2.9 History, Info og kommandosøk.
 3. Draw Inside (rest av D2.2).
 4. D2.6 PDF-eksport, D2.3 gradienter, D2.8 flere verktøy, D2.9 History/Info/kommandosøk.
 5. D2.10 Send til Cut v2.

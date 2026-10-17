@@ -29,6 +29,7 @@ import { runDrawCharacterWorkflows } from './draw-character-workflows.mjs';
 import { runDrawCompoundWorkflows } from './draw-compound-workflows.mjs';
 import { runDrawPathCommandWorkflows } from './draw-path-commands-workflows.mjs';
 import { runDrawGradientWorkflows } from './draw-gradient-workflows.mjs';
+import { runDrawToolsTwoWorkflows } from './draw-tools-two-workflows.mjs';
 import { runDrawTextOutlineWorkflows } from './draw-text-outline-workflows.mjs';
 import { runDrawFeedbackWorkflows } from './draw-feedback-workflows.mjs';
 import { runWorkflows, verifyRecoveredSession } from "./workflows.mjs";
@@ -88,6 +89,9 @@ try {
   } else if (process.argv.includes('--draw-outlines')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawTextOutlineWorkflows(first);first.socket.close();
+  } else if (process.argv.includes('--draw-tools-two')) {
+    for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
+    await runDrawToolsTwoWorkflows(first);first.socket.close();
   } else if (process.argv.includes('--draw-gradient')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawGradientWorkflows(first);first.socket.close();
@@ -184,6 +188,7 @@ try {
     await runDrawCompoundWorkflows(first);
     await runDrawPathCommandWorkflows(first);
     await runDrawGradientWorkflows(first);
+    await runDrawToolsTwoWorkflows(first);
     await runDrawTextOutlineWorkflows(first);
     const expected = await runProjectWorkflows(first, profile);
     first.socket.close();

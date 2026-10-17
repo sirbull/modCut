@@ -4,7 +4,7 @@
  * Live corners are baked first, as Illustrator expands them before editing anchors.
  */
 import { bakeCorners } from './corners.mjs';
-import { reversePath, deleteAnchors } from './path-editing.mjs';
+import { reversePath, deleteAnchors, splitCurve } from './path-editing.mjs';
 
 const JOIN_TOLERANCE = .01; // mm: endpoints closer than this become one anchor
 const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
@@ -84,4 +84,26 @@ export function cleanUpTargets(doc) {
     if (n.type === 'text') return !n.content.runs.map((r) => r.text).join('').trim();
     return false;
   }).map((n) => n.id);
+}
+
+/**
+ * Scissors: cut a subpath at curve `index`, parameter `t` (0 or 1 cut at an anchor). A closed path
+ * opens there (both ends on the cut point); an open path becomes two.
+ */
+export function cutSubpath(subpath, index, t) {
+  let path = plain(subpath), at;
+  const n = path.segments.length, curves = path.closed ? n : n - 1;
+  if (index < 0 || index >= curves) throw new Error('Click on a path segment to cut it.');
+  if (t > 1e-6 && t < 1 - 1e-6) { path = splitCurve(path, index, t); at = index + 1; }
+  else at = t <= 1e-6 ? index : (index + 1) % n;
+  const s = path.segments;
+  if (path.closed) {
+    const ordered = [...s.slice(at), ...s.slice(0, at)].map((g) => structuredClone(g));
+    const end = { ...structuredClone(ordered[0]), out: [0, 0] }; ordered[0] = { ...ordered[0], in: [0, 0] };
+    return [{ closed: false, segments: [...ordered, end] }];
+  }
+  if (at === 0 || at === s.length - 1) throw new Error('Cut inside the path, not at its end.');
+  const first = s.slice(0, at + 1).map((g) => structuredClone(g)), second = s.slice(at).map((g) => structuredClone(g));
+  first.at(-1).out = [0, 0]; second[0].in = [0, 0];
+  return [{ closed: false, segments: first }, { closed: false, segments: second }];
 }

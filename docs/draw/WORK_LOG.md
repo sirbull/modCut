@@ -1272,3 +1272,17 @@ forrige commit (29da906) passerte uten feil.
 Hele Draw-E2E for gradient-commiten (b644831) passerte også: 30 av 30 suiter, uten feil.
 
 Neste: D2.8 flere verktøy.
+
+## 2026-10-17: D2.8 del A, Eyedropper, Measure, Group Selection og Scissors
+
+- `doc/tool-rules.mjs`: `sampleAppearance`, `applySampleCommands`, `measure` (vinkel mot klokka,
+  uten -0) og `groupSelectionTarget`. `geom/path-commands.mjs`: `cutSubpath`.
+- `tools/interactions.mjs`: verktøyene `eyedropper` (Shift leser lerretets piksel med `pixelHex`),
+  `measure`, `group-selection` og `scissors` (bruker `renderer.curveHit`). Markører i `cursors.mjs`.
+- `index.mjs`: `eyedropper`, `scissors` og `setMeasure`; statuslinjen viser målingen.
+  `renderer.setMeasure` tegner målelinjen i overlegget.
+
+Verifisering: 219 Draw-enhetstester (4 nye i `tool-rules.test.mjs`), ny E2E
+`draw-tools-two-workflows.mjs` (`--draw-tools-two`).
+
+Neste: D2.8 del B, Pencil, Shear og Arc.
