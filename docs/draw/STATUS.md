@@ -529,6 +529,22 @@ velger hele objekter med Alt+Mod.
 Gjenstår i D3.4: Path Eraser (visker deler av åpne baner), Shape Builder-valg (gap detection,
 fargeplukking), og Eraser med trykkfølsomhet.
 
+### 2.23 Transform Each, Split Into Grid og Free Transform (D3.6, 2026-10-17)
+
+* **Object > Transform > Transform Each…** (Mod+Shift+Alt+D): skalering (horisontal og vertikal), flytting,
+  rotasjon og speiling X/Y for hvert valgte objekt rundt sitt eget referansepunkt (ni valg), med **Random**
+  (hver verdi ganges med en tilfeldig faktor per objekt) og **Copy**. Ett angresteg.
+* **Object > Path > Split Into Grid…:** hver valgt bane eller form blir rader x kolonner rektangler innenfor
+  sine grenser, med rad- og kolonnemellomrom i mm og samme utseende. «Add Guides» venter på hjelpelinjer
+  som dokumentobjekter.
+* **Free Transform (E):** dra et hjørne av utvalgsboksen for fri forvrengning (de andre hjørnene står);
+  baner og former, også inne i grupper, følger bilineært, med live forhåndsvisning og ett angresteg.
+  Skalering og rotasjon gjøres som før med Selection-verktøyets boks.
+* Kode: `geom/transform-each.mjs` (`transformEachMatrix`, `gridCells`, `distortSubpaths`), kommandoene i
+  `pathCommand` og `freeDistort*` i `index.mjs`, gesten i `tools/interactions.mjs`.
+
+Gjenstår i D3.6: perspektiv (Shift i Free Transform) og forhåndsvisning i Transform Each-dialogen.
+
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
 | Oppgave | Status |
@@ -554,7 +570,8 @@ fargeplukking), og Eraser med trykkfølsomhet.
 | D3.3 Image Trace | Gjenstår |
 | D3.4 Shape Builder, Eraser og Knife | Ferdig (2.22); Path Eraser gjenstår |
 | D3.5 Magic Wand, Lasso, Select-meny | Ferdig (2.21) |
-| D3.6 til D3.8, fase 4 og 5 | Gjenstår |
+| D3.6 Free Transform, Transform Each, Split Into Grid | Ferdig (2.23); perspektiv gjenstår |
+| D3.7, D3.8, fase 4 og 5 | Gjenstår |
 
 ## 4. Rekkefølge videre
 
@@ -572,8 +589,8 @@ SVG-, PNG- og JPEG-eksport er gjort (2.5).
 5. Hullene i fase 2: D2.5 SVG-import, D2.7 WebP og D2.3 globale swatches og gradientswatches (2.19) er
    gjort. Fra D2.1 er skalering, baseline shift, kerning, avsnitt og blandede stiler gjort (2.11).
 6. Fase 3: D3.1 Expand og Expand Appearance (2.20) og D3.5 Select-meny, Magic Wand og Lasso (2.21) er gjort.
-   D3.4 Shape Builder, Knife og Eraser (2.22) er også gjort. **Neste: D3.6 Free Transform, Transform Each
-   og Split Into Grid, så D3.2 effekter.**
+   D3.4 Shape Builder, Knife og Eraser (2.22) og D3.6 Free Transform, Transform Each og Split Into Grid
+   (2.23) er også gjort. **Neste: D3.2 effekter (Drop Shadow, Offset Path, Round Corners som levende effekter).**
 
 
 ## 5. Kjente begrensninger og risiko

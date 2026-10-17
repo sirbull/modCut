@@ -472,6 +472,35 @@ export function magicWandDialog(defaults={}) {
     {key:'opacityTolerance',label:'Opacity tolerance (%)',type:'number',value:defaults.opacityTolerance??5,min:0,max:100,step:1},
   ]}).then(v=>v&&{fill:!!v.fill,stroke:!!v.stroke,weight:!!v.weight,opacity:!!v.opacity,fillTolerance:Number(v.fillTolerance),strokeTolerance:Number(v.strokeTolerance),weightTolerance:Number(v.weightTolerance),opacityTolerance:Number(v.opacityTolerance)});
 }
+/** Transform Each: scale, move, rotate and reflect each object around its own reference point. */
+export function transformEachDialog(defaults={}) {
+  const d={scaleX:100,scaleY:100,moveX:0,moveY:0,angle:0,reflectX:false,reflectY:false,random:false,copy:false,anchor:'center',...defaults};
+  const anchors=[['top-left','Top left'],['top','Top'],['top-right','Top right'],['left','Left'],['center','Center'],['right','Right'],['bottom-left','Bottom left'],['bottom','Bottom'],['bottom-right','Bottom right']];
+  return openDrawModal({title:'Transform Each',submitLabel:'OK',className:'draw-transform-each-dialog',fields:[
+    {key:'scaleX',label:'Scale horizontal (%)',type:'number',value:d.scaleX,min:-100000,max:100000,step:'any',required:true},
+    {key:'scaleY',label:'Scale vertical (%)',type:'number',value:d.scaleY,min:-100000,max:100000,step:'any',required:true},
+    {key:'moveX',label:'Move horizontal (mm)',type:'number',value:d.moveX,min:-100000,max:100000,step:'any',required:true},
+    {key:'moveY',label:'Move vertical (mm)',type:'number',value:d.moveY,min:-100000,max:100000,step:'any',required:true},
+    {key:'angle',label:'Rotate (°)',type:'number',value:d.angle,min:-360,max:360,step:'any',required:true},
+    {key:'reflectX',label:'Reflect X',type:'checkbox',value:d.reflectX},{key:'reflectY',label:'Reflect Y',type:'checkbox',value:d.reflectY},
+    {key:'anchor',label:'Reference point',type:'select',value:d.anchor,options:anchors.map(([value,label])=>({value,label}))},
+    {key:'random',label:'Random',type:'checkbox',value:d.random},{key:'copy',label:'Copy',type:'checkbox',value:d.copy},
+  ]}).then(v=>{
+    if(!v)return null;
+    const [ax,ay]={'top-left':[0,0],top:[.5,0],'top-right':[1,0],left:[0,.5],center:[.5,.5],right:[1,.5],'bottom-left':[0,1],bottom:[.5,1],'bottom-right':[1,1]}[v.anchor]??[.5,.5];
+    return {scaleX:Number(v.scaleX),scaleY:Number(v.scaleY),moveX:Number(v.moveX),moveY:Number(v.moveY),angle:Number(v.angle),reflectX:!!v.reflectX,reflectY:!!v.reflectY,
+      random:!!v.random,copy:!!v.copy,anchor:v.anchor,reference:[ax,ay]};
+  });
+}
+/** Split Into Grid: rows, columns and gutters (mm). */
+export function splitGridDialog(defaults={}) {
+  return openDrawModal({title:'Split Into Grid',submitLabel:'OK',className:'draw-split-grid-dialog',fields:[
+    {key:'rows',label:'Rows',type:'number',value:defaults.rows??2,min:1,max:1000,step:1,required:true},
+    {key:'rowGutter',label:'Row gutter (mm)',type:'number',value:defaults.rowGutter??2,min:0,max:10000,step:'any',required:true},
+    {key:'columns',label:'Columns',type:'number',value:defaults.columns??2,min:1,max:1000,step:1,required:true},
+    {key:'columnGutter',label:'Column gutter (mm)',type:'number',value:defaults.columnGutter??2,min:0,max:10000,step:'any',required:true},
+  ]}).then(v=>v&&{rows:Math.round(Number(v.rows)),columns:Math.round(Number(v.columns)),rowGutter:Number(v.rowGutter),columnGutter:Number(v.columnGutter)});
+}
 /** Eraser Tool Options: brush diameter in mm. */
 export function eraserDialog(size=3) {
   return openDrawModal({title:'Eraser Tool Options',submitLabel:'OK',className:'draw-eraser-dialog',fields:[

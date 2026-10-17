@@ -1517,3 +1517,17 @@ Verifisering: 244 Draw-enhetstester (3 nye i `region-ops.test.mjs`), ny E2E `dra
 (`--draw-region-tools`). Hele E2E for 4800e69 (Select-menyen) passerte helt: 36 av 36.
 
 Neste: D3.6 Free Transform, Transform Each og Split Into Grid.
+
+## 2026-10-17: D3.6 Transform Each, Split Into Grid og Free Transform
+
+- `geom/transform-each.mjs`: `compose`, `transformEachMatrix` (skaler, speil og roter rundt referansepunktet,
+  så flytt; Random som faktor), `gridCells`, `distortPoint`, `distortSubpaths` og `boxCorners`.
+- `index.mjs`: `transform-each` bruker `transforms.apply` per objekt i én transaksjon (Copy samler kopiene);
+  `split-into-grid` bytter hver bane med cellene i forelderens rom; `freeDistortSession`, `freeDistortPreview`
+  (via `renderer.previewPaths`) og `freeDistort` (former blir baner med `replaceLeaf`).
+- `ui/dialogs.mjs`: `transformEachDialog` og `splitGridDialog`; menyoppføringer i `electron/main.mjs`.
+
+Verifisering: 249 Draw-enhetstester (5 i `transform-each.test.mjs`); `--draw-region-tools` dekker alle tre.
+Hele E2E for 785f19e (D3.4) passerte helt: 37 av 37.
+
+Neste: D3.2 effekter.

@@ -266,11 +266,12 @@ function buildMenu(mode = "cut") {
     template.find(item=>item.label==='Object').submenu=[{label:'Transform',submenu:[
       ...['Rotate','Reflect','Scale','Shear'].map(label=>({label:`${label}…`,click:()=>send(`${label.toLowerCase()}-dialog`)})),
       {type:'separator'},{label:'Transform Again',accelerator:acceleratorFor('transform-again',{isMac}),click:()=>send('transform-again')},
+      {label:'Transform Each…',accelerator:acceleratorFor('transform-each',{isMac}),click:()=>send('transform-each')},
     ]},{label:'Arrange',submenu:[objectItem('Bring to Front','bring-front'),objectItem('Bring Forward','bring-forward'),objectItem('Send Backward','send-backward'),objectItem('Send to Back','send-back')]},
     {type:'separator'},objectItem('Group','group'),objectItem('Ungroup','ungroup'),
     {type:'separator'},objectItem('Expand…','expand'),objectItem('Expand Appearance','expand-appearance'),{type:'separator'},{label:'Clipping Mask',submenu:[objectItem('Make','clip-make'),objectItem('Release','clip-release')]},
     {label:'Compound Path',submenu:[objectItem('Make','compound-make'),objectItem('Release','compound-release')]},
-    {label:'Path',submenu:[objectItem('Join','join'),objectItem('Average…','average'),{type:'separator'},objectItem('Offset Path…','offset-path'),objectItem('Outline Stroke','outline-stroke'),objectItem('Simplify…','simplify'),{type:'separator'},objectItem('Reverse Path Direction','reverse-path'),
+    {label:'Path',submenu:[objectItem('Join','join'),objectItem('Average…','average'),{type:'separator'},objectItem('Offset Path…','offset-path'),objectItem('Outline Stroke','outline-stroke'),objectItem('Split Into Grid…','split-into-grid'),objectItem('Simplify…','simplify'),{type:'separator'},objectItem('Reverse Path Direction','reverse-path'),
       objectItem('Add Anchor Points','add-anchors'),objectItem('Remove Anchor Points','remove-anchors'),{type:'separator'},objectItem('Clean Up','clean-up')]},
     {type:'separator'},objectItem('Lock Selection','lock'),objectItem('Unlock All','unlock-all'),objectItem('Hide Selection','hide'),objectItem('Show All','show-all')];
   }

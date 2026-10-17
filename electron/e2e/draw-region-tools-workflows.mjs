@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { inputHelpers } from './cdp.mjs';
+import { inputHelpers, wait } from './cdp.mjs';
 import { activeDraw as active, enterDraw, rememberTabs, submitNewDrawDialog } from './draw-test-helpers.mjs';
 
 /** D3.4: Shape Builder merges and deletes regions, Knife splits shapes, Eraser removes a brush stroke. */
@@ -52,6 +52,33 @@ export async function runDrawRegionToolWorkflows(client) {
   parts = (await layer()).filter(p => p.b[0] >= 59);
   assert.equal(parts.length, 2, `Erased across: ${JSON.stringify(parts)}`); assert.equal(await applied(), steps + 1);
   assert.ok(parts.every(p => p.b[3] <= 9), 'Each piece is shorter than half the square');
+  await evaluate(`(async()=>{const w=${active};w.handle('undo');w.setTool('select')})()`);
+
+  // Transform Each: two squares rotate 90° and move 5 mm, each around its own centre, in one step.
+  const pair = await add([[10, 50, 10, '#333333'], [30, 50, 10, '#333333']]);
+  await evaluate(`(async()=>(${active}.select(${JSON.stringify(pair)})))()`);
+  steps = await applied();
+  await evaluate(`(async()=>{${active}.handle('transform-each')})()`);
+  for (let i = 0; i < 100 && !await evaluate("!!document.querySelector('.draw-transform-each-dialog form')"); i++) await wait(30);
+  await evaluate("(()=>{const f=document.querySelector('.draw-transform-each-dialog form');f.elements.scaleX.value='50';f.elements.moveX.value='5';f.requestSubmit();})()"); await wait(80);
+  let boxes = (await layer()).filter(p => pair.includes(p.id)).map(p => p.b);
+  assert.deepEqual(boxes, [[18, 50, 5, 10], [38, 50, 5, 10]].map(b => b), `Each scaled around its centre and moved: ${JSON.stringify(boxes)}`);
+  assert.equal(await applied(), steps + 1, 'Transform Each is one undo step');
+  // Split Into Grid: one square becomes 2 x 2 cells with 2 mm gutters.
+  await evaluate(`(async()=>(${active}.select(['${pair[0]}'])))()`);
+  await evaluate(`(async()=>{${active}.handle('split-into-grid')})()`);
+  for (let i = 0; i < 100 && !await evaluate("!!document.querySelector('.draw-split-grid-dialog form')"); i++) await wait(30);
+  await evaluate("document.querySelector('.draw-split-grid-dialog form').requestSubmit()"); await wait(80);
+  const cells = (await evaluate(`(async()=>(${active}.state.selection.ids))()`));
+  assert.equal(cells.length, 4, 'Four cells');
+  // Free Transform (E): drag the bottom-right corner of the other square out by 10 mm; that corner moves alone.
+  await evaluate(`(async()=>{const w=${active};w.select(['${pair[1]}']);w.setTool('free-transform')})()`);
+  const before = await evaluate(`(async()=>{const w=${active},b=w.renderer.bounds('${pair[1]}'),a=w.state.document.data.artboards[0];return [b.x-a.x,b.y-a.y,b.width,b.height]})()`);
+  steps = await applied();
+  await stroke([[before[0] + before[2], before[1] + before[3]], [before[0] + before[2] + 5, before[1] + before[3] + 5], [before[0] + before[2] + 10, before[1] + before[3] + 10]]);
+  const after = await evaluate(`(async()=>{const w=${active},n=w.state.document.getNode('${pair[1]}'),a=w.state.document.data.artboards[0];return n.subpaths[0].segments.map(s=>[Math.round(s.p[0]-a.x),Math.round(s.p[1]-a.y)])})()`);
+  assert.deepEqual(after, [[38, 50], [43, 50], [53, 70], [38, 60]], `Only the dragged corner moved: ${JSON.stringify(after)}`);
+  assert.equal(await applied(), steps + 1, 'Free Distort is one undo step');
   await evaluate(`(async()=>(${active}.setTool('select')))()`); await restore();
-  console.log('PASS Draw region tools: Shape Builder merges crossed regions and Alt deletes them, Knife splits a shape, Eraser removes a brush stroke, one undo step each');
+  console.log('PASS Draw region tools: Shape Builder merges crossed regions and Alt deletes them, Knife splits a shape, Eraser removes a brush stroke, Transform Each, Split Into Grid and Free Distort, one undo step each');
 }

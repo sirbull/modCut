@@ -16,7 +16,7 @@ export function createInteractions(canvas, state, api) {
     return a?'#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('').toUpperCase():null;
   }
   function clearPreview() {preview?.remove();preview=null;renderer.clearTransformPreview();state.ui.transformPreviewBox=null;}
-  function cancel() {const previous=gesture;gesture=null;withScope(()=>{clearPreview();if(TRANSFORM_TOOLS.includes(previous?.tool))api.transforms.setOrigin(previous.originBefore);renderer.updateView();});api.status();}
+  function cancel() {const previous=gesture;gesture=null;if(previous?.mode==='free-transform')api.freeDistortPreview(null);withScope(()=>{clearPreview();if(TRANSFORM_TOOLS.includes(previous?.tool))api.transforms.setOrigin(previous.originBefore);renderer.updateView();});api.status();}
   // Clicks select the outermost group around a hit, or, in isolation mode, the outermost group inside the isolated one.
   function targetId(id) {
     let chain=state.document.ancestors(id);const iso=state.ui.isolation;
@@ -93,6 +93,8 @@ export function createInteractions(canvas, state, api) {
         // Live freehand line; points closer than half a screen pixel are skipped.
         const last=gesture.points.at(-1);if(Math.hypot(p.x-last[0],p.y-last[1])>=.5/scope.view.zoom)gesture.points.push([p.x,p.y]);
         preview=new scope.Path({segments:gesture.points,strokeColor:'#071411',strokeWidth:1/scope.view.zoom});
+      } else if (gesture.mode==='free-transform') {
+        gesture.corners[gesture.corner]=[p.x,p.y];gesture.moved=true;api.freeDistortPreview(gesture.session,gesture.corners);
       } else if (['shape-builder','knife','eraser'].includes(gesture.mode)) {
         const last=gesture.points.at(-1);if(Math.hypot(p.x-last[0],p.y-last[1])>=1/scope.view.zoom)gesture.points.push([p.x,p.y]);
         // Shape Builder shades the regions it will merge; Knife shows its line; Eraser its brush stroke.
@@ -157,6 +159,12 @@ export function createInteractions(canvas, state, api) {
       gesture={...base,mode:'shape-builder',session,points:[[p.x,p.y]]};return;
     }
     if(tool==='knife'||tool==='eraser'){gesture={...base,mode:tool,points:[[p.x,p.y]]};return;}
+    if(tool==='free-transform'){
+      // Free Distort: grab the nearest corner of the selection box (within 10 screen pixels).
+      const session=api.freeDistortSession(),corner=session?session.corners.findIndex(c=>Math.hypot(c[0]-p.x,c[1]-p.y)<=10/scope.view.zoom):-1;
+      if(corner<0){api.notify?.(session?'Drag a corner of the selection box to distort it.':'Select paths or shapes to distort.');return;}
+      gesture={...base,mode:'free-transform',session,corner,corners:session.corners.map(c=>[...c])};return;
+    }
     if(tool==='scissors') {
       const hit=renderer.curveHit(p,{shapes:true});
       if(!hit){api.notify?.('Click on a path or shape outline to cut it.');return;}
@@ -226,6 +234,8 @@ export function createInteractions(canvas, state, api) {
       if (state.document.readOnly)return;
       if(drag.mode==='pencil') {
         if(moved||drag.points.length>2)api.pencil(drag.points);
+      }else if(drag.mode==='free-transform') {
+        if(drag.moved)api.freeDistort(drag.session,drag.corners);else api.freeDistortPreview(null);
       }else if(drag.mode==='shape-builder') {
         api.shapeBuilder(drag.session,drag.points,{alt:event.altKey||drag.modifiers.alt});
       }else if(drag.mode==='knife'||drag.mode==='eraser') {

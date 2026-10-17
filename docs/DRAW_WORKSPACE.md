@@ -1440,7 +1440,7 @@ Oversikt over hva som er gjort og gjenstår, inkludert delvis ferdige oppgaver: 
 * [ ] D3.3 Image Trace
 * [x] D3.4 Shape Builder, Eraser, Knife m.fl. (Path Eraser gjenstår, se [STATUS.md](draw/STATUS.md))
 * [x] D3.5 Magic Wand, Lasso, Select-meny (se [STATUS.md](draw/STATUS.md))
-* [ ] D3.6 Free Transform, Transform Each, Split Into Grid
+* [x] D3.6 Free Transform, Transform Each, Split Into Grid (perspektiv gjenstår, se [STATUS.md](draw/STATUS.md))
 * [ ] D3.7 AI- og DXF-eksport
 * [ ] D3.8 Links, Crop Image, Document Info, Rediger i Draw
 * [ ] D4.1 Width og width profiles

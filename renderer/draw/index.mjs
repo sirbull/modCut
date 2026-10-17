@@ -7,6 +7,7 @@ import { multiply as multiplyMatrix } from './doc/arrange.mjs';
 import { stackingOrder as objectOrder } from './doc/arrange.mjs';
 import { arrangeCommands, groupCommands, hideCommands, lockCommands, showAllCommands, ungroupCommands, unlockAllCommands } from './doc/arrange.mjs';
 import { PATHFINDER_LABELS, runPathfinder, toSubpaths } from './geom/pathfinder.mjs';
+import { transformEachMatrix, gridCells, distortSubpaths, boxCorners } from './geom/transform-each.mjs';
 import { pickRegions, mergeRegions, knifeCut, erase as eraseRegion, areaOf } from './geom/region-ops.mjs';
 import { fillHex, pathfinderCommands, stackingOrder } from './doc/pathfinder-commands.mjs';
 import { cancelActiveScrub } from './ui/number-field.mjs';
@@ -32,7 +33,7 @@ import { SAME_MODES, OBJECT_KINDS, magicWand, inverseSelection, sameAs, objectsO
 import { DRAW_MODE_LABELS, insideTarget, nextDrawMode, placement } from './doc/draw-mode.mjs';
 import { changePaint, changeStroke, paintHex } from './doc/paint.mjs';
 import { importArtwork } from './import-artwork.mjs';
-import { shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog,layerOptionsDialog,swatchOptionsDialog,sendToCutDialog,averageDialog,offsetDialog,simplifyDialog,pencilDialog,expandDialog,magicWandDialog,eraserDialog,saveSelectionDialog,editSelectionDialog } from './ui/dialogs.mjs';
+import { shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog,layerOptionsDialog,swatchOptionsDialog,sendToCutDialog,averageDialog,offsetDialog,simplifyDialog,pencilDialog,expandDialog,magicWandDialog,eraserDialog,transformEachDialog,splitGridDialog,saveSelectionDialog,editSelectionDialog } from './ui/dialogs.mjs';
 import { ALL_ARTBOARDS, artboardCutSvg } from './io/cut-svg.mjs';
 import { EXPORT_FORMATS, rasterSize, svgDocument } from './io/export.mjs';
 import { createExportController } from './export-controller.mjs';
@@ -49,10 +50,10 @@ import { textDialog } from './ui/dialogs.mjs';
 
 const workspaces=new WeakMap();
 export function getDrawWorkspace(root) {return workspaces.get(root) || null;}
-const implementedTools=new Set(['select','group-selection','magic-wand','lasso','shape-builder','knife','eraser','pencil','hand','zoom','artboard','gradient','eyedropper','measure','scissors','type','area-type','type-on-path',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
+const implementedTools=new Set(['select','group-selection','magic-wand','lasso','shape-builder','knife','eraser','free-transform','pencil','hand','zoom','artboard','gradient','eyedropper','measure','scissors','type','area-type','type-on-path',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
 const commands=new Set(['undo','redo','delete','select-all','select-artboard','deselect','cancel','fit-artboard','fit-all','actual-size','zoom-in','zoom-out','outline',
   'cut','copy','paste','paste-front','paste-back','paste-place','paste-all-artboards',
-  'edit-text','create-outlines','join','average','offset-path','outline-stroke','expand','expand-appearance','simplify','reverse-path','add-anchors','remove-anchors','clean-up','compound-make','compound-release','clip-make','clip-release','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
+  'edit-text','create-outlines','join','average','offset-path','outline-stroke','expand','expand-appearance','transform-each','split-into-grid','simplify','reverse-path','add-anchors','remove-anchors','clean-up','compound-make','compound-release','clip-make','clip-release','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
   'paint-focus','paint-swap','paint-none','paint-solid','paint-gradient','default-paint','smart-guides','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','shear-dialog','toggle-panels','toggle-panels-except-tools','command-search','draw-mode','draw-normal','draw-behind','draw-inside','reselect','select-inverse','select-next-above','select-next-below','save-selection','edit-selection',
   ...Object.keys(SAME_MODES).map(m=>`select-same-${m}`),...Object.keys(OBJECT_KINDS).map(k=>`select-object-${k}`),
   ...PANEL_DEFINITIONS.map(p=>`panel.${p.id}`),...['left','right','up','down'].flatMap(d=>[`nudge-${d}`,`nudge-large-${d}`,`duplicate-${d}`])]);
@@ -105,6 +106,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       tool.id==='gradient' ? 'Drag across the selection: gradient direction and length · Shift: 45° steps · Click: apply gradient' :
       tool.id==='eyedropper' ? 'Click: copy appearance to the selection · Alt: apply the selection\'s appearance · Shift: colour under the pointer' :
       tool.id==='measure' ? (state.ui.measurement?measurementText(state.ui.measurement):'Drag: distance and angle · Shift: 45° steps') :
+      tool.id==='free-transform' ? 'Drag a corner of the selection: free distort (the other corners stay)' :
       tool.id==='shape-builder' ? 'Drag across regions of the selected shapes: merge · Alt+drag: delete regions' :
       tool.id==='knife' ? 'Drag across filled shapes to cut them (the selection, or every shape)' :
       tool.id==='eraser' ? 'Drag to erase from filled shapes (the selection, or every shape) · Enter: diameter' :
@@ -393,6 +395,29 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     if(!results.length){state.history.transaction(label,()=>session.ids.forEach(id=>state.history.execute(removeNode(id))));select([]);return;}
     const {commands,ids}=pathfinderCommands(doc,session.ids,{results,grouped:false},'divide',label);
     state.history.transaction(label,()=>commands.forEach(c=>state.history.execute(c)));select(ids);
+  }
+  /** Free Transform: the selected paths and shapes (also inside groups) distorted by moving a corner of the selection box. */
+  function freeDistortSession(){
+    const doc=state.document,box=renderer.selectionBounds();if(!box||box.width<1e-6||box.height<1e-6)return null;
+    const ids=selectedIds().flatMap(id=>doc.getNode(id)?.children?doc.descendants(id).map(n=>n.id):[id]).filter(id=>['path','shape'].includes(doc.getNode(id)?.type)&&doc.isEditable(id));
+    if(!ids.length)return null;
+    const items=withScope(()=>ids.map(id=>{const item=renderer.booleanOperand(id),world=toSubpaths(item);item.remove();
+      world.forEach((s,i)=>{const original=doc.getNode(id).type==='path'?doc.getNode(id).subpaths[i]:null;if(original)s.closed=original.closed;});return {id,world};}));
+    return {box,items,corners:boxCorners(box)};
+  }
+  function freeDistortPreview(session,corners){
+    if(!session){withScope(()=>renderer.previewPaths());return;}
+    const doc=state.document;
+    withScope(()=>renderer.previewPaths(session.items.map(({id,world})=>({subpaths:distortSubpaths(world,session.box,corners),appearance:doc.getNode(id).appearance,strokeScaling:doc.getNode(id).strokeScaling,fillRule:doc.getNode(id).fillRule,matrix:[1,0,0,1,0,0]})),session.items.map(i=>i.id)));
+  }
+  function freeDistort(session,corners){
+    const doc=state.document;freeDistortPreview(null);
+    state.history.transaction('Free Distort',()=>{for(const {id,world} of session.items){
+      const node=doc.getNode(id),{parentId}=doc.locate(id),placed=toParentSpace(parentId,{type:'path',subpaths:distortSubpaths(world,session.box,corners)});
+      if(node.type==='shape')state.history.execute(replaceLeaf(id,{...withScope(()=>renderer.expandedShape(id)),subpaths:placed.subpaths}));
+      else state.history.execute(updateNode(id,{subpaths:placed.subpaths},{label:'Free Distort'}));
+    }});
+    select(state.selection.ids);
   }
   /** Filled closed paths and shapes a Knife or Eraser stroke works on: the selection, or every one. */
   function cutTargets(){
@@ -749,6 +774,28 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       if(!made.length)throw new Error('Nothing to expand.');
       run(()=>{apply(label,made.flatMap(({id,node})=>{const {parentId,index}=doc.locate(id);return [removeNode(id),insertNode(parentId,node,index)];}));select(made.map(m=>m.node.id));});
     };
+    // Transform Each: every selected object around its own reference point; Random picks a factor per object.
+    if(command==='transform-each')return async()=>{
+      const targets=selectedIds().filter(id=>doc.isEditable(id));if(!targets.length)throw new Error('Select objects to transform.');
+      const values=await transformEachDialog(state.ui.transformEachDefaults??{});if(!values||destroyed)return;state.ui.transformEachDefaults=values;
+      run(()=>{const created=[];
+        state.history.transaction(values.copy?'Copy Transform Each':'Transform Each',()=>{for(const id of targets){
+          const box=renderer.bounds(id);if(!box)continue;
+          transforms.apply(transformEachMatrix(box,values,Math.random()),'Transform Each',{ids:[id],copy:values.copy,remember:false});created.push(...state.selection.ids);}});
+        select(values.copy?created:targets);});
+    };
+    // Split Into Grid: each selected path or shape becomes rows x columns rectangles inside its bounds.
+    if(command==='split-into-grid')return async()=>{
+      const ids=editable();if(!ids.length)throw new Error('Select paths or shapes to split.');
+      const values=await splitGridDialog(state.ui.splitGridDefaults??{});if(!values||destroyed)return;state.ui.splitGridDefaults=values;
+      run(()=>{const created=[];
+        state.history.transaction('Split Into Grid',()=>{for(const id of ids){
+          const node=doc.getNode(id),box=renderer.bounds(id),{parentId,index}=doc.locate(id);if(!box)continue;
+          const cells=gridCells(box,values);state.history.execute(removeNode(id));
+          cells.forEach((c,i)=>{const cell=toParentSpace(parentId,createNode('path',{name:node.name,subpaths:[{closed:true,segments:[[c.x,c.y],[c.x+c.width,c.y],[c.x+c.width,c.y+c.height],[c.x,c.y+c.height]].map(p=>({p,in:[0,0],out:[0,0]}))}],
+            fillRule:'nonzero',appearance:structuredClone(node.appearance),opacity:node.opacity,blendMode:node.blendMode}));state.history.execute(insertNode(parentId,cell,index+i));created.push(cell.id);});
+        }});select(created);});
+    };
     if(command==='outline-stroke')return()=>expandSelection('Outline Stroke',editable().filter(id=>visible(doc.getNode(id).appearance?.strokes).some(e=>e.width>0)),{fill:false,stroke:true},'Select paths or shapes with a stroke.');
     if(command==='expand-appearance')return()=>expandSelection('Expand Appearance',editable().filter(id=>visible(doc.getNode(id).appearance?.fills).length+visible(doc.getNode(id).appearance?.strokes).length>1),{fill:true,stroke:true},
       'Select objects with several fills or strokes, or a fill and a stroke.');
@@ -913,6 +960,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       const found=magicWand(state.document,hit,state.ui.magicWand??{}),current=selectedIds();
       select(subtract?current.filter(id=>!found.includes(id)):add?[...new Set([...current,...found])]:found);},
     lasso:(points,options)=>paths.lasso(points,options),
+    freeDistortSession,freeDistortPreview,freeDistort,
     shapeBuilderSession,shapeBuilderPreview,shapeBuilder,knife,eraser,eraserSize:()=>state.ui.eraserSize??3,
     gradientVector(from,to,mergeKey){const kind=state.ui.paintFocus==='stroke'?'stroke':'fill',last=state.ui.lastGradient;
       gradient(kind,(current,box,node)=>{const a=renderer.pointToLocal(node.id,from),b=renderer.pointToLocal(node.id,to);
