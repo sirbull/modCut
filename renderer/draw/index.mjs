@@ -10,7 +10,9 @@ import { PATHFINDER_LABELS, runPathfinder } from './geom/pathfinder.mjs';
 import { fillHex, pathfinderCommands, stackingOrder } from './doc/pathfinder-commands.mjs';
 import { cancelActiveScrub } from './ui/number-field.mjs';
 import { PANEL_DEFINITIONS } from './panels/registry.mjs';
-import { toolRegistry } from './tools/registry.mjs';
+import { TOOL_DEFINITIONS, toolRegistry } from './tools/registry.mjs';
+import { shortcutLabel } from './keymap.mjs';
+import { commandEntries, openCommandSearch } from './ui/command-search.mjs';
 import { createToolbar } from './tools/toolbar.mjs';
 import { createInteractions } from './tools/interactions.mjs';
 import { createPathInteractions, PATH_TOOLS } from './tools/paths.mjs';
@@ -48,7 +50,7 @@ const implementedTools=new Set(['select','group-selection','pencil','hand','zoom
 const commands=new Set(['undo','redo','delete','select-all','select-artboard','deselect','cancel','fit-artboard','fit-all','actual-size','zoom-in','zoom-out','outline',
   'cut','copy','paste','paste-front','paste-back','paste-place','paste-all-artboards',
   'edit-text','create-outlines','join','average','offset-path','simplify','reverse-path','add-anchors','remove-anchors','clean-up','compound-make','compound-release','clip-make','clip-release','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
-  'paint-focus','paint-swap','paint-none','paint-solid','paint-gradient','default-paint','smart-guides','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','shear-dialog','toggle-panels','toggle-panels-except-tools',
+  'paint-focus','paint-swap','paint-none','paint-solid','paint-gradient','default-paint','smart-guides','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','shear-dialog','toggle-panels','toggle-panels-except-tools','command-search',
   ...PANEL_DEFINITIONS.map(p=>`panel.${p.id}`),...['left','right','up','down'].flatMap(d=>[`nudge-${d}`,`nudge-large-${d}`,`duplicate-${d}`])]);
 export function createDrawWorkspace(root,{paper=window.paper,state=createProjectDraw(),onError=console.warn,onNotice=()=>{},onImport=()=>{},onSendToCut=null,cutIsEmpty=()=>false,cutClipboard=()=>null,onExport=null,getPreferences=()=>({}),statusHost=null}={}) {
   state.ui={tool:'select',flyout:null,layerId:state.document.data.layers[0]?.id,fill:'#FFFFFF',stroke:'#071411',strokeWidth:.5,paintFocus:'fill',...state.ui};
@@ -105,6 +107,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       tool.id==='anchor-point' ? 'Click anchor: corner/smooth · Drag: handles · Click shape: expand to path' :
       tool.id==='artboard' ? 'Drag: create/move · Edges: resize · Alt+drag: duplicate' :
       tool.id==='select' ? 'Shift: add to selection · Alt+drag: copy · Space: Hand' : 'Space: Hand · Ctrl/Cmd+Space: Zoom');
+    panels?.updateInfo();
   }
   // The canvas always shows an Illustrator-style cursor for the current or temporary tool.
   const cursor=()=>toolCursor(temporary?.id || state.ui.tool,{zoomOut:!!temporary?.zoomOut});
@@ -464,6 +467,10 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     textStyle:(changes,label)=>textStyle(changes,label).catch(error=>{if(!destroyed)onError(error.message);}),
     fontFamilies,
     command:id=>handle(id),
+    pointer:()=>lastPoint,
+    historyGoTo:index=>run(()=>{if(state.document.readOnly)return;interactions.cancel();paths.finish();
+      const applied=()=>state.history.entries.filter(entry=>entry.applied).length;
+      while(applied()>index&&state.history.undo());while(applied()<index&&state.history.redo());select(state.selection.ids);}),
     expandShapes(ids){if(state.document.readOnly||!ids.length)return;
       state.history.transaction('Expand Shape',()=>{for(const id of ids)if(state.document.getNode(id)?.type==='shape')state.history.execute(replaceLeaf(id,withScope(()=>renderer.expandedShape(id))));});select(ids);},
     pathfinder(op){if(state.document.readOnly)return;
@@ -661,6 +668,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   function handle(command) {return run(()=>{
     if(command.startsWith('tool.'))return setTool(command.slice(5));
     if(command.startsWith('panel.'))return openPanel(command.slice(6));
+    if(command==='command-search')return void openCommandSearch(commandEntries({commands:[...commands],tools:TOOL_DEFINITIONS.filter(t=>implementedTools.has(t.id)),panels:PANEL_DEFINITIONS}),{run:id=>handle(id),shortcut:id=>shortcutLabel(id,{isMac:/Mac/.test(navigator.platform)})});
     if(command==='cancel'&&(cancelActiveScrub()||panels.close()))return;
     if(paths?.handle(command)){if(command==='cancel')toolbar.close(true);return;}
     // Escape cancels a gesture in progress; otherwise it leaves isolation mode.

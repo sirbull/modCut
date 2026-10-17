@@ -915,7 +915,45 @@ export function createPanels(shell, state, api) {
     add.disabled = reverse.disabled = ro; actions.append(add,remove,reverse);
     text(host,g.type === 'linear' ? 'Angle turns the gradient around the object\'s centre. Drag with the Gradient tool to set it exactly.' : 'Radial gradients run from the centre outward.');
   }
-  const PANEL_CONTENT = { gradient: gradientPanel, character: host => characterPanel(host), paragraph: host => paragraphPanel(host), swatches: swatchesPanel, color: colorPanel, stroke: strokePanel, transparency: transparencyPanel, pathfinder: pathfinderPanel, appearance: appearancePanel, transform: host => transform(host), align: alignPanel, artboards: artboardPanel };
+  /** History: every undo step, oldest first; clicking a step undoes or redoes to it. Steps after the current one are greyed out. */
+  function historyPanel(host) {
+    const entries = state.history.entries, current = entries.filter(entry => entry.applied).length;
+    const list = document.createElement('ol'); list.className = 'draw-history'; list.setAttribute('aria-label','History');
+    [{ label: 'Open' }, ...entries].forEach((entry,index) => {
+      const item = document.createElement('li'), b = document.createElement('button'); b.type = 'button'; b.className = 'draw-history__step';
+      b.dataset.drawHistory = String(index); b.textContent = entry.label; b.disabled = state.document.readOnly;
+      b.classList.toggle('is-undone',index > current); b.setAttribute('aria-current',String(index === current));
+      b.addEventListener('click',() => api.historyGoTo(index)); item.append(b); list.append(item);
+    });
+    host.append(list);
+    text(host,entries.length ? `${current} of ${entries.length} steps applied. Click a step to go back or forward to it.` : 'Edits appear here as you make them.');
+    list.querySelector('[aria-current="true"]')?.scrollIntoView?.({ block: 'nearest' });
+  }
+  /** Info: the pointer position, the selection's bounds and paint, and the last Measure tool reading. */
+  function infoPanel(host) {
+    const grid = document.createElement('dl'); grid.className = 'draw-info'; host.append(grid);
+    const row = (key, label, value) => { const dt = document.createElement('dt'), dd = document.createElement('dd'); dt.textContent = label; dd.textContent = value; dd.dataset.drawInfo = key; grid.append(dt,dd); };
+    const mm = value => Number.isFinite(value) ? `${value.toFixed(2)} mm` : '';
+    const point = api.pointer();
+    row('x','X',point ? mm(point.x) : ''); row('y','Y',point ? mm(point.y) : '');
+    const box = api.selectedIds().length ? api.bounds() : null;
+    row('width','W',box ? mm(box.width) : ''); row('height','H',box ? mm(box.height) : '');
+    if (box) { row('left','Left',mm(box.x)); row('top','Top',mm(box.y)); }
+    const node = state.document.getNode(api.paintIds()[0]);
+    if (node?.appearance) {
+      const describe = entry => !entry ? 'None' : isGradient(entry.paint) ? `${entry.paint.type === 'radial' ? 'Radial' : 'Linear'} gradient` : paintHex(entry)?.toUpperCase() ?? 'None';
+      row('fill','Fill',describe(node.appearance.fills[0]));
+      const stroke = node.appearance.strokes[0]; row('stroke','Stroke',describe(stroke) + (stroke ? ` · ${Number(stroke.width ?? 0).toFixed(2)} mm` : ''));
+    }
+    const m = state.ui.measurement;
+    if (m) { row('distance','D',mm(m.distance)); row('angle','Angle',`${m.angle.toFixed(1)}°`); }
+  }
+  /** Updates the Info panel in place as the pointer moves, without rebuilding the other panels. */
+  function updateInfo() {
+    if (flyout.hidden || flyoutBody.dataset.drawPanelBody !== 'info') return;
+    flyoutBody.replaceChildren(); infoPanel(flyoutBody);
+  }
+  const PANEL_CONTENT = { gradient: gradientPanel, character: host => characterPanel(host), paragraph: host => paragraphPanel(host), swatches: swatchesPanel, color: colorPanel, stroke: strokePanel, transparency: transparencyPanel, pathfinder: pathfinderPanel, appearance: appearancePanel, transform: host => transform(host), align: alignPanel, artboards: artboardPanel, history: historyPanel, info: infoPanel };
   function renderFlyout() {
     const group = PANEL_GROUPS.find(g => g.id === state.ui.flyout);
     flyout.hidden = !group; if (!group) { flyoutTabs.replaceChildren(); flyoutBody.replaceChildren(); return; }
@@ -1021,5 +1059,5 @@ export function createPanels(shell, state, api) {
       if (!show) continue; const b = button(label,action); b.dataset.drawCb = key; b.disabled = ro && key !== 'transform'; actions.append(b);
     }
   }
-  render(); return { render, open, close };
+  render(); return { render, open, close, updateInfo };
 }

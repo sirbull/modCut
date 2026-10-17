@@ -515,3 +515,24 @@ body[data-workspace="draw"] #sendToCut { display: inline-flex; }
 .draw-gradient-stop { position: absolute; top: 100%; width: 14px; height: 16px; margin: 3px 0 0 -7px; padding: 0; border: 1px solid var(--text); border-radius: 2px 2px 7px 7px; background: var(--stop-color, #000); cursor: pointer; }
 .draw-gradient-stop[aria-pressed=true] { outline: 2px solid var(--brand-mid); outline-offset: 1px; }
 .draw-gradient-actions { display: flex; align-items: center; gap: 6px; margin: 4px 0 8px; }
+
+/* History panel: one row per undo step; steps after the current one are greyed out. */
+.draw-history { list-style: none; margin: 4px 0; padding: 0; max-height: 280px; overflow: auto; }
+.draw-history__step { display: block; width: 100%; padding: 5px 8px; border: 0; border-radius: 4px; background: transparent; color: var(--text); font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
+.draw-history__step:hover:not(:disabled) { background: var(--surface-2, rgba(127,127,127,.12)); }
+.draw-history__step.is-undone { color: var(--text-muted); font-style: italic; }
+.draw-history__step[aria-current=true] { outline: 1px solid var(--brand-mid); outline-offset: -1px; font-weight: 600; }
+/* Info panel: label and value pairs. */
+.draw-info { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 6px 4px; font-size: 12px; }
+.draw-info dt { color: var(--text-muted); }
+.draw-info dd { margin: 0; font-variant-numeric: tabular-nums; }
+/* Command search (Mod+Shift+K). */
+.modal-overlay:has(.draw-command-search) { align-items: flex-start; padding-top: 12vh; }
+.draw-command-search { width: min(520px, calc(100vw - 32px)); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.draw-command-search__input { width: 100%; }
+.draw-command-search__list { list-style: none; margin: 0; padding: 0; max-height: 50vh; overflow: auto; }
+.draw-command-search__list li { display: flex; justify-content: space-between; gap: 12px; padding: 6px 8px; border-radius: 4px; font-size: 13px; cursor: pointer; }
+.draw-command-search__list li[aria-selected=true] { background: var(--brand-mid); color: #fff; }
+.draw-command-search__list li[aria-selected=true] .draw-command-search__meta { color: inherit; }
+.draw-command-search__meta { color: var(--text-muted); font-size: 12px; white-space: nowrap; }
+.draw-command-search__empty { color: var(--text-muted); cursor: default; }

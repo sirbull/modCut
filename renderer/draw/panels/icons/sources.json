@@ -126,6 +126,16 @@
       "path": "icons/outline/folder-plus.svg",
       "sha256": "add07c96cd278366823b4d028cb0a4cb135ce6f7d2d8b72bece4fd65dcd3e521"
     },
+    "history": {
+      "name": "history",
+      "path": "icons/outline/history.svg",
+      "sha256": "a0ade047b62f42441fdf3c157b751452cf7ee7ce92b336329eff20d8c44de8f8"
+    },
+    "info-circle": {
+      "name": "info-circle",
+      "path": "icons/outline/info-circle.svg",
+      "sha256": "bf4377dff0aaaddf1676a4bb7292f90f1102f19daaca7021331ba6a191317c1c"
+    },
     "keyframe-align-horizontal": {
       "name": "keyframe-align-horizontal",
       "path": "icons/outline/keyframe-align-horizontal.svg",
@@ -235,6 +245,11 @@
       "name": "plus",
       "path": "icons/outline/plus.svg",
       "sha256": "c273c746b4db19bebe87aaad5142f649c8e60cecfeb63d457ad4633d9907d17d"
+    },
+    "search": {
+      "name": "search",
+      "path": "icons/outline/search.svg",
+      "sha256": "57e054b6c1508be40d5eba1ea434b702f5ff55dca04e28e5e3f22472c2f6176d"
     },
     "spacing-horizontal": {
       "name": "spacing-horizontal",

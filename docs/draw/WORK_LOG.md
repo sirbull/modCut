@@ -1303,3 +1303,17 @@ Verifisering: 222 Draw-enhetstester (3 nye i `shear-arc.test.mjs`); `--draw-tool
 Hele Draw-E2E for del A (49fdd22) passerte: 31 av 31.
 
 Neste: D2.9 History-panel, Info-panel og kommandosøk.
+
+## 2026-10-17: D2.9 History-panel, Info-panel og kommandosøk
+
+- `panels/registry.mjs`: panelene `info` og `history` i en ny Info-gruppe i panelraden.
+- `panels/ui.mjs`: `historyPanel` (Open-rad, grå angrede steg, klikk går til steget via `api.historyGoTo`),
+  `infoPanel` og `updateInfo`, som `status()` kaller slik at pekerposisjonen oppdateres uten full rendering.
+- `ui/command-search.mjs`: ren søkefunksjon og modal; `index.mjs` håndterer `command-search`
+  (Mod+Shift+K var allerede i keymapen) med ferdige kommandoer, verktøy og paneler.
+- Ikoner: `history`, `info-circle` og `search` fra Tabler.
+
+Verifisering: 224 Draw-enhetstester (2 nye i `command-search.test.mjs`), ny E2E
+`draw-history-info-workflows.mjs` (`--draw-history`). Hele Draw-E2E for D2.8 del B (9a8e596) passerte: 31 av 31.
+
+Neste: Draw Inside (rest av D2.2).

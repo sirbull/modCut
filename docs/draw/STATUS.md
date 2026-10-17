@@ -351,6 +351,24 @@ Del B (2026-10-17):
 Gjenstår i D2.8 og nær beslektet: Smooth og Path Eraser, Knife, Lasso, Magic Wand, Curvature og Spiral
 (fase 3).
 
+### 2.16 History, Info og kommandosøk (D2.9, 2026-10-17)
+
+* **History-panel** (Info-gruppen i panelraden, sammen med Info): én rad per angresteg under raden
+  **Open**. Klikk på en rad angrer eller gjør om til det steget (Open gir dokumentet slik det ble åpnet).
+  Steg etter det gjeldende vises grå og kursiv; det gjeldende er markert. Et nytt steg etter å ha gått
+  tilbake forkaster de grå stegene, som i Illustrator.
+* **Info-panel (F8):** pekerens X og Y i mm (oppdateres mens musa beveger seg, uten å bygge de andre
+  panelene på nytt), utvalgets W, H, Left og Top, fyll og strek (farge eller gradienttype, strekbredde)
+  og siste Measure-måling (avstand og vinkel).
+* **Kommandosøk (Ctrl/Cmd+Shift+K):** søk i alle kommandoer, verktøy og paneler som er ferdige, med
+  snarvei og type ved siden av. Hvert søkeord må starte et ord i navnet eller nøkkelordene (for eksempel
+  finner «mask» Make Clipping Mask). Piltaster velger, Enter kjører, Escape lukker uten å kjøre.
+* Kode: `historyPanel`, `infoPanel` og `updateInfo` i `panels/ui.mjs`; `historyGoTo` og `pointer` i
+  panel-API-et i `index.mjs`; `ui/command-search.mjs` (`commandEntries`, `searchCommands`, `openCommandSearch`).
+
+Gjenstår i D2.9: History-panelets Delete State og snapshots, Info for tekst (tegn og ord), og
+kommandosøk i hjelpemenyen.
+
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
 | Oppgave | Status |
@@ -369,7 +387,7 @@ Gjenstår i D2.8 og nær beslektet: Smooth og Path Eraser, Knife, Lasso, Magic W
 | D2.6 PDF-eksport | Ferdig (Codex): Save PDF-dialog med forhåndsinnstillinger, lag, merker, bevar redigering; også EPS og DXF. Se WORK_LOG «Eksport del 1 og 2» |
 | D2.7 Raster-eksport | PNG og JPEG (2.5) og Export for Screens med skala og suffiks (WORK_LOG «Eksport del 3») ferdig; WebP gjenstår |
 | D2.8 Pencil, Shear, Eyedropper m.fl. | Ferdig (2.15): Eyedropper, Measure, Group Selection, Scissors, Pencil, Shear, Arc |
-| D2.9 Transparency, History, Info, kommandosøk | Transparency ferdig; resten gjenstår |
+| D2.9 Transparency, History, Info, kommandosøk | Ferdig (2.16); snapshots i History gjenstår |
 | D2.10 Send til Cut v2 | Automatisk tekst til outlines ferdig (2.9); øvrige v2-deler gjenstår |
 | D3.1 Outline Stroke og Expand | Gjenstår (Expand Shape finnes) |
 | D3.2 Appearance og effekter | Appearance ferdig; effekter gjenstår |
@@ -384,11 +402,10 @@ SVG-, PNG- og JPEG-eksport er gjort (2.5).
 1. **D2.1 Tekst** er ferdig i grunnform (2.6 til 2.11). Resten (kerning-modus, justert tekst, innrykk,
    blandede stiler, klammer for tekst på path, reflow med canvas-håndtak) tas senere.
    D2.2 compound paths og klippemasker er gjort (2.12).
-2. D2.4 path-kommandoer (2.13), D2.3 gradienter (2.14) og D2.8 verktøy (2.15) er gjort.
-   **Neste: D2.9 History-panel, Info-panel og kommandosøk.**
-3. Draw Inside (rest av D2.2).
-4. D2.6 PDF-eksport, D2.3 gradienter, D2.8 flere verktøy, D2.9 History/Info/kommandosøk.
-5. D2.10 Send til Cut v2.
+2. D2.4 path-kommandoer (2.13), D2.3 gradienter (2.14), D2.8 verktøy (2.15) og D2.9 History, Info og
+   kommandosøk (2.16) er gjort.
+3. **Neste: Draw Inside (rest av D2.2).**
+4. D2.10 Send til Cut v2.
 
 ## 5. Kjente begrensninger og risiko
 
