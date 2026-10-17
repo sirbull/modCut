@@ -6,7 +6,7 @@ import { setImmediate as yieldEventLoop } from 'node:timers/promises';
 import { create } from 'fontkit';
 import { textProperties, textValues, PT_TO_MM } from '../renderer/draw/doc/text.mjs';
 import { glyphSubpaths, textSignature } from '../renderer/draw/doc/text-layout.mjs';
-import { wrapText } from '../renderer/draw/doc/text-wrap.mjs';
+import { wrapLines } from '../renderer/draw/doc/text-wrap.mjs';
 import { measurePath, reverseSubpath, pathRunStart, glyphFrame } from '../renderer/draw/geom/path-measure.mjs';
 import { variableMetadata } from './font-metadata.mjs';
 
@@ -102,23 +102,32 @@ export function createFontService({directories=systemFontDirectories(),google}={
       }
       return {version:1,signature:textSignature(patch),font:fontInfo,glyphs,lineWidths:[total],overflow};
     }
-    const lines=area?wrapText(v.text,v.frameWidth/scale,text=>width(shapeText(text.replace(/\t/g,'    ')))):v.text.split('\n');
+    // Paragraph indents (pt) narrow the lines; space before and after (pt) separates paragraphs.
+    const pt=n=>(n??0)*PT_TO_MM,left=pt(v.leftIndent),right=pt(v.rightIndent),firstIndent=pt(v.firstLineIndent),gap=pt(v.spaceBefore)+pt(v.spaceAfter);
+    const lines=area?wrapLines(v.text,first=>(v.frameWidth-left-right-(first?firstIndent:0))/scale,text=>width(shapeText(text.replace(/\t/g,'    '))))
+      :v.text.split('\n').map((text,paragraph)=>({text,paragraph,first:true,last:true}));
     const ascent=area?font.ascent*scale:0,lineHeight=area?(font.ascent-font.descent)*scale:0;
-    let visibleLines=area?Math.max(0,Math.min(lines.length,Math.floor((v.frameHeight-lineHeight+1e-9)/(v.leading*PT_TO_MM))+1)):lines.length;
-    for(const [line,text] of lines.entries()) {
+    const lineTop=line=>line*v.leading*PT_TO_MM+lines[line].paragraph*gap;
+    let visibleLines=lines.length;
+    if(area){visibleLines=0;while(visibleLines<lines.length&&lineTop(visibleLines)+lineHeight<=v.frameHeight+1e-9)visibleLines++;}
+    for(const [line,{text,first,last}] of lines.entries()) {
       const run=shapeText(text.replace(/\t/g,'    '));
       const lineAdvance=width(run);lineWidths.push(lineAdvance*scale);
-      if(area&&lineAdvance*scale>v.frameWidth+1e-9)visibleLines=Math.min(visibleLines,line);
-      const offset=(v.alignment==='center'?-lineAdvance/2:v.alignment==='right'?-lineAdvance:0)+(area?(v.alignment==='center'?v.frameWidth/scale/2:v.alignment==='right'?v.frameWidth/scale:0):0);
+      const indent=left+(first?firstIndent:0),room=area?v.frameWidth-indent-right:0;
+      if(area&&lineAdvance*scale>room+1e-9)visibleLines=Math.min(visibleLines,line);
+      // Justified lines spread the free room over their spaces; a paragraph's last line stays left aligned.
+      const justify=area&&v.alignment==='justify'&&!last,spaces=justify?run.glyphs.filter(g=>g.codePoints.includes(32)).length:0;
+      const spread=spaces?Math.max(0,room/scale-lineAdvance)/spaces:0,align=v.alignment==='justify'?'left':v.alignment;
+      const offset=indent/scale+(align==='center'?-lineAdvance/2:align==='right'?-lineAdvance:0)+(area?(align==='center'?room/scale/2:align==='right'?room/scale:0):0);
       let x=0,y=0;
       for(let i=0;i<run.glyphs.length;i++) {
         const glyph=run.glyphs[i],pos=run.positions[i];
         const commands=outlines(glyph);
         if(line<visibleLines) {
-          const subpaths=glyphSubpaths(commands,(gx,gy)=>[(offset+x+(pos.xOffset+gx)*hs)*scale,ascent+line*v.leading*PT_TO_MM-(y+pos.yOffset+gy*vs)*scale-rise]);
+          const subpaths=glyphSubpaths(commands,(gx,gy)=>[(offset+x+(pos.xOffset+gx)*hs)*scale,ascent+lineTop(line)-(y+pos.yOffset+gy*vs)*scale-rise]);
           glyphs.push({line,glyphId:glyph.id,subpaths});
         }
-        x+=advance(pos);y+=pos.yAdvance;
+        x+=advance(pos)+(spaces&&glyph.codePoints.includes(32)?spread:0);y+=pos.yAdvance;
       }
       await yieldEventLoop();
     }

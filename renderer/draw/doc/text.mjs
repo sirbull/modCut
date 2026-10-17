@@ -8,12 +8,12 @@ export const PT_TO_MM = 25.4 / 72;
 export const DEFAULT_CHARACTER = Object.freeze({ fontFamily: 'Arial', fontSize: 24, leading: 28.8, fontWeight: 'normal', fontStyle: 'normal' });
 export function textContent(node) { return node.content.runs.map(run => run.text).join(''); }
 export function textValues(node) {
-  return { text: textContent(node), ...DEFAULT_CHARACTER, ...node.character, alignment: node.paragraph.alignment ?? 'left',
+  return { text: textContent(node), ...DEFAULT_CHARACTER, ...node.character, ...node.paragraph, alignment: node.paragraph.alignment ?? 'left',
     kind:node.kind??'point', ...(node.kind==='area'?{frameWidth:node.frame.width,frameHeight:node.frame.height}:{}),
     ...(node.kind==='onPath'?{pathSubpath:node.onPath.subpath,pathOffset:node.onPath.offset??0,pathFlip:!!node.onPath.flip}:{}) };
 }
 export function textProperties(values) {
-  const { text, fontFamily, fontSize, leading, fontWeight, fontStyle, alignment, fontPostscriptName, kind='point', frameWidth, frameHeight,fontSource='system',googleFont,fontAxes,pathSubpath,pathOffset=0,pathFlip=false,tracking=0,allCaps=false,horizontalScale=100,verticalScale=100,baselineShift=0,kerning='metrics' } = values;
+  const { text, fontFamily, fontSize, leading, fontWeight, fontStyle, alignment, fontPostscriptName, kind='point', frameWidth, frameHeight,fontSource='system',googleFont,fontAxes,pathSubpath,pathOffset=0,pathFlip=false,tracking=0,allCaps=false,horizontalScale=100,verticalScale=100,baselineShift=0,kerning='metrics',leftIndent=0,rightIndent=0,firstLineIndent=0,spaceBefore=0,spaceAfter=0 } = values;
   if(!['system','google'].includes(fontSource))throw new Error('Choose a font source.');
   if(googleFont!==undefined&&(!validGoogleReference(googleFont)||fontSource!=='google'||googleFont.family!==fontFamily))throw new Error('Invalid saved Google font reference.');
   if(fontAxes!==undefined&&!validFontAxes(fontAxes))throw new Error('Invalid variable font axes.');
@@ -29,7 +29,9 @@ export function textProperties(values) {
   for (const [label, n] of [['Font size', fontSize], ['Leading', leading]]) {
     if (!Number.isFinite(n) || n < .1 || n > 10000) throw new Error(`${label} must be between 0.1 and 10,000 pt.`);
   }
-  if ((!['normal', 'bold'].includes(fontWeight)&&!(Number.isFinite(fontWeight)&&fontWeight>=1&&fontWeight<=1000)) || !['normal', 'italic'].includes(fontStyle) || !['left', 'center', 'right'].includes(alignment)) throw new Error('Invalid text style.');
+  if ((!['normal', 'bold'].includes(fontWeight)&&!(Number.isFinite(fontWeight)&&fontWeight>=1&&fontWeight<=1000)) || !['normal', 'italic'].includes(fontStyle) || !['left', 'center', 'right', 'justify'].includes(alignment)) throw new Error('Invalid text style.');
+  for(const [label,n] of [['Left indent',leftIndent],['Right indent',rightIndent],['First-line indent',firstLineIndent],['Space before',spaceBefore],['Space after',spaceAfter]])
+    if(!Number.isFinite(n)||Math.abs(n)>10000)throw new Error(`${label} must be between -10,000 and 10,000 pt.`);
   return { kind, ...(kind==='area'?{frame:{width:frameWidth,height:frameHeight}}:{}),
     ...(kind==='onPath'?{onPath:{subpath:structuredClone(pathSubpath),offset:pathOffset,flip:!!pathFlip}}:{}), content: { runs: [{ text: text.replace(/\r\n?/g, '\n') }] },
     character: { fontFamily: fontFamily.trim(), fontSize, leading, fontWeight, fontStyle,
@@ -39,7 +41,9 @@ export function textProperties(values) {
       // Tracking is in thousandths of an em, as in Illustrator; both are left out at their defaults.
       ...(tracking?{tracking}:{}),...(allCaps?{allCaps:true}:{}),
       // Scale (percent), baseline shift (pt, up) and kerning are also left out at their defaults.
-      ...(horizontalScale!==100?{horizontalScale}:{}),...(verticalScale!==100?{verticalScale}:{}),...(baselineShift?{baselineShift}:{}),...(kerning!=='metrics'?{kerning}:{}) }, paragraph: { alignment } };
+      ...(horizontalScale!==100?{horizontalScale}:{}),...(verticalScale!==100?{verticalScale}:{}),...(baselineShift?{baselineShift}:{}),...(kerning!=='metrics'?{kerning}:{}) },
+    // Indents and paragraph spacing are in points; zero values are left out.
+    paragraph: { alignment, ...Object.fromEntries(Object.entries({leftIndent,rightIndent,firstLineIndent,spaceBefore,spaceAfter}).filter(([,n])=>n)) } };
 }
 /** Type on a Path from a path's first subpath, in the same coordinate space as the path. */
 export function pathText(subpath, values, paint = {}) {

@@ -58,6 +58,24 @@ test('horizontal and vertical scale, baseline shift and kerning shape the glyphs
   node.character.kerning='optical';assert.ok(validateDocument(data).some(e=>e.path.endsWith('.kerning')));
   assert.throws(()=>pointText([0,0],{...v,horizontalScale:0}),/Horizontal scale/);
 });
+test('paragraphs: justified area text, indents and space between paragraphs',{skip:!latin},async()=>{
+  const v=values(latin,'Horten'),one=await service.shape(v),mm=25.4/72,frame=one.lineWidths[0]*2.6;
+  const area={...v,text:'Horten Horten Horten',kind:'area',frameWidth:frame,frameHeight:100};
+  const right=l=>Math.max(...l.glyphs.filter(g=>g.line===0).flatMap(g=>g.subpaths.flatMap(s=>s.segments.map(x=>x.p[0]))));
+  const plain=await service.shape(area),justified=await service.shape({...area,alignment:'justify'});
+  assert.equal(justified.lineWidths.length,2);
+  assert.ok(right(justified)>right(plain)+1,'Justify spreads the first line towards the right edge');
+  assert.ok(right(justified)<=frame+1e-6,'and keeps it inside the frame');
+  const firstX=l=>Math.min(...l.glyphs.filter(g=>g.line===1).flatMap(g=>g.subpaths.flatMap(s=>s.segments.map(x=>x.p[0]))));
+  assert.ok(Math.abs(firstX(justified)-firstX(plain))<1e-9,'The last line stays left aligned');
+  const indented=await service.shape({...area,leftIndent:10,firstLineIndent:5});
+  const x0=(l,line)=>Math.min(...l.glyphs.filter(g=>g.line===line).flatMap(g=>g.subpaths.flatMap(s=>s.segments.map(x=>x.p[0]))));
+  assert.ok(Math.abs(x0(indented,0)-x0(plain,0)-15*mm)<1e-9,'Left plus first-line indent');
+  const point={...v,text:'A\nA'},tight=await service.shape(point),spaced=await service.shape({...point,spaceBefore:6,spaceAfter:4});
+  const y0=(l,line)=>Math.max(...l.glyphs.filter(g=>g.line===line).flatMap(g=>g.subpaths.flatMap(s=>s.segments.map(x=>x.p[1]))));
+  assert.ok(Math.abs((y0(spaced,1)-y0(spaced,0))-(y0(tight,1)-y0(tight,0))-10*mm)<1e-9,'Space before and after separate paragraphs');
+  const node=pointText([0,0],{...v,alignment:'justify',leftIndent:3});assert.deepEqual(node.paragraph,{alignment:'justify',leftIndent:3});
+});
 const otf=faces.find(f=>f.format==='otf');
 test('area text wraps shaped words, fits lines vertically and preserves overset text',{skip:!latin},async()=>{
   const v={...values(latin,'AV fi Horten ÆØÅ Horten ÆØÅ'),kind:'area',frameWidth:28,frameHeight:100};

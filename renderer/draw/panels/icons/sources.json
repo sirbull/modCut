@@ -36,6 +36,11 @@
       "path": "icons/outline/align-center.svg",
       "sha256": "d3fea8f389e1ebf6b27c946715a8315a977c6f64f96d8513e2cf8b4817aaea0a"
     },
+    "align-justified": {
+      "name": "align-justified",
+      "path": "icons/outline/align-justified.svg",
+      "sha256": "db7f20d410d3bd6a3e4d96177667ed1d5857929885684d6c07e5c8e6f04354e4"
+    },
     "align-left": {
       "name": "align-left",
       "path": "icons/outline/align-left.svg",

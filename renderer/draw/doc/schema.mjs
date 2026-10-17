@@ -210,7 +210,8 @@ export function validateDocument(doc) {
         else string(run.text, `${path}.content.runs.${i}.text`);
       });
       if (!object(value.paragraph)) fail(`${path}.paragraph`, 'Expected paragraph settings');
-      else if (value.paragraph.alignment !== undefined) enumeration(value.paragraph.alignment, ['left', 'center', 'right'], `${path}.paragraph.alignment`);
+      else if (value.paragraph.alignment !== undefined) enumeration(value.paragraph.alignment, ['left', 'center', 'right', 'justify'], `${path}.paragraph.alignment`);
+      for (const key of ['leftIndent', 'rightIndent', 'firstLineIndent', 'spaceBefore', 'spaceAfter']) if (value.paragraph?.[key] !== undefined) number(value.paragraph[key], `${path}.paragraph.${key}`, -10000, 10000);
       if (value.character !== undefined) {
         const c = value.character, p = `${path}.character`;
         if (!object(c)) fail(p, 'Expected character settings');

@@ -71,6 +71,16 @@ export async function runDrawCharacterWorkflows(client) {
   await until(`(async()=>{const d=${active}.state.document;return ${JSON.stringify(ids)}.every(id=>d.getNode(id).paragraph.alignment==='center')})()`,'both texts centred');
   assert.equal(await applied(),steps+1,'One undo step for the whole selection');
   assert.equal(await evaluate(`document.querySelector('${fly} [data-draw-paragraph=center]').getAttribute('aria-pressed')`),'true');
+  // Justify and indents: stored on the paragraph and shaped again, one undo step each.
+  await evaluate(`document.querySelector('${fly} [data-draw-paragraph=justify]').click()`);
+  await until(`(async()=>{const d=${active}.state.document;return ${JSON.stringify(ids)}.every(id=>d.getNode(id).paragraph.alignment==='justify')})()`,'justified');
+  const beforeIndent=await node(ids[0]);
+  await set(`${fly} [data-draw-field=left-indent]`,12);
+  await until(`(async()=>(${active}.state.document.getNode('${ids[0]}').paragraph.leftIndent===12))()`,'left indent');
+  const indented=await node(ids[0]),minX=l=>Math.min(...l.layout.glyphs.flatMap(g=>g.subpaths.flatMap(s=>s.segments.map(x=>x.p[0]))));
+  assert.ok(Math.abs(minX(indented)-minX(beforeIndent)-12*25.4/72)<1e-6,'The left indent moves the text by 12 pt');
+  await set(`${fly} [data-draw-field=space-after]`,6);
+  await until(`(async()=>(${active}.state.document.getNode('${ids[0]}').paragraph.spaceAfter===6))()`,'space after');
   // The control bar size field applies to the selection as well.
   await set(`${root} .draw-control-bar [data-draw-field=cb-font-size]`,30);
   await until(`(async()=>{const d=${active}.state.document;return ${JSON.stringify(ids)}.every(id=>d.getNode(id).character.fontSize===30)})()`,'control bar size');
@@ -79,5 +89,5 @@ export async function runDrawCharacterWorkflows(client) {
   const svg=await evaluate(`(async()=>{const w=${active};return w.exportBoard(w.state.ui.artboardId,'svg')})()`);assert.match(svg,/<path[\s>]/);
   await evaluate(`(async()=>{${active}.handle('cancel')})()`);
   await restore();
-  console.log('PASS Draw Character and Paragraph: Mod+T, size, tracking, All Caps, horizontal scale, baseline shift, kerning, Bold face, family and unknown family, one undo step each, Paragraph alignment for several texts, Properties and control bar fields, save and export');
+  console.log('PASS Draw Character and Paragraph: Mod+T, size, tracking, All Caps, horizontal scale, baseline shift, kerning, Bold face, family and unknown family, one undo step each, Paragraph alignment for several texts, justify, left indent and space after, Properties and control bar fields, save and export');
 }

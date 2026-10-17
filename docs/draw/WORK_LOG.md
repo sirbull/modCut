@@ -1444,3 +1444,18 @@ sendingen uten å vente på en promise og venter i stedet på byttet til Cut. He
 stoppet der; alle suiter før den passerte.
 
 Neste: avsnitt (justert tekst, innrykk og avstand), så blandede stiler.
+
+## 2026-10-17: D2.1 avsnitt: justert tekst, innrykk og avstand
+
+- `doc/text-wrap.mjs`: `wrapLines` gir linjene med avsnitt, første og siste linje, og tar en bredde per linje
+  (førstelinje-innrykk); `wrapText` er en tynn innpakning rundt den.
+- `electron/font-service.mjs`: innrykk flytter og smalner linjene, avstand før og etter legges mellom
+  avsnitt (også i beregningen av synlige linjer), og `justify` fordeler ledig plass på mellomrommene.
+- `doc/text.mjs`, `doc/schema.mjs`, `ui/dialogs.mjs` og `panels/ui.mjs`: validering, lagring bare av
+  verdier ulik null, Justify-knapp (Tabler `align-justified`) og fem felt i Paragraph.
+
+Verifisering: ny test i `electron/test-font-service.mjs` (27 main-tester); `text.test.mjs` avviser nå
+`justify-all` og ugyldige innrykk; `draw-character-workflows.mjs` dekker justify, innrykk og avstand.
+Hele Draw-E2E for 218724f: alle 33 Draw-suiter passerte (outlines også); bare autolagringsflaken stoppet.
+
+Neste: blandede stiler i én tekst.

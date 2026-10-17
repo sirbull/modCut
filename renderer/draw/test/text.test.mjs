@@ -21,7 +21,7 @@ test('point text preserves Unicode, typographic units, placement, save/reload an
   state.history.redo(); assert.ok(doc.getNode(node.id));
 });
 test('invalid text and typography are rejected at the UI and document boundaries', () => {
-  for(const patch of [{text:' '},{fontFamily:' '},{fontSize:0},{fontSize:NaN},{leading:Infinity},{fontWeight:'huge'},{fontStyle:'oblique'},{alignment:'justify'}]) {
+  for(const patch of [{text:' '},{fontFamily:' '},{fontSize:0},{fontSize:NaN},{leading:Infinity},{fontWeight:'huge'},{fontStyle:'oblique'},{alignment:'justify-all'},{leftIndent:NaN},{spaceAfter:20000}]) {
     assert.throws(()=>textProperties({...values,...patch}));
   }
   const node=pointText([0,0],values),doc=createDocument();doc.layers[0].children.push(node);

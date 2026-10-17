@@ -898,11 +898,17 @@ export function createPanels(shell, state, api) {
     if (!node) { text(host,'Select text to change its paragraph settings.'); return; }
     const ro = state.document.readOnly || nodes.some(n => !state.document.isEditable(n.id)), current = node.paragraph.alignment ?? 'left';
     const row = document.createElement('div'); row.className = 'draw-align-row'; row.setAttribute('role','group'); row.setAttribute('aria-label','Paragraph alignment');
-    for (const [label,iconId,value] of [['Align left','align-left','left'],['Align center','align-center','center'],['Align right','align-right','right']]) {
+    for (const [label,iconId,value] of [['Align left','align-left','left'],['Align center','align-center','center'],['Align right','align-right','right'],['Justify with last line aligned left','align-justified','justify']]) {
       const b = iconButton(label,iconId,() => api.textStyle({ alignment: value },'Paragraph Alignment'),'draw-layer-action draw-align-button');
       b.dataset.drawParagraph = `${prefix}${value}`; b.setAttribute('aria-pressed',String(current === value)); b.disabled = ro; row.append(b);
     }
     host.append(row);
+    // Indents and paragraph spacing in points, as in Illustrator's Paragraph panel.
+    const p = node.paragraph, spacing = document.createElement('div'); spacing.className = 'draw-fields'; host.append(spacing);
+    for (const [key,label,name] of [['leftIndent','Left indent (pt)','Left Indent'],['rightIndent','Right indent (pt)','Right Indent'],['firstLineIndent','First-line indent (pt)','First-Line Indent'],
+      ['spaceBefore','Space before (pt)','Space Before Paragraph'],['spaceAfter','Space after (pt)','Space After Paragraph']])
+      field(spacing,label,p[key] ?? 0,value => api.textStyle({ [key]: value },name),{ min:-10000, max:10000, key:`${prefix}${key.replace(/[A-Z]/g,c => `-${c.toLowerCase()}`)}`, disabled: ro, scrubbable: false });
+    if (current === 'justify' && node.kind !== 'area') text(host,'Justified lines need area text; point text and text on a path align left.');
     if (node.kind === 'onPath') text(host,'On a path, alignment places the text between the start offset and the end of the path.');
   }
   /** Gradient: type, angle, stops (colour, location, opacity), add, delete and reverse, on the focused fill or stroke. */

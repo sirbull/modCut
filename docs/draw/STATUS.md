@@ -254,9 +254,15 @@ Tillegg 2026-10-17: **horisontal og vertikal skalering** (1 til 10 000 %), **bas
 **kerning** Metrics eller None, i Character-panelet og Properties, lagret bare når de avviker fra standard,
 med i linjebryting, tekst på path, eksport, outlines og Send to Cut.
 
+Avsnitt 2026-10-17: **Justify with last line aligned left** (område-tekst; ekstra plass fordeles på
+mellomrommene, siste linje i hvert avsnitt venstrestilles; punkttekst og tekst på path venstrestilles),
+**venstre, høyre og førstelinje-innrykk** og **avstand før og etter avsnitt**, alt i punkt, i Paragraph-panelet
+og Edit Text. Område-tekst bryter linjene innenfor innrykkene, og avstanden telles med når det avgjøres
+hvilke linjer som får plass i rammen.
+
 Gjenstår i Character/Paragraph (fra kapittel 10.8): optisk og manuell kerning, Small Caps, understreking,
-justert tekst, innrykk og avstand før og etter avsnitt, blandede stiler i samme tekstobjekt (stiler gjelder
-hele objektet).
+de andre justeringsvariantene (siste linje sentrert, høyre eller justert), blandede stiler i samme
+tekstobjekt (stiler gjelder hele objektet).
 
 ### 2.12 Compound paths og klippemasker (D2.2, 2026-10-17)
 
@@ -509,8 +515,8 @@ SVG-, PNG- og JPEG-eksport er gjort (2.5).
 3. Draw Normal, Behind og Inside (2.17) er gjort.
 4. D2.10 Send til Cut v2 (2.18) er gjort. Alle fase 2-oppgavene finnes nå i grunnform.
 5. Hullene i fase 2: D2.5 SVG-import, D2.7 WebP og D2.3 globale swatches og gradientswatches (2.19) er
-   gjort. Fra D2.1 er skalering, baseline shift og kerning gjort (2.11). **Neste: avsnitt (justert tekst,
-   innrykk, avstand før og etter), så blandede stiler i én tekst.**
+   gjort. Fra D2.1 er skalering, baseline shift, kerning og avsnitt gjort (2.11). **Neste: blandede stiler
+   i én tekst (tegnstiler per tekstbit).**
 6. Så fase 3: D3.1 Expand Appearance, D3.2 effekter, D3.5 Lasso og Select-meny, D3.4 Shape Builder,
    Eraser og Knife, D3.6 Free Transform og Split Into Grid.
 
