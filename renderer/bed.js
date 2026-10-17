@@ -169,7 +169,28 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   // exactly those items, in the same undo step, keeping any move the user made in Cut.
   const linkedTo = (item, link) => !!link && item.data?.drawLink?.doc === link.doc && item.data.drawLink.board === link.board;
   function linkedItems(link) { return designLayer.children.filter((it) => linkedTo(it, link)); }
-  function loadSVG(node, wMm, hMm, viewBox, { placement = "center", replace = false, link = null, replaceLink = null } = {}) {
+  // An engraving raster from Draw: `x`, `y` is its centre on the bed, `width`/`height` its size in mm.
+  function placeRaster(dataUrl, { x, y, width, height, rotation = 0 }) {
+    const raster = new paper.Raster({ insert: false });
+    raster.data.modcutRaster = true;
+    raster.data.modcutColor = "#000000";
+    raster.data.originalDataUrl = dataUrl;
+    raster.data.rasterSettings = { ...DEFAULT_RASTER_SETTINGS };
+    raster.data.rasterMode = "Grayscale";
+    raster.smoothing = false;
+    raster.onLoad = () => {
+      if (raster.width && raster.height) raster.scale(width / raster.width, height / raster.height);
+      if (rotation) raster.rotate(rotation);
+      raster.position = P(x, y);
+      applyRasterSettings(raster);
+      view.update();
+      notifyChange();
+    };
+    raster.source = dataUrl;
+    designLayer.addChild(raster);
+    return raster;
+  }
+  function loadSVG(node, wMm, hMm, viewBox, { placement = "center", replace = false, link = null, replaceLink = null, images = [] } = {}) {
     resetGroupFocus();
     pushHistory();
     if (replace) { abandonPenInteraction(); clearNodeSelection(); designLayer.removeChildren(); selected.clear(); }
@@ -196,6 +217,9 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     if (moved) g.translate(moved);
     const sentTopLeft = g.bounds.topLeft;
     if (g.className === "Group") { flattenInto(g, designLayer); g.remove(); } // single-shape SVGs import as a Path
+    // Images arrive in the SVG's millimetre space and move exactly as the paths did.
+    const shift = (hasViewport && placement !== "origin" ? P((bedWmm - wMm) / 2, (bedHmm - hMm) / 2) : P(0, 0)).add(moved ?? P(0, 0));
+    for (const image of hasViewport ? images : []) placeRaster(image.dataUrl, { ...image, x: image.x + shift.x, y: image.y + shift.y });
     clearSel();
     const added = designLayer.children.filter((it) => !before.has(it));
     if (link) for (const it of added) it.data.drawLink = { ...link, topLeft: [sentTopLeft.x - (moved?.x ?? 0), sentTopLeft.y - (moved?.y ?? 0)] };

@@ -1435,7 +1435,7 @@ Oversikt over hva som er gjort og gjenstår, inkludert delvis ferdige oppgaver: 
 * [ ] D2.7 Raster-eksport (PNG og JPEG ferdig; WebP, Export for Screens og skala gjenstår)
 * [x] D2.8 Pencil, Shear, Eyedropper m.fl.
 * [x] D2.9 Transparency, History, Info, kommandosøk (snapshots i History gjenstår, se [STATUS.md](draw/STATUS.md))
-* [ ] D2.10 Send til Cut v2 — automatisk tekst til outlines, direkte sending til tom Cut og kopier/lim inn mellom Draw og Cut ferdig; øvrige v2-deler gjenstår.
+* [x] D2.10 Send til Cut v2 (varsel om objekter utenfor bedet gjenstår, se [STATUS.md](draw/STATUS.md))
 * [ ] D3.1 Outline Stroke og Expand
 * [ ] D3.2 Appearance og effekter
 * [ ] D3.3 Image Trace

@@ -421,8 +421,18 @@ Del B (2026-10-17), **Update in Cut**:
   `bed.js` som kapittel 14.2 tillater), `sendDrawToCut` i `app.js`, `cutLink`, `cutStatus` og `sourceHash`
   i `index.mjs`.
 
-Gjenstår i D2.10: bilder som rastergravering, flere artboards i én sending, objekter utenfor bedet, og
-å finne igjen en sending i en annen fane etter at prosjektet er lukket og åpnet (fane-id-er er per økt).
+Del C (2026-10-17):
+* **Bilder** sendes som graveringsraster i Cut (samme oppsett som Cuts egen bildeimport: gråtone, svart
+  lag), med senter, størrelse og rotasjon som i Draw, i samme angresteg og med samme lenke som banene.
+  Referansebilder sendes ikke. Skjeve eller speilvendte bilder sendes rotert og skalert (advarsel);
+  bilder i en klippemaske sendes hele (advarsel). Crop Image finnes ikke ennå i Draw.
+* **All artboards, as laid out** i Artboard-valget (når det er flere): alle artboards i én sending,
+  plassert som i dokumentet. Kunst som ligger mellom artboards sendes ikke, og «Cut at the artboard
+  edge» kutter ved hvert artboard.
+* Sammendraget sier for eksempel «3 paths (12 nodes) and 1 image as engraving will be sent».
+
+Gjenstår i D2.10: objekter utenfor bedet (krever bedmål fra Cut i dialogen), og å finne igjen en sending
+i en annen fane etter at prosjektet er lukket og åpnet (fane-id-er er per økt).
 
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
@@ -443,7 +453,7 @@ Gjenstår i D2.10: bilder som rastergravering, flere artboards i én sending, ob
 | D2.7 Raster-eksport | PNG og JPEG (2.5) og Export for Screens med skala og suffiks (WORK_LOG «Eksport del 3») ferdig; WebP gjenstår |
 | D2.8 Pencil, Shear, Eyedropper m.fl. | Ferdig (2.15): Eyedropper, Measure, Group Selection, Scissors, Pencil, Shear, Arc |
 | D2.9 Transparency, History, Info, kommandosøk | Ferdig (2.16); snapshots i History gjenstår |
-| D2.10 Send til Cut v2 | Tekst til outlines (2.9), Outline Stroke, kutt ved artboard, validering og Update in Cut (2.18) ferdig; bilder og flere artboards gjenstår |
+| D2.10 Send til Cut v2 | Ferdig (2.9 og 2.18): tekst til outlines, Outline Stroke, kutt ved artboard, validering, Update in Cut, bilder og alle artboards; varsel om objekter utenfor bedet gjenstår |
 | D3.1 Outline Stroke og Expand | Outline Stroke (2.18) og Expand Shape finnes; Expand Appearance gjenstår |
 | D3.2 Appearance og effekter | Appearance ferdig; effekter gjenstår |
 | D3.3 til D3.8, fase 4 og 5 | Gjenstår |
@@ -460,8 +470,11 @@ SVG-, PNG- og JPEG-eksport er gjort (2.5).
 2. D2.4 path-kommandoer (2.13), D2.3 gradienter (2.14), D2.8 verktøy (2.15) og D2.9 History, Info og
    kommandosøk (2.16) er gjort.
 3. Draw Normal, Behind og Inside (2.17) er gjort.
-4. D2.10 Send til Cut v2: del A og B (2.18) er gjort. **Neste: del C, bilder som rastergravering og flere
-   artboards i én sending.**
+4. D2.10 Send til Cut v2 (2.18) er gjort. Alle fase 2-oppgavene finnes nå i grunnform.
+5. **Neste: hullene i fase 2 som står åpne i sjekklisten: D2.5 full SVG-import til Draw-modellen,
+   D2.7 WebP, D2.3 globale swatches og gradientswatches, deretter resten av D2.1 (se 2.11).**
+6. Så fase 3: D3.1 Expand Appearance, D3.2 effekter, D3.5 Lasso og Select-meny, D3.4 Shape Builder,
+   Eraser og Knife, D3.6 Free Transform og Split Into Grid.
 
 ## 5. Kjente begrensninger og risiko
 

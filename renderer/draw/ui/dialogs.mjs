@@ -371,7 +371,7 @@ export function sendToCutDialog({boards,boardId,summary,cutEmpty=false,linked=ne
     ...(linked.size?[{value:'update',label:'Update the earlier send in Cut'}]:[]),
     {value:'new-tab',label:'New Cut tab'},{value:'replace',label:'Replace the design in this tab’s Cut'},{value:'add',label:'Add to this tab’s Cut'}]}];
   const result=openDrawModal({title:'Send to Cut',submitLabel:'Send',className:'draw-send-dialog',fields:[
-    {key:'boardId',label:'Artboard',type:'select',value:boardId,options:boards.map((b,i)=>({value:b.id,label:escapeHtml(`${i+1}. ${b.name}`)}))},
+    {key:'boardId',label:'Artboard',type:'select',value:boardId,options:[...boards.map((b,i)=>({value:b.id,label:escapeHtml(`${i+1}. ${b.name}`)})),...(boards.length>1?[{value:'all',label:'All artboards, as laid out'}]:[])]},
     ...target,
     {key:'placement',label:'Placement',type:'select',value:'origin',options:[{value:'origin',label:'Artboard top left at the bed origin'},{value:'center',label:'Centered on the bed'}]},
     {key:'strokes',label:'Strokes',type:'select',value:'centerline',options:[{value:'centerline',label:'Centerline (cut and score)'},{value:'outline',label:'Outline Stroke (engrave the stroke area)'}]},
@@ -386,11 +386,12 @@ export function sendToCutDialog({boards,boardId,summary,cutEmpty=false,linked=ne
       let s;try{s=summary(form.elements.boardId.value,options);}catch(error){s={count:0,warnings:[],errors:[error.message]};}
     info.replaceChildren();const p=document.createElement('p');info.append(p);
       const outline=form.elements.strokes.value==='outline';
-      p.textContent=s.count?`${s.count} path${s.count===1?'':'s'}${s.nodes?` (${s.nodes} node${s.nodes===1?'':'s'})`:''} will be sent${outline?'; strokes as filled outlines':' as centerline geometry'}. Colors become Cut layers.`:'Nothing on this artboard can be sent.';
+      const images=s.images?.length??0,paths=s.count?`${s.count} path${s.count===1?'':'s'}${s.nodes?` (${s.nodes} node${s.nodes===1?'':'s'})`:''}`:'';
+      p.textContent=s.count||images?`${[paths,images?`${images} image${images===1?'':'s'} as engraving`:''].filter(Boolean).join(' and ')} will be sent${s.count?outline?'; strokes as filled outlines':' as centerline geometry':''}.${s.count?' Colors become Cut layers.':''}`:'Nothing on this artboard can be sent.';
       if(s.textCount){const note=document.createElement('p');note.textContent=`${s.textCount} text object${s.textCount===1?'':'s'} will be sent as outlines automatically. Text stays editable in Draw.`;info.append(note);}
       if(s.errors?.length){const p=document.createElement('p');p.setAttribute('role','alert');p.textContent=s.errors.join(' ');info.append(p);}
     if(s.warnings.length){const list=document.createElement('ul');for(const w of s.warnings){const li=document.createElement('li');li.textContent=w;list.append(li);}info.append(list);}
-      submit.disabled=!s.count||!!s.errors?.length;
+      submit.disabled=!(s.count||s.images?.length)||!!s.errors?.length;
   };
   for(const key of ['boardId','strokes','outside','dedupe'])form.elements[key].addEventListener('change',update);update();
   return result.then(values=>values&&{target:'add',...values});

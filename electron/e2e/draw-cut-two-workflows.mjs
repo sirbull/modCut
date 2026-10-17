@@ -83,6 +83,30 @@ export async function runDrawCutTwoWorkflows(client) {
   assert.equal(await evaluate("paper.project.layers[1].children.filter(i=>i.data.drawLink).some(i=>Math.abs(i.bounds.center.y-60)<.5&&i.bounds.center.x<100)"), false, 'One undo in Cut restores the earlier send');
   await evaluate("document.querySelector('#workspaceToggle').click()"); await until("document.body.dataset.workspace==='draw'", 'back to Draw');
   assert.equal(await status(), 'sent', 'After the update the artboard is in sync again');
+
+  // Part C: an image goes as an engraving raster, and all artboards go as one send laid out as in Draw.
+  await evaluate(`(async()=>{const w=${active},{createNode,createArtboard}=await import('./draw/doc/schema.mjs'),{insertNode,insertArtboard,updateDocument}=await import('./draw/doc/commands.mjs'),{appearance}=await import('./draw/geometry.mjs');
+    const c=document.createElement('canvas');c.width=40;c.height=20;const g=c.getContext('2d');g.fillStyle='#000';g.fillRect(0,0,40,20);const data=c.toDataURL('image/png').split(',')[1];
+    const b=w.state.document.data.artboards[0],L=w.state.document.data.layers[0].id;
+    w.state.history.execute(updateDocument({assets:{...w.state.document.data.assets,e2eImage:{mimeType:'image/png',data,width:40,height:20}}}));
+    w.state.history.execute(insertNode(L,createNode('image',{assetId:'e2eImage',width:20,height:10,transform:[0,1,-1,0,b.x+40,b.y+10]})));
+    w.state.history.execute(insertArtboard(createArtboard({name:'Second',x:b.x+b.width+30,y:b.y,width:60,height:40})));
+    w.state.history.execute(insertNode(L,createNode('path',{subpaths:[{closed:false,segments:[[b.x+b.width+40,b.y+20],[b.x+b.width+70,b.y+20]].map(p=>({p,in:[0,0],out:[0,0]}))}],appearance:appearance(null,'#00AAFF',.1)})));})()`);
+  await evaluate("document.querySelector('#sendToCut').click()");
+  await until("!!document.querySelector('.draw-send-dialog form')", 'Send to Cut dialog for all artboards');
+  await evaluate("(()=>{const f=document.querySelector('.draw-send-dialog form');f.elements.boardId.value='all';f.elements.boardId.dispatchEvent(new Event('change'));})()");
+  assert.match(await summary(), /and 1 image as engraving will be sent/);
+  const tabsBefore = await evaluate("document.querySelectorAll('.doc-tab').length");
+  await evaluate("(()=>{const f=document.querySelector('.draw-send-dialog form');f.elements.target.value='new-tab';f.elements.strokes.value='centerline';f.elements.outside.value='whole';f.requestSubmit();})()");
+  await until("document.body.dataset.workspace==='cut'", 'switch to Cut for all artboards');
+  assert.equal(await evaluate("document.querySelectorAll('.doc-tab').length"), tabsBefore + 1);
+  await until("paper.project.layers[1].children.some(i=>i.className==='Raster'&&i.bounds.width>1)", 'the raster loads');
+  const all = await evaluate(`(()=>{const items=paper.project.layers[1].children,r=items.find(i=>i.className==='Raster'),line=items.find(i=>i.strokeColor?.toCSS(true)==='#00aaff');
+    return {raster:[r.bounds.x,r.bounds.y,r.bounds.width,r.bounds.height],linked:!!r.data.drawLink,engraving:!!r.data.modcutRaster,line:[line.bounds.x,line.bounds.y]};})()`);
+  [30, 10, 10, 20].forEach((v, i) => assert.ok(Math.abs(all.raster[i] - v) < .05, `The image is rotated and placed as in Draw: ${all.raster}`));
+  assert.equal(all.linked, true); assert.equal(all.engraving, true);
+  assert.ok(Math.abs(all.line[0] - 160) < .05 && Math.abs(all.line[1] - 20) < .05, `The second artboard keeps its place: ${all.line}`);
+  // The new Cut tab has no Draw document; closing it returns to the Draw tab.
   await restoreTabs();
-  console.log('PASS Draw Send to Cut v2: Outline Stroke command, outline strokes and cut at the artboard in Send to Cut, duplicates left out, tiny segments and node count reported, artboard send status, Update in Cut keeps the choices, the move in Cut and other items, one undo');
+  console.log('PASS Draw Send to Cut v2: Outline Stroke command, outline strokes and cut at the artboard in Send to Cut, duplicates left out, tiny segments and node count reported, artboard send status, Update in Cut keeps the choices, the move in Cut and other items, one undo, images as rotated engraving rasters, all artboards in one send');
 }

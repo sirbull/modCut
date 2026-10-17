@@ -31,7 +31,7 @@ import { DRAW_MODE_LABELS, insideTarget, nextDrawMode, placement } from './doc/d
 import { changePaint, changeStroke, paintHex } from './doc/paint.mjs';
 import { importArtwork } from './import-artwork.mjs';
 import { shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog,layerOptionsDialog,swatchOptionsDialog,sendToCutDialog,averageDialog,offsetDialog,simplifyDialog,pencilDialog } from './ui/dialogs.mjs';
-import { artboardCutSvg } from './io/cut-svg.mjs';
+import { ALL_ARTBOARDS, artboardCutSvg } from './io/cut-svg.mjs';
 import { EXPORT_FORMATS, rasterSize, svgDocument } from './io/export.mjs';
 import { createExportController } from './export-controller.mjs';
 import { layerOptionsPatch, templateLayerCommands, isOutputNode } from './doc/layers.mjs';
@@ -239,11 +239,11 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   let cutBusy=false;
   /** Outline Stroke for Send to Cut: each stroked path or shape's stroke area, in the same space as its cut geometry. */
   async function strokeOutlines(boardId) {
-    const outlines=new Map(),board=state.document.getArtboard(boardId);
+    const outlines=new Map(),boards=boardId===ALL_ARTBOARDS?state.document.data.artboards:[state.document.getArtboard(boardId)].filter(Boolean);
     for(const node of state.document.descendants(null)){
       if(!['path','shape'].includes(node.type)||!isOutputNode(state.document,node.id))continue;
       const stroke=(node.appearance?.strokes??[]).find(e=>!e.hidden);if(!stroke||!(stroke.width>0))continue;
-      const box=renderer.bounds(node.id);if(!box||box.x>board.x+board.width||box.y>board.y+board.height||box.x+box.width<board.x||box.y+box.height<board.y)continue;
+      const box=renderer.bounds(node.id);if(!box||!boards.some(board=>box.x<=board.x+board.width&&box.y<=board.y+board.height&&box.x+box.width>=board.x&&box.y+box.height>=board.y))continue;
       const subpaths=withScope(()=>renderer.clippedSubpaths(node.id,worldMatrix(node.id))??(node.type==='shape'?renderer.expandedShape(node.id)?.subpaths:node.subpaths))??[];
       const [a,b,c,d]=worldMatrix(node.id),width=node.strokeScaling===false?stroke.width/Math.sqrt(Math.abs(a*d-b*c)||1):stroke.width;
       outlines.set(node.id,await outlineStroke(subpaths,{width,join:stroke.join??'miter',cap:stroke.cap??'butt',miterLimit:stroke.miterLimit??4}));
@@ -254,7 +254,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   const hashCache=new Map();
   function sourceHash(boardId){
     const data=state.document.data,cached=hashCache.get(boardId);if(cached?.data===data)return cached.hash;
-    let svg='';try{svg=cutSvg(boardId).svg;}catch{/* an unsendable artboard hashes as empty */}
+    let svg='';try{const out=cutSvg(boardId);svg=out.svg+JSON.stringify(out.images.map(({dataUrl,...rest})=>rest));}catch{/* an unsendable artboard hashes as empty */}
     let h=2166136261;for(let i=0;i<svg.length;i++){h^=svg.charCodeAt(i);h=Math.imul(h,16777619);}
     const hash=(h>>>0).toString(16);hashCache.set(boardId,{data,hash});return hash;
   }
@@ -275,22 +275,24 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     // An empty Cut with one artboard needs no questions: the artboard goes straight into this tab's Cut.
     // The dialog still opens when something blocks the send or needs a choice (warnings), so it can explain why.
     const boards=state.document.data.artboards,empty=cutIsEmpty();
-    const direct=empty&&boards.length===1&&(()=>{try{const s=cutSvg(boards[0].id,resolved);return s.count>0&&!s.errors.length&&!s.warnings.length;}catch{return false;}})();
+    const direct=empty&&boards.length===1&&(()=>{try{const s=cutSvg(boards[0].id,resolved);return s.count+s.images.length>0&&!s.errors.length&&!s.warnings.length;}catch{return false;}})();
     // Update in Cut repeats the earlier send's choices without asking, unless something blocks it.
     const stored=update&&!empty?cutLink(boardId):null;
-    const quick=stored&&(()=>{try{const s=cutSvg(boardId,resolved,{clipToBoard:stored.options?.outside==='clip',dedupe:stored.options?.dedupe!==false});return s.count>0&&!s.errors.length;}catch{return false;}})();
+    const quick=stored&&(()=>{try{const s=cutSvg(boardId,resolved,{clipToBoard:stored.options?.outside==='clip',dedupe:stored.options?.dedupe!==false});return s.count+s.images.length>0&&!s.errors.length;}catch{return false;}})();
     const options=quick?{boardId,target:'update',...stored.options}:direct?{boardId:boards[0].id,target:'add',placement:'origin'}
       :await sendToCutDialog({boards,boardId,summary:(id,o={})=>cutSvg(id,resolved,{clipToBoard:o.outside==='clip',dedupe:o.dedupe!==false}),cutEmpty:empty,
         linked:new Set((state.document.data.cutLinks??[]).map(l=>l.artboardId))});
     if(!options||destroyed)return;
     if(state.document.data!==before)throw new Error('The artwork changed while preparing the cut. Try sending again.');
-    const board=state.document.getArtboard(options.boardId),cutOptions={clipToBoard:options.outside==='clip',dedupe:options.dedupe!==false};
+    // All artboards go as one send, laid out as in the document.
+    const all=options.boardId===ALL_ARTBOARDS&&boards.length>1;
+    const board=all?{id:ALL_ARTBOARDS,name:`${state.document.data.name||'Artboards'} (all artboards)`}:state.document.getArtboard(options.boardId),cutOptions={clipToBoard:options.outside==='clip',dedupe:options.dedupe!==false};
     if(options.strokes==='outline')cutOptions.outlines=await strokeOutlines(board.id);
     if(destroyed)return;if(state.document.data!==before)throw new Error('The artwork changed while preparing the cut. Try sending again.');
-    const {svg,count,warnings,errors}=cutSvg(board.id,resolved,cutOptions);
+    const {svg,count,images,warnings,errors}=cutSvg(board.id,resolved,cutOptions);
     if(errors.length)throw new Error(errors.join(' '));
-    if(!count)throw new Error('Nothing on this artboard can be sent to Cut.');
-    const sent=await onSendToCut({svg,count,warnings,name:board.name,width:board.width,height:board.height,target:options.target,placement:options.placement,
+    if(!count&&!images.length)throw new Error('Nothing on this artboard can be sent to Cut.');
+    const sent=await onSendToCut({svg,count,images,warnings,name:board.name,width:board.width,height:board.height,target:options.target,placement:options.placement,
       link:{doc:state.document.data.id,board:board.id},cutTabId:cutLink(board.id)?.cutTabId??null});
     if(destroyed||state.document.readOnly)return;
     const others=(state.document.data.cutLinks??[]).filter(l=>l.artboardId!==board.id);

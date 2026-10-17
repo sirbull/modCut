@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { DrawDocument } from '../doc/document.mjs';
 import { History } from '../doc/history.mjs';
 import { createNode } from '../doc/schema.mjs';
-import { insertNode } from '../doc/commands.mjs';
+import { insertNode, updateDocument } from '../doc/commands.mjs';
 import { appearance } from '../geometry.mjs';
 import { artboardCutSvg } from '../io/cut-svg.mjs';
 
@@ -40,4 +40,34 @@ test('outlined strokes are sent as filled areas, and cutting at the artboard use
   assert.equal(clipped, 1, 'Only the object past the edge is cut');
   assert.match(result.warnings.join(' '), /cut at the artboard edge/);
   assert.doesNotMatch(result.svg, /M-/);
+});
+
+test('images are sent as engraving rasters with centre, size and rotation on the artboard', () => {
+  const doc = new DrawDocument(), history = new History(doc), layer = doc.data.layers[0].id, board = doc.data.artboards[0];
+  history.execute(updateDocument({ assets: { a1: { mimeType: 'image/png', data: 'AAAA', width: 96, height: 48 } } }));
+  const r = Math.SQRT1_2;
+  history.execute(insertNode(layer, createNode('image', { assetId: 'a1', width: 20, height: 10, transform: [r, r, -r, r, board.x + 50, board.y + 20] })));
+  const id = doc.data.layers[0].children[0].id;
+  const result = artboardCutSvg(doc, board.id, { bounds: () => ({ x: board.x + 40, y: board.y + 20, width: 20, height: 20 }), worldMatrix: () => doc.getNode(id).transform, subpaths: () => [] });
+  assert.equal(result.images.length, 1); assert.equal(result.count, 0);
+  const [image] = result.images;
+  assert.match(image.dataUrl, /^data:image\/png;base64,AAAA$/);
+  assert.ok(Math.abs(image.width - 20) < 1e-9 && Math.abs(image.height - 10) < 1e-9);
+  assert.ok(Math.abs(image.rotation - 45) < 1e-9);
+  assert.ok(Math.abs(image.x - (50 + r * 10 - r * 5)) < 1e-9 && Math.abs(image.y - (20 + r * 10 + r * 5)) < 1e-9);
+  assert.equal(result.warnings.length, 0);
+});
+
+test('all artboards go as one send laid out as in the document, leaving out art between them', async () => {
+  const { insertArtboard } = await import('../doc/commands.mjs'), { createArtboard } = await import('../doc/schema.mjs');
+  const { doc, board, geometry } = setup([[[[10, 10], [20, 10]], '#FF0000']]);
+  const history = new History(doc);
+  history.execute(insertArtboard(createArtboard({ x: board.x + board.width + 50, y: board.y, width: 100, height: 50 })));
+  const second = doc.data.artboards[1], layer = doc.data.layers[0].id;
+  history.execute(insertNode(layer, createNode('path', { subpaths: [{ closed: false, segments: [[second.x + 10, second.y + 10], [second.x + 30, second.y + 10]].map(seg) }], appearance: appearance(null, '#0000FF', .2) })));
+  history.execute(insertNode(layer, createNode('path', { subpaths: [{ closed: false, segments: [[board.x + board.width + 10, board.y + 10], [board.x + board.width + 20, board.y + 10]].map(seg) }], appearance: appearance(null, '#00FF00', .2) })));
+  const result = artboardCutSvg(doc, 'all', geometry);
+  assert.equal(result.count, 2, 'The line between the artboards stays out');
+  assert.match(result.svg, new RegExp(`width="${board.width + 50 + 100}mm"`));
+  assert.match(result.svg, new RegExp(`M${board.width + 50 + 10} 10`), 'The second artboard keeps its place to the right');
 });

@@ -1374,3 +1374,20 @@ standard Target for et artboard som er sendt før. Hele Draw-E2E for D2.10 del A
 passerte; kjøringen stoppet på den kjente autolagringsflaken (`project-workflows.mjs:113`).
 
 Neste: D2.10 del C, bilder som rastergravering og flere artboards i én sending.
+
+## 2026-10-17: D2.10 del C, bilder og alle artboards
+
+- `io/cut-svg.mjs`: bildenoder gir `images` (data-URL, senter, størrelse og rotasjon i artboardets mm,
+  pluss asset-id for endringshashen); `ALL_ARTBOARDS` (`'all'`) bruker rektangelet rundt alle artboards,
+  tar bare med kunst som ligger på minst ett, og kutter ved hvert artboard.
+- `bed.js`: `loadSVG` tar `images` og lager rastrene i samme angresteg (`placeRaster`, samme oppsett som
+  `loadImage`), forskjøvet som banene ved sentrering og ved Update.
+- `app.js`, `index.mjs` og dialogen: bilder telles med; Artboard-valget har All artboards.
+
+Verifisering: 235 Draw-enhetstester (2 nye i `cut-svg-options.test.mjs`); `--draw-cut-two` sender et
+bilde rotert 90° og to artboards i én sending.
+
+Hele Draw-E2E for del B (36b1a21): alle suiter til og med `--draw-cut-two` passerte; `Draw outlines` stoppet
+med CDP-feilen «Promise was collected». Den passerte alene etterpå.
+
+Neste: D2.5 full SVG-import til Draw-modellen (se STATUS.md kapittel 4).
