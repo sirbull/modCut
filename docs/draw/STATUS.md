@@ -456,6 +456,17 @@ eller artboardfarge) og kvalitet 0 til 10, og Export for Screens har en WebP-rad
 Kode: `webp` i `EXPORT_FORMATS` (`io/export.mjs`), `EXPORT_TARGETS` (`io/export-plan.mjs`) og
 `EXPORT_FILE_TYPES` (`electron/export-files.mjs`).
 
+**Globale swatches og gradientswatches (D2.3, 2026-10-17):**
+* Nye swatches er **globale** (hvitt hjørne i panelet), som standard i Illustrator. Fyll og strek som får
+  fargen fra en global swatch husker den (`paint.swatch`). Endres fargen i Swatch Options, får alle disse
+  objektene ny farge i samme angresteg. **Global** kan slås av i Swatch Options (koblingene fjernes, fargene
+  blir). Sletting av en global swatch beholder fargene uten kobling. Endres fargen i Color-panelet, brytes
+  koblingen for det objektet. Nye objekter som tegnes etterpå, får vanlig farge.
+* **Gradientswatches:** New Swatch med gradient i fokusert fyll eller strek lager en gradientswatch (type,
+  stopp og vinkel). Klikk legger gradienten over hvert valgte objekts boks. Swatch Options gir bare navn.
+* Kode: `addSwatch`, `swatchPaint`, `linkedPaints` og `editSwatch` i `doc/swatches.mjs`; `swatch`-argumentet
+  i `changePaint` og `paint`.
+
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
 | Oppgave | Status |
@@ -468,7 +479,7 @@ Kode: `webp` i `EXPORT_FORMATS` (`io/export.mjs`), `EXPORT_TARGETS` (`io/export-
 | D1.12 Send til Cut v1 | Ferdig (se 2.2) |
 | D2.1 Tekst | Punkt-, område- og path-tekst, system-/Google-fonter, shaping, variable akser, outlines, Character og Paragraph (2.6 til 2.11); se 2.11 for det som gjenstår |
 | D2.2 Pathfinder, Compound, Clipping | Pathfinder, compound paths, klippemasker (2.12) og Draw Normal/Behind/Inside (2.17) ferdig; lagklipping gjenstår |
-| D2.3 Gradienter og Swatches | Swatches (solide) og gradienter ferdig (2.14); globale swatches, gradientswatches og PDF-shading gjenstår |
+| D2.3 Gradienter og Swatches | Ferdig: swatches, gradienter (2.14), globale swatches og gradientswatches (2.19); PDF-shading gjenstår |
 | D2.4 Path-kommandoer | Ferdig (2.13): Join, Average, Reverse, Add/Remove Anchor Points, Clean Up, Offset Path, Simplify; Smooth og Split Into Grid gjenstår |
 | D2.5 SVG eksport/import | Ferdig: eksport (2.5) og import med gradienter, klipping, bilder og tekst (2.19); mask og filter rasteriseres |
 | D2.6 PDF-eksport | Ferdig (Codex): Save PDF-dialog med forhåndsinnstillinger, lag, merker, bevar redigering; også EPS og DXF. Se WORK_LOG «Eksport del 1 og 2» |
@@ -493,8 +504,8 @@ SVG-, PNG- og JPEG-eksport er gjort (2.5).
    kommandosøk (2.16) er gjort.
 3. Draw Normal, Behind og Inside (2.17) er gjort.
 4. D2.10 Send til Cut v2 (2.18) er gjort. Alle fase 2-oppgavene finnes nå i grunnform.
-5. Hullene i fase 2: D2.5 SVG-import og D2.7 WebP (2.19) er gjort. **Neste: D2.3 globale swatches og
-   gradientswatches, deretter resten av D2.1 (se 2.11).**
+5. Hullene i fase 2: D2.5 SVG-import, D2.7 WebP og D2.3 globale swatches og gradientswatches (2.19) er
+   gjort. **Neste: resten av D2.1 (se 2.11), med blandede stiler i én tekst først.**
 6. Så fase 3: D3.1 Expand Appearance, D3.2 effekter, D3.5 Lasso og Select-meny, D3.4 Shape Builder,
    Eraser og Knife, D3.6 Free Transform og Split Into Grid.
 

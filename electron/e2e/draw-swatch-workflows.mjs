@@ -10,7 +10,7 @@ export async function runDrawSwatchWorkflows(client) {
   const scratch = await evaluate("document.querySelector('.doc-tab.is-active').dataset.tabId");
   const screen = p => evaluate(`(async()=>{const w=${active},p=w.scope.view.projectToView(new w.scope.Point(${p})),b=w.scope.view.element.getBoundingClientRect();return{x:p.x+b.x,y:p.y+b.y}})()`);
   const model = () => evaluate(`(async()=>(${active}.state.snapshot()))()`);
-  const click = selector => evaluate(`document.querySelector(${JSON.stringify(`${root} ${selector}`)}).click()`);
+  const click = selector => evaluate(`(()=>{const el=document.querySelector(${JSON.stringify(`${root} ${selector}`)});if(!el)throw new Error("Missing "+${JSON.stringify(selector)});el.click();})()`);
   const hex = paint => paint?.color ? '#' + paint.color.values.map(v => Math.round(v * 255).toString(16).padStart(2, '0')).join('').toUpperCase() : null;
   await evaluate(`(async()=>(${active}.setTool('rectangle')))()`);
   await drag(await screen([10, 10]), await screen([30, 20]));
@@ -42,6 +42,28 @@ export async function runDrawSwatchWorkflows(client) {
   await click('[data-draw-swatch-action=delete]');
   assert.ok(!(await model()).swatches.some(s => s.id === custom[0]), 'Delete removes the chosen swatch');
   await command('undo'); assert.ok((await model()).swatches.some(s => s.id === custom[0]), 'Undo restores it');
+  // A new swatch is global: what it paints stays linked, and editing the swatch recolors it in one step.
+  assert.equal((await model()).swatches.find(s => s.id === custom[0]).global, true, 'New swatches are global');
+  assert.ok(await evaluate(`document.querySelector('${root} [data-draw-swatch="${custom[0]}"]').classList.contains('is-global')`), 'Global swatches are marked');
+  await click('[data-draw-paint-target=fill]');
+  await click(`[data-draw-swatch="${custom[0]}"]`);
+  assert.equal((await model()).layers[0].children[0].appearance.fills[0].paint.swatch, custom[0], 'The fill remembers the global swatch');
+  const steps = () => evaluate(`(async()=>(${active}.state.history.entries.filter(e=>e.applied).length))()`), atStart = await steps();
+  await evaluate(`document.querySelector('${root} [data-draw-swatch="${custom[0]}"]').dispatchEvent(new MouseEvent('dblclick',{bubbles:true}))`); await wait(50);
+  await evaluate("(()=>{const f=document.querySelector('.draw-swatch-dialog form');f.elements.hex.value='#00ff00';f.requestSubmit();})()"); await wait(50);
+  assert.equal(hex((await model()).layers[0].children[0].appearance.fills[0].paint), '#00FF00', 'Editing the global swatch recolors the object');
+  assert.equal(await steps(), atStart + 1, 'Swatch and recolor are one undo step');
+  await command('undo');
+  // A gradient fill makes a gradient swatch; clicking it applies the gradient across the object.
+  await command('paint-gradient'); await command('panel.swatches');
+  await click('[data-draw-swatch-action=new]');
+  const gradients = await evaluate(`[...document.querySelectorAll('${root} [data-draw-swatch-group="Custom"] .draw-swatch.is-gradient')].map(b=>b.dataset.drawSwatch)`);
+  assert.equal(gradients.length, 1, 'The gradient swatch is listed');
+  assert.ok((await model()).swatches.find(s => s.id === gradients[0]).gradient.stops.length >= 2);
+  await click(`[data-draw-swatch="${custom[0]}"]`);
+  assert.equal((await model()).layers[0].children[0].appearance.fills[0].paint.type, 'solid');
+  await click(`[data-draw-swatch="${gradients[0]}"]`);
+  assert.equal((await model()).layers[0].children[0].appearance.fills[0].paint.type, 'linear', 'Clicking the gradient swatch applies it');
   // List view and the Color panel's Recent Colors.
   await click('[data-draw-swatch-view=list]');
   assert.ok(await evaluate(`!!document.querySelector('${root} .draw-swatch-list [data-draw-swatch] code')`), 'List view shows names and hex values');
@@ -71,5 +93,5 @@ export async function runDrawSwatchWorkflows(client) {
     await wait(50);
   }
   if (await evaluate("document.body.dataset.workspace") === 'draw') await evaluate("document.querySelector('#workspaceToggle').click()");
-  process.stdout.write('PASS Draw swatches: library with laser colors, fill/stroke/None, Recent Colors, new/rename/delete swatch, list view, Transparency blending mode and opacity\n');
+  process.stdout.write('PASS Draw swatches: library with laser colors, fill/stroke/None, Recent Colors, new/rename/delete swatch, global swatches recolor what they paint in one step, gradient swatches, list view, Transparency blending mode and opacity\n');
 }

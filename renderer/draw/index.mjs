@@ -151,7 +151,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     hint.hidden=state.document.data.layers.some(layer=>layer.children.length) || state.document.readOnly || state.ui.tool!=='select';
     outlineButton.setAttribute('aria-pressed',String(renderer.outline));status();
   }
-  function paint(kind,value,{mergeKey=null}={}) {
+  function paint(kind,value,{mergeKey=null,swatch=null}={}) {
     if(state.document.readOnly)return;
     if(kind==='width')state.ui.strokeWidth=value;else state.ui[kind]=value;
     // Remember the last solid color per kind for the Color button / Comma shortcut.
@@ -159,7 +159,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     // Recent Colors records committed colors, not every step of a live slider drag.
     if(kind!=='width'&&value&&!mergeKey)state.ui.recentColors=rememberColor(state.ui.recentColors,value);
     const ids=paintIds();
-    if(ids.length)state.history.transaction('Appearance',()=>{for(const id of ids)state.history.execute(updateNode(id,{appearance:changePaint(state.document.getNode(id).appearance,kind,value,state.ui)}));},{mergeKey});
+    if(ids.length)state.history.transaction('Appearance',()=>{for(const id of ids)state.history.execute(updateNode(id,{appearance:changePaint(state.document.getNode(id).appearance,kind,value,state.ui,swatch)}));},{mergeKey});
     else {panels?.render();toolbar?.update();}
   }
   function layerId() {

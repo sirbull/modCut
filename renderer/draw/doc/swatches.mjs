@@ -1,5 +1,10 @@
-/** Pure swatch rules: the default library, document swatches and the Recent Colors list. */
+/**
+ * Pure swatch rules: the default library, document swatches and the Recent Colors list.
+ * A global swatch is remembered in each fill or stroke it paints (`paint.swatch`), so editing the swatch
+ * recolors all of them. A gradient swatch holds a gradient's type, stops and angle (no `hex`).
+ */
 import { normalizeHex } from './color.mjs';
+import { solidPaint } from '../geometry.mjs';
 
 let nextId = 0;
 const swatch = (name, hex, group) => Object.freeze({ id: `default-${++nextId}`, name, hex, group });
@@ -22,11 +27,42 @@ export const DEFAULT_SWATCHES = Object.freeze([
 export function documentSwatches(data) {
   return data.swatches?.length ? data.swatches : DEFAULT_SWATCHES;
 }
-export function addSwatch(data, hex, name, makeId) {
-  if (!hex) throw new Error('Choose a color before adding a swatch.');
-  const value = normalizeHex(hex), list = documentSwatches(data);
-  const created = { id: makeId(), name: String(name || value).trim() || value, hex: value, group: 'Custom' };
+export function addSwatch(data, color, name, makeId, { global = false } = {}) {
+  if (!color) throw new Error('Choose a color before adding a swatch.');
+  const list = documentSwatches(data);
+  // A gradient paint makes a gradient swatch; anything else is a hex colour.
+  if (typeof color === 'object') {
+    const gradient = { type: color.type, stops: structuredClone(color.stops), angle: color.angle ?? 0 };
+    const created = { id: makeId(), name: String(name || `${color.type === 'radial' ? 'Radial' : 'Linear'} gradient`).trim(), gradient, group: 'Custom' };
+    return { swatches: [...list.map((s) => ({ ...s })), created], created };
+  }
+  const value = normalizeHex(color);
+  const created = { id: makeId(), name: String(name || value).trim() || value, hex: value, group: 'Custom', ...(global ? { global: true } : {}) };
   return { swatches: [...list.map((s) => ({ ...s })), created], created };
+}
+/** The solid paint a swatch applies; a global swatch is remembered in the paint. */
+export function swatchPaint(swatch) {
+  return { ...solidPaint(swatch.hex), ...(swatch.global ? { swatch: swatch.id } : {}) };
+}
+/**
+ * Appearance patches for every node painted with global swatch `id`: recolored to `hex`, or with the
+ * link removed (colour kept) when `hex` is null. Returns [[nodeId, appearance], ...].
+ */
+export function linkedPaints(doc, id, hex) {
+  const out = [];
+  for (const node of doc.descendants(null)) {
+    if (!node.appearance) continue;
+    let changed = false;
+    const relink = (entry) => {
+      if (entry.paint?.swatch !== id) return entry;
+      changed = true;
+      if (hex) return { ...entry, paint: { ...solidPaint(normalizeHex(hex)), swatch: id } };
+      const { swatch, ...paint } = entry.paint; return { ...entry, paint };
+    };
+    const appearance = { ...node.appearance, fills: node.appearance.fills.map(relink), strokes: node.appearance.strokes.map(relink) };
+    if (changed) out.push([node.id, appearance]);
+  }
+  return out;
 }
 export function removeSwatch(data, id) {
   const list = documentSwatches(data);
@@ -34,10 +70,11 @@ export function removeSwatch(data, id) {
   // Deleting the last swatch brings the default library back, like a new document.
   return list.filter((s) => s.id !== id).map((s) => ({ ...s }));
 }
-export function editSwatch(data, id, { name, hex }) {
-  const list = documentSwatches(data), value = hex === undefined ? undefined : normalizeHex(hex);
+export function editSwatch(data, id, { name, hex, global }) {
+  const list = documentSwatches(data), value = hex === undefined || hex === null ? undefined : normalizeHex(hex);
   if (!list.some((s) => s.id === id)) throw new Error('Choose a swatch to edit.');
-  return list.map((s) => s.id === id ? { ...s, ...(name !== undefined ? { name: String(name).trim() || s.name } : {}), ...(value ? { hex: value } : {}) } : { ...s });
+  return list.map((s) => s.id === id ? { ...s, ...(name !== undefined ? { name: String(name).trim() || s.name } : {}), ...(value && !s.gradient ? { hex: value } : {}),
+    ...(global !== undefined && !s.gradient ? { global: !!global } : {}) } : { ...s });
 }
 export function groupSwatches(list) {
   const groups = new Map();

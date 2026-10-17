@@ -353,11 +353,13 @@ export function layerOptionsDialog(layer,{focus='name'}={}) {
   return result.then(values=>values&&({...values,locked:el.template.checked||values.locked,printable:!el.template.checked&&values.printable,preview:el.template.checked||values.preview}));
 }
 /** Swatch Options: rename a swatch or change its color. */
+/** Swatch Options: name, and for a colour swatch its colour and Global (edits recolor what it paints). */
 export function swatchOptionsDialog(swatch) {
   return openDrawModal({title:'Swatch Options',submitLabel:'OK',className:'draw-swatch-dialog',fields:[
     {key:'name',label:'Swatch name',value:swatch.name,required:true},
-    {key:'hex',label:'Color',type:'color',value:swatch.hex.toLowerCase()},
-  ]}).then(values=>values&&{name:values.name,hex:values.hex.toUpperCase()});
+    ...(swatch.gradient?[]:[{key:'hex',label:'Color',type:'color',value:swatch.hex.toLowerCase()},
+      {key:'global',label:'Global (changes update every object using it)',type:'checkbox',value:!!swatch.global}]),
+  ]}).then(values=>values&&{name:values.name,...(swatch.gradient?{}:{hex:values.hex.toUpperCase(),global:!!values.global})});
 }
 const escapeHtml=text=>String(text).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 /**

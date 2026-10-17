@@ -1,6 +1,7 @@
 import { appearance, solidPaint } from '../geometry.mjs';
 
-export function changePaint(original, kind, value, defaults) {
+/** `swatch`: the id of a global swatch the new solid paint stays linked to. */
+export function changePaint(original, kind, value, defaults, swatch = null) {
   const result=structuredClone(original), key=kind==='fill' ? 'fills' : 'strokes';
   if (kind==='width') {
     if (result.strokes.length) result.strokes=result.strokes.map(s=>({...s,width:value}));
@@ -8,7 +9,7 @@ export function changePaint(original, kind, value, defaults) {
   } else if (value===null) result[key]=[];
   else {
     const entries=result[key], first=entries[0] || appearance(kind==='fill' ? value : null,kind==='stroke' ? value : null,defaults.strokeWidth)[key][0];
-    result[key]=[{...first,paint:solidPaint(value)},...entries.slice(1)];
+    result[key]=[{...first,paint:{...solidPaint(value),...(swatch?{swatch}:{})}},...entries.slice(1)];
   }
   return result;
 }

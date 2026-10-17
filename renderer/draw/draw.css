@@ -545,3 +545,6 @@ body[data-workspace="draw"] #sendToCut { display: inline-flex; }
 /* Send to Cut status in the Artboards list. */
 .draw-cut-status { margin-left: 6px; font-size: 11px; color: var(--text-muted); }
 .draw-cut-status--changed { color: var(--warn, #b26a00); }
+/* Global swatches carry a white corner, as in Illustrator; gradient swatches show the gradient. */
+.draw-swatch.is-global { position: relative; }
+.draw-swatch.is-global::after { content: ''; position: absolute; right: 0; bottom: 0; border-style: solid; border-width: 0 0 7px 7px; border-color: transparent transparent #fff transparent; filter: drop-shadow(0 0 1px rgba(0,0,0,.5)); }

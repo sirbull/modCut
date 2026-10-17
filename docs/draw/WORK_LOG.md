@@ -1413,3 +1413,17 @@ WebP gjennomsiktig bakgrunn og kvalitet; Export for Screens har en WebP-rad. `dr
 sjekker MIME-type, størrelse og gjennomsiktighet, og `export-plan.test.mjs` filendelsen.
 
 Neste: D2.3 globale swatches og gradientswatches.
+
+## 2026-10-17: D2.3 globale swatches og gradientswatches
+
+- `doc/swatches.mjs`: `addSwatch` tar en gradient (gradientswatch) eller hex med `global`; `swatchPaint`;
+  `linkedPaints` gir nye utseender for alt som er koblet til en swatch (ny farge, eller koblingen fjernet).
+- `doc/paint.mjs` og `index.mjs`: `changePaint`/`paint` tar `swatch` og lagrer koblingen i den solide malingen.
+- `panels/ui.mjs`: klikk på gradientswatch bruker `api.gradient` med `defaultGradient` over objektets boks;
+  Swatch Options og Delete Swatch oppdaterer koblede objekter i samme transaksjon. `ui/dialogs.mjs`: Global.
+
+Verifisering: 237 Draw-enhetstester (2 nye i `swatches.test.mjs`); `draw-swatch-workflows.mjs` dekker global
+omfarging i ett angresteg og gradientswatch. Hele Draw-E2E for 49730c0 (SVG-import og WebP): alle Draw-suitene
+passerte, også outlines; kjøringen stoppet på autolagringsflaken (`project-workflows.mjs:113`).
+
+Neste: resten av D2.1, blandede stiler i én tekst først.

@@ -32,3 +32,30 @@ test('Recent Colors keeps ten, newest first, without duplicates', () => {
   list = rememberColor(list, '#000005'); assert.equal(list[0], '#000005'); assert.equal(list.filter((c) => c === '#000005').length, 1);
   assert.equal(rememberColor(list, null), list); assert.equal(rememberColor(list, 'nope'), list);
 });
+
+test('global swatches stay linked: editing recolors what they paint, deleting unlinks', async () => {
+  const { DrawDocument } = await import('../doc/document.mjs'), { History } = await import('../doc/history.mjs');
+  const { createNode } = await import('../doc/schema.mjs'), { insertNode, updateNode } = await import('../doc/commands.mjs');
+  const { appearance } = await import('../geometry.mjs'), { changePaint, paintHex } = await import('../doc/paint.mjs');
+  const { swatchPaint, linkedPaints } = await import('../doc/swatches.mjs');
+  const doc = new DrawDocument(), history = new History(doc), layer = doc.data.layers[0].id;
+  const { created } = addSwatch({ swatches: [] }, '#112233', 'Brand', () => 'g1', { global: true });
+  assert.equal(created.global, true); assert.equal(swatchPaint(created).swatch, 'g1');
+  const a = createNode('path', { appearance: appearance('#FFFFFF', null) }), b = createNode('path', { appearance: appearance('#FFFFFF', null) });
+  history.execute(insertNode(layer, a)); history.execute(insertNode(layer, b));
+  history.execute(updateNode(a.id, { appearance: changePaint(doc.getNode(a.id).appearance, 'fill', created.hex, {}, 'g1') }));
+  const recolor = linkedPaints(doc, 'g1', '#AA0000');
+  assert.deepEqual(recolor.map(([id]) => id), [a.id], 'Only the linked object changes');
+  assert.equal(paintHex(recolor[0][1].fills[0]), '#aa0000'); assert.equal(recolor[0][1].fills[0].paint.swatch, 'g1');
+  const unlinked = linkedPaints(doc, 'g1', null)[0][1].fills[0].paint;
+  assert.equal(unlinked.swatch, undefined); assert.equal(paintHex({ paint: unlinked }), '#112233', 'Deleting keeps the colour');
+});
+
+test('a gradient paint makes a gradient swatch, and Global applies only to colour swatches', () => {
+  const g = { type: 'radial', stops: [{ offset: 0, color: { space: 'rgb', values: [1, 1, 1] } }, { offset: 1, color: { space: 'rgb', values: [0, 0, 0] } }], origin: [0, 0], angle: 0, length: 5, aspect: 1 };
+  const { swatches, created } = addSwatch({ swatches: [] }, g, '', () => 'r1', { global: true });
+  assert.equal(created.hex, undefined); assert.equal(created.gradient.type, 'radial'); assert.equal(created.gradient.stops.length, 2); assert.equal(created.global, undefined);
+  assert.equal(created.name, 'Radial gradient');
+  const edited = editSwatch({ swatches }, 'r1', { name: 'Glow', hex: '#FF0000', global: true }).find((s) => s.id === 'r1');
+  assert.equal(edited.name, 'Glow'); assert.equal(edited.hex, undefined); assert.equal(edited.global, undefined);
+});

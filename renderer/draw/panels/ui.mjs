@@ -2,8 +2,8 @@ import { DOCK_PANELS, PANEL_DEFINITIONS, PANEL_GROUPS, clampDockSplit, groupForP
 import { insertNode, updateDocument, updateNode } from '../doc/commands.mjs';
 import { createId } from '../doc/schema.mjs';
 import { textValues } from '../doc/text.mjs';
-import { addStop, colorHex, gradientCss, isGradient, removeStop, reverseGradient, setGradientAngle, setGradientType, updateStop } from '../doc/gradient.mjs';
-import { addSwatch, documentSwatches, editSwatch, groupSwatches, rememberColor, removeSwatch } from '../doc/swatches.mjs';
+import { addStop, colorHex, defaultGradient, gradientCss, isGradient, removeStop, reverseGradient, setGradientAngle, setGradientType, updateStop } from '../doc/gradient.mjs';
+import { addSwatch, documentSwatches, editSwatch, groupSwatches, linkedPaints, rememberColor, removeSwatch } from '../doc/swatches.mjs';
 import { ROOT_CONTEXT, collectCommands, deleteLayerCommands, deleteRowCommands, duplicateCommands, filterLayerTree, flattenCommands, layerContext, mergeLayersCommands, moveCommand, moveToLayerCommands, newLayer, othersUpdates, releaseCommands, soloUpdates } from '../doc/layers.mjs';
 import { shortcutLabel } from '../keymap.mjs';
 import { REFERENCE_POINTS } from '../geom/transforms.mjs';
@@ -440,6 +440,10 @@ export function createPanels(shell, state, api) {
     }
     text(host,!ids.length ? 'Select objects to align or distribute them.' : alignTo === 'key' ? 'The key object stays in place. Enter a spacing to use an exact gap.' : ids.length === 1 && alignTo === 'selection' ? 'A single object aligns to the active artboard.' : 'Distribute Objects needs three objects, or an artboard.');
   }
+  function focusedGradient() {
+    const node = state.document.getNode(api.paintIds()[0]), entry = node && (state.ui.paintFocus === 'stroke' ? node.appearance.strokes[0] : node.appearance.fills[0]);
+    return isGradient(entry?.paint) ? entry.paint : null;
+  }
   function currentPaint(kind) {
     const node = state.document.getNode(api.paintIds()[0]);
     if (!node) return state.ui[kind];
@@ -486,10 +490,17 @@ export function createPanels(shell, state, api) {
       const title = document.createElement('h3'); title.className = 'draw-panel__section'; title.textContent = group.name; host.append(title);
       const box = document.createElement('div'); box.className = view === 'list' ? 'draw-swatch-list' : 'draw-swatch-row'; box.dataset.drawSwatchGroup = group.name;
       for (const s of group.swatches) {
-        const b = chip(s.hex,`${s.name} ${s.hex}`,() => { state.ui.swatchId = s.id; api.paint(target,s.hex); render(); },{ pressed: s.hex === current });
+        // A gradient swatch spans each object's box; a global swatch stays linked to what it paints.
+        const pick = () => { state.ui.swatchId = s.id;
+          if (s.gradient) api.gradient(target,(previous,box) => defaultGradient(box,{ type: s.gradient.type, stops: s.gradient.stops, angle: s.gradient.angle }),{ label: 'Gradient Swatch' });
+          else api.paint(target,s.hex,{ swatch: s.global ? s.id : null });
+          render(); };
+        const b = chip(s.hex ?? '#FFFFFF',`${s.name}${s.hex ? ` ${s.hex}` : ''}${s.global ? ' (global)' : ''}`,pick,{ pressed: !!s.hex && s.hex === current });
+        if (s.gradient) { b.style.setProperty('--swatch','transparent'); b.style.backgroundImage = gradientCss(s.gradient); b.classList.add('is-gradient'); }
+        b.classList.toggle('is-global',!!s.global);
         b.classList.toggle('is-chosen',state.ui.swatchId === s.id);
         b.dataset.drawSwatch = s.id;
-        if (view === 'list') { const name = document.createElement('span'); name.textContent = s.name; const code = document.createElement('code'); code.textContent = s.hex; b.append(name,code); }
+        if (view === 'list') { const name = document.createElement('span'); name.textContent = s.name; const code = document.createElement('code'); code.textContent = s.hex ?? (s.gradient.type === 'radial' ? 'Radial' : 'Linear'); b.append(name,code); }
         b.addEventListener('dblclick',() => api.run(() => swatchOptions(s)));
         box.append(b);
       }
@@ -499,17 +510,26 @@ export function createPanels(shell, state, api) {
     const count = document.createElement('span'); count.className = 'draw-layer-count'; count.textContent = `${list.length} swatches`;
     const actions = document.createElement('div'); actions.className = 'draw-layer-actions';
     const add = iconButton(`New swatch from the current ${target} color`,'square-plus',() => {
-      const { swatches, created } = addSwatch(doc.data,currentPaint(target),'',createId);
+      // A gradient fill or stroke becomes a gradient swatch; a colour a global swatch, as Illustrator's default.
+      const { swatches, created } = addSwatch(doc.data,focusedGradient() ?? currentPaint(target),'',createId,{ global: true });
       setSwatches('New Swatch',swatches); state.ui.swatchId = created.id;
-    }); add.dataset.drawSwatchAction = 'new'; add.disabled = readOnly || !current;
+    }); add.dataset.drawSwatchAction = 'new'; add.disabled = readOnly || !(current || focusedGradient());
     const selectedSwatch = list.find(s => s.id === state.ui.swatchId);
-    const remove = iconButton('Delete swatch','trash',() => { setSwatches('Delete Swatch',removeSwatch(doc.data,state.ui.swatchId)); state.ui.swatchId = null; });
+    // Deleting a global swatch keeps the colors it painted, unlinked.
+    const remove = iconButton('Delete swatch','trash',() => { const id = state.ui.swatchId; state.history.transaction('Delete Swatch',() => {
+      for (const [node,appearance] of linkedPaints(doc,id,null)) state.history.execute(updateNode(node,{ appearance }));
+      state.history.execute(updateDocument({ swatches: removeSwatch(doc.data,id) })); }); state.ui.swatchId = null; });
     remove.dataset.drawSwatchAction = 'delete'; remove.disabled = readOnly || !selectedSwatch;
     actions.append(add,remove); bar.append(count,actions); host.append(bar);
     text(host,'Click a swatch to apply it to the ' + target + '. Double-click to rename or change it.');
     async function swatchOptions(s) {
       const values = await api.swatchOptions(s); if (!values) return;
-      api.run(() => setSwatches('Swatch Options',editSwatch(state.document.data,s.id,values)));
+      // A global swatch recolors everything it paints in the same undo step; unticking Global unlinks it.
+      api.run(() => state.history.transaction('Swatch Options',() => {
+        const doc = state.document, relink = s.global ? linkedPaints(doc,s.id,values.global === false ? null : values.hex ?? s.hex) : [];
+        for (const [node,appearance] of relink) state.history.execute(updateNode(node,{ appearance }));
+        state.history.execute(updateDocument({ swatches: editSwatch(doc.data,s.id,values) }));
+      }));
     }
   }
   const BLEND_MODES = [['normal','Normal'],['darken','Darken'],['multiply','Multiply'],['color-burn','Color Burn'],['lighten','Lighten'],['screen','Screen'],['color-dodge','Color Dodge'],
