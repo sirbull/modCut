@@ -363,18 +363,23 @@ $("workspaceToggle").addEventListener("click", () => {
 });
 
 // Draw's Send to Cut: a millimetre SVG of one artboard enters Cut through the normal SVG import path.
-async function sendDrawToCut({ svg, name, count, warnings, target, placement }) {
+async function sendDrawToCut({ svg, name, count, warnings, target, placement, link = null, cutTabId = null }) {
   const prepared = prepareSVG(svg);
+  // Update in Cut goes to the tab that received the earlier send, when it is still open.
+  if (target === "update" && cutTabId && cutTabId !== activeTabId && documentTabs.some((tab) => tab.id === cutTabId)) switchDocumentTab(cutTabId);
   if (target === "new-tab") newDocument("cut");
   setWorkspace("cut");
   bed.finishDrawing();
-  const wasEmpty = !bed.getDesign();
-  bed.loadSVG(prepared.node, prepared.widthMm, prepared.heightMm, prepared.viewBox, { placement, replace: target === "replace" });
-  if (wasEmpty || target !== "add") { $("filename").value = name; setFileLabel(name); }
+  const wasEmpty = !bed.getDesign(), updating = target === "update" && !!link && bed.linkedCount(link) > 0;
+  bed.loadSVG(prepared.node, prepared.widthMm, prepared.heightMm, prepared.viewBox, { placement, replace: target === "replace", link, replaceLink: updating ? link : null });
+  if (wasEmpty || !["add", "update"].includes(target)) { $("filename").value = name; setFileLabel(name); }
   syncColorsAndLayers();
   markDirty();
-  toast(`${name} sent to Cut (${count} path${count === 1 ? "" : "s"}). Undo in Cut removes the whole send.`, "ok");
+  toast(updating ? `${name} updated in Cut (${count} path${count === 1 ? "" : "s"}). Layer settings are kept; undo in Cut restores the earlier send.`
+    : `${name} sent to Cut (${count} path${count === 1 ? "" : "s"}). Undo in Cut removes the whole send.`, "ok");
+  if (target === "update" && !updating) toast("The earlier send was not found in this Cut, so the artboard was added.", "info");
   if (warnings.length) toast(warnings.join(" "), "info");
+  return { cutTabId: activeTabId };
 }
 // Draw's Export As: SVG text or a PNG/JPEG data URL, written where the user chooses.
 // Draw export writes only where the user chose in the main process's save or folder dialog.

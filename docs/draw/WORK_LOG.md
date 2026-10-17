@@ -1354,3 +1354,23 @@ toasten lever 4 s, og i en full kjøring kom pollingen for sent. Testen registre
 MutationObserver før handlingen. Suiten passerte alene både før og etter endringen.
 
 Neste: D2.10 del B, `cutLinks` og Oppdater i Cut.
+
+## 2026-10-17: D2.10 del B, Update in Cut
+
+- `bed.js` (smal endring etter kapittel 14.2): `loadSVG` tar `link` (merker nye elementer med
+  `data.drawLink` = dokument, artboard og posisjonen slik den ble sendt) og `replaceLink` (fjerner de
+  merkede elementene i samme angresteg og flytter den nye sendingen like mye som brukeren flyttet den
+  gamle). `linkedCount` sier om en sending finnes.
+- `app.js`: `sendDrawToCut` håndterer `target: 'update'`, bytter til fanen som fikk sendingen om den er
+  åpen, og returnerer `cutTabId`.
+- `index.mjs`: `cutLinks` skrives etter hver sending; `sourceHash` (FNV-1a av sentrallinje-SVG-en, hurtigbufret
+  per dokumentversjon) og `cutStatus`; `updateInCut` gjentar lagrede valg.
+- `panels/ui.mjs`: status i artboardlisten og knappen Update in Cut. `ui/dialogs.mjs`: Target-valget Update.
+- `doc/commands.mjs`: `updateDocument` tar en etikett.
+
+Verifisering: `--draw-cut-two` dekker nå også status, endring, oppdatering med beholdt flytting og
+brukerens egne elementer, og ett angresteg i Cut. `draw-cut-workflows.mjs` forventer nå Update som
+standard Target for et artboard som er sendt før. Hele Draw-E2E for D2.10 del A (4173ee7): alle Draw-suitene
+passerte; kjøringen stoppet på den kjente autolagringsflaken (`project-workflows.mjs:113`).
+
+Neste: D2.10 del C, bilder som rastergravering og flere artboards i én sending.

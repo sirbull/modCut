@@ -542,3 +542,6 @@ body[data-workspace="draw"] #sendToCut { display: inline-flex; }
 .draw-mode-button svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .draw-mode-button[aria-pressed=true] { background: var(--surface-2); border-color: var(--border); color: var(--text); }
 .draw-mode-button:disabled { opacity: .35; cursor: default; }
+/* Send to Cut status in the Artboards list. */
+.draw-cut-status { margin-left: 6px; font-size: 11px; color: var(--text-muted); }
+.draw-cut-status--changed { color: var(--warn, #b26a00); }

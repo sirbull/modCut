@@ -250,7 +250,17 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     }
     return outlines;
   }
-  async function sendToCut(boardId=state.ui.artboardId) {
+  // Send to Cut links: what was sent last per artboard, so the Artboards panel can say when it changed.
+  const hashCache=new Map();
+  function sourceHash(boardId){
+    const data=state.document.data,cached=hashCache.get(boardId);if(cached?.data===data)return cached.hash;
+    let svg='';try{svg=cutSvg(boardId).svg;}catch{/* an unsendable artboard hashes as empty */}
+    let h=2166136261;for(let i=0;i<svg.length;i++){h^=svg.charCodeAt(i);h=Math.imul(h,16777619);}
+    const hash=(h>>>0).toString(16);hashCache.set(boardId,{data,hash});return hash;
+  }
+  function cutLink(boardId){return (state.document.data.cutLinks??[]).find(l=>l.artboardId===boardId)??null;}
+  function cutStatus(boardId){const link=cutLink(boardId);return link?link.sourceHash===sourceHash(boardId)?'sent':'changed':null;}
+  async function sendToCut(boardId=state.ui.artboardId,{update=false}={}) {
     if(cutBusy||textBusy||document.querySelector('.modal-overlay'))return;
     if(!onSendToCut)throw new Error('Send to Cut is not available here.');
     cutBusy=true;
@@ -266,8 +276,12 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     // The dialog still opens when something blocks the send or needs a choice (warnings), so it can explain why.
     const boards=state.document.data.artboards,empty=cutIsEmpty();
     const direct=empty&&boards.length===1&&(()=>{try{const s=cutSvg(boards[0].id,resolved);return s.count>0&&!s.errors.length&&!s.warnings.length;}catch{return false;}})();
-    const options=direct?{boardId:boards[0].id,target:'add',placement:'origin'}
-      :await sendToCutDialog({boards,boardId,summary:(id,o={})=>cutSvg(id,resolved,{clipToBoard:o.outside==='clip',dedupe:o.dedupe!==false}),cutEmpty:empty});
+    // Update in Cut repeats the earlier send's choices without asking, unless something blocks it.
+    const stored=update&&!empty?cutLink(boardId):null;
+    const quick=stored&&(()=>{try{const s=cutSvg(boardId,resolved,{clipToBoard:stored.options?.outside==='clip',dedupe:stored.options?.dedupe!==false});return s.count>0&&!s.errors.length;}catch{return false;}})();
+    const options=quick?{boardId,target:'update',...stored.options}:direct?{boardId:boards[0].id,target:'add',placement:'origin'}
+      :await sendToCutDialog({boards,boardId,summary:(id,o={})=>cutSvg(id,resolved,{clipToBoard:o.outside==='clip',dedupe:o.dedupe!==false}),cutEmpty:empty,
+        linked:new Set((state.document.data.cutLinks??[]).map(l=>l.artboardId))});
     if(!options||destroyed)return;
     if(state.document.data!==before)throw new Error('The artwork changed while preparing the cut. Try sending again.');
     const board=state.document.getArtboard(options.boardId),cutOptions={clipToBoard:options.outside==='clip',dedupe:options.dedupe!==false};
@@ -276,7 +290,12 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     const {svg,count,warnings,errors}=cutSvg(board.id,resolved,cutOptions);
     if(errors.length)throw new Error(errors.join(' '));
     if(!count)throw new Error('Nothing on this artboard can be sent to Cut.');
-    await onSendToCut({svg,count,warnings,name:board.name,width:board.width,height:board.height,target:options.target,placement:options.placement});
+    const sent=await onSendToCut({svg,count,warnings,name:board.name,width:board.width,height:board.height,target:options.target,placement:options.placement,
+      link:{doc:state.document.data.id,board:board.id},cutTabId:cutLink(board.id)?.cutTabId??null});
+    if(destroyed||state.document.readOnly)return;
+    const others=(state.document.data.cutLinks??[]).filter(l=>l.artboardId!==board.id);
+    state.history.execute(updateDocument({cutLinks:[...others,{artboardId:board.id,cutTabId:sent?.cutTabId??null,sentAt:new Date().toISOString(),sourceHash:sourceHash(board.id),
+      options:{strokes:options.strokes??'centerline',outside:options.outside??'whole',dedupe:options.dedupe!==false,placement:options.placement??'origin'}}]},{label:'Send to Cut'}));
     }finally{cutBusy=false;}
   }
   function isolate(id) {if(state.document.getNode(id)?.type!=='group')return;state.ui.isolation=id;select([]);isolationChanged();}
@@ -498,6 +517,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     fontFamilies,
     command:id=>handle(id),
     pointer:()=>lastPoint,
+    cutStatus,updateInCut:boardId=>sendToCut(boardId,{update:true}).catch(error=>{if(!destroyed)onError(error.message);}),
     historyGoTo:index=>run(()=>{if(state.document.readOnly)return;interactions.cancel();paths.finish();
       const applied=()=>state.history.entries.filter(entry=>entry.applied).length;
       while(applied()>index&&state.history.undo());while(applied()<index&&state.history.redo());select(state.selection.ids);}),

@@ -704,6 +704,9 @@ export function createPanels(shell, state, api) {
     const list=document.createElement('div');list.className='draw-artboard-list';list.setAttribute('aria-label','Artboards');
     for (const [i,board] of state.document.data.artboards.entries()) {
       const b=button(`${i+1}. ${board.name}`,()=>api.artboards.choose(board.id));b.dataset.drawArtboard=board.id;
+      const sent=api.cutStatus(board.id);
+      if(sent){const badge=document.createElement('span');badge.className=`draw-cut-status draw-cut-status--${sent}`;badge.dataset.drawCutStatus=sent;
+        badge.textContent=sent==='changed'?'Changed since sending':'Sent to Cut';b.append(badge);}
       b.setAttribute('aria-pressed',String(board.id===api.artboards.active().id));
       b.addEventListener('dblclick',()=>api.artboards.choose(board.id,true));list.append(b);
     } host.append(list);
@@ -717,6 +720,8 @@ export function createPanels(shell, state, api) {
       const b=button(label,action);b.disabled=disabled || state.document.readOnly;host.append(b);
     }
     const send=button('Send to Cut…',()=>api.command('send-to-cut'));send.className='btn btn--primary btn--sm draw-send-button';send.dataset.drawSendToCut='';host.append(send);
+    if(api.cutStatus(board.id)){const update=button('Update in Cut',()=>api.updateInCut(board.id));update.className='btn btn--ghost btn--sm draw-send-button';update.dataset.drawUpdateCut='';
+      update.disabled=state.document.readOnly;update.dataset.tooltip='Replace what this artboard last sent to Cut, with the same choices';host.append(update);}
   }
   const TYPE_NAMES = { path: 'Path', group: 'Group', compoundPath: 'Compound Path', image: 'Image', text: 'Text', layer: 'Layer' };
   function selectionTitle(ids) {

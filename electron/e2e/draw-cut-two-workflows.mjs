@@ -53,6 +53,36 @@ export async function runDrawCutTwoWorkflows(client) {
   assert.ok(placed.red >= 1 && placed.yellow === 1, `The square's fill and red outline: ${JSON.stringify(placed)}`);
   assert.equal(placed.count, 5, `fill + outline + clipped line + one green line + tiny-segment line: ${JSON.stringify(placed)}`);
   await evaluate("document.querySelector('#workspaceToggle').click()"); await until("document.body.dataset.workspace==='draw'", 'back to Draw');
+
+  // Part B: the artboard remembers the send. Artboards shows its status and Update in Cut after a change.
+  await evaluate(`(async()=>(${active}.handle('panel.artboards')))()`); await wait(50);
+  const status = () => evaluate("document.querySelector('.draw-project[style*=block] [data-draw-cut-status]')?.dataset.drawCutStatus ?? null");
+  assert.equal(await status(), 'sent');
+  assert.equal(await evaluate(`(async()=>{const l=${active}.state.document.data.cutLinks;return l.length===1&&l[0].options.strokes==='outline'&&l[0].options.outside==='clip'})()`), true, 'The link keeps the choices');
+  await evaluate(`(async()=>{const w=${active},{updateNode}=await import('./draw/doc/commands.mjs'),L=w.state.document.data.layers[0],n=L.children.find(c=>c.subpaths?.[0]?.segments.length===4&&!c.subpaths[0].closed);
+    w.state.history.execute(updateNode(n.id,{subpaths:n.subpaths.map(s=>({...s,segments:s.segments.map(g=>({...g,p:[g.p[0],g.p[1]-10]}))}))}));})()`);
+  await wait(50);
+  assert.equal(await status(), 'changed', 'Editing the artwork marks the artboard as changed since sending');
+  // The user moved the sent items 10 mm right in Cut; the update keeps that move.
+  await evaluate("document.querySelector('#workspaceToggle').click()"); await until("document.body.dataset.workspace==='cut'", 'to Cut');
+  const sentBefore = await evaluate("(()=>{const items=paper.project.layers[1].children;items.forEach(i=>i.translate([10,0]));return items.length;})()");
+  const extra = await evaluate("(()=>{const p=new paper.Path.Rectangle({rectangle:[300,300,5,5],strokeColor:'#ff00ff',parent:paper.project.layers[1]});return paper.project.layers[1].children.length;})()");
+  await evaluate("document.querySelector('#workspaceToggle').click()"); await until("document.body.dataset.workspace==='draw'", 'back to Draw');
+  await evaluate("document.querySelector('.draw-project[style*=block] [data-draw-update-cut]').click()");
+  await until("document.body.dataset.workspace==='cut'", 'Update in Cut switches to Cut');
+  assert.equal(await evaluate("!!document.querySelector('.draw-send-dialog')"), false, 'Update repeats the earlier choices without a dialog');
+  const updated = await evaluate(`(()=>{const items=paper.project.layers[1].children,linked=items.filter(i=>i.data.drawLink);
+    const b=linked.reduce((a,i)=>a?a.unite(i.bounds):i.bounds.clone(),null);return {count:items.length,linked:linked.length,left:b.left,stroked:linked.filter(i=>i.strokeColor&&i.strokeWidth>0&&i.strokeColor.alpha!==0).length,
+      tinyLine:linked.some(i=>Math.abs(i.bounds.center.y-60)<.5&&i.bounds.center.x<100)};})()`);
+  assert.equal(updated.count, extra, 'The earlier send is replaced; the user\'s own item stays');
+  assert.equal(updated.linked, sentBefore); assert.equal(updated.stroked, 0, 'Outline Stroke is used again');
+  assert.ok(Math.abs(updated.left - 19) < .05, `The 10 mm move in Cut is kept (outline starts at 9 mm): left ${updated.left}`);
+  assert.equal(updated.tinyLine, true, 'The moved line arrives at its new place');
+  const undoKey = process.platform === 'darwin' ? 'metaKey' : 'ctrlKey';
+  await evaluate(`window.dispatchEvent(new KeyboardEvent('keydown',{key:'z',code:'KeyZ',bubbles:true,cancelable:true,${undoKey}:true}))`);
+  assert.equal(await evaluate("paper.project.layers[1].children.filter(i=>i.data.drawLink).some(i=>Math.abs(i.bounds.center.y-60)<.5&&i.bounds.center.x<100)"), false, 'One undo in Cut restores the earlier send');
+  await evaluate("document.querySelector('#workspaceToggle').click()"); await until("document.body.dataset.workspace==='draw'", 'back to Draw');
+  assert.equal(await status(), 'sent', 'After the update the artboard is in sync again');
   await restoreTabs();
-  console.log('PASS Draw Send to Cut v2 (A): Outline Stroke command, outline strokes and cut at the artboard in Send to Cut, duplicates left out, tiny segments and node count reported');
+  console.log('PASS Draw Send to Cut v2: Outline Stroke command, outline strokes and cut at the artboard in Send to Cut, duplicates left out, tiny segments and node count reported, artboard send status, Update in Cut keeps the choices, the move in Cut and other items, one undo');
 }

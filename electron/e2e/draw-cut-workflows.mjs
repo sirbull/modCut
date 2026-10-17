@@ -49,8 +49,9 @@ export async function runDrawCutWorkflows(client) {
   await until("!!document.querySelector('.draw-send-dialog form')", 'Send to Cut dialog');
   const summary = await evaluate("document.querySelector('[data-draw-send-summary]').textContent");
   assert.match(summary, /^2 paths \(8 nodes\) will be sent as centerline geometry/, summary);
-  assert.equal(await evaluate("document.querySelector('.draw-send-dialog form').elements.target.value"), 'new-tab', 'A new Cut tab is the default target');
-  await evaluate("document.querySelector('.draw-send-dialog form').requestSubmit()");
+  // The artboard was sent before, so updating that send is the default; New Cut tab is chosen here.
+  assert.equal(await evaluate("document.querySelector('.draw-send-dialog form').elements.target.value"), 'update', 'Update is the default for an artboard sent before');
+  await evaluate("(()=>{const f=document.querySelector('.draw-send-dialog form');f.elements.target.value='new-tab';f.requestSubmit();})()");
   await until("document.body.dataset.workspace==='cut'", 'switch to Cut');
   assert.equal(await evaluate("document.querySelectorAll('.doc-tab').length"), tabs + 1, 'Send to Cut opened a new tab');
   assert.equal(await evaluate("paper.project.layers[1].children.length"), 2, 'The new tab holds the artboard');

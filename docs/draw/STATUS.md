@@ -406,8 +406,23 @@ lagklipping fra Layers-menyen.
 * Kode: `outlineStroke` i `geom/kernel-js.mjs`, `outline-stroke` og `strokeOutlines` i `index.mjs`,
   `clipToRect` i `render/paper-adapter.mjs`, valgene `clipToBoard`, `outlines` og `dedupe` i `io/cut-svg.mjs`.
 
-Gjenstår i D2.10: `cutLinks` med **Oppdater i Cut**, bilder som rastergravering, flere artboards i én
-sending, og objekter utenfor bedet.
+Del B (2026-10-17), **Update in Cut**:
+* Hver sending lagres i `cutLinks` i Draw-dokumentet: artboard, Cut-fane, tidspunkt, en hash av det som
+  ble sendt og valgene (Strokes, Past the artboard, duplikater, plassering). Lagringen er et eget
+  angresteg i Draw («Send to Cut»).
+* Artboards-panelet viser **Sent to Cut** eller **Changed since sending** ved artboardet, og knappen
+  **Update in Cut** når artboardet er sendt før.
+* Update in Cut gjentar valgene uten dialog (dialogen åpner bare hvis noe blokkerer). I Cut byttes bare
+  elementene fra den forrige sendingen av artboardet ut; andre elementer og lagenes innstillinger blir.
+  Har brukeren flyttet de sendte elementene i Cut, beholdes flyttingen. Ett angresteg i Cut.
+* I Send to Cut-dialogen er **Update the earlier send in Cut** et valg under Target, og standard når
+  artboardet er sendt før. Finnes ikke den forrige sendingen i Cut, legges artboardet til, med beskjed.
+* Kode: `data.drawLink` på Cut-elementene og `link`/`replaceLink` i `bed.loadSVG` (den smale endringen i
+  `bed.js` som kapittel 14.2 tillater), `sendDrawToCut` i `app.js`, `cutLink`, `cutStatus` og `sourceHash`
+  i `index.mjs`.
+
+Gjenstår i D2.10: bilder som rastergravering, flere artboards i én sending, objekter utenfor bedet, og
+å finne igjen en sending i en annen fane etter at prosjektet er lukket og åpnet (fane-id-er er per økt).
 
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
@@ -428,7 +443,7 @@ sending, og objekter utenfor bedet.
 | D2.7 Raster-eksport | PNG og JPEG (2.5) og Export for Screens med skala og suffiks (WORK_LOG «Eksport del 3») ferdig; WebP gjenstår |
 | D2.8 Pencil, Shear, Eyedropper m.fl. | Ferdig (2.15): Eyedropper, Measure, Group Selection, Scissors, Pencil, Shear, Arc |
 | D2.9 Transparency, History, Info, kommandosøk | Ferdig (2.16); snapshots i History gjenstår |
-| D2.10 Send til Cut v2 | Tekst til outlines (2.9), Outline Stroke, kutt ved artboard og validering (2.18) ferdig; Oppdater i Cut, bilder og flere artboards gjenstår |
+| D2.10 Send til Cut v2 | Tekst til outlines (2.9), Outline Stroke, kutt ved artboard, validering og Update in Cut (2.18) ferdig; bilder og flere artboards gjenstår |
 | D3.1 Outline Stroke og Expand | Outline Stroke (2.18) og Expand Shape finnes; Expand Appearance gjenstår |
 | D3.2 Appearance og effekter | Appearance ferdig; effekter gjenstår |
 | D3.3 til D3.8, fase 4 og 5 | Gjenstår |
@@ -445,7 +460,8 @@ SVG-, PNG- og JPEG-eksport er gjort (2.5).
 2. D2.4 path-kommandoer (2.13), D2.3 gradienter (2.14), D2.8 verktøy (2.15) og D2.9 History, Info og
    kommandosøk (2.16) er gjort.
 3. Draw Normal, Behind og Inside (2.17) er gjort.
-4. D2.10 Send til Cut v2: del A (2.18) er gjort. **Neste: del B, `cutLinks` og Oppdater i Cut.**
+4. D2.10 Send til Cut v2: del A og B (2.18) er gjort. **Neste: del C, bilder som rastergravering og flere
+   artboards i én sending.**
 
 ## 5. Kjente begrensninger og risiko
 

@@ -146,9 +146,9 @@ export function reorderArtboard(id, index) {
     const [board] = data.artboards.splice(from,1); data.artboards.splice(index,0,board);
   }, {nodeIds:[id]});
 }
-export function updateDocument(properties) {
+export function updateDocument(properties, { label = 'Document Setup' } = {}) {
   const allowed = ['name', 'units', 'rasterEffectsPpi', 'colorMode', 'settings', 'swatches', 'swatchGroups', 'graphicStyles', 'assets', 'guides', 'cutLinks'];
   if (Object.keys(properties).some((key) => !allowed.includes(key))) throw new Error('Unsupported document property');
   const copy = structuredClone(properties);
-  return new EditCommand('Document Setup', (data) => Object.assign(data, structuredClone(copy)));
+  return new EditCommand(label, (data) => Object.assign(data, structuredClone(copy)));
 }

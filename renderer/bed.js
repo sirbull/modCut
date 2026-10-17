@@ -165,10 +165,20 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   }
   // options.placement "origin" puts the SVG's top-left at the bed origin instead of centering it;
   // options.replace clears the design inside the same undo step (Send to Cut from Draw).
-  function loadSVG(node, wMm, hMm, viewBox, { placement = "center", replace = false } = {}) {
+  // Draw's Send to Cut tags what it adds (`link`), so a later "Update in Cut" (`replaceLink`) can swap
+  // exactly those items, in the same undo step, keeping any move the user made in Cut.
+  const linkedTo = (item, link) => !!link && item.data?.drawLink?.doc === link.doc && item.data.drawLink.board === link.board;
+  function linkedItems(link) { return designLayer.children.filter((it) => linkedTo(it, link)); }
+  function loadSVG(node, wMm, hMm, viewBox, { placement = "center", replace = false, link = null, replaceLink = null } = {}) {
     resetGroupFocus();
     pushHistory();
     if (replace) { abandonPenInteraction(); clearNodeSelection(); designLayer.removeChildren(); selected.clear(); }
+    let moved = null;
+    if (replaceLink) {
+      const old = linkedItems(replaceLink), sent = old[0]?.data.drawLink.topLeft;
+      if (old.length && sent) { const b = old.reduce((a, it) => a ? a.unite(it.bounds) : it.bounds.clone(), null); moved = b.topLeft.subtract(P(sent[0], sent[1])); }
+      if (old.length) { abandonPenInteraction(); clearNodeSelection(); for (const it of old) { selected.delete(it); it.remove(); } }
+    }
     designLayer.activate();
     const before = new Set(designLayer.children);
     const g = paper.project.importSVG(node, { expandShapes: true, insert: true });
@@ -183,9 +193,13 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       g.scale(sf, g.bounds.topLeft);
       g.position = P(bedWmm / 2, bedHmm / 2);
     }
+    if (moved) g.translate(moved);
+    const sentTopLeft = g.bounds.topLeft;
     if (g.className === "Group") { flattenInto(g, designLayer); g.remove(); } // single-shape SVGs import as a Path
     clearSel();
-    for (const it of designLayer.children) if (!before.has(it) && isSelectableItem(it)) addSel(it);
+    const added = designLayer.children.filter((it) => !before.has(it));
+    if (link) for (const it of added) it.data.drawLink = { ...link, topLeft: [sentTopLeft.x - (moved?.x ?? 0), sentTopLeft.y - (moved?.y ?? 0)] };
+    for (const it of added) if (isSelectableItem(it)) addSel(it);
     designAngle = 0;
     emitSel();
     view.update();
@@ -2495,7 +2509,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   sizeCanvas(); drawBed(); fit(); setCursor(cursorForTool(currentTool)); // safe now: everything above is initialized
 
   return {
-    loadSVG, loadImage, clear: clearDesign, setBedSize,
+    loadSVG, linkedCount: (link) => linkedItems(link).length, loadImage, clear: clearDesign, setBedSize,
     zoomIn: () => { view.zoom = Math.min(60, view.zoom * 1.25); drawOverlay(); },
     zoomOut: () => { view.zoom = Math.max(0.05, view.zoom / 1.25); drawOverlay(); },
     fit,

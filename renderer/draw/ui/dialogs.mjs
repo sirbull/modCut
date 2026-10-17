@@ -364,9 +364,12 @@ const escapeHtml=text=>String(text).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt
  * Send to Cut: artboard, target and placement, with a live summary of what will be sent.
  * `summary(boardId)` returns { count, warnings } for the chosen artboard.
  */
-export function sendToCutDialog({boards,boardId,summary,cutEmpty=false}) {
+export function sendToCutDialog({boards,boardId,summary,cutEmpty=false,linked=new Set()}) {
   // An empty Cut has nothing to replace or keep apart, so the artboard always goes into this tab's Cut.
-  const target=cutEmpty?[]:[{key:'target',label:'Target',type:'select',value:'new-tab',options:[{value:'new-tab',label:'New Cut tab'},{value:'replace',label:'Replace the design in this tab’s Cut'},{value:'add',label:'Add to this tab’s Cut'}]}];
+  // Update replaces only what an earlier send of the artboard put in Cut, keeping the rest and the layer settings.
+  const target=cutEmpty?[]:[{key:'target',label:'Target',type:'select',value:linked.has(boardId)?'update':'new-tab',options:[
+    ...(linked.size?[{value:'update',label:'Update the earlier send in Cut'}]:[]),
+    {value:'new-tab',label:'New Cut tab'},{value:'replace',label:'Replace the design in this tab’s Cut'},{value:'add',label:'Add to this tab’s Cut'}]}];
   const result=openDrawModal({title:'Send to Cut',submitLabel:'Send',className:'draw-send-dialog',fields:[
     {key:'boardId',label:'Artboard',type:'select',value:boardId,options:boards.map((b,i)=>({value:b.id,label:escapeHtml(`${i+1}. ${b.name}`)}))},
     ...target,
