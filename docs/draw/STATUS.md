@@ -4,7 +4,7 @@
 > Detaljer: [hovedplanen](../DRAW_WORKSPACE.md) (spesifikasjon og byggeplan),
 > [RIGHT_PANELS.md](RIGHT_PANELS.md) (høyresiden), [WORK_LOG.md](WORK_LOG.md) (hva som er gjort, dag for dag)
 > og [HANDOFF.md](HANDOFF.md) (overlevering til neste agent).
-> Sist oppdatert: 2026-10-17 (verktøy, D2.8 del A). Arbeidsgren: `feat/vector-draw` (Claude og Codex
+> Sist oppdatert: 2026-10-17 (verktøy, D2.8 del A og B). Arbeidsgren: `feat/vector-draw` (Claude og Codex
 > jobber begge der; hent alltid før du starter, og kjør `npm ci` ved endrede avhengigheter).
 
 ## 1. Kort oppsummert
@@ -336,7 +336,20 @@ swatches.
 * Kode: `doc/tool-rules.mjs` (Eyedropper, Measure, Group Selection) og `cutSubpath` i
   `geom/path-commands.mjs`. Hvert verktøy har egen markør.
 
-Del B (neste): Pencil (N), Shear og Arc.
+Del B (2026-10-17):
+* **Pencil (N):** frihånd; punktene tilpasses Bézier-kurver. Slutter streken nær starten, lukkes banen.
+  Enter åpner Pencil Tool Options: fidelity (Accurate til Smooth), lukkeavstand i piksler og Keep selected.
+  Streken får standard strek og ikke fyll, som i Illustrator. Ett angresteg.
+* **Shear (i Scale-gruppen):** dra for å skjære rundt referansepunktet; aksen følger draget (Shift holder
+  den horisontal). Enter eller **Object > Transform > Shear…** åpner dialog med vinkel og akse, Preview og Copy.
+* **Arc (i Line-gruppen):** dra for en kvart ellipse som vanlig åpen path med strek og uten fyll; Shift gir
+  en sirkelbue, klikk åpner dialog for mål.
+* Felles `fitCurve` i `index.mjs` brukes av Pencil og Simplify, og sørger for at lukkede baner ikke
+  faller sammen til ett anker. `toParentSpace` legger paths i en transformert forelder ved å flytte
+  ankrene, siden paths alltid har identitetstransform.
+
+Gjenstår i D2.8 og nær beslektet: Smooth og Path Eraser, Knife, Lasso, Magic Wand, Curvature og Spiral
+(fase 3).
 
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
@@ -355,7 +368,7 @@ Del B (neste): Pencil (N), Shear og Arc.
 | D2.5 SVG eksport/import | SVG-eksport ferdig (se 2.5); SVG-import finnes i enkel form |
 | D2.6 PDF-eksport | Ferdig (Codex): Save PDF-dialog med forhåndsinnstillinger, lag, merker, bevar redigering; også EPS og DXF. Se WORK_LOG «Eksport del 1 og 2» |
 | D2.7 Raster-eksport | PNG og JPEG (2.5) og Export for Screens med skala og suffiks (WORK_LOG «Eksport del 3») ferdig; WebP gjenstår |
-| D2.8 Pencil, Shear, Eyedropper m.fl. | Del A ferdig (2.15): Eyedropper, Measure, Group Selection, Scissors; Pencil, Shear og Arc gjenstår |
+| D2.8 Pencil, Shear, Eyedropper m.fl. | Ferdig (2.15): Eyedropper, Measure, Group Selection, Scissors, Pencil, Shear, Arc |
 | D2.9 Transparency, History, Info, kommandosøk | Transparency ferdig; resten gjenstår |
 | D2.10 Send til Cut v2 | Automatisk tekst til outlines ferdig (2.9); øvrige v2-deler gjenstår |
 | D3.1 Outline Stroke og Expand | Gjenstår (Expand Shape finnes) |
@@ -371,8 +384,8 @@ SVG-, PNG- og JPEG-eksport er gjort (2.5).
 1. **D2.1 Tekst** er ferdig i grunnform (2.6 til 2.11). Resten (kerning-modus, justert tekst, innrykk,
    blandede stiler, klammer for tekst på path, reflow med canvas-håndtak) tas senere.
    D2.2 compound paths og klippemasker er gjort (2.12).
-2. D2.4 path-kommandoer (2.13), D2.3 gradienter (2.14) og D2.8 del A (2.15) er gjort. **Neste: D2.8 del B**
-   (Pencil, Shear, Arc), deretter D2.9 History, Info og kommandosøk.
+2. D2.4 path-kommandoer (2.13), D2.3 gradienter (2.14) og D2.8 verktøy (2.15) er gjort.
+   **Neste: D2.9 History-panel, Info-panel og kommandosøk.**
 3. Draw Inside (rest av D2.2).
 4. D2.6 PDF-eksport, D2.3 gradienter, D2.8 flere verktøy, D2.9 History/Info/kommandosøk.
 5. D2.10 Send til Cut v2.

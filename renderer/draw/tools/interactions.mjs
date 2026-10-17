@@ -89,6 +89,10 @@ export function createInteractions(canvas, state, api) {
           Object.assign(gesture.node.params,{outerRadius:gesture.innerControl.radius,innerRadius:gesture.innerControl.radius*ratio});
         } else gesture.innerControl=null;
         preview=renderer.shapePreview(gesture.node);
+      } else if (gesture.mode==='pencil') {
+        // Live freehand line; points closer than half a screen pixel are skipped.
+        const last=gesture.points.at(-1);if(Math.hypot(p.x-last[0],p.y-last[1])>=.5/scope.view.zoom)gesture.points.push([p.x,p.y]);
+        preview=new scope.Path({segments:gesture.points,strokeColor:'#071411',strokeWidth:1/scope.view.zoom});
       } else if (gesture.mode==='measure') {
         let end=p;
         if(event.shiftKey){const d=p.subtract(gesture.start),a=Math.round(Math.atan2(d.y,d.x)/(Math.PI/4))*Math.PI/4;end=gesture.start.add(new scope.Point(Math.cos(a),Math.sin(a)).multiply(d.length));}
@@ -137,6 +141,7 @@ export function createInteractions(canvas, state, api) {
       if(!hit){api.notify?.('Click on a path or shape outline to cut it.');return;}
       api.run(()=>api.scissors(hit));return;
     }
+    if(tool==='pencil'){gesture={...base,mode:'pencil',points:[[p.x,p.y]]};return;}
     if(tool==='measure'){api.setMeasure(null);gesture={...base,mode:'measure'};return;}
     if(tool==='group-selection') {
       const hit=renderer.hit(p);
@@ -198,7 +203,9 @@ export function createInteractions(canvas, state, api) {
     if (drag.tool==='zoom') {if(!drag.scrubbed)api.zoomAt(drag.start,event.altKey || api.zoomOut() ? .8 : 1.25);return;}
     run(()=>{
       if (state.document.readOnly)return;
-      if(drag.mode==='measure') {
+      if(drag.mode==='pencil') {
+        if(moved||drag.points.length>2)api.pencil(drag.points);
+      }else if(drag.mode==='measure') {
         if(drag.end)api.setMeasure([drag.start.x,drag.start.y],[drag.end.x,drag.end.y]);
       }else if(drag.mode==='gradient') {
         if(!moved)api.command('paint-gradient');

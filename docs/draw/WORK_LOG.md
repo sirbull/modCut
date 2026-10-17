@@ -1286,3 +1286,20 @@ Verifisering: 219 Draw-enhetstester (4 nye i `tool-rules.test.mjs`), ny E2E
 `draw-tools-two-workflows.mjs` (`--draw-tools-two`).
 
 Neste: D2.8 del B, Pencil, Shear og Arc.
+
+## 2026-10-17: D2.8 del B, Pencil, Shear og Arc
+
+- `geom/transforms.mjs`: `shear` i `TRANSFORM_TOOLS`, `operationMatrix`, `dragTransform` (aksen følger
+  draget) og `dialogOperation`. Transformdialogen har vinkel og akse for Shear; Object > Transform > Shear….
+- `tools/shapes.mjs`: `arc` i `SHAPE_TOOLS`; `shapeFromDrag('arc')` lager en åpen path (kvart ellipse).
+- `tools/interactions.mjs`: Pencil samler punkter med live linje; slipp gir `api.pencil`. En lukket sløyfe
+  ender der den startet, så antallet punkter avgjør (ikke bare flyttavstanden).
+- `index.mjs`: `pencil` og `pencilDialog`; `fitCurve` (felles med Simplify) halverer toleransen til lukkede
+  baner har minst tre ankre. Uten den forsvant en sirkelformet blyantstrek uten melding.
+- `toParentSpace` flytter ankrene til paths i stedet for å gi dem en transform.
+
+Verifisering: 222 Draw-enhetstester (3 nye i `shear-arc.test.mjs`); `--draw-tools-two` dekker også Pencil
+(lukket sløyfe og åpen strek, ett angresteg), Arc og Shear (dialog med 30° og drag som ett angresteg).
+Hele Draw-E2E for del A (49fdd22) passerte: 31 av 31.
+
+Neste: D2.9 History-panel, Info-panel og kommandosøk.

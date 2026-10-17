@@ -66,6 +66,33 @@ export async function runDrawToolsTwoWorkflows(client) {
   assert.equal(await evaluate(`(async()=>(${active}.state.document.data.layers[0].children.length))()`),before+1,'The line is now two paths');
   const pieces=await evaluate(`(async()=>{const w=${active},a=w.state.document.data.artboards[0];return w.state.selection.ids.map(id=>w.state.document.getNode(id).subpaths[0].segments.map(s=>Math.round(s.p[0]-a.x)))})()`);
   assert.deepEqual(pieces,[[70,100],[100,130]]);
+  // Pencil (N): a freehand loop that ends near its start closes; an open stroke stays open. One step each.
+  await tool('select');await select([]);await key('n');assert.equal(await evaluate(`(async()=>(${active}.state.ui.tool))()`),'pencil');
+  const {mouse}=inputHelpers(client),loop=[];for(let i=0;i<=24;i++){const a=i/24*2*Math.PI;loop.push([20+10*Math.cos(a),75+8*Math.sin(a)]);}
+  steps=await applied();await mouse('mouseMoved',await at(...loop[0]));await mouse('mousePressed',await at(...loop[0]),{buttons:1});
+  for(const p of loop.slice(1))await mouse('mouseMoved',await at(...p),{buttons:1});await mouse('mouseReleased',await at(...loop.at(-1)));
+  let drawn=await evaluate(`(async()=>{const w=${active};return w.state.document.getNode(w.state.selection.ids[0])})()`);
+  assert.equal(drawn.type,'path');assert.equal(drawn.subpaths[0].closed,true,'The loop closes');assert.ok(drawn.subpaths[0].segments.length>=3&&drawn.subpaths[0].segments.length<24,`Smoothed to ${drawn.subpaths[0].segments.length} anchors`);
+  assert.equal(drawn.appearance.fills.length,0);assert.equal(await applied(),steps+1);
+  const wave=[[40,60],[45,64],[50,60],[55,64],[60,60]];
+  await mouse('mouseMoved',await at(...wave[0]));await mouse('mousePressed',await at(...wave[0]),{buttons:1});
+  for(const p of wave.slice(1))await mouse('mouseMoved',await at(...p),{buttons:1});await mouse('mouseReleased',await at(...wave.at(-1)));
+  drawn=await evaluate(`(async()=>{const w=${active};return w.state.document.getNode(w.state.selection.ids[0])})()`);assert.equal(drawn.subpaths[0].closed,false,'An open stroke stays open');
+  // Arc: a stroked, unfilled quarter ellipse as a plain path.
+  await tool('arc');await drag(await at(70,50),await at(100,80));
+  const arc=await evaluate(`(async()=>{const w=${active};return w.state.document.getNode(w.state.selection.ids[0])})()`);
+  assert.equal(arc.type,'path');assert.equal(arc.subpaths[0].segments.length,2);assert.equal(arc.subpaths[0].closed,false);assert.equal(arc.appearance.fills.length,0);
+  // Shear: the Object > Transform > Shear dialog slants a square by 30°; dragging with the tool shears as one step.
+  const square=await evaluate(`(async()=>{const w=${active},{shapeFromDrag}=await import('./draw/tools/shapes.mjs'),{insertNode}=await import('./draw/doc/commands.mjs'),b=w.state.document.data.artboards[0];
+    const n=shapeFromDrag('rectangle',[b.x+110,b.y+60],[b.x+130,b.y+80],{fill:'#CCCCCC',stroke:null});w.state.history.execute(insertNode(w.state.document.data.layers[0].id,n));w.setTool('select');w.select([n.id]);return n.id;})()`);
+  const width=()=>evaluate(`(async()=>(${active}.renderer.bounds('${square}').width))()`);
+  assert.equal(await evaluate("window.modcut.clickE2EMenuItem('Object','Shear…')"),true);
+  for(let i=0;i<100&&!await evaluate("!!document.querySelector('.draw-transform-dialog form')");i++)await wait(30);
+  await evaluate("(()=>{const f=document.querySelector('.draw-transform-dialog form');f.elements.angle.value='30';f.dispatchEvent(new Event('input',{bubbles:true}));f.requestSubmit();})()");await wait(80);
+  assert.ok(Math.abs(await width()-(20+20*Math.tan(Math.PI/6)))<.01,`Shear 30° widens by height × tan 30°: ${await width()}`);
+  await evaluate(`(async()=>{${active}.handle('undo')})()`);assert.ok(Math.abs(await width()-20)<.01);
+  steps=await applied();await tool('shear');await drag(await at(120,62),await at(126,62));
+  assert.ok(await width()>21,'Dragging with Shear slants the square');assert.equal(await applied(),steps+1);
   await tool('select');await restore();
-  console.log('PASS Draw tools: Eyedropper (copy to selection, default paint, Shift pixel colour), Measure distance and angle, Group Selection levels, Scissors on a closed shape and an open path');
+  console.log('PASS Draw tools: Pencil closed loop and open stroke, Arc, Shear dialog and drag, plus Eyedropper (copy to selection, default paint, Shift pixel colour), Measure distance and angle, Group Selection levels, Scissors on a closed shape and an open path');
 }

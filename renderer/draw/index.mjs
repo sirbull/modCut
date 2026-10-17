@@ -21,12 +21,13 @@ import { transformedBox } from './tools/selection.mjs';
 import { SHAPE_TOOLS, shapeFromDrag } from './tools/shapes.mjs';
 import { insertNode, removeNode, replaceLeaf, updateNode, updateDocument } from './doc/commands.mjs';
 import { createNode } from './doc/schema.mjs';
+import { appearance } from './geometry.mjs';
 import { changeGradient, defaultGradient, isGradient, vectorGradient } from './doc/gradient.mjs';
 import { sampleAppearance, applySampleCommands, measure } from './doc/tool-rules.mjs';
 import { activeArtboard } from './doc/artboards.mjs';
 import { changePaint, changeStroke, paintHex } from './doc/paint.mjs';
 import { importArtwork } from './import-artwork.mjs';
-import { shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog,layerOptionsDialog,swatchOptionsDialog,sendToCutDialog,averageDialog,offsetDialog,simplifyDialog } from './ui/dialogs.mjs';
+import { shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog,layerOptionsDialog,swatchOptionsDialog,sendToCutDialog,averageDialog,offsetDialog,simplifyDialog,pencilDialog } from './ui/dialogs.mjs';
 import { artboardCutSvg } from './io/cut-svg.mjs';
 import { EXPORT_FORMATS, rasterSize, svgDocument } from './io/export.mjs';
 import { createExportController } from './export-controller.mjs';
@@ -43,11 +44,11 @@ import { textDialog } from './ui/dialogs.mjs';
 
 const workspaces=new WeakMap();
 export function getDrawWorkspace(root) {return workspaces.get(root) || null;}
-const implementedTools=new Set(['select','group-selection','hand','zoom','artboard','gradient','eyedropper','measure','scissors','type','area-type','type-on-path',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
+const implementedTools=new Set(['select','group-selection','pencil','hand','zoom','artboard','gradient','eyedropper','measure','scissors','type','area-type','type-on-path',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
 const commands=new Set(['undo','redo','delete','select-all','select-artboard','deselect','cancel','fit-artboard','fit-all','actual-size','zoom-in','zoom-out','outline',
   'cut','copy','paste','paste-front','paste-back','paste-place','paste-all-artboards',
   'edit-text','create-outlines','join','average','offset-path','simplify','reverse-path','add-anchors','remove-anchors','clean-up','compound-make','compound-release','clip-make','clip-release','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
-  'paint-focus','paint-swap','paint-none','paint-solid','paint-gradient','default-paint','smart-guides','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','toggle-panels','toggle-panels-except-tools',
+  'paint-focus','paint-swap','paint-none','paint-solid','paint-gradient','default-paint','smart-guides','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','shear-dialog','toggle-panels','toggle-panels-except-tools',
   ...PANEL_DEFINITIONS.map(p=>`panel.${p.id}`),...['left','right','up','down'].flatMap(d=>[`nudge-${d}`,`nudge-large-${d}`,`duplicate-${d}`])]);
 export function createDrawWorkspace(root,{paper=window.paper,state=createProjectDraw(),onError=console.warn,onNotice=()=>{},onImport=()=>{},onSendToCut=null,cutIsEmpty=()=>false,cutClipboard=()=>null,onExport=null,getPreferences=()=>({}),statusHost=null}={}) {
   state.ui={tool:'select',flyout:null,layerId:state.document.data.layers[0]?.id,fill:'#FFFFFF',stroke:'#071411',strokeWidth:.5,paintFocus:'fill',...state.ui};
@@ -97,6 +98,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       tool.id==='gradient' ? 'Drag across the selection: gradient direction and length · Shift: 45° steps · Click: apply gradient' :
       tool.id==='eyedropper' ? 'Click: copy appearance to the selection · Alt: apply the selection\'s appearance · Shift: colour under the pointer' :
       tool.id==='measure' ? (state.ui.measurement?measurementText(state.ui.measurement):'Drag: distance and angle · Shift: 45° steps') :
+      tool.id==='pencil' ? 'Drag: draw freehand · End near the start: close · Enter: Pencil options' :
       tool.id==='scissors' ? 'Click a path: cut it there (a closed path opens, an open path splits)' :
       tool.id==='group-selection' ? 'Click: object · Click again: its group, one level up per click · Shift: add' :
       tool.id==='direct-selection' ? 'Drag dots: round corners · Alt: one corner / break handles · Shift: add anchors/constrain' :
@@ -169,7 +171,10 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   function insertionParent() {const iso=isolation();return iso&&state.document.isEditable(iso)?iso:layerId();}
   function toParentSpace(parentId,node) {
     const world=renderer.worldMatrix(parentId);
-    return world.every((v,i)=>v===[1,0,0,1,0,0][i])?node:{...node,transform:multiplyMatrix(invertMatrix(world),node.transform)};
+    if(world.every((v,i)=>v===[1,0,0,1,0,0][i]))return node;
+    // Paths keep an identity transform: their anchors move into the parent's space instead.
+    if(node.type==='path')return {...node,subpaths:node.subpaths.map(s=>mapSubpath(s,invertMatrix(world)))};
+    return {...node,transform:multiplyMatrix(invertMatrix(world),node.transform)};
   }
   /** The artboard as a cut SVG; shapes are expanded and placed with their parent's world matrix. */
   function worldMatrix(id){const node=state.document.getNode(id),parent=state.document.ancestors(id)[0];
@@ -284,6 +289,30 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     return {...patch,character:{...patch.character,fontPostscriptName:layout.font.postscriptName,...(layout.font.reference?{googleFont:layout.font.reference}:{})},layout};
   }
   const measurementText=m=>`D ${m.distance.toFixed(2)} mm · W ${m.dx.toFixed(2)} · H ${(-m.dy).toFixed(2)} · ∠ ${m.angle.toFixed(1)}°`;
+  /**
+   * Bézier fit through points (Paper.js simplify). Paper can fit a closed curve with one looping anchor,
+   * so the tolerance halves until a closed path keeps three anchors and an open one two. Call inside withScope.
+   */
+  function fitCurve(points,closed,tolerance) {
+    let path=new scope.Path({segments:points,closed,insert:false});
+    for(let tries=0;points.length>2&&tries<12;tolerance/=2,tries++) {
+      const attempt=new scope.Path({segments:points,closed,insert:false});attempt.simplify(tolerance);
+      if(attempt.segments.length>=(closed?3:2)){path.remove();path=attempt;break;}attempt.remove();
+    }
+    return path;
+  }
+  /** Pencil: the dragged points become a smooth path; fidelity sets how closely it follows the hand (in screen pixels). */
+  function pencil(points) {
+    if(state.document.readOnly||points.length<2)return;
+    const options={fidelity:3,close:true,closeDistance:15,keepSelected:true,...state.ui.pencil},pixel=1/scope.view.zoom;
+    const first=points[0],last=points.at(-1),closed=options.close&&points.length>3&&Math.hypot(first[0]-last[0],first[1]-last[1])<=options.closeDistance*pixel;
+    const subpath=withScope(()=>{
+      const path=fitCurve(closed?points.slice(0,-1):points,closed,[.5,1,2.5,5,10][options.fidelity-1]*pixel);
+      const result={closed,segments:path.segments.map(s=>({p:[s.point.x,s.point.y],in:[s.handleIn.x,s.handleIn.y],out:[s.handleOut.x,s.handleOut.y]}))};path.remove();return result;});
+    if(subpath.segments.length<2)return;
+    const node=createNode('path',{name:'',subpaths:[subpath],appearance:appearance(null,state.ui.stroke??'#071411',state.ui.strokeWidth??.5)});
+    run(()=>{const parent=insertionParent();state.history.execute(insertNode(parent,toParentSpace(parent,node)));select(options.keepSelected?[node.id]:[]);});
+  }
   /** Measure: a line on the canvas and the distance, offsets and angle in the status bar. */
   function setMeasure(from,to=null){state.ui.measurement=from&&to?measure(from,to):null;withScope(()=>renderer.setMeasure(from&&to?[from,to]:null));status();}
   /** Eyedropper: `sample` copies the clicked object's look, `apply` gives it the selection's look, `pixel` takes a colour. */
@@ -583,12 +612,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       const before=sources.reduce((sum,s)=>sum+s.node.subpaths.reduce((n,p)=>n+p.segments.length,0),0);
       // Precision 100 keeps detail within 0.002 mm; every 10 % less doubles the allowed deviation.
       const simplified=values=>withScope(()=>sources.map(({id,node})=>({id,node,subpaths:flattenPath(node.subpaths.map(s=>mapSubpath(s,[1,0,0,1,0,0])),.005).map(contour=>{
-        // Paper can fit a closed curve with a single looping anchor; halve the tolerance until the shape keeps at least three.
-        let path=new scope.Path({segments:contour.points,closed:contour.closed,insert:false});
-        for(let tolerance=.002*2**((100-values.precision)/10),tries=0;contour.points.length>2&&tries<12;tolerance/=2,tries++) {
-          const attempt=new scope.Path({segments:contour.points,closed:contour.closed,insert:false});attempt.simplify(tolerance);
-          if(attempt.segments.length>=(contour.closed?3:2)){path.remove();path=attempt;break;}attempt.remove();
-        }
+        const path=fitCurve(contour.points,contour.closed,.002*2**((100-values.precision)/10));
         const result={closed:contour.closed,segments:path.segments.map(s=>({p:[s.point.x,s.point.y],in:values.straight?[0,0]:[s.handleIn.x,s.handleIn.y],out:values.straight?[0,0]:[s.handleOut.x,s.handleOut.y]}))};
         path.remove();return result;}).filter(p=>p.segments.length>1)})));
       const count=values=>simplified(values).reduce((sum,r)=>sum+r.subpaths.reduce((n,p)=>n+p.segments.length,0),0);
@@ -663,7 +687,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       const {commands:moves}=templateLayerCommands(state.document,state.document.ancestors(images[0]).find(n=>n.type==='layer').id,{name:state.document.getNode(images[0]).name||'Image',moveIds:images});
       state.history.transaction('Use as Template',()=>moves.forEach(c=>state.history.execute(c)));return select([]);}
     const object=objectCommand(command)??pathCommand(command)??clipboardCommand(command);if(object){const result=object();if(result?.catch)result.catch(error=>{if(!destroyed)onError(error.message);});return;}
-    if(['rotate-dialog','reflect-dialog','scale-dialog'].includes(command))return void transformToolDialog(command.split('-')[0]);
+    if(['rotate-dialog','reflect-dialog','scale-dialog','shear-dialog'].includes(command))return void transformToolDialog(command.split('-')[0]);
     if(command==='delete') {
       if(state.ui.tool==='artboard')return artboards.remove();
       state.history.transaction('Delete',()=>{for(const id of selectedIds())state.history.execute(removeNode(id));});return;
@@ -687,6 +711,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       });state.ui.fill=fill;state.ui.stroke=stroke;toolbar.update();panels.render();return;
     }
     if(command==='tool-dialog'&&SHAPE_TOOLS.includes(state.ui.tool))return void shapeDialog(state.ui.tool);
+    if(command==='tool-dialog'&&state.ui.tool==='pencil')return void pencilDialog(state.ui.pencil??{}).then(values=>{if(values&&!destroyed)state.ui.pencil=values;});
     if(command==='tool-dialog'&&state.ui.tool==='type-on-path'){const id=selectedIds()[0];if(id)return void editText(undefined,null,null,{pathFrom:id});return;}
     if(command==='tool-dialog'&&['type','area-type'].includes(state.ui.tool))return void editText(undefined,null,state.ui.tool==='area-type'?{width:60,height:30}:null);
     if(command==='tool-dialog'&&TRANSFORM_TOOLS.includes(state.ui.tool))return void transformToolDialog(state.ui.tool);
@@ -703,7 +728,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     tool:()=>temporary?.id || state.ui.tool,closeMenus:()=>toolbar.close()});
   interactions=createInteractions(canvas,state,{scope,renderer,withScope,run,select,selectedIds,transform,artboards,status,shapeOptions,insertShape,shapeDialog,zoomAt,isolate,exitIsolation,
     transforms,transformDialog:transformToolDialog,editText,paintIds,command:id=>handle(id),
-    eyedropper,scissors,setMeasure,
+    eyedropper,scissors,setMeasure,pencil,
     gradientVector(from,to,mergeKey){const kind=state.ui.paintFocus==='stroke'?'stroke':'fill',last=state.ui.lastGradient;
       gradient(kind,(current,box,node)=>{const a=renderer.pointToLocal(node.id,from),b=renderer.pointToLocal(node.id,to);
         return vectorGradient(current??defaultGradient(box,last?{type:last.type,stops:last.stops}:{}),[a.x,a.y],[b.x,b.y]);},{label:'Gradient',mergeKey});},

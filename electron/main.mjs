@@ -256,7 +256,7 @@ function buildMenu(mode = "cut") {
     const objectItem=(label,command)=>({label,accelerator:acceleratorFor(command,{isMac}),click:()=>send(command)});
     template.find(item=>item.label==='Type').submenu=[objectItem('Edit Text…','edit-text'),objectItem('Create Outlines','create-outlines')];
     template.find(item=>item.label==='Object').submenu=[{label:'Transform',submenu:[
-      ...['Rotate','Reflect','Scale'].map(label=>({label:`${label}…`,click:()=>send(`${label.toLowerCase()}-dialog`)})),
+      ...['Rotate','Reflect','Scale','Shear'].map(label=>({label:`${label}…`,click:()=>send(`${label.toLowerCase()}-dialog`)})),
       {type:'separator'},{label:'Transform Again',accelerator:acceleratorFor('transform-again',{isMac}),click:()=>send('transform-again')},
     ]},{label:'Arrange',submenu:[objectItem('Bring to Front','bring-front'),objectItem('Bring Forward','bring-forward'),objectItem('Send Backward','send-backward'),objectItem('Send to Back','send-back')]},
     {type:'separator'},objectItem('Group','group'),objectItem('Ungroup','ungroup'),

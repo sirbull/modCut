@@ -210,6 +210,15 @@ export function saveTemplateDialog(name) {
     {key:'name',label:'Template name',value:name,required:true,description:'Saves the artboard size, count and arrangement, units and resolution. Artwork is not included.'},
   ]});
 }
+/** Pencil Options: fidelity from accurate to smooth, and closing near ends. */
+export function pencilDialog(defaults={}) {
+  return openDrawModal({title:'Pencil Tool Options',submitLabel:'OK',className:'draw-pencil-dialog',fields:[
+    {key:'fidelity',label:'Fidelity',type:'select',value:String(defaults.fidelity??3),options:[{value:'1',label:'Accurate'},{value:'2',label:'More accurate'},{value:'3',label:'Balanced'},{value:'4',label:'Smoother'},{value:'5',label:'Smooth'}]},
+    {key:'close',label:'Close paths when ends are near',type:'checkbox',value:defaults.close!==false},
+    {key:'closeDistance',label:'Within (pixels)',type:'number',value:defaults.closeDistance??15,min:1,max:100,step:1,required:true},
+    {key:'keepSelected',label:'Keep selected',type:'checkbox',value:defaults.keepSelected!==false},
+  ]}).then(values=>values&&{...values,fidelity:Number(values.fidelity)});
+}
 export function shapeSizeDialog(tool, defaults = {}) {
   const radial=['polygon','star'].includes(tool), line=tool==='line';
   const fields=radial ? [
@@ -244,6 +253,9 @@ export function transformDialog(tool,origin,defaults={},onPreview=()=>{}) {
   ]:tool==='reflect'?[
     {key:'axis',label:'Reflection axis',type:'select',value:defaults.axis??'vertical',options:[{value:'horizontal',label:'Horizontal'},{value:'vertical',label:'Vertical'},{value:'angle',label:'Custom angle'}]},
     numeric('angle','Axis angle (°, counterclockwise)',defaults.angle??0,{min:-36000,max:36000,showIf:v=>v.axis==='angle'}),
+  ]:tool==='shear'?[
+    numeric('angle','Shear angle (°)',defaults.angle??0,{min:-89.99,max:89.99}),
+    {key:'axis',label:'Axis',type:'select',value:defaults.axis??'horizontal',options:[{value:'horizontal',label:'Horizontal'},{value:'vertical',label:'Vertical'}]},
   ]:[numeric('angle','Angle (°, counterclockwise)',defaults.angle??0,{min:-36000,max:36000})];
   fields.push(numeric('originX','Reference X (mm)',origin[0]),numeric('originY','Reference Y (mm)',origin[1]),
     {key:'preview',label:'Preview',type:'checkbox',value:true},{key:'copy',label:'Copy',type:'checkbox',value:false});

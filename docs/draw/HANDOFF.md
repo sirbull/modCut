@@ -21,8 +21,8 @@ Fase 0 og fase 1 er fullført. Export As, **D2.1a/b punkttekst med systemfonter,
 Create Outlines** og **D2.1c rektangulær områdetekst med linjebryting** er ferdige.
 **Tekst på path (STATUS.md 2.10) og Character/Paragraph (2.11) er ferdige.** D2.1 er ferdig i grunnform;
 resten står i 2.11. D2.2 compound paths og klippemasker er ferdige (2.12).
-D2.4 path-kommandoer (2.13), D2.3 gradienter (2.14) og D2.8 del A (2.15) er ferdige.
-**Neste oppgave er D2.8 del B: Pencil, Shear og Arc.** Kjør `npm ci` etter pull.
+D2.4 path-kommandoer (2.13), D2.3 gradienter (2.14) og D2.8 verktøy (2.15) er ferdige.
+**Neste oppgave er D2.9: History-panel, Info-panel og kommandosøk.** Kjør `npm ci` etter pull.
 
 **Brukerstyrt tillegg etter D2.1c:** Google Fonts og automatisk tekst til outlines ved Send to Cut
 er implementert (STATUS.md 2.9). Tekst på path er fortsatt neste ordinære del.

@@ -1,7 +1,8 @@
 import { createNode } from '../doc/schema.mjs';
 import { appearance } from '../geometry.mjs';
 
-export const SHAPE_TOOLS = Object.freeze(['rectangle','rounded-rectangle','ellipse','line','polygon','star']);
+export const SHAPE_TOOLS = Object.freeze(['rectangle','rounded-rectangle','ellipse','line','arc','polygon','star']);
+const KAPPA = 0.5522847498;
 export function shapeFromDrag(tool, start, end, options = {}) {
   let dx=end[0]-start[0], dy=end[1]-start[1];
   if (options.shift) {
@@ -12,6 +13,13 @@ export function shapeFromDrag(tool, start, end, options = {}) {
   }
   const x=options.alt ? start[0]-dx : start[0], y=options.alt ? start[1]-dy : start[1];
   const x2=start[0]+dx, y2=start[1]+dy;
+  if (tool==='arc') {
+    // A quarter ellipse from the drag start to its end, leaving horizontally and arriving vertically.
+    // As in Illustrator the result is a plain open path, stroked and unfilled.
+    const from=options.alt?[x,y]:start,to=[x2,y2];
+    return createNode('path',{name:'arc',subpaths:[{closed:false,segments:[{p:from,in:[0,0],out:[(to[0]-from[0])*KAPPA,0]},{p:to,in:[0,(from[1]-to[1])*KAPPA],out:[0,0]}]}],
+      appearance:appearance(null,options.stroke ?? options.fill ?? '#071411',options.strokeWidth ?? .5)});
+  }
   let params={x:Math.min(x,x2),y:Math.min(y,y2),width:Math.abs(x2-x),height:Math.abs(y2-y)};
   if (tool==='line') params={x1:x,y1:y,x2,y2};
   else if (tool==='polygon' || tool==='star') {
