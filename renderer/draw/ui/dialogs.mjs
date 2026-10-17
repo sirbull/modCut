@@ -472,6 +472,11 @@ export function magicWandDialog(defaults={}) {
     {key:'opacityTolerance',label:'Opacity tolerance (%)',type:'number',value:defaults.opacityTolerance??5,min:0,max:100,step:1},
   ]}).then(v=>v&&{fill:!!v.fill,stroke:!!v.stroke,weight:!!v.weight,opacity:!!v.opacity,fillTolerance:Number(v.fillTolerance),strokeTolerance:Number(v.strokeTolerance),weightTolerance:Number(v.weightTolerance),opacityTolerance:Number(v.opacityTolerance)});
 }
+/** Eraser Tool Options: brush diameter in mm. */
+export function eraserDialog(size=3) {
+  return openDrawModal({title:'Eraser Tool Options',submitLabel:'OK',className:'draw-eraser-dialog',fields:[
+    {key:'size',label:'Diameter (mm)',type:'number',value:size,min:.05,max:1000,step:'any',required:true}]}).then(v=>v&&Number(v.size)>0?Number(v.size):null);
+}
 /** Select > Save Selection: a name for the current selection. */
 export function saveSelectionDialog(name) {
   return openDrawModal({title:'Save Selection',submitLabel:'OK',className:'draw-save-selection-dialog',fields:[{key:'name',label:'Name',value:name,required:true}]}).then(values=>values?.name??null);

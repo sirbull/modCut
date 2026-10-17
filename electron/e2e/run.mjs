@@ -35,6 +35,7 @@ import { runDrawModeWorkflows } from './draw-modes-workflows.mjs';
 import { runDrawCutTwoWorkflows } from './draw-cut-two-workflows.mjs';
 import { runDrawSvgImportWorkflows } from './draw-svg-import-workflows.mjs';
 import { runDrawSelectWorkflows } from './draw-select-workflows.mjs';
+import { runDrawRegionToolWorkflows } from './draw-region-tools-workflows.mjs';
 import { runDrawTextOutlineWorkflows } from './draw-text-outline-workflows.mjs';
 import { runDrawFeedbackWorkflows } from './draw-feedback-workflows.mjs';
 import { runWorkflows, verifyRecoveredSession } from "./workflows.mjs";
@@ -97,6 +98,9 @@ try {
   } else if (process.argv.includes('--draw-tools-two')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawToolsTwoWorkflows(first);first.socket.close();
+  } else if (process.argv.includes('--draw-region-tools')) {
+    for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
+    await runDrawRegionToolWorkflows(first);first.socket.close();
   } else if (process.argv.includes('--draw-select')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawSelectWorkflows(first);first.socket.close();
@@ -214,6 +218,7 @@ try {
     await runDrawCutTwoWorkflows(first);
     await runDrawSvgImportWorkflows(first);
     await runDrawSelectWorkflows(first);
+    await runDrawRegionToolWorkflows(first);
     await runDrawTextOutlineWorkflows(first);
     const expected = await runProjectWorkflows(first, profile);
     first.socket.close();

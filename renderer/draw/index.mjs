@@ -6,7 +6,8 @@ import { copyNodes, drawClipboard, invert as invertMatrix, pasteCommands } from 
 import { multiply as multiplyMatrix } from './doc/arrange.mjs';
 import { stackingOrder as objectOrder } from './doc/arrange.mjs';
 import { arrangeCommands, groupCommands, hideCommands, lockCommands, showAllCommands, ungroupCommands, unlockAllCommands } from './doc/arrange.mjs';
-import { PATHFINDER_LABELS, runPathfinder } from './geom/pathfinder.mjs';
+import { PATHFINDER_LABELS, runPathfinder, toSubpaths } from './geom/pathfinder.mjs';
+import { pickRegions, mergeRegions, knifeCut, erase as eraseRegion, areaOf } from './geom/region-ops.mjs';
 import { fillHex, pathfinderCommands, stackingOrder } from './doc/pathfinder-commands.mjs';
 import { cancelActiveScrub } from './ui/number-field.mjs';
 import { PANEL_DEFINITIONS } from './panels/registry.mjs';
@@ -31,7 +32,7 @@ import { SAME_MODES, OBJECT_KINDS, magicWand, inverseSelection, sameAs, objectsO
 import { DRAW_MODE_LABELS, insideTarget, nextDrawMode, placement } from './doc/draw-mode.mjs';
 import { changePaint, changeStroke, paintHex } from './doc/paint.mjs';
 import { importArtwork } from './import-artwork.mjs';
-import { shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog,layerOptionsDialog,swatchOptionsDialog,sendToCutDialog,averageDialog,offsetDialog,simplifyDialog,pencilDialog,expandDialog,magicWandDialog,saveSelectionDialog,editSelectionDialog } from './ui/dialogs.mjs';
+import { shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog,layerOptionsDialog,swatchOptionsDialog,sendToCutDialog,averageDialog,offsetDialog,simplifyDialog,pencilDialog,expandDialog,magicWandDialog,eraserDialog,saveSelectionDialog,editSelectionDialog } from './ui/dialogs.mjs';
 import { ALL_ARTBOARDS, artboardCutSvg } from './io/cut-svg.mjs';
 import { EXPORT_FORMATS, rasterSize, svgDocument } from './io/export.mjs';
 import { createExportController } from './export-controller.mjs';
@@ -48,7 +49,7 @@ import { textDialog } from './ui/dialogs.mjs';
 
 const workspaces=new WeakMap();
 export function getDrawWorkspace(root) {return workspaces.get(root) || null;}
-const implementedTools=new Set(['select','group-selection','magic-wand','lasso','pencil','hand','zoom','artboard','gradient','eyedropper','measure','scissors','type','area-type','type-on-path',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
+const implementedTools=new Set(['select','group-selection','magic-wand','lasso','shape-builder','knife','eraser','pencil','hand','zoom','artboard','gradient','eyedropper','measure','scissors','type','area-type','type-on-path',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
 const commands=new Set(['undo','redo','delete','select-all','select-artboard','deselect','cancel','fit-artboard','fit-all','actual-size','zoom-in','zoom-out','outline',
   'cut','copy','paste','paste-front','paste-back','paste-place','paste-all-artboards',
   'edit-text','create-outlines','join','average','offset-path','outline-stroke','expand','expand-appearance','simplify','reverse-path','add-anchors','remove-anchors','clean-up','compound-make','compound-release','clip-make','clip-release','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
@@ -104,6 +105,9 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       tool.id==='gradient' ? 'Drag across the selection: gradient direction and length · Shift: 45° steps · Click: apply gradient' :
       tool.id==='eyedropper' ? 'Click: copy appearance to the selection · Alt: apply the selection\'s appearance · Shift: colour under the pointer' :
       tool.id==='measure' ? (state.ui.measurement?measurementText(state.ui.measurement):'Drag: distance and angle · Shift: 45° steps') :
+      tool.id==='shape-builder' ? 'Drag across regions of the selected shapes: merge · Alt+drag: delete regions' :
+      tool.id==='knife' ? 'Drag across filled shapes to cut them (the selection, or every shape)' :
+      tool.id==='eraser' ? 'Drag to erase from filled shapes (the selection, or every shape) · Enter: diameter' :
       tool.id==='magic-wand' ? 'Click: objects with a similar fill · Shift: add · Alt: remove · Enter: tolerance' :
       tool.id==='lasso' ? 'Drag around anchor points to select them · Shift: add · Alt: remove' :
       tool.id==='pencil' ? 'Drag: draw freehand · End near the start: close · Enter: Pencil options' :
@@ -371,6 +375,52 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     const node=createNode('path',{name:'',subpaths:[subpath],appearance:appearance(null,state.ui.stroke??'#071411',state.ui.strokeWidth??.5)});
     run(()=>{insertNew(node);select(options.keepSelected?[node.id]:[]);});
   }
+  /**
+   * Shape Builder: the selected shapes divided into regions when the drag starts; the regions the drag
+   * crosses merge into one (Alt deletes them) and the rest stay, as separate paths, in one undo step.
+   */
+  function shapeBuilderSession(){
+    const doc=state.document,ids=stackingOrder(doc,selectedIds().filter(id=>doc.isEditable(id)));
+    if(ids.length<2)return null;
+    return withScope(()=>({ids,regions:runPathfinder(ids.map(id=>({id,item:renderer.booleanOperand(id),fill:fillHex(doc,id)})),'divide').results}));
+  }
+  function shapeBuilderPreview(session,points){return withScope(()=>pickRegions(scope,session.regions,points)).map(i=>session.regions[i].subpaths);}
+  function shapeBuilder(session,points,{alt=false}={}){
+    const picked=withScope(()=>pickRegions(scope,session.regions,points));if(!picked.length)return;
+    let results=session.regions.filter((r,i)=>!picked.includes(i));
+    if(!alt)results=[...results,{subpaths:withScope(()=>mergeRegions(scope,session.regions,picked)),sourceId:session.regions[picked[0]].sourceId,kind:'fill'}];
+    const doc=state.document,label=alt?'Shape Builder Delete':'Shape Builder';
+    if(!results.length){state.history.transaction(label,()=>session.ids.forEach(id=>state.history.execute(removeNode(id))));select([]);return;}
+    const {commands,ids}=pathfinderCommands(doc,session.ids,{results,grouped:false},'divide',label);
+    state.history.transaction(label,()=>commands.forEach(c=>state.history.execute(c)));select(ids);
+  }
+  /** Filled closed paths and shapes a Knife or Eraser stroke works on: the selection, or every one. */
+  function cutTargets(){
+    const doc=state.document,chosen=selectedIds(),pool=chosen.length?chosen.flatMap(id=>doc.getNode(id)?.children?doc.descendants(id).map(n=>n.id):[id]):doc.descendants(null).map(n=>n.id);
+    return pool.filter(id=>{const n=doc.getNode(id);return ['path','shape'].includes(n?.type)&&doc.isEditable(id)&&(n.type==='shape'||n.subpaths.some(s=>s.closed))&&n.appearance.fills.some(f=>!f.hidden);});
+  }
+  /** Knife and Eraser: each target replaced by its pieces (in its parent's space), in one undo step. */
+  function cutWith(label,cut){
+    const doc=state.document,edits=[];
+    for(const id of cutTargets()){
+      const world=withScope(()=>{const item=renderer.booleanOperand(id),sub=toSubpaths(item);item.remove();return sub;});
+      const pieces=withScope(()=>cut(world));
+      const before=withScope(()=>areaOf(scope,world)),after=withScope(()=>pieces.reduce((sum,p)=>sum+areaOf(scope,p),0));
+      if(pieces.length<2&&Math.abs(before-after)<1e-6)continue;
+      edits.push({id,pieces});
+    }
+    if(!edits.length)return false;
+    const created=[];
+    state.history.transaction(label,()=>{for(const {id,pieces} of edits){
+      const node=doc.getNode(id),{parentId,index}=doc.locate(id),look=structuredClone(node.appearance);
+      state.history.execute(removeNode(id));
+      pieces.forEach((subpaths,i)=>{const piece=toParentSpace(parentId,createNode('path',{name:node.name,subpaths,fillRule:'nonzero',appearance:look,opacity:node.opacity,blendMode:node.blendMode}));
+        state.history.execute(insertNode(parentId,piece,index+i));created.push(piece.id);});
+    }});
+    select(created);return true;
+  }
+  const knife=points=>cutWith('Knife',world=>knifeCut(scope,world,points));
+  const eraser=points=>cutWith('Eraser',world=>eraseRegion(scope,world,points,state.ui.eraserSize??3));
   /** Measure: a line on the canvas and the distance, offsets and angle in the status bar. */
   function setMeasure(from,to=null){state.ui.measurement=from&&to?measure(from,to):null;withScope(()=>renderer.setMeasure(from&&to?[from,to]:null));status();}
   /** Eyedropper: `sample` copies the clicked object's look, `apply` gives it the selection's look, `pixel` takes a colour. */
@@ -837,6 +887,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       });state.ui.fill=fill;state.ui.stroke=stroke;toolbar.update();panels.render();return;
     }
     if(command==='tool-dialog'&&SHAPE_TOOLS.includes(state.ui.tool))return void shapeDialog(state.ui.tool);
+    if(command==='tool-dialog'&&state.ui.tool==='eraser')return void eraserDialog(state.ui.eraserSize??3).then(size=>{if(size&&!destroyed)state.ui.eraserSize=size;});
     if(command==='tool-dialog'&&state.ui.tool==='magic-wand')return void magicWandDialog(state.ui.magicWand??{}).then(values=>{if(values&&!destroyed)state.ui.magicWand=values;});
     if(command==='tool-dialog'&&state.ui.tool==='pencil')return void pencilDialog(state.ui.pencil??{}).then(values=>{if(values&&!destroyed)state.ui.pencil=values;});
     if(command==='tool-dialog'&&state.ui.tool==='type-on-path'){const id=selectedIds()[0];if(id)return void editText(undefined,null,null,{pathFrom:id});return;}
@@ -862,6 +913,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       const found=magicWand(state.document,hit,state.ui.magicWand??{}),current=selectedIds();
       select(subtract?current.filter(id=>!found.includes(id)):add?[...new Set([...current,...found])]:found);},
     lasso:(points,options)=>paths.lasso(points,options),
+    shapeBuilderSession,shapeBuilderPreview,shapeBuilder,knife,eraser,eraserSize:()=>state.ui.eraserSize??3,
     gradientVector(from,to,mergeKey){const kind=state.ui.paintFocus==='stroke'?'stroke':'fill',last=state.ui.lastGradient;
       gradient(kind,(current,box,node)=>{const a=renderer.pointToLocal(node.id,from),b=renderer.pointToLocal(node.id,to);
         return vectorGradient(current??defaultGradient(box,last?{type:last.type,stops:last.stops}:{}),[a.x,a.y],[b.x,b.y]);},{label:'Gradient',mergeKey});},

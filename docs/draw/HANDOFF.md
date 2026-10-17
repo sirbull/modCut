@@ -26,7 +26,9 @@ kommandosøk (2.16) og Draw Normal/Behind/Inside (2.17) er ferdige. D2.10 Send t
 D2.5 SVG-import, D2.7 WebP og D2.3 globale swatches og gradientswatches (2.19) er ferdige.
 Fra D2.1 er skalering, baseline shift, kerning, avsnitt og blandede stiler gjort. D3.1 Expand og Expand
 Appearance (2.20) er ferdig. D3.5 Select-meny, Magic
-Wand og Lasso (2.21) er ferdig. **Neste oppgave er D3.4 Shape Builder, Eraser og Knife; se STATUS.md kapittel 4.** Kjør `npm ci` etter pull.
+Wand og Lasso (2.21) er ferdig. D3.4 Shape Builder, Knife
+og Eraser (2.22) er ferdig. **Neste oppgave er D3.6 Free Transform, Transform Each og Split Into Grid; se
+STATUS.md kapittel 4.** Kjør `npm ci` etter pull.
 
 **Brukerstyrt tillegg etter D2.1c:** Google Fonts og automatisk tekst til outlines ved Send to Cut
 er implementert (STATUS.md 2.9). Tekst på path er fortsatt neste ordinære del.

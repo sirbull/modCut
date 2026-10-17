@@ -93,6 +93,14 @@ export function createInteractions(canvas, state, api) {
         // Live freehand line; points closer than half a screen pixel are skipped.
         const last=gesture.points.at(-1);if(Math.hypot(p.x-last[0],p.y-last[1])>=.5/scope.view.zoom)gesture.points.push([p.x,p.y]);
         preview=new scope.Path({segments:gesture.points,strokeColor:'#071411',strokeWidth:1/scope.view.zoom});
+      } else if (['shape-builder','knife','eraser'].includes(gesture.mode)) {
+        const last=gesture.points.at(-1);if(Math.hypot(p.x-last[0],p.y-last[1])>=1/scope.view.zoom)gesture.points.push([p.x,p.y]);
+        // Shape Builder shades the regions it will merge; Knife shows its line; Eraser its brush stroke.
+        if(gesture.mode==='shape-builder'){preview=new scope.Group({children:api.shapeBuilderPreview(gesture.session,gesture.points).map(subpaths=>new scope.CompoundPath({
+          children:subpaths.map(s=>new scope.Path({closed:true,segments:s.segments.map(g=>new scope.Segment(new scope.Point(...g.p),new scope.Point(...g.in),new scope.Point(...g.out)))})),
+          fillColor:event.altKey?'rgba(220,40,40,.35)':'rgba(20,115,230,.25)',strokeColor:'#1473E6',strokeWidth:1/scope.view.zoom}))});}
+        else preview=new scope.Path({segments:gesture.points,strokeColor:gesture.mode==='knife'?'#D32F2F':'rgba(120,120,120,.5)',strokeCap:'round',strokeJoin:'round',
+          strokeWidth:gesture.mode==='knife'?1/scope.view.zoom:api.eraserSize()});
       } else if (gesture.mode==='lasso') {
         const last=gesture.points.at(-1);if(Math.hypot(p.x-last[0],p.y-last[1])>=1/scope.view.zoom)gesture.points.push([p.x,p.y]);
         preview=new scope.Path({segments:gesture.points,closed:true,strokeColor:'#1473E6',dashArray:[4/scope.view.zoom,3/scope.view.zoom],strokeWidth:1/scope.view.zoom});
@@ -144,6 +152,11 @@ export function createInteractions(canvas, state, api) {
       const hit=renderer.hit(p);api.run(()=>api.magicWand(hit,{add:event.shiftKey,subtract:event.altKey}));return;
     }
     if(tool==='lasso'){gesture={...base,mode:'lasso',points:[[p.x,p.y]]};return;}
+    if(tool==='shape-builder'){
+      const session=api.shapeBuilderSession();if(!session){api.notify?.('Select at least two overlapping shapes for Shape Builder.');return;}
+      gesture={...base,mode:'shape-builder',session,points:[[p.x,p.y]]};return;
+    }
+    if(tool==='knife'||tool==='eraser'){gesture={...base,mode:tool,points:[[p.x,p.y]]};return;}
     if(tool==='scissors') {
       const hit=renderer.curveHit(p,{shapes:true});
       if(!hit){api.notify?.('Click on a path or shape outline to cut it.');return;}
@@ -213,6 +226,10 @@ export function createInteractions(canvas, state, api) {
       if (state.document.readOnly)return;
       if(drag.mode==='pencil') {
         if(moved||drag.points.length>2)api.pencil(drag.points);
+      }else if(drag.mode==='shape-builder') {
+        api.shapeBuilder(drag.session,drag.points,{alt:event.altKey||drag.modifiers.alt});
+      }else if(drag.mode==='knife'||drag.mode==='eraser') {
+        if(drag.points.length>1&&!api[drag.mode](drag.points))api.notify?.(drag.mode==='knife'?'The knife did not cross a filled shape.':'Nothing to erase there.');
       }else if(drag.mode==='lasso') {
         if(drag.points.length>2)api.lasso(drag.points,{add:drag.modifiers.shift,subtract:drag.modifiers.alt});else if(!drag.modifiers.shift)api.select([]);
       }else if(drag.mode==='measure') {

@@ -1438,7 +1438,7 @@ Oversikt over hva som er gjort og gjenstår, inkludert delvis ferdige oppgaver: 
 * [x] D3.1 Outline Stroke og Expand (effekter, stiplede streker og pilspisser gjenstår, se [STATUS.md](draw/STATUS.md))
 * [ ] D3.2 Appearance og effekter
 * [ ] D3.3 Image Trace
-* [ ] D3.4 Shape Builder, Eraser, Knife m.fl.
+* [x] D3.4 Shape Builder, Eraser, Knife m.fl. (Path Eraser gjenstår, se [STATUS.md](draw/STATUS.md))
 * [x] D3.5 Magic Wand, Lasso, Select-meny (se [STATUS.md](draw/STATUS.md))
 * [ ] D3.6 Free Transform, Transform Each, Split Into Grid
 * [ ] D3.7 AI- og DXF-eksport

@@ -513,6 +513,22 @@ Gjenstår i D3.1: utvidelse av effekter (kommer med D3.2), stiplede streker og p
 Gjenstår i D3.5: Select > Same > Graphic Style (krever grafiske stiler), Direction Handles, og Lasso som
 velger hele objekter med Alt+Mod.
 
+### 2.22 Shape Builder, Knife og Eraser (D3.4, 2026-10-17)
+
+* **Shape Builder (Shift+M):** med minst to valgte former deles de i regioner når man trykker ned. Regionene
+  draget krysser skraveres og slås sammen til én bane når man slipper (fyll fra regionen der draget startet);
+  resten blir egne baner. **Alt+drag** sletter regionene i stedet (skravert rødt). Ett angresteg.
+* **Knife (i Eraser-gruppen):** dra over fylte former for å dele dem langs linjen (et kutt på 0,02 mm).
+  Virker på utvalget, eller på alle fylte former når ingenting er valgt.
+* **Eraser (Shift+E):** dra for å viske ut fra fylte former med en rund pensel (diameter på Enter, standard
+  3 mm); biter som blir skilt, blir egne baner. Utvalget, eller alle fylte former uten utvalg.
+* Delene beholder objektets utseende og havner i samme forelder (også i transformerte grupper).
+* Kode: `geom/region-ops.mjs` (`pickRegions`, `mergeRegions`, `knifeCut`, `erase`, `pieces`, `bandAround`),
+  `shapeBuilder*`, `cutWith`, `knife` og `eraser` i `index.mjs`, gestene i `tools/interactions.mjs`.
+
+Gjenstår i D3.4: Path Eraser (visker deler av åpne baner), Shape Builder-valg (gap detection,
+fargeplukking), og Eraser med trykkfølsomhet.
+
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
 | Oppgave | Status |
@@ -535,7 +551,8 @@ velger hele objekter med Alt+Mod.
 | D2.10 Send til Cut v2 | Ferdig (2.9 og 2.18): tekst til outlines, Outline Stroke, kutt ved artboard, validering, Update in Cut, bilder og alle artboards; varsel om objekter utenfor bedet gjenstår |
 | D3.1 Outline Stroke og Expand | Ferdig (2.18, 2.20): Outline Stroke, Expand, Expand Appearance; effekter, stiplede streker og pilspisser gjenstår |
 | D3.2 Appearance og effekter | Appearance ferdig; effekter gjenstår |
-| D3.3 Image Trace, D3.4 Shape Builder og Eraser | Gjenstår |
+| D3.3 Image Trace | Gjenstår |
+| D3.4 Shape Builder, Eraser og Knife | Ferdig (2.22); Path Eraser gjenstår |
 | D3.5 Magic Wand, Lasso, Select-meny | Ferdig (2.21) |
 | D3.6 til D3.8, fase 4 og 5 | Gjenstår |
 
@@ -555,7 +572,8 @@ SVG-, PNG- og JPEG-eksport er gjort (2.5).
 5. Hullene i fase 2: D2.5 SVG-import, D2.7 WebP og D2.3 globale swatches og gradientswatches (2.19) er
    gjort. Fra D2.1 er skalering, baseline shift, kerning, avsnitt og blandede stiler gjort (2.11).
 6. Fase 3: D3.1 Expand og Expand Appearance (2.20) og D3.5 Select-meny, Magic Wand og Lasso (2.21) er gjort.
-   **Neste: D3.4 Shape Builder, Eraser og Knife, så D3.6 Free Transform og Split Into Grid, D3.2 effekter.**
+   D3.4 Shape Builder, Knife og Eraser (2.22) er også gjort. **Neste: D3.6 Free Transform, Transform Each
+   og Split Into Grid, så D3.2 effekter.**
 
 
 ## 5. Kjente begrensninger og risiko

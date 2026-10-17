@@ -1503,3 +1503,17 @@ Verifisering: 241 Draw-enhetstester (4 nye i `select-rules.test.mjs`), ny E2E `d
 Hele E2E for eceff4a (Expand) passerte helt: 35 av 35, med prosjekt-, autolagrings- og relanseringstestene.
 
 Neste: D3.4 Shape Builder, Eraser og Knife.
+
+## 2026-10-17: D3.4 Shape Builder, Knife og Eraser
+
+- `geom/region-ops.mjs`: Paper-operasjoner på PathData i verdensmillimeter; `pieces` deler et resultat i
+  ytterringer med hullene sine, så hver løs bit blir egen bane.
+- `index.mjs`: `shapeBuilderSession` deler utvalget med Pathfinder Divide når draget starter;
+  `shapeBuilder` slår sammen eller sletter og bruker `pathfinderCommands`; `cutWith` bytter hvert mål med
+  bitene sine (via `booleanOperand` og `toParentSpace`) og hopper over former draget ikke traff.
+- `tools/interactions.mjs`: gester med skravering (Shape Builder), linje (Knife) og penselstrøk (Eraser).
+
+Verifisering: 244 Draw-enhetstester (3 nye i `region-ops.test.mjs`), ny E2E `draw-region-tools-workflows.mjs`
+(`--draw-region-tools`). Hele E2E for 4800e69 (Select-menyen) passerte helt: 36 av 36.
+
+Neste: D3.6 Free Transform, Transform Each og Split Into Grid.
