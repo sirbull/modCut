@@ -552,3 +552,6 @@ body[data-workspace="draw"] #sendToCut { display: inline-flex; }
 .draw-text-styles { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0 10px; }
 .draw-text-styles .input { width: 76px; }
 .draw-text-styles__note { font-size: 12px; color: var(--text-muted); }
+/* Appearance: live effects and Add Effect. */
+.draw-effect-row .draw-appearance-name { flex: 1; text-align: left; }
+.draw-add-effect { max-width: 150px; font-size: 12px; }

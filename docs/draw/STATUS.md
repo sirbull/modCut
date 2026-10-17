@@ -545,6 +545,26 @@ fargeplukking), og Eraser med trykkfølsomhet.
 
 Gjenstår i D3.6: perspektiv (Shift i Free Transform) og forhåndsvisning i Transform Each-dialogen.
 
+### 2.24 Levende effekter, del A (D3.2, 2026-10-17)
+
+* Effekter ligger i `appearance.effects` og brukes i rekkefølge når objektet tegnes, eksporteres og sendes
+  til Cut, mens objektets egne ankre forblir redigerbare. Banen og formen får effektene; tekst og grupper
+  ikke ennå.
+* **Effect-menyen:** Apply Last Effect, Last Effect…, Distort & Transform > **Transform…** (skalering,
+  flytting, rotasjon og antall kopier), Path > **Offset Path…**, Stylize > **Round Corners…**. Hver ny effekt
+  er ett angresteg. Effektene finnes også i kommandosøket.
+* **Appearance-panelet** viser effektene: øyet skjuler, dobbeltklikk redigerer, pil opp flytter, søppelbøtten
+  sletter. «Add Effect…» legger til fra panelet.
+* **Expand Appearance** baker effektene inn i vanlige baner.
+* Offset Path bruker Clipper, som lastes når arbeidsflaten starter; til den er lastet tegnes objektet uten
+  Offset Path, og så tegnes det på nytt.
+* Kode: `doc/effects.mjs` (`EFFECTS`, `effect`, `applyVectorEffects`), `make`/`effectiveSubpaths` i
+  `render/paper-adapter.mjs`, `offsetPathsSync`/`loadGeometry` i `geom/kernel-js.mjs`, `addEffect`/`editEffect`
+  i `index.mjs`, effektlisten i `panels/ui.mjs`. Skjemaet validerer kjente effekter.
+
+Gjenstår i D3.2: rastereffekter (Drop Shadow, Glow, Feather, Gaussian Blur), Pucker & Bloat, Roughen,
+Zig Zag, Twist, Free Distort som effekt, effekter på tekst og grupper, og Preview i effektdialogene.
+
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
 | Oppgave | Status |
@@ -566,7 +586,7 @@ Gjenstår i D3.6: perspektiv (Shift i Free Transform) og forhåndsvisning i Tran
 | D2.9 Transparency, History, Info, kommandosøk | Ferdig (2.16); snapshots i History gjenstår |
 | D2.10 Send til Cut v2 | Ferdig (2.9 og 2.18): tekst til outlines, Outline Stroke, kutt ved artboard, validering, Update in Cut, bilder og alle artboards; varsel om objekter utenfor bedet gjenstår |
 | D3.1 Outline Stroke og Expand | Ferdig (2.18, 2.20): Outline Stroke, Expand, Expand Appearance; effekter, stiplede streker og pilspisser gjenstår |
-| D3.2 Appearance og effekter | Appearance ferdig; effekter gjenstår |
+| D3.2 Appearance og effekter | Appearance og vektoreffektene Offset Path, Round Corners og Transform (2.24); rastereffekter og flere vektoreffekter gjenstår |
 | D3.3 Image Trace | Gjenstår |
 | D3.4 Shape Builder, Eraser og Knife | Ferdig (2.22); Path Eraser gjenstår |
 | D3.5 Magic Wand, Lasso, Select-meny | Ferdig (2.21) |
@@ -590,7 +610,8 @@ SVG-, PNG- og JPEG-eksport er gjort (2.5).
    gjort. Fra D2.1 er skalering, baseline shift, kerning, avsnitt og blandede stiler gjort (2.11).
 6. Fase 3: D3.1 Expand og Expand Appearance (2.20) og D3.5 Select-meny, Magic Wand og Lasso (2.21) er gjort.
    D3.4 Shape Builder, Knife og Eraser (2.22) og D3.6 Free Transform, Transform Each og Split Into Grid
-   (2.23) er også gjort. **Neste: D3.2 effekter (Drop Shadow, Offset Path, Round Corners som levende effekter).**
+   (2.23) er også gjort, og D3.2 del A (vektoreffekter, 2.24). **Neste: D3.2 del B, Drop Shadow og flere
+   vektoreffekter (Zig Zag, Pucker & Bloat, Roughen).**
 
 
 ## 5. Kjente begrensninger og risiko

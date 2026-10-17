@@ -1531,3 +1531,18 @@ Verifisering: 249 Draw-enhetstester (5 i `transform-each.test.mjs`); `--draw-reg
 Hele E2E for 785f19e (D3.4) passerte helt: 37 av 37.
 
 Neste: D3.2 effekter.
+
+## 2026-10-17: D3.2 del A, levende vektoreffekter
+
+- `doc/effects.mjs`: `EFFECTS` (Offset Path, Round Corners, Transform), `effect` (validering med standardverdier),
+  `applyVectorEffects` (i rekkefølge, skjulte hoppes over, Offset via funksjon).
+- `geom/kernel-js.mjs`: `loadGeometry`, `geometryReady`, `offsetPathsSync`; Offset Path deler `offsetWith`.
+- `render/paper-adapter.mjs`: `make` bygger grunngeometrien (`makeBase`) og legger effektene på; geometrinøkkelen
+  tar med synlige effekter og om Clipper er lastet; `effectiveSubpaths` for Send to Cut og Expand.
+- `index.mjs`: `addEffect`, `editEffect`, kommandoene `effect-*`, `effect-last` og `effect-options`; Expand Appearance
+  baker effektene. `electron/main.mjs`: Effect-menyen. `panels/ui.mjs`: effektlisten og Add Effect.
+
+Verifisering: 252 Draw-enhetstester (3 i `effects.test.mjs`), ny E2E `draw-effects-workflows.mjs` (`--draw-effects`).
+Hele Draw-E2E for 28b34ec (D3.6): alle Draw-suitene passerte; autolagringsflaken stoppet prosjekttestene.
+
+Neste: D3.2 del B, Drop Shadow og flere vektoreffekter.

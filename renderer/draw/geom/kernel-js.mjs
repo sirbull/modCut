@@ -66,17 +66,21 @@ export function flattenPath(path, tolerance = DEFAULT_TOLERANCE) {
     return { closed: subpath.closed, points };
   });
 }
-let library;
+let library, loaded = null;
 async function clipper() {
   library ||= import('../../../node_modules/clipper-lib/clipper.js').then((module) => {
     const value = module.default || globalThis.ClipperLib;
     if (!value?.Clipper) throw new GeometryError('Could not load polygon library', 'BACKEND_UNAVAILABLE');
     // Upstream's default Error uses alert. A worker must throw instead of opening UI.
     value.Error = (message) => { throw new GeometryError(String(message)); };
+    loaded = value;
     return value;
   });
   return library;
 }
+/** Loads the polygon library; afterwards the `*Sync` functions work (live effects render synchronously). */
+export const loadGeometry = () => clipper().then(() => true);
+export const geometryReady = () => !!loaded;
 function executeUnion(lib, paths, fill) {
   if (!paths.length) return [];
   const engine = new lib.Clipper(); engine.StrictlySimple = true;
@@ -114,14 +118,17 @@ export async function unite(paths, { tolerance = DEFAULT_TOLERANCE, fillRule = '
  * normalised with their fill rule first so holes shrink when the outline grows. Open paths become
  * closed outlines with butt ends. Joins: miter (with limit), round or bevel. Result: straight segments.
  */
-export async function offsetPaths(paths, { distance, join = 'miter', miterLimit = 4, tolerance = .005, fillRule = 'nonzero' } = {}) {
+export async function offsetPaths(paths, options = {}) { return offsetWith(await clipper(), paths, options); }
+/** Offset Path once `loadGeometry()` has finished; null before that. */
+export function offsetPathsSync(paths, options = {}) { return loaded ? offsetWith(loaded, paths, options) : null; }
+function offsetWith(lib, paths, { distance, join = 'miter', miterLimit = 4, tolerance = .005, fillRule = 'nonzero' } = {}) {
   if (!Array.isArray(paths)) throw new GeometryError('Expected an array of paths');
   if (typeof distance !== 'number' || !Number.isFinite(distance) || Math.abs(distance) > 10000) throw new GeometryError('Offset must be between -10,000 and 10,000 mm');
   if (!['miter', 'round', 'bevel'].includes(join)) throw new GeometryError('Invalid join');
   positive(miterLimit, 'miter limit', 500); positive(tolerance, 'offset tolerance', 1);
   if (!['nonzero', 'evenodd'].includes(fillRule)) throw new GeometryError('Invalid fill rule');
   for (const path of paths) validatePath(path);
-  const lib = await clipper(), closed = [], open = [], fill = fillRule === 'evenodd' ? lib.PolyFillType.pftEvenOdd : lib.PolyFillType.pftNonZero;
+  const closed = [], open = [], fill = fillRule === 'evenodd' ? lib.PolyFillType.pftEvenOdd : lib.PolyFillType.pftNonZero;
   const ints = (points) => points.map(([x, y]) => ({ X: Math.round(x * SCALE), Y: Math.round(y * SCALE) }));
   for (const path of paths) {
     const contours = flattenPath(path, tolerance / 4);

@@ -33,13 +33,14 @@ import { SAME_MODES, OBJECT_KINDS, magicWand, inverseSelection, sameAs, objectsO
 import { DRAW_MODE_LABELS, insideTarget, nextDrawMode, placement } from './doc/draw-mode.mjs';
 import { changePaint, changeStroke, paintHex } from './doc/paint.mjs';
 import { importArtwork } from './import-artwork.mjs';
-import { shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog,layerOptionsDialog,swatchOptionsDialog,sendToCutDialog,averageDialog,offsetDialog,simplifyDialog,pencilDialog,expandDialog,magicWandDialog,eraserDialog,transformEachDialog,splitGridDialog,saveSelectionDialog,editSelectionDialog } from './ui/dialogs.mjs';
+import { shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog,layerOptionsDialog,swatchOptionsDialog,sendToCutDialog,averageDialog,offsetDialog,simplifyDialog,pencilDialog,expandDialog,effectDialog,magicWandDialog,eraserDialog,transformEachDialog,splitGridDialog,saveSelectionDialog,editSelectionDialog } from './ui/dialogs.mjs';
 import { ALL_ARTBOARDS, artboardCutSvg } from './io/cut-svg.mjs';
 import { EXPORT_FORMATS, rasterSize, svgDocument } from './io/export.mjs';
 import { createExportController } from './export-controller.mjs';
 import { layerOptionsPatch, templateLayerCommands, isOutputNode } from './doc/layers.mjs';
 import { compoundCommands, releaseCompoundCommands, clipCommands, releaseClipCommands } from './doc/compound.mjs';
-import { offsetPaths, flattenPath, outlineStroke } from './geom/kernel-js.mjs';
+import { offsetPaths, flattenPath, outlineStroke, loadGeometry } from './geom/kernel-js.mjs';
+import { EFFECTS, effect, hasVectorEffects } from './doc/effects.mjs';
 import { cutSubpath } from './geom/path-commands.mjs';
 import { addAnchorPoints, removeAnchorPoints, reverseSubpaths, averagePoints, joinSubpaths, closeSubpath, cleanUpTargets, mapSubpath } from './geom/path-commands.mjs';
 import { toolCursor } from './tools/cursors.mjs';
@@ -53,7 +54,7 @@ export function getDrawWorkspace(root) {return workspaces.get(root) || null;}
 const implementedTools=new Set(['select','group-selection','magic-wand','lasso','shape-builder','knife','eraser','free-transform','pencil','hand','zoom','artboard','gradient','eyedropper','measure','scissors','type','area-type','type-on-path',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
 const commands=new Set(['undo','redo','delete','select-all','select-artboard','deselect','cancel','fit-artboard','fit-all','actual-size','zoom-in','zoom-out','outline',
   'cut','copy','paste','paste-front','paste-back','paste-place','paste-all-artboards',
-  'edit-text','create-outlines','join','average','offset-path','outline-stroke','expand','expand-appearance','transform-each','split-into-grid','simplify','reverse-path','add-anchors','remove-anchors','clean-up','compound-make','compound-release','clip-make','clip-release','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
+  'edit-text','create-outlines','join','average','offset-path','outline-stroke','expand','expand-appearance','transform-each','split-into-grid','effect-last','effect-options',...Object.keys(EFFECTS).map(t=>`effect-${t}`),'simplify','reverse-path','add-anchors','remove-anchors','clean-up','compound-make','compound-release','clip-make','clip-release','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
   'paint-focus','paint-swap','paint-none','paint-solid','paint-gradient','default-paint','smart-guides','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','shear-dialog','toggle-panels','toggle-panels-except-tools','command-search','draw-mode','draw-normal','draw-behind','draw-inside','reselect','select-inverse','select-next-above','select-next-below','save-selection','edit-selection',
   ...Object.keys(SAME_MODES).map(m=>`select-same-${m}`),...Object.keys(OBJECT_KINDS).map(k=>`select-object-${k}`),
   ...PANEL_DEFINITIONS.map(p=>`panel.${p.id}`),...['left','right','up','down'].flatMap(d=>[`nudge-${d}`,`nudge-large-${d}`,`duplicate-${d}`])]);
@@ -199,7 +200,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       bounds:id=>renderer.bounds(id),
       worldMatrix,
       // Clipping masks are cut into the geometry, so the laser follows what is visible.
-      subpaths(id){const node=state.document.getNode(id);return renderer.clippedSubpaths(id,worldMatrix(id))??(node.type==='shape'?renderer.expandedShape(id)?.subpaths:node.subpaths);},
+      subpaths(id){const node=state.document.getNode(id);return renderer.clippedSubpaths(id,worldMatrix(id))??renderer.effectiveSubpaths(id)??(node.type==='shape'?renderer.expandedShape(id)?.subpaths:node.subpaths);},
       clip:(subpaths,world,rect,filled)=>renderer.clipToRect(subpaths,world,rect,filled),
       resolvedText:id=>resolved.get(id),glyphBounds:(id,paths)=>renderer.glyphBounds(id,paths),
     },options));
@@ -254,7 +255,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       if(!['path','shape'].includes(node.type)||!isOutputNode(state.document,node.id))continue;
       const stroke=(node.appearance?.strokes??[]).find(e=>!e.hidden);if(!stroke||!(stroke.width>0))continue;
       const box=renderer.bounds(node.id);if(!box||!boards.some(board=>box.x<=board.x+board.width&&box.y<=board.y+board.height&&box.x+box.width>=board.x&&box.y+box.height>=board.y))continue;
-      const subpaths=withScope(()=>renderer.clippedSubpaths(node.id,worldMatrix(node.id))??(node.type==='shape'?renderer.expandedShape(node.id)?.subpaths:node.subpaths))??[];
+      const subpaths=withScope(()=>renderer.clippedSubpaths(node.id,worldMatrix(node.id))??renderer.effectiveSubpaths(node.id)??(node.type==='shape'?renderer.expandedShape(node.id)?.subpaths:node.subpaths))??[];
       const [a,b,c,d]=worldMatrix(node.id),width=node.strokeScaling===false?stroke.width/Math.sqrt(Math.abs(a*d-b*c)||1):stroke.width;
       outlines.set(node.id,await outlineStroke(subpaths,{width,join:stroke.join??'miter',cap:stroke.cap??'butt',miterLimit:stroke.miterLimit??4}));
     }
@@ -418,6 +419,23 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       else state.history.execute(updateNode(id,{subpaths:placed.subpaths},{label:'Free Distort'}));
     }});
     select(state.selection.ids);
+  }
+  /** Live effects: added to every selected path and shape, edited in place; Apply Last Effect repeats the last one. */
+  async function addEffect(type,{ask=true}={}){
+    if(state.document.readOnly)return;
+    const ids=selectedIds().filter(id=>['path','shape'].includes(state.document.getNode(id)?.type)&&state.document.isEditable(id));
+    if(!ids.length)throw new Error('Select paths or shapes to add an effect to.');
+    const last=state.ui.lastEffect?.type===type?state.ui.lastEffect:null;
+    const values=ask?await effectDialog(type,{...EFFECTS[type].defaults,...last}):last??EFFECTS[type].defaults;if(!values||destroyed)return;
+    const e=effect(type,values);state.ui.lastEffect=e;
+    run(()=>state.history.transaction(EFFECTS[type].label,()=>{for(const id of ids){const node=state.document.getNode(id);
+      state.history.execute(updateNode(id,{appearance:{...node.appearance,effects:[...(node.appearance.effects??[]),e]}},{label:EFFECTS[type].label}));}}));
+  }
+  async function editEffect(id,index){
+    const node=state.document.getNode(id),current=node?.appearance.effects?.[index];if(!current||state.document.readOnly)return;
+    const values=await effectDialog(current.type,current);if(!values||destroyed)return;
+    run(()=>{const fresh=state.document.getNode(id),list=[...fresh.appearance.effects];list[index]=effect(current.type,{...values,hidden:current.hidden});
+      state.history.execute(updateNode(id,{appearance:{...fresh.appearance,effects:list}},{label:`Edit ${EFFECTS[current.type].label}`}));});
   }
   /** Filled closed paths and shapes a Knife or Eraser stroke works on: the selection, or every one. */
   function cutTargets(){
@@ -599,6 +617,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     textStyle:(changes,label)=>textStyle(changes,label).catch(error=>{if(!destroyed)onError(error.message);}),
     fontFamilies,
     command:id=>handle(id),
+    addEffect:type=>addEffect(type).catch(error=>{if(!destroyed)onError(error.message);}),editEffect:(id,i)=>editEffect(id,i).catch(error=>{if(!destroyed)onError(error.message);}),
     pointer:()=>lastPoint,
     cutStatus,updateInCut:boardId=>sendToCut(boardId,{update:true}).catch(error=>{if(!destroyed)onError(error.message);}),
     historyGoTo:index=>run(()=>{if(state.document.readOnly)return;interactions.cancel();paths.finish();
@@ -753,7 +772,9 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
      * several parts become a group carrying the object's opacity and blending.
      */
     async function expanded(id,{fill=true,stroke=true}={}){
-      const node=base(id),fills=visible(node.appearance.fills),strokes=visible(node.appearance.strokes).filter(e=>e.width>0),[a,b,c,d]=parentWorld(id),parts=[];
+      // Live effects are baked in: the parts use the geometry as drawn.
+      const own=base(id),drawn=withScope(()=>renderer.effectiveSubpaths(id)),node=drawn?{...own,subpaths:drawn,fillRule:'nonzero'}:own;
+      const fills=visible(node.appearance.fills),strokes=visible(node.appearance.strokes).filter(e=>e.width>0),[a,b,c,d]=parentWorld(id),parts=[];
       const part=(look,subpaths=node.subpaths,fillRule=node.fillRule)=>createNode('path',{name:'',subpaths,fillRule,appearance:{...appearance(null,null),...look}});
       if(fill&&fills.length>1)for(const entry of fills)parts.push(part({fills:[structuredClone(entry)],strokes:[]}));
       else if(fills.length)parts.push(part({fills:structuredClone(fills),strokes:stroke?[]:structuredClone(strokes)}));
@@ -797,7 +818,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
         }});select(created);});
     };
     if(command==='outline-stroke')return()=>expandSelection('Outline Stroke',editable().filter(id=>visible(doc.getNode(id).appearance?.strokes).some(e=>e.width>0)),{fill:false,stroke:true},'Select paths or shapes with a stroke.');
-    if(command==='expand-appearance')return()=>expandSelection('Expand Appearance',editable().filter(id=>visible(doc.getNode(id).appearance?.fills).length+visible(doc.getNode(id).appearance?.strokes).length>1),{fill:true,stroke:true},
+    if(command==='expand-appearance')return()=>expandSelection('Expand Appearance',editable().filter(id=>hasVectorEffects(doc.getNode(id))||visible(doc.getNode(id).appearance?.fills).length+visible(doc.getNode(id).appearance?.strokes).length>1),{fill:true,stroke:true},
       'Select objects with several fills or strokes, or a fill and a stroke.');
     if(command==='expand')return async()=>{
       const ids=editable();if(!ids.length)throw new Error('Select paths or shapes to expand.');
@@ -883,6 +904,9 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     if(command.startsWith('panel.'))return openPanel(command.slice(6));
     if(command==='draw-mode'){const next=nextDrawMode(state.ui.drawMode??'normal');try{return setDrawMode(next);}catch{return setDrawMode('normal');}}
     if(['draw-normal','draw-behind','draw-inside'].includes(command))return setDrawMode(command.slice(5));
+    if(command.startsWith('effect-')&&EFFECTS[command.slice(7)])return void addEffect(command.slice(7)).catch(error=>{if(!destroyed)onError(error.message);});
+    if(command==='effect-last'||command==='effect-options'){const last=state.ui.lastEffect;if(!last)throw new Error('No effect has been applied yet.');
+      return void addEffect(last.type,{ask:command==='effect-options'}).catch(error=>{if(!destroyed)onError(error.message);});}
     if(command==='command-search')return void openCommandSearch(commandEntries({commands:[...commands],tools:TOOL_DEFINITIONS.filter(t=>implementedTools.has(t.id)),panels:PANEL_DEFINITIONS}),{run:id=>handle(id),shortcut:id=>shortcutLabel(id,{isMac:/Mac/.test(navigator.platform)})});
     if(command==='cancel'&&(cancelActiveScrub()||panels.close()))return;
     if(paths?.handle(command)){if(command==='cancel')toolbar.close(true);return;}
@@ -967,6 +991,8 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
         return vectorGradient(current??defaultGradient(box,last?{type:last.type,stops:last.stops}:{}),[a.x,a.y],[b.x,b.y]);},{label:'Gradient',mergeKey});},
 typeOnPath:id=>editText(undefined,null,null,{pathFrom:id}),cursor,
     tool:()=>temporary?.id || state.ui.tool,zoomOut:()=>!!temporary?.zoomOut,preferences:getPreferences,closeMenus:()=>toolbar.close(),notify:message=>onError(message)});
+  // Offset Path effects draw once the polygon library is loaded; until then they are skipped.
+  loadGeometry().then(()=>{if(!destroyed)refresh();}).catch(()=>{});
   const unsubscribe=state.subscribe(()=>{interactions.cancel();paths.documentChanged();refresh();if(state.ui.isolation&&!isolation())isolationChanged();else renderIsolationBar();});
   function resize(){const {width,height}=stage.getBoundingClientRect();if(width<=0||height<=0)return;
     withScope(()=>{scope.view.viewSize=new scope.Size(width,height);if(!fitted){renderer.fit();fitted=true;}renderer.updateView();});status();}

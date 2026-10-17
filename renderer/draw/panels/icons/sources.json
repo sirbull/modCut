@@ -86,6 +86,11 @@
       "path": "icons/outline/chevron-right.svg",
       "sha256": "0142561fc2fd1b6a18b2cb0c08959b6037643aecf6adc6612aefe16ec4f39f0f"
     },
+    "chevron-up": {
+      "name": "chevron-up",
+      "path": "icons/outline/chevron-up.svg",
+      "sha256": "b832f0550c1d0ea213538fb55d1849e080a0c5e9c86063913b061d81b41fe31c"
+    },
     "color-swatch": {
       "name": "color-swatch",
       "path": "icons/outline/color-swatch.svg",

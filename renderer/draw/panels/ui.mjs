@@ -3,6 +3,7 @@ import { insertNode, updateDocument, updateNode } from '../doc/commands.mjs';
 import { createId } from '../doc/schema.mjs';
 import { textValues } from '../doc/text.mjs';
 import { addStop, colorHex, defaultGradient, gradientCss, isGradient, removeStop, reverseGradient, setGradientAngle, setGradientType, updateStop } from '../doc/gradient.mjs';
+import { EFFECTS, effectLabel } from '../doc/effects.mjs';
 import { addSwatch, documentSwatches, editSwatch, groupSwatches, linkedPaints, rememberColor, removeSwatch } from '../doc/swatches.mjs';
 import { ROOT_CONTEXT, collectCommands, deleteLayerCommands, deleteRowCommands, duplicateCommands, filterLayerTree, flattenCommands, layerContext, mergeLayersCommands, moveCommand, moveToLayerCommands, newLayer, othersUpdates, releaseCommands, soloUpdates } from '../doc/layers.mjs';
 import { shortcutLabel } from '../keymap.mjs';
@@ -620,6 +621,23 @@ export function createPanels(shell, state, api) {
     }
     if (!list.children.length) { const empty = document.createElement('p'); empty.className = 'draw-panel__hint'; empty.textContent = 'No fill and no stroke.'; list.append(empty); }
     host.append(list);
+    // Live effects: applied top to bottom; the eye hides one, double-click edits, the arrows reorder.
+    const effects = look.effects ?? [], setEffects = (label, next) => state.history.execute(updateNode(node.id,{ appearance: { ...look, effects: next } },{ label }));
+    if (effects.length) {
+      const fx = document.createElement('div'); fx.className = 'draw-appearance-list draw-effect-list'; fx.setAttribute('role','list'); fx.setAttribute('aria-label','Effects');
+      effects.forEach((e,i) => {
+        const row = document.createElement('div'); row.className = 'draw-appearance-row draw-effect-row'; row.setAttribute('role','listitem'); row.dataset.drawEffect = String(i);
+        const eye = document.createElement('input'); eye.type = 'checkbox'; eye.checked = !e.hidden; eye.disabled = readOnly; eye.setAttribute('aria-label',`Show ${effectLabel(e)}`); eye.dataset.drawEffectToggle = String(i);
+        eye.addEventListener('change',() => api.run(() => setEffects(eye.checked ? 'Show Effect' : 'Hide Effect',effects.map((x,k) => k === i ? (eye.checked ? (({ hidden, ...rest }) => rest)(x) : { ...x, hidden: true }) : x))));
+        const name = document.createElement('button'); name.type = 'button'; name.className = 'draw-appearance-name'; name.textContent = effectLabel(e); name.disabled = readOnly;
+        name.dataset.tooltip = 'Double-click to edit'; name.addEventListener('dblclick',() => api.editEffect(node.id,i));
+        const up = iconButton('Move effect up','chevron-up',() => setEffects('Reorder Effects',effects.map((x,k) => k === i - 1 ? effects[i] : k === i ? effects[i - 1] : x)),'draw-layer-action');
+        const remove = iconButton('Delete effect','trash',() => setEffects('Delete Effect',effects.filter((_,k) => k !== i)),'draw-layer-action');
+        up.disabled = readOnly || i === 0; remove.disabled = readOnly; remove.dataset.drawEffectDelete = String(i);
+        row.append(eye,name,up,remove); fx.append(row);
+      });
+      host.append(fx);
+    }
     const opacity = document.createElement('button'); opacity.type = 'button'; opacity.className = 'draw-appearance-name draw-appearance-opacity-row';
     opacity.textContent = `Opacity: ${node.opacity === 1 ? 'Default' : `${Math.round(node.opacity*100)}%`}${node.blendMode !== 'normal' ? ` ${node.blendMode}` : ''}`;
     opacity.dataset.drawOpen = 'transparency'; opacity.addEventListener('click',() => open('transparency')); host.append(opacity);
@@ -629,12 +647,14 @@ export function createPanels(shell, state, api) {
     for (const [label,iconId,action,disabled,key] of [
       ['Add New Stroke','border-outer',() => { const r = addEntry(look,'strokes',{ color: state.ui.stroke || '#071411', width: state.ui.strokeWidth }); commit('Add New Stroke',r.appearance,{ kind:'strokes', index:r.index }); },readOnly,'add-stroke'],
       ['Add New Fill','square-rounded-plus',() => { const r = addEntry(look,'fills',{ color: state.ui.fill || '#FFFFFF' }); commit('Add New Fill',r.appearance,{ kind:'fills', index:r.index }); },readOnly,'add-fill'],
-      ['Add New Effect (coming with live effects)','math-function',null,true,'add-effect'],
       ['Clear Appearance','ban',() => commit('Clear Appearance',clearAppearance(look),null),readOnly || !(look.fills.length || look.strokes.length),'clear'],
       ['Duplicate Selected Item','copy',() => { const r = duplicateEntry(look,pick.kind,pick.index); commit('Duplicate Appearance',r.appearance,{ kind:pick.kind, index:r.index }); },readOnly || !pick,'duplicate'],
       ['Delete Selected Item','trash',() => commit('Delete Appearance',removeEntry(look,pick.kind,pick.index),null),readOnly || !pick,'delete'],
     ]) { const b = iconButton(label,iconId,action); b.disabled = disabled; b.dataset.drawAppearanceAction = key; actions.append(b); }
-    bar.append(document.createElement('span'),actions); host.append(bar);
+    const addEffect = document.createElement('select'); addEffect.className = 'select draw-add-effect'; addEffect.dataset.drawAddEffect = ''; addEffect.disabled = readOnly || !['path','shape'].includes(node.type);
+    addEffect.setAttribute('aria-label','Add New Effect'); addEffect.append(new Option('Add Effect…',''),...Object.entries(EFFECTS).map(([type,d]) => new Option(`${d.group}: ${d.label}…`,type)));
+    addEffect.addEventListener('change',() => { const type = addEffect.value; addEffect.value = ''; if (type) api.addEffect(type); });
+    bar.append(addEffect,actions); host.append(bar);
     text(host,'The top row draws on top. Drag rows to reorder fills or strokes. Click a row name to choose it for Duplicate and Delete.');
   }
   function colorPanel(host) {

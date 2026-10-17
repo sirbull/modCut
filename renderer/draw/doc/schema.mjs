@@ -1,4 +1,5 @@
 /** Versioned JSON data in millimetres. No renderer or Paper.js dependencies. */
+import { EFFECTS, effect } from './effects.mjs';
 import { resolveCorners } from '../geom/corners.mjs';
 import { textSignature, validPathSubpath } from './text-layout.mjs';
 import { validGoogleReference,validFontAxes } from './font-reference.mjs';
@@ -103,7 +104,11 @@ export function validateDocument(doc) {
   }
   function appearance(value, path) {
     if (!object(value)) { fail(path, 'Expected appearance'); return; }
-    array(value.effects, `${path}.effects`);
+    array(value.effects, `${path}.effects`).forEach((entry, i) => {
+      // Known live effects must have valid settings; unknown types are kept for newer versions.
+      if (!object(entry) || typeof entry.type !== 'string') { fail(`${path}.effects.${i}`, 'Expected an effect'); return; }
+      if (EFFECTS[entry.type]) try { effect(entry.type, entry); } catch (error) { fail(`${path}.effects.${i}`, error.message); }
+    });
     for (const kind of ['fills', 'strokes']) array(value[kind], `${path}.${kind}`).forEach((entry, i) => {
       const p = `${path}.${kind}.${i}`;
       if (!object(entry)) { fail(p, 'Expected an appearance entry'); return; }

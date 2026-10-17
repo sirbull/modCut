@@ -9,6 +9,9 @@ import { scaledStrokeProperties } from '../geom/transforms.mjs';
 import { isOutputNode, layerContext, ROOT_CONTEXT } from '../doc/layers.mjs';
 import { arrowShapes } from '../geom/arrows.mjs';
 import { PT_TO_MM, textValues } from '../doc/text.mjs';
+import { applyVectorEffects, hasVectorEffects } from '../doc/effects.mjs';
+import { offsetPathsSync, geometryReady } from '../geom/kernel-js.mjs';
+import { toSubpaths } from '../geom/pathfinder.mjs';
 import { textSubpaths } from '../doc/text-layout.mjs';
 
 export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withScope = fn => fn() } = {}) {
@@ -85,7 +88,23 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     item.matrix = new scope.Matrix(...node.transform)
       .translate(width / 2, height / 2).scale(width / item.width, height / item.height);
   }
+  /** The drawn item: the node's own geometry, then its live vector effects (paths and shapes). */
   function make(node) {
+    const base = makeBase(node);
+    if (!['path', 'shape'].includes(node.type) || !hasVectorEffects(node)) return base;
+    const out = applyVectorEffects(toSubpaths(base), node.appearance.effects, { offset: offsetPathsSync, fillRule: node.fillRule ?? 'nonzero' });
+    base.remove();
+    return out.length === 1 ? path(out[0]) : new scope.CompoundPath({ insert: false, children: out.map(path), fillRule: node.fillRule ?? 'nonzero' });
+  }
+  /** Geometry after live effects, in the space `expandedShape` and a path's own subpaths use; null without effects. */
+  function effectiveSubpaths(id) {
+    const node = state.document.getNode(id);
+    if (!node || !['path', 'shape'].includes(node.type) || !hasVectorEffects(node)) return null;
+    const item = make(node);
+    if (node.type === 'shape') item.transform(new scope.Matrix(...node.transform));
+    const out = toSubpaths(item); item.remove(); return out;
+  }
+  function makeBase(node) {
     if (node.children) return new scope.Group({ insert: false });
     if (node.type === 'text') {
       const geometry=textSubpaths(node);
@@ -137,8 +156,10 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
   }
   function geometryKey(node) {
     if (node.type === 'text') return JSON.stringify([node.kind,node.frame,node.onPath,node.content, node.character, node.paragraph,node.layout]);
-    if (node.type === 'path') return JSON.stringify([node.subpaths, node.fillRule]);
-    if (node.type === 'shape') return JSON.stringify([node.shape, node.params]);
+    // Live effects change the geometry; Offset Path waits for the polygon library, so its readiness counts too.
+    const effects = hasVectorEffects(node) ? [node.appearance.effects.filter(e => !e.hidden), geometryReady()] : null;
+    if (node.type === 'path') return JSON.stringify([node.subpaths, node.fillRule, effects]);
+    if (node.type === 'shape') return JSON.stringify([node.shape, node.params, effects]);
     if (node.type === 'image') return JSON.stringify([node.assetId, state.document.data.assets[node.assetId]]);
     return node.type;
   }
@@ -594,7 +615,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     } catch { url = null; } finally { clone.remove(); }
     thumbnails.set(id, { key, url }); return url;
   }
-  return { render, select: updateView, updateView, bounds, selectionBounds, hit, items, setOutline, thumbnail, exportArtwork, clippedSubpaths, clipToRect, booleanOperand, selectionHandle:point=>selection.hit(point),
+  return { render, select: updateView, updateView, bounds, selectionBounds, hit, items, setOutline, thumbnail, exportArtwork, clippedSubpaths, clipToRect, effectiveSubpaths, booleanOperand, selectionHandle:point=>selection.hit(point),
     glyphBounds(id,subpaths) {const item=new scope.CompoundPath({insert:false,children:subpaths.map(path)});try{return item.getBounds(records.get(id).worldMatrix).clone();}finally{item.remove();}},
     previewText(node, parentId = null) {
       textPreview?.remove(); textPreview = null;textPreviewFrame?.remove();textPreviewFrame=null;

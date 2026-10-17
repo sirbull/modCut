@@ -472,6 +472,17 @@ export function magicWandDialog(defaults={}) {
     {key:'opacityTolerance',label:'Opacity tolerance (%)',type:'number',value:defaults.opacityTolerance??5,min:0,max:100,step:1},
   ]}).then(v=>v&&{fill:!!v.fill,stroke:!!v.stroke,weight:!!v.weight,opacity:!!v.opacity,fillTolerance:Number(v.fillTolerance),strokeTolerance:Number(v.strokeTolerance),weightTolerance:Number(v.weightTolerance),opacityTolerance:Number(v.opacityTolerance)});
 }
+/** A live effect's settings (Offset Path, Round Corners, Transform). */
+export function effectDialog(type, values = {}) {
+  const n = (key,label,min,max,step='any') => ({key,label,type:'number',value:values[key],min,max,step,required:true});
+  const fields = type === 'offset-path' ? [n('distance','Offset (mm)',-1000,1000),
+      {key:'join',label:'Joins',type:'select',value:values.join,options:[{value:'miter',label:'Miter'},{value:'round',label:'Round'},{value:'bevel',label:'Bevel'}]},n('miterLimit','Miter limit',1,500)]
+    : type === 'round-corners' ? [n('radius','Radius (mm)',0,10000)]
+    : [n('scaleX','Scale horizontal (%)',-100000,100000),n('scaleY','Scale vertical (%)',-100000,100000),n('moveX','Move horizontal (mm)',-100000,100000),
+      n('moveY','Move vertical (mm)',-100000,100000),n('angle','Rotate (°)',-360,360),n('copies','Copies',0,1000,1)];
+  const title = {'offset-path':'Offset Path','round-corners':'Round Corners',transform:'Transform Effect'}[type];
+  return openDrawModal({title,submitLabel:'OK',className:'draw-effect-dialog',fields}).then(v=>v&&Object.fromEntries(Object.entries(v).map(([k,x])=>[k,k==='join'?x:k==='copies'?Math.round(Number(x)):Number(x)])));
+}
 /** Transform Each: scale, move, rotate and reflect each object around its own reference point. */
 export function transformEachDialog(defaults={}) {
   const d={scaleX:100,scaleY:100,moveX:0,moveY:0,angle:0,reflectX:false,reflectY:false,random:false,copy:false,anchor:'center',...defaults};
