@@ -1269,5 +1269,6 @@ Verifisering: 215 Draw-enhetstester (4 nye i `gradient.test.mjs`), ny E2E `draw-
 (`--draw-gradient`): tasten `.`, PNG-piksler hvit til svart, Properties, stopp, farge, Reverse, radial,
 verktøydrag som ett angresteg, SVG `linearGradient`, første stopp i Send to Cut. Hele Draw-E2E for
 forrige commit (29da906) passerte uten feil.
+Hele Draw-E2E for gradient-commiten (b644831) passerte også: 30 av 30 suiter, uten feil.
 
 Neste: D2.8 flere verktøy.
