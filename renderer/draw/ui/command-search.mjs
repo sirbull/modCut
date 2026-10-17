@@ -15,9 +15,10 @@ const LABELS = {
   'clip-make': 'Make Clipping Mask', 'clip-release': 'Release Clipping Mask', 'transform-again': 'Transform Again', 'rotate-dialog': 'Rotate', 'reflect-dialog': 'Reflect',
   'scale-dialog': 'Scale', 'shear-dialog': 'Shear', 'paint-swap': 'Swap Fill and Stroke', 'default-paint': 'Default Fill and Stroke', 'paint-none': 'None',
   'paint-solid': 'Color', 'paint-gradient': 'Gradient', 'paint-focus': 'Toggle Fill and Stroke', 'toggle-panels': 'Hide All Panels', 'toggle-panels-except-tools': 'Hide Panels except Tools',
+  'draw-mode': 'Cycle Drawing Mode', 'draw-normal': 'Draw Normal', 'draw-behind': 'Draw Behind', 'draw-inside': 'Draw Inside', 'command-search': 'Search Commands',
 };
 const KEYWORDS = { 'send-to-cut': 'laser cut bed', 'export-as': 'svg png jpg pdf eps dxf save', 'create-outlines': 'text type convert', 'clip-make': 'mask',
-  'offset-path': 'grow shrink outline', simplify: 'smooth reduce points', join: 'connect close', 'clean-up': 'stray empty', outline: 'wireframe' };
+  'offset-path': 'grow shrink outline', simplify: 'smooth reduce points', join: 'connect close', 'clean-up': 'stray empty', outline: 'wireframe', 'draw-inside': 'clip mask', 'draw-behind': 'back bottom' };
 
 /** Entries for the commands this workspace can run: `{ id, label, kind, keywords }`. */
 export function commandEntries({ commands = [], tools = [], panels = [] } = {}) {

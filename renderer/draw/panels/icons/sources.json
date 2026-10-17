@@ -151,6 +151,11 @@
       "path": "icons/outline/layers-intersect.svg",
       "sha256": "d5e04801ab417901f74b16e976f3db732d920f4f9f73ebf0ca61643506d127fd"
     },
+    "layers-selected-bottom": {
+      "name": "layers-selected-bottom",
+      "path": "icons/outline/layers-selected-bottom.svg",
+      "sha256": "da16f4d011032b3a1e2ce36cea723c9881a54f51d6591672296508d6d33860ea"
+    },
     "layers-subtract": {
       "name": "layers-subtract",
       "path": "icons/outline/layers-subtract.svg",
@@ -260,6 +265,16 @@
       "name": "spacing-vertical",
       "path": "icons/outline/spacing-vertical.svg",
       "sha256": "680d259668cb07c1f8ed7ca8fe7fe66bae25567a3a97b66aa162f2ef17fbc0b0"
+    },
+    "square": {
+      "name": "square",
+      "path": "icons/outline/square.svg",
+      "sha256": "5b470dfa3b1fd4896af6c23fccb18c07fde0245078003abc31bc2593f1933851"
+    },
+    "square-dot": {
+      "name": "square-dot",
+      "path": "icons/outline/square-dot.svg",
+      "sha256": "167784c46657a07d7376654fb151d07a5c9f83b4d1149df6b6efcbc24c904ffd"
     },
     "square-plus": {
       "name": "square-plus",

@@ -1314,6 +1314,23 @@ Neste: D2.9 History-panel, Info-panel og kommandosøk.
 - Ikoner: `history`, `info-circle` og `search` fra Tabler.
 
 Verifisering: 224 Draw-enhetstester (2 nye i `command-search.test.mjs`), ny E2E
-`draw-history-info-workflows.mjs` (`--draw-history`). Hele Draw-E2E for D2.8 del B (9a8e596) passerte: 31 av 31.
+`draw-history-info-workflows.mjs` (`--draw-history`). Hele Draw-E2E for D2.8 del B (9a8e596) passerte: 31 av 31;
+for D2.9 (88e1120): 32 av 32.
 
 Neste: Draw Inside (rest av D2.2).
+
+## 2026-10-17: Draw Normal, Behind og Inside (rest av D2.2)
+
+- `doc/draw-mode.mjs`: `placement` gir forelder, indeks og eventuelle kommandoer (Draw Inside lager
+  klippegruppen første gang); `insideTarget` godtar én bane, form eller klippegruppe.
+- `index.mjs`: `insertNew` brukes av figurer, Pencil, ny tekst og Pen (via `api.insertNew` i `tools/paths.mjs`);
+  kommandoene `draw-mode` (Shift+D), `draw-normal`, `draw-behind` og `draw-inside`.
+- `tools/toolbar.mjs`: tre modusknapper (Tabler `square`, `layers-selected-bottom`, `square-dot`).
+- `render/paper-adapter.mjs`: en klippebane med maling får en fyllkopi først i gruppen og en strekkopi
+  over gruppen. Eksport følger med fordi den kloner Paper-treet.
+- `io/cut-svg.mjs`: fyllet til en slik klippebane settes inn før gruppens innhold, streken etter.
+
+Verifisering: 228 Draw-enhetstester (4 nye i `draw-mode.test.mjs`), ny E2E `draw-modes-workflows.mjs`
+(`--draw-modes`) som sjekker piksler på lerretet (klipping, fyll og strek) og Send to Cut.
+
+Neste: D2.10 Send til Cut v2.

@@ -1,5 +1,5 @@
 import { createNode } from '../doc/schema.mjs';
-import { insertNode,updateNode,removeNode,replaceLeaf } from '../doc/commands.mjs';
+import { updateNode,removeNode,replaceLeaf } from '../doc/commands.mjs';
 import { appearance } from '../geometry.mjs';
 import { anchor,reversePath,splitCurve,moveAnchors,deleteAnchors,convertAnchor,constrain } from '../geom/path-editing.mjs';
 import { editablePath,editCornerSource,bakeCorners,roundCorners } from '../geom/corners.mjs';
@@ -196,7 +196,7 @@ export function createPathInteractions(canvas,state,api) {
       }
       if(g.mode==='pen-handle'&&!g.dragged){selectAnchors([{nodeId:g.node.id,subpath:g.subpath,segment:g.index}]);return;}
       if(state.document.getNode(g.node.id))commit(g.node,g.mode==='convert'?'Convert Anchor':'Pen');
-      else state.history.execute(insertNode(api.layerId(),g.node));
+      else api.insertNew(g.node,{space:false});
       if(g.mode.startsWith('pen'))session=g.closing?null:{id:g.node.id,subpath:g.subpath};
       selectAnchors([{nodeId:g.node.id,subpath:g.subpath,segment:g.index??g.hit.segment}]);
     });

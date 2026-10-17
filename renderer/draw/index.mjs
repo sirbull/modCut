@@ -27,6 +27,7 @@ import { appearance } from './geometry.mjs';
 import { changeGradient, defaultGradient, isGradient, vectorGradient } from './doc/gradient.mjs';
 import { sampleAppearance, applySampleCommands, measure } from './doc/tool-rules.mjs';
 import { activeArtboard } from './doc/artboards.mjs';
+import { DRAW_MODE_LABELS, insideTarget, nextDrawMode, placement } from './doc/draw-mode.mjs';
 import { changePaint, changeStroke, paintHex } from './doc/paint.mjs';
 import { importArtwork } from './import-artwork.mjs';
 import { shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog,layerOptionsDialog,swatchOptionsDialog,sendToCutDialog,averageDialog,offsetDialog,simplifyDialog,pencilDialog } from './ui/dialogs.mjs';
@@ -50,7 +51,7 @@ const implementedTools=new Set(['select','group-selection','pencil','hand','zoom
 const commands=new Set(['undo','redo','delete','select-all','select-artboard','deselect','cancel','fit-artboard','fit-all','actual-size','zoom-in','zoom-out','outline',
   'cut','copy','paste','paste-front','paste-back','paste-place','paste-all-artboards',
   'edit-text','create-outlines','join','average','offset-path','simplify','reverse-path','add-anchors','remove-anchors','clean-up','compound-make','compound-release','clip-make','clip-release','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
-  'paint-focus','paint-swap','paint-none','paint-solid','paint-gradient','default-paint','smart-guides','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','shear-dialog','toggle-panels','toggle-panels-except-tools','command-search',
+  'paint-focus','paint-swap','paint-none','paint-solid','paint-gradient','default-paint','smart-guides','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','shear-dialog','toggle-panels','toggle-panels-except-tools','command-search','draw-mode','draw-normal','draw-behind','draw-inside',
   ...PANEL_DEFINITIONS.map(p=>`panel.${p.id}`),...['left','right','up','down'].flatMap(d=>[`nudge-${d}`,`nudge-large-${d}`,`duplicate-${d}`])]);
 export function createDrawWorkspace(root,{paper=window.paper,state=createProjectDraw(),onError=console.warn,onNotice=()=>{},onImport=()=>{},onSendToCut=null,cutIsEmpty=()=>false,cutClipboard=()=>null,onExport=null,getPreferences=()=>({}),statusHost=null}={}) {
   state.ui={tool:'select',flyout:null,layerId:state.document.data.layers[0]?.id,fill:'#FFFFFF',stroke:'#071411',strokeWidth:.5,paintFocus:'fill',...state.ui};
@@ -91,7 +92,8 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     const tool=toolRegistry.get(temporary?.id || state.ui.tool),a=activeArtboard(state);
     positionLabel.textContent=lastPoint ? `X ${lastPoint.x.toFixed(1)}  Y ${lastPoint.y.toFixed(1)} mm` : `${a.width.toFixed(1)} × ${a.height.toFixed(1)} mm`;
     const percent=scope.view.zoom/(96/25.4)*100;zoomInput.value=String(percent<1 ? Number(percent.toFixed(4)) : Math.round(percent));
-    statusLine.textContent=`${tool.name} · ${state.selection.ids.length} selected · `+(
+    const drawMode=(state.ui.drawMode??'normal')==='normal'?'':`${DRAW_MODE_LABELS[state.ui.drawMode]} · `;
+    statusLine.textContent=`${tool.name} · ${drawMode}${state.selection.ids.length} selected · `+(
       SHAPE_TOOLS.includes(tool.id) ? 'Shift: constrain · Alt: from center · Space: move · Click: exact size' :
       TRANSFORM_TOOLS.includes(tool.id) ? 'Click: reference point · Drag: transform · Shift: constrain · Alt: copy · Enter: dialog' :
       tool.id==='pen' ? 'Click: corner · Drag: curve · Alt: break handles · Space: move anchor · Enter/Esc: finish' :
@@ -278,7 +280,18 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       isolationBar.append(crumb);
     });
   }
-  function insertShape(node) {const parent=insertionParent();state.history.execute(insertNode(parent,toParentSpace(parent,node)));select([node.id]);}
+  /** Inserts a new object where the drawing mode puts it: on top, behind, or inside the Draw Inside target. */
+  function insertNew(node,{space=true}={}) {
+    const mode=state.ui.drawMode??'normal',p=placement(state.document,mode,{parentId:insertionParent(),selection:selectedIds(),insideId:mode==='inside'?state.ui.drawInside:null});
+    const owner=p.commands.length?state.document.locate(state.ui.drawInside).parentId:p.parentId,placed=space?toParentSpace(owner,node):node;
+    if(!p.commands.length)return state.history.execute(insertNode(p.parentId,placed,p.index));
+    state.history.transaction('Draw Inside',()=>{p.commands.forEach(c=>state.history.execute(c));state.history.execute(insertNode(p.parentId,placed,p.index));});
+  }
+  function setDrawMode(mode) {
+    state.ui.drawInside=mode==='inside'?insideTarget(state.document,selectedIds()):null;
+    state.ui.drawMode=mode;toolbar?.update();status();
+  }
+  function insertShape(node) {insertNew(node);select([node.id]);}
   const listFonts=()=>fontCatalog??=(window.modcut.listSystemFonts().catch(error=>{fontCatalog=null;throw error;}));
   async function resolveText(node,patch) {
     patch=textProperties(textValues({...node,...patch}));
@@ -314,7 +327,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       const result={closed,segments:path.segments.map(s=>({p:[s.point.x,s.point.y],in:[s.handleIn.x,s.handleIn.y],out:[s.handleOut.x,s.handleOut.y]}))};path.remove();return result;});
     if(subpath.segments.length<2)return;
     const node=createNode('path',{name:'',subpaths:[subpath],appearance:appearance(null,state.ui.stroke??'#071411',state.ui.strokeWidth??.5)});
-    run(()=>{const parent=insertionParent();state.history.execute(insertNode(parent,toParentSpace(parent,node)));select(options.keepSelected?[node.id]:[]);});
+    run(()=>{insertNew(node);select(options.keepSelected?[node.id]:[]);});
   }
   /** Measure: a line on the canvas and the distance, offsets and angle in the status bar. */
   function setMeasure(from,to=null){state.ui.measurement=from&&to?measure(from,to):null;withScope(()=>renderer.setMeasure(from&&to?[from,to]:null));status();}
@@ -431,7 +444,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
         state.history.transaction(original?'Edit Text':pathFrom?'Type on a Path':frame?'Area Text':'Point Text',()=>{
           if(original)return state.history.execute(updateNode(id,patch));
           if(pathFrom){const {index}=state.document.locate(pathFrom);state.history.execute(removeNode(pathFrom));return state.history.execute(insertNode(parent,{...node,...patch},index));}
-          state.history.execute(insertNode(parent,{...node,...patch}));
+          insertNew({...node,...patch},{space:false});
         });
         select([node.id]);
       });
@@ -668,6 +681,8 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   function handle(command) {return run(()=>{
     if(command.startsWith('tool.'))return setTool(command.slice(5));
     if(command.startsWith('panel.'))return openPanel(command.slice(6));
+    if(command==='draw-mode'){const next=nextDrawMode(state.ui.drawMode??'normal');try{return setDrawMode(next);}catch{return setDrawMode('normal');}}
+    if(['draw-normal','draw-behind','draw-inside'].includes(command))return setDrawMode(command.slice(5));
     if(command==='command-search')return void openCommandSearch(commandEntries({commands:[...commands],tools:TOOL_DEFINITIONS.filter(t=>implementedTools.has(t.id)),panels:PANEL_DEFINITIONS}),{run:id=>handle(id),shortcut:id=>shortcutLabel(id,{isMac:/Mac/.test(navigator.platform)})});
     if(command==='cancel'&&(cancelActiveScrub()||panels.close()))return;
     if(paths?.handle(command)){if(command==='cancel')toolbar.close(true);return;}
@@ -732,7 +747,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     }
   });}
   toolbar=createToolbar(tools,state,{available:id=>implementedTools.has(id),setTool,command:handle,openPanel,run});
-  paths=createPathInteractions(canvas,state,{scope,renderer,withScope,run,select,selectionChanged,layerId:insertionParent,status,
+  paths=createPathInteractions(canvas,state,{scope,renderer,withScope,run,select,selectionChanged,layerId:insertionParent,insertNew,status,
     tool:()=>temporary?.id || state.ui.tool,closeMenus:()=>toolbar.close()});
   interactions=createInteractions(canvas,state,{scope,renderer,withScope,run,select,selectedIds,transform,artboards,status,shapeOptions,insertShape,shapeDialog,zoomAt,isolate,exitIsolation,
     transforms,transformDialog:transformToolDialog,editText,paintIds,command:id=>handle(id),

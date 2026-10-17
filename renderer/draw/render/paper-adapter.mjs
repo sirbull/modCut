@@ -219,7 +219,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
       let record = records.get(node.id), item = items.get(node.id);
       const replaced = !record || record.node.type !== node.type || record.geometry !== geometry;
       if (replaced) {
-        item?.remove(); record?.frame?.remove(); record?.arrows?.remove(); record?.stack?.remove();
+        item?.remove(); record?.frame?.remove(); record?.arrows?.remove(); record?.stack?.remove(); record?.maskStroke?.remove();
         item = make(node); item.applyMatrix = false; item.data.nodeId = node.id;
         items.set(node.id, item);
         record = { node, geometry, context }; records.set(node.id, record);
@@ -252,6 +252,20 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
         for (const child of node.children) {
           const childItem = items.get(child.id), want = child.id === mask;
           if (childItem && childItem.clipMask !== want) { childItem.clipMask = want; if (!want) style(childItem, child, outlineFor(child.id), true); }
+        }
+        // Draw Inside keeps the clipping path's paint: its fill under the contents, its stroke above them.
+        record.maskFill?.remove(); record.maskStroke?.remove(); record.maskFill = record.maskStroke = null;
+        const maskNode = mask ? node.children.at(-1) : null, maskItem = maskNode && items.get(maskNode.id);
+        if (maskItem && maskNode.visible) {
+          const piece = (kind) => {
+            const entries = shown(maskNode.appearance?.[kind]); if (!entries.length) return null;
+            const copy = maskItem.clone({ insert: false }); copy.clipMask = false; copy.data = { nodeId: maskNode.id, maskPaint: true };
+            style(copy, { ...maskNode, appearance: { ...maskNode.appearance, fills: kind === 'fills' ? entries : [], strokes: kind === 'strokes' ? entries : [] } }, false);
+            return copy;
+          };
+          record.maskFill = piece('fills'); if (record.maskFill) item.insertChild(0, record.maskFill);
+          record.maskStroke = piece('strokes');
+          if (record.maskStroke) { record.maskStroke.matrix = item.matrix.clone().append(maskItem.matrix); place(parent, record.maskStroke, index++); }
         }
       }
     }
@@ -301,7 +315,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     for (const [id, record] of boardItems) if (!data.artboards.some(b => b.id === id)) { record.item.remove(); record.label.remove(); record.labelRect.remove(); boardItems.delete(id); }
     reconcile(data.layers, artwork, alive);
     for (const [id, item] of items) if (!alive.has(id)) {
-      item.remove(); records.get(id).frame?.remove(); records.get(id).arrows?.remove(); records.get(id).stack?.remove(); items.delete(id); records.delete(id); thumbnails.delete(id);
+      item.remove(); records.get(id).frame?.remove(); records.get(id).arrows?.remove(); records.get(id).stack?.remove(); records.get(id).maskStroke?.remove(); items.delete(id); records.delete(id); thumbnails.delete(id);
     }
     updateBounds(); updateView();
   }
@@ -365,6 +379,8 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
         (state.selection.ids.includes(id)||asOutline||node.layout?.overflow))textFrames.addChild(textGuide(node,record.worldMatrix));
       if (record.arrows) record.arrows.visible = item.visible && !asOutline;
       if (record.stack) record.stack.visible = item.visible && !asOutline;
+      if (record.maskFill) record.maskFill.visible = !asOutline;
+      if (record.maskStroke) record.maskStroke.visible = item.visible && !asOutline;
       const factor = dimmed?.has(id) ? ISOLATION_DIM : 1;
       if (item.data.baseOpacity !== undefined) item.opacity = item.data.baseOpacity * factor;
       if (record.stack) record.stack.opacity = (record.stack.data.baseOpacity ?? 1) * factor;

@@ -49,7 +49,7 @@ export function artboardCutSvg(doc, boardId, geometry, { only = null } = {}) {
   const toBoard = [1, 0, 0, 1, -board.x, -board.y], elements = [], skipped = { images: 0, outside: 0, empty: 0 };
   let partly = 0, stacked = 0, openFilled = 0, textCount = 0;
   const errors=[];
-  function emit(node,subpaths,box) {
+  function emit(node,subpaths,box,at=elements.length) {
     if (!onBoard(box)) { skipped.outside++; return; }
     if (!only && !inside(box, board)) partly++;
     const fills = shown(node.appearance?.fills), strokes = shown(node.appearance?.strokes);
@@ -66,9 +66,12 @@ export function artboardCutSvg(doc, boardId, geometry, { only = null } = {}) {
     if (fill && node.fillRule === 'evenodd') attrs.push('fill-rule="evenodd"');
     if (stroke) attrs.push(`stroke="${stroke}"`, `stroke-width="${fmt((strokes[0].width ?? 0) * scale)}"`);
     else attrs.push('stroke="none"');
-    elements.push(`  <path ${attrs.join(' ')}/>`);
+    elements.splice(at, 0, `  <path ${attrs.join(' ')}/>`);
   }
+  // A clipping path that keeps its paint (Draw Inside) is filled under the clipped objects and stroked above them.
+  const clipStart = new Map();
   for (const original of doc.descendants(null)) {
+    if (original.type === 'group' && original.clip) clipStart.set(original.children.at(-1)?.id, elements.length);
     if (original.children || !isOutputNode(doc, original.id) || !picked(original.id)) continue;
     if (original.type === 'image') { skipped.images++; continue; }
     if (original.type === 'text') {
@@ -78,7 +81,13 @@ export function artboardCutSvg(doc, boardId, geometry, { only = null } = {}) {
       if(node.layout.overflow){errors.push(node.kind==='onPath'?'Text does not fit on its path. Shorten the text or use a longer path before sending to Cut.':'Text overflows its frame. Enlarge the frame before sending to Cut.');continue;}
       textCount++;
       for(const glyph of node.layout.glyphs)if(glyph.subpaths.length)emit(node,glyph.subpaths,geometry.glyphBounds?.(node.id,glyph.subpaths)??box);
-    } else if (original.type === 'path' || original.type === 'shape')emit(original,geometry.subpaths(original.id)??[],geometry.bounds(original.id));
+    } else if (original.type === 'path' || original.type === 'shape') {
+      const subpaths = geometry.subpaths(original.id) ?? [], box = geometry.bounds(original.id);
+      if (clipStart.has(original.id) && shown(original.appearance?.fills).length && shown(original.appearance?.strokes).length) {
+        emit({ ...original, appearance: { ...original.appearance, strokes: [] } }, subpaths, box, clipStart.get(original.id));
+        emit({ ...original, appearance: { ...original.appearance, fills: [] } }, subpaths, box);
+      } else emit(original, subpaths, box, clipStart.has(original.id) && shown(original.appearance?.fills).length ? clipStart.get(original.id) : elements.length);
+    }
   }
   const warnings = [];
   if (skipped.images) warnings.push(`${skipped.images} image${skipped.images === 1 ? ' is' : 's are'} not sent yet (Send to Cut v2).`);

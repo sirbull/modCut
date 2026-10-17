@@ -1,6 +1,8 @@
 import { toolRegistry, iconHref } from './registry.mjs';
 import { toolTooltip, shortcutLabel } from '../keymap.mjs';
 import { icon } from '../panels/ui.mjs';
+import { panelSpriteHref } from '../panels/registry.mjs';
+import { DRAW_MODE_LABELS, insideTarget } from '../doc/draw-mode.mjs';
 
 /** One rail entry per group. Its flyout contains only the other variants. */
 export const TOOL_GROUPS = Object.freeze([...new Set(toolRegistry.tools.map(t => t.group))]
@@ -79,6 +81,13 @@ export function createToolbar(host, state, { available, setTool, command, openPa
     button.dataset.tooltip = later ? `${label} · ${later}` : `${label} (${shortcutLabel(id,{isMac})})`; button.disabled = state.document.readOnly || !!later;
     button.addEventListener('click',() => run(() => command(id))); host.append(button);
   }
+  // Draw Normal, Behind and Inside (Shift+D cycles), under the paint controls as in Illustrator.
+  const drawModes = document.createElement('div'); drawModes.className = 'draw-mode-buttons'; drawModes.setAttribute('role','group'); drawModes.setAttribute('aria-label','Drawing mode'); host.append(drawModes);
+  for (const [mode,iconName] of [['normal','square'],['behind','layers-selected-bottom'],['inside','square-dot']]) {
+    const button = document.createElement('button'); button.type = 'button'; button.className = 'draw-mode-button'; button.dataset.drawMode = mode;
+    button.setAttribute('aria-label',DRAW_MODE_LABELS[mode]); button.dataset.tooltip = `${DRAW_MODE_LABELS[mode]} (${shortcutLabel('draw-mode',{isMac})} cycles)`;
+    button.append(icon(panelSpriteHref(iconName))); button.addEventListener('click',() => run(() => command(`draw-${mode}`))); drawModes.append(button);
+  }
   function update() {
     const active = toolRegistry.get(state.ui.tool);
     if (active) variants.set(active.group,active.id);
@@ -86,6 +95,12 @@ export function createToolbar(host, state, { available, setTool, command, openPa
     for (const button of paint.querySelectorAll('[data-paint]')) {
       const value = state.ui[button.dataset.paint]; button.style.setProperty('--paint-color',value || 'transparent');
       button.classList.toggle('is-none',!value); button.setAttribute('aria-pressed',String((state.ui.paintFocus || 'fill') === button.dataset.paint));
+    }
+    const mode = state.ui.drawMode ?? 'normal';
+    let canInside = mode === 'inside'; if (!canInside) try { insideTarget(state.document,state.selection.ids); canInside = true; } catch { /* no single path or shape selected */ }
+    for (const button of drawModes.children) {
+      button.setAttribute('aria-pressed',String(button.dataset.drawMode === mode));
+      button.disabled = state.document.readOnly || (button.dataset.drawMode === 'inside' && !canInside);
     }
   }
   const outside = event => { if (flyout && !flyout.contains(event.target) && !trigger?.parentElement.contains(event.target)) close(); };

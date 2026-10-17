@@ -271,7 +271,7 @@ avstand før og etter avsnitt, blandede stiler i samme tekstobjekt (stiler gjeld
 * Kode: `doc/compound.mjs` (rene kommandoer), `clip` i schema, `resolveClipping` og `clippedSubpaths`
   i `render/paper-adapter.mjs`.
 
-Gjenstår i D2.2: Draw Inside (Shift+D), klippemaske for et helt lag fra Layers-menyen (Illustrators
+Gjenstår i D2.2 (Draw Inside er gjort, se 2.17): klippemaske for et helt lag fra Layers-menyen (Illustrators
 lagklipping), redigering av compound path som egne delbaner med Group Selection, tekst som klippebane,
 og compound shapes med Alt-klikk i Pathfinder (fase 4).
 
@@ -369,6 +369,24 @@ Gjenstår i D2.8 og nær beslektet: Smooth og Path Eraser, Knife, Lasso, Magic W
 Gjenstår i D2.9: History-panelets Delete State og snapshots, Info for tekst (tegn og ord), og
 kommandosøk i hjelpemenyen.
 
+### 2.17 Draw Normal, Behind og Inside (D2.2, 2026-10-17)
+
+* Tre knapper under fyll og strek nederst i verktøylinjen; **Shift+D** sykler mellom dem. Statuslinjen
+  viser modusen når den ikke er Normal. Modusen gjelder figurer, Pen, Pencil og ny tekst.
+* **Draw Behind:** nye objekter legges rett under det valgte objektet, eller nederst i laget uten utvalg.
+* **Draw Inside:** krever én valgt bane eller form (eller en klippegruppe, da brukes klippebanen).
+  Første objekt lager en klippegruppe rundt målet i samme angresteg; senere objekter legges i samme
+  gruppe, over det som er der og under klippebanen. Shift+D hopper over Inside når ingenting passende
+  er valgt, og knappen er da avslått.
+* Til forskjell fra Make Clipping Mask **beholder klippebanen fyll og strek**, som i Illustrator: fyllet
+  tegnes under innholdet og streken over. Det gjelder lerret, SVG/PNG/PDF-eksport og Send to Cut
+  (fyllet sendes før de klippede objektene, streken etter).
+* Kode: `doc/draw-mode.mjs` (`placement`, `insideTarget`, `nextDrawMode`), `insertNew` i `index.mjs`,
+  `maskFill`/`maskStroke` i `render/paper-adapter.mjs` og rekkefølgen i `io/cut-svg.mjs`.
+
+Gjenstår: stiplede hjørnemerker rundt Draw Inside-målet på lerretet, Paste i Draw Inside, og
+lagklipping fra Layers-menyen.
+
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
 | Oppgave | Status |
@@ -380,7 +398,7 @@ kommandosøk i hjelpemenyen.
 | D1.11 Place bitmap og template-lag | Ferdig (se 2.3); høyreklikkmeny, Crop Image og Links gjenstår |
 | D1.12 Send til Cut v1 | Ferdig (se 2.2) |
 | D2.1 Tekst | Punkt-, område- og path-tekst, system-/Google-fonter, shaping, variable akser, outlines, Character og Paragraph (2.6 til 2.11); se 2.11 for det som gjenstår |
-| D2.2 Pathfinder, Compound, Clipping | Pathfinder, compound paths og klippemasker ferdig (2.12); Draw Inside og lagklipping gjenstår |
+| D2.2 Pathfinder, Compound, Clipping | Pathfinder, compound paths, klippemasker (2.12) og Draw Normal/Behind/Inside (2.17) ferdig; lagklipping gjenstår |
 | D2.3 Gradienter og Swatches | Swatches (solide) og gradienter ferdig (2.14); globale swatches, gradientswatches og PDF-shading gjenstår |
 | D2.4 Path-kommandoer | Ferdig (2.13): Join, Average, Reverse, Add/Remove Anchor Points, Clean Up, Offset Path, Simplify; Smooth og Split Into Grid gjenstår |
 | D2.5 SVG eksport/import | SVG-eksport ferdig (se 2.5); SVG-import finnes i enkel form |
@@ -404,8 +422,8 @@ SVG-, PNG- og JPEG-eksport er gjort (2.5).
    D2.2 compound paths og klippemasker er gjort (2.12).
 2. D2.4 path-kommandoer (2.13), D2.3 gradienter (2.14), D2.8 verktøy (2.15) og D2.9 History, Info og
    kommandosøk (2.16) er gjort.
-3. **Neste: Draw Inside (rest av D2.2).**
-4. D2.10 Send til Cut v2.
+3. Draw Normal, Behind og Inside (2.17) er gjort.
+4. **Neste: D2.10 Send til Cut v2.**
 
 ## 5. Kjente begrensninger og risiko
 
