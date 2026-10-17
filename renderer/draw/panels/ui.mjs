@@ -1,6 +1,7 @@
 import { DOCK_PANELS, PANEL_DEFINITIONS, PANEL_GROUPS, clampDockSplit, groupForPanel, panelAvailable, panelName, panelSpriteHref } from './registry.mjs';
 import { insertNode, updateDocument, updateNode } from '../doc/commands.mjs';
 import { createId } from '../doc/schema.mjs';
+import { textValues } from '../doc/text.mjs';
 import { addSwatch, documentSwatches, editSwatch, groupSwatches, rememberColor, removeSwatch } from '../doc/swatches.mjs';
 import { ROOT_CONTEXT, collectCommands, deleteLayerCommands, deleteRowCommands, duplicateCommands, filterLayerTree, flattenCommands, layerContext, mergeLayersCommands, moveCommand, moveToLayerCommands, newLayer, othersUpdates, releaseCommands, soloUpdates } from '../doc/layers.mjs';
 import { shortcutLabel } from '../keymap.mjs';
@@ -122,7 +123,7 @@ export function createPanels(shell, state, api) {
       if (scrub) render();
     };
   }
-  function field(host, label, value, action, { type = 'number', disabled = false, min, max, key = label, step } = {}) {
+  function field(host, label, value, action, { type = 'number', disabled = false, min, max, key = label, step, scrubbable = true } = {}) {
     const row = document.createElement('label'); row.className = 'draw-field';
     const name = document.createElement('span'); name.textContent = label;
     const input = document.createElement('input'); input.type = type; input.value = type === 'color' ? value || '#FFFFFF' : type==='number' ? Number(Number(value).toFixed(3)) : value; input.dataset.drawField = key;
@@ -133,7 +134,7 @@ export function createPanels(shell, state, api) {
       if (type === 'number' && (!Number.isFinite(next) || (min !== undefined && next < min) || (max !== undefined && next > max))) throw new Error(`Enter a valid ${label.toLowerCase()}.`);
       action(next);
     }));
-    if (type === 'number') {
+    if (type === 'number' && scrubbable) {
       attachScrub(name,input,{ step, min, max, onScrub: scrubField(key,action) });
       if (scrub?.key === key) { input.value = String(scrub.value); input.classList.add('is-scrubbing'); }
     }
@@ -747,6 +748,7 @@ export function createPanels(shell, state, api) {
     if (!ids.length) return documentProperties(host);
     const node = state.document.getNode(ids[0]);
     if (ids.length === 1) field(host,'Name',node.name,value => state.history.execute(updateNode(node.id,{name:value})),{type:'text'});
+    if (node.type === 'text') { section(host,'Character'); characterPanel(host,{ compact: true, prefix: 'prop-' }); section(host,'Paragraph'); paragraphPanel(host,{ prefix: 'prop-' }); }
     if (ids.length === 1 && node.type === 'text') {
       section(host,'Type'); quickActions(host,[['Edit Text…',() => api.command('edit-text'),'edit-text',state.document.readOnly || !state.document.isEditable(node.id)],['Create Outlines',()=>api.command('create-outlines'),'create-outlines',state.document.readOnly || !state.document.isEditable(node.id)]]);
     }
@@ -819,7 +821,54 @@ export function createPanels(shell, state, api) {
       ['Pathfinder…',() => open('pathfinder'),'pathfinder',ids.length < 2],['Appearance…',() => open('appearance'),'appearance'],
     ]);
   }
-  const PANEL_CONTENT = { swatches: swatchesPanel, color: colorPanel, stroke: strokePanel, transparency: transparencyPanel, pathfinder: pathfinderPanel, appearance: appearancePanel, transform: host => transform(host), align: alignPanel, artboards: artboardPanel };
+  const WEIGHTS = ['normal','bold',100,200,300,400,500,600,700,800,900];
+  const selectedText = () => api.selectedIds().map(id => state.document.getNode(id)).filter(n => n?.type === 'text');
+  /** Character: font, weight, style, size, leading, tracking and All Caps for the selected text. Each change is one undo step. */
+  function characterPanel(host, { compact = false, prefix = '' } = {}) {
+    const nodes = selectedText(), node = nodes[0];
+    if (!node) { text(host,'Select text to change its character settings. New text uses the last settings you applied.'); return; }
+    const v = textValues(node), ro = state.document.readOnly || nodes.some(n => !state.document.isEditable(n.id)), set = (changes,label) => api.textStyle(changes,label);
+    const families = api.fontFamilies(), listId = 'draw-font-families';
+    let list = document.getElementById(listId);
+    if (!list) { list = document.createElement('datalist'); list.id = listId; document.body.append(list); }
+    if (list.childElementCount !== families.length) list.replaceChildren(...families.map(f => new Option(f)));
+    const family = field(host,'Font',v.fontFamily,value => {
+      if (!value.trim()) throw new Error('Enter a font family.');
+      if (families.length && !families.includes(value)) throw new Error(`“${value}” is not installed. Choose an installed font, or use Edit Text for Google Fonts.`);
+      set({ fontFamily: value, fontSource: 'system' },'Font');
+    },{ type:'text', key:`${prefix}font-family`, disabled: ro });
+    family.setAttribute('list',listId); family.title = v.fontSource === 'google' ? 'Google font. Choose an installed font here, or another Google font in Edit Text.' : '';
+    const styles = document.createElement('div'); styles.className = 'draw-fields'; host.append(styles);
+    const select = (parent, label, key, value, options, onChange) => {
+      const row = document.createElement('label'); row.className = 'draw-field'; const name = document.createElement('span'); name.textContent = label;
+      const input = document.createElement('select'); input.className = 'select'; input.dataset.drawField = key; input.disabled = ro;
+      for (const [optionValue,optionLabel] of options) input.append(new Option(optionLabel,String(optionValue)));
+      input.value = String(value); input.addEventListener('change',() => api.run(() => onChange(input.value))); row.append(name,input); parent.append(row); return input;
+    };
+    select(styles,'Weight',`${prefix}font-weight`,v.fontWeight,WEIGHTS.map(w => [w,typeof w === 'number' ? String(w) : w[0].toUpperCase()+w.slice(1)]),
+      value => set({ fontWeight: ['normal','bold'].includes(value) ? value : Number(value) },'Font Weight'));
+    select(styles,'Style',`${prefix}font-style`,v.fontStyle,[['normal','Normal'],['italic','Italic']],value => set({ fontStyle: value },'Font Style'));
+    const sizes = document.createElement('div'); sizes.className = 'draw-fields'; host.append(sizes);
+    field(sizes,compact ? 'Size' : 'Size (pt)',v.fontSize,value => set({ fontSize: value },'Font Size'),{ min:.1, max:10000, key:`${prefix}font-size`, disabled: ro, scrubbable: false });
+    field(sizes,compact ? 'Leading' : 'Leading (pt)',v.leading,value => set({ leading: value },'Leading'),{ min:.1, max:10000, key:`${prefix}leading`, disabled: ro, scrubbable: false });
+    field(sizes,'Tracking',v.tracking ?? 0,value => set({ tracking: value },'Tracking'),{ min:-1000, max:10000, key:`${prefix}tracking`, disabled: ro, scrubbable: false });
+    const caps = check(host,'All Caps',`${prefix}all-caps`,!!v.allCaps,value => set({ allCaps: value },'All Caps')); caps.disabled = ro;
+    if (!compact) text(host,'Sizes and leading are in points. Tracking is in thousandths of an em. Changes are shaped again with the font, so export, outlines and Send to Cut follow.');
+  }
+  /** Paragraph: alignment of the selected text (lines in point and area text, the run along a path). */
+  function paragraphPanel(host, { prefix = '' } = {}) {
+    const nodes = selectedText(), node = nodes[0];
+    if (!node) { text(host,'Select text to change its paragraph settings.'); return; }
+    const ro = state.document.readOnly || nodes.some(n => !state.document.isEditable(n.id)), current = node.paragraph.alignment ?? 'left';
+    const row = document.createElement('div'); row.className = 'draw-align-row'; row.setAttribute('role','group'); row.setAttribute('aria-label','Paragraph alignment');
+    for (const [label,iconId,value] of [['Align left','align-left','left'],['Align center','align-center','center'],['Align right','align-right','right']]) {
+      const b = iconButton(label,iconId,() => api.textStyle({ alignment: value },'Paragraph Alignment'),'draw-layer-action draw-align-button');
+      b.dataset.drawParagraph = `${prefix}${value}`; b.setAttribute('aria-pressed',String(current === value)); b.disabled = ro; row.append(b);
+    }
+    host.append(row);
+    if (node.kind === 'onPath') text(host,'On a path, alignment places the text between the start offset and the end of the path.');
+  }
+  const PANEL_CONTENT = { character: host => characterPanel(host), paragraph: host => paragraphPanel(host), swatches: swatchesPanel, color: colorPanel, stroke: strokePanel, transparency: transparencyPanel, pathfinder: pathfinderPanel, appearance: appearancePanel, transform: host => transform(host), align: alignPanel, artboards: artboardPanel };
   function renderFlyout() {
     const group = PANEL_GROUPS.find(g => g.id === state.ui.flyout);
     flyout.hidden = !group; if (!group) { flyoutTabs.replaceChildren(); flyoutBody.replaceChildren(); return; }
@@ -903,6 +952,19 @@ export function createPanels(shell, state, api) {
     for (const [label,iconId,mode] of [['Horizontal align left','layout-align-left','left'],['Horizontal align center','layout-align-center','centerX'],['Horizontal align right','layout-align-right','right'],
       ['Vertical align top','layout-align-top','top'],['Vertical align center','layout-align-middle','centerY'],['Vertical align bottom','layout-align-bottom','bottom']]) {
       const b = iconButton(label,iconId,() => api.alignPanel('align',mode),'draw-layer-action'); b.dataset.drawCbAlign = mode; b.disabled = ro; align.append(b);
+    }
+    const texts = selectedText();
+    if (texts.length) {
+      // Character and Paragraph, as Illustrator's Control panel shows them for type.
+      const v = textValues(texts[0]), typeGroup = group('Character'), tro = ro || texts.some(n => !state.document.isEditable(n.id));
+      const font = field(typeGroup,'Font',v.fontFamily,value => api.textStyle({ fontFamily: value, fontSource: 'system' },'Font'),{ type:'text', key:'cb-font-family', disabled: tro });
+      font.setAttribute('list','draw-font-families'); font.closest('label').classList.add('draw-cb-field','draw-cb-field--text');
+      num(typeGroup,'Size',v.fontSize,value => api.textStyle({ fontSize: value },'Font Size'),{ key:'cb-font-size', min:.1, max:10000, step:1, disabled: tro, scrubbable: false });
+      const para = group('Paragraph');
+      for (const [label,iconId,value] of [['Align left','align-left','left'],['Align center','align-center','center'],['Align right','align-right','right']]) {
+        const b = iconButton(label,iconId,() => api.textStyle({ alignment: value },'Paragraph Alignment'),'draw-layer-action'); b.dataset.drawCbParagraph = value;
+        b.setAttribute('aria-pressed',String((texts[0].paragraph.alignment ?? 'left') === value)); b.disabled = tro; para.append(b);
+      }
     }
     const shapes = ids.filter(id => state.document.getNode(id)?.type === 'shape' && state.document.isEditable(id));
     const images = ids.filter(id => state.document.getNode(id)?.type === 'image');

@@ -2,7 +2,7 @@
 
 **Start med [STATUS.md](STATUS.md)**: én side med hva som er gjort og hva som gjenstår.
 
-Oppdatert 2026-10-16. Arbeidsgren: `feat/vector-draw`.
+Oppdatert 2026-10-17. Arbeidsgren: `feat/vector-draw` (Claude og Codex jobber der; hent før du starter).
 
 **Høyrepanelet følger nå [RIGHT_PANELS.md](RIGHT_PANELS.md).** Trinn 1 (dokk med Properties over
 Layers, dragbar delelinje, panelgrupper som flyout med faner) trinn 2 (scrubby labels) og trinn 3
@@ -19,10 +19,8 @@ D1.8 (Transform, Align, Color, Stroke, Fill/Stroke-boks og Properties) ble fullf
 
 Fase 0 og fase 1 er fullført. Export As, **D2.1a/b punkttekst med systemfonter, shaping og
 Create Outlines** og **D2.1c rektangulær områdetekst med linjebryting** er ferdige.
-**Tekst på path er ferdig (STATUS.md 2.10, Claude 2026-10-16).** Neste del er egne
-Character/Paragraph-paneler og tekstseksjoner i Properties. Ikke marker hele D2.1 som ferdig.
-Claude pusher til `claude/draw-properties-layers-panels`, som bygger på `feat/vector-draw`; spol
-`feat/vector-draw` fram dit før du fortsetter der. Kjør `npm ci` etter pull (fontkit).
+**Tekst på path (STATUS.md 2.10) og Character/Paragraph (2.11) er ferdige.** D2.1 er ferdig i grunnform;
+resten står i 2.11. **Neste oppgave er D2.2: compound paths og clipping masks.** Kjør `npm ci` etter pull.
 
 **Brukerstyrt tillegg etter D2.1c:** Google Fonts og automatisk tekst til outlines ved Send to Cut
 er implementert (STATUS.md 2.9). Tekst på path er fortsatt neste ordinære del.
@@ -82,7 +80,7 @@ SVG bruker outlines for beregnet tekst.
 `scripts/verify-font-package.mjs` kontrollerer fontmotoren fra app.asar; kjøres av `npm run pack`.
 
 E2E-flagg for de nye delene: `--draw-cut`, `--draw-place`, `--draw-control`, `--draw-export`,
-`--draw-text`, `--draw-outlines`, `--draw-area-text`, `--draw-path-text`, `--draw-google-fonts` (sistnevnte krever nett
+`--draw-text`, `--draw-outlines`, `--draw-area-text`, `--draw-path-text`, `--draw-character`, `--draw-google-fonts` (sistnevnte krever nett
 ved første fontnedlasting; holdes utenfor den vanlige offline Draw-suiten).
 
 Historikk for D1.9: commit `d337a8f` (en annen agent) flyttet allerede visningskontrollene

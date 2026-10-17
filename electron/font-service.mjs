@@ -76,7 +76,9 @@ export function createFontService({directories=systemFontDirectories(),google}={
     for(const [tag,value] of Object.entries(settings))if(!axes[tag]||value<axes[tag].min||value>axes[tag].max)throw new Error(`The ${tag} axis is outside this font’s range.`);
     if(Object.keys(settings).length)font=font.getVariation(settings);
     const scale=v.fontSize*PT_TO_MM/font.unitsPerEm,glyphs=[],lineWidths=[],area=v.kind==='area';
-    const width=run=>run.positions.reduce((sum,p)=>sum+p.xAdvance,0);
+    // Tracking adds the same advance after every glyph; All Caps changes only the shaped text, never the content.
+    const track=(v.tracking??0)/1000*font.unitsPerEm,advance=p=>p.xAdvance+track,shapeText=text=>font.layout(v.allCaps?text.toLocaleUpperCase():text);
+    const width=run=>run.positions.reduce((sum,p)=>sum+advance(p),0);
     const fontInfo={family:face.family,style:face.style,postscriptName:face.postscriptName,...(face.source==='google'?{source:'google',reference:face.reference}:{}),axes,instances};
     const outlines=glyph=>{
       if(glyph.id===0)throw new Error(`The font “${face.family}” does not contain every character in the text.`);
@@ -86,25 +88,25 @@ export function createFontService({directories=systemFontDirectories(),google}={
     };
     if(v.kind==='onPath') {
       // One line along the path: each glyph is centred on its arc length and turned to the tangent.
-      const run=font.layout(v.text.replace(/[ \t]*\n[ \t]*/g,' ').replace(/\t/g,'    ')),advance=width(run)*scale;
+      const run=shapeText(v.text.replace(/[ \t]*\n[ \t]*/g,' ').replace(/\t/g,'    ')),total=width(run)*scale;
       const measure=measurePath(v.pathFlip?reverseSubpath(v.pathSubpath):v.pathSubpath);
-      let pen=pathRunStart(measure.length,advance,{offset:v.pathOffset,alignment:v.alignment}),overflow=false;
+      let pen=pathRunStart(measure.length,total,{offset:v.pathOffset,alignment:v.alignment}),overflow=false;
       for(let i=0;i<run.glyphs.length;i++) {
-        const glyph=run.glyphs[i],pos=run.positions[i],commands=outlines(glyph),step=pos.xAdvance*scale,centre=pen+step/2;
+        const glyph=run.glyphs[i],pos=run.positions[i],commands=outlines(glyph),step=advance(pos)*scale,centre=pen+pos.xAdvance*scale/2;
         if(centre>measure.length+1e-9)overflow=true;
-        else {const map=glyphFrame(measure,centre);glyphs.push({line:0,glyphId:glyph.id,subpaths:glyphSubpaths(commands,(gx,gy)=>map((pos.xOffset+gx)*scale-step/2,(pos.yOffset+gy)*scale))});}
+        else {const map=glyphFrame(measure,centre);glyphs.push({line:0,glyphId:glyph.id,subpaths:glyphSubpaths(commands,(gx,gy)=>map((pos.xOffset+gx)*scale-pos.xAdvance*scale/2,(pos.yOffset+gy)*scale))});}
         pen+=step;
       }
-      return {version:1,signature:textSignature(patch),font:fontInfo,glyphs,lineWidths:[advance],overflow};
+      return {version:1,signature:textSignature(patch),font:fontInfo,glyphs,lineWidths:[total],overflow};
     }
-    const lines=area?wrapText(v.text,v.frameWidth/scale,text=>width(font.layout(text.replace(/\t/g,'    ')))):v.text.split('\n');
+    const lines=area?wrapText(v.text,v.frameWidth/scale,text=>width(shapeText(text.replace(/\t/g,'    ')))):v.text.split('\n');
     const ascent=area?font.ascent*scale:0,lineHeight=area?(font.ascent-font.descent)*scale:0;
     let visibleLines=area?Math.max(0,Math.min(lines.length,Math.floor((v.frameHeight-lineHeight+1e-9)/(v.leading*PT_TO_MM))+1)):lines.length;
     for(const [line,text] of lines.entries()) {
-      const run=font.layout(text.replace(/\t/g,'    '));
-      const advance=width(run);lineWidths.push(advance*scale);
-      if(area&&advance*scale>v.frameWidth+1e-9)visibleLines=Math.min(visibleLines,line);
-      const offset=(v.alignment==='center'?-advance/2:v.alignment==='right'?-advance:0)+(area?(v.alignment==='center'?v.frameWidth/scale/2:v.alignment==='right'?v.frameWidth/scale:0):0);
+      const run=shapeText(text.replace(/\t/g,'    '));
+      const lineAdvance=width(run);lineWidths.push(lineAdvance*scale);
+      if(area&&lineAdvance*scale>v.frameWidth+1e-9)visibleLines=Math.min(visibleLines,line);
+      const offset=(v.alignment==='center'?-lineAdvance/2:v.alignment==='right'?-lineAdvance:0)+(area?(v.alignment==='center'?v.frameWidth/scale/2:v.alignment==='right'?v.frameWidth/scale:0):0);
       let x=0,y=0;
       for(let i=0;i<run.glyphs.length;i++) {
         const glyph=run.glyphs[i],pos=run.positions[i];
@@ -113,7 +115,7 @@ export function createFontService({directories=systemFontDirectories(),google}={
           const subpaths=glyphSubpaths(commands,(gx,gy)=>[(offset+x+pos.xOffset+gx)*scale,ascent+line*v.leading*PT_TO_MM-(y+pos.yOffset+gy)*scale]);
           glyphs.push({line,glyphId:glyph.id,subpaths});
         }
-        x+=pos.xAdvance;y+=pos.yAdvance;
+        x+=advance(pos);y+=pos.yAdvance;
       }
       await yieldEventLoop();
     }

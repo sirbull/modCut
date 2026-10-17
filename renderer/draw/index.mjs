@@ -269,6 +269,33 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     const layout=await window.modcut.shapeText(textValues({...node,...patch}));
     return {...patch,character:{...patch.character,fontPostscriptName:layout.font.postscriptName,...(layout.font.reference?{googleFont:layout.font.reference}:{})},layout};
   }
+  /** Installed font families for the Character panel; loads once and re-renders the panels when ready. */
+  let fontFamilyList=null;
+  function fontFamilies() {
+    if(fontFamilyList)return fontFamilyList;
+    fontFamilyList=[];listFonts().then(fonts=>{fontFamilyList=[...new Set(fonts.map(f=>f.family))].sort((a,b)=>a.localeCompare(b));if(!destroyed)panels?.render();}).catch(()=>{fontFamilyList=null;});
+    return fontFamilyList;
+  }
+  /** Character and Paragraph changes: every selected text is shaped again with the font, then committed as one undo step. */
+  async function textStyle(changes,label='Character') {
+    if(destroyed||state.document.readOnly)return;
+    if(textBusy)throw new Error('Text is still being updated. Try again in a moment.');
+    const ids=selectedIds().filter(id=>state.document.getNode(id)?.type==='text'&&state.document.isEditable(id));
+    if(!ids.length)throw new Error('Select text first.');
+    textBusy=true;statusLine.textContent='Updating text…';const before=state.document.data;
+    try {
+      const patches=await Promise.all(ids.map(async id=>{
+        const node=state.document.getNode(id),values={...textValues(node),...changes};
+        // A new family or source drops the saved face, Google reference and variable axes of the old font.
+        if(changes.fontFamily!==undefined&&(changes.fontFamily!==node.character?.fontFamily||changes.fontSource!==(node.character?.fontSource??'system'))){delete values.fontPostscriptName;delete values.googleFont;delete values.fontAxes;}
+        if(changes.fontWeight!==undefined||changes.fontStyle!==undefined)delete values.fontPostscriptName;
+        return [id,await resolveText(node,textProperties(values))];
+      }));
+      if(destroyed)return;if(state.document.data!==before)throw new Error('The artwork changed while updating text. Try again.');
+      run(()=>{state.history.transaction(label,()=>{for(const [id,patch] of patches)state.history.execute(updateNode(id,patch));});
+        const last=patches.at(-1)[1];state.ui.character=last.character;state.ui.textAlignment=last.paragraph.alignment;state.ui.fontMetadata=last.layout.font;});
+    }finally{textBusy=false;if(!destroyed){status();panels?.render();}}
+  }
   async function createTextOutlines() {
     if(destroyed||textBusy||state.document.readOnly||document.querySelector('.modal-overlay'))return;
     const previousSelection=selectedIds();
@@ -350,6 +377,8 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       state.history.transaction('Stroke',()=>{for(const id of ids)state.history.execute(updateNode(id,{appearance:changeStroke(state.document.getNode(id).appearance,props,state.ui)}));},{mergeKey});},
     paintFocus(kind){state.ui.paintFocus=kind;toolbar?.update();panels?.render();},
     thumbnail:id=>withScope(()=>renderer.thumbnail(id)),
+    textStyle:(changes,label)=>textStyle(changes,label).catch(error=>{if(!destroyed)onError(error.message);}),
+    fontFamilies,
     command:id=>handle(id),
     expandShapes(ids){if(state.document.readOnly||!ids.length)return;
       state.history.transaction('Expand Shape',()=>{for(const id of ids)if(state.document.getNode(id)?.type==='shape')state.history.execute(replaceLeaf(id,withScope(()=>renderer.expandedShape(id))));});select(ids);},

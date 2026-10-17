@@ -82,6 +82,22 @@ test('type on a path follows the curve, flips, aligns and reports glyphs that do
   node.onPath.offset=11;assert.equal(hasTextLayout(node),false,'Moving the start invalidates the layout');
   await assert.rejects(service.shape({...v,pathSubpath:{closed:false,segments:[seg([0,0])]}}),/two points/);
 });
+test('tracking widens every advance and All Caps shapes capitals without changing the content',{skip:!latin},async()=>{
+  const v=values(latin,'Horten'),plain=await service.shape(v),tracked=await service.shape({...v,tracking:100});
+  const em=v.fontSize*25.4/72;
+  assert.ok(Math.abs(tracked.lineWidths[0]-plain.lineWidths[0]-6*em*.1)<1e-6,'100/1000 em per glyph');
+  const x=l=>l.glyphs.filter(g=>g.subpaths.length).map(g=>g.subpaths[0].segments[0].p[0]);
+  x(tracked).forEach((p,i)=>assert.ok(Math.abs(p-x(plain)[i]-i*em*.1)<1e-6));
+  const caps=await service.shape({...v,allCaps:true}),upper=await service.shape({...v,text:'HORTEN'});
+  assert.deepEqual(caps.glyphs.map(g=>g.glyphId),upper.glyphs.map(g=>g.glyphId));
+  const node=pointText([0,0],{...v,allCaps:true,tracking:100});assert.equal(node.content.runs[0].text,'Horten');
+  assert.deepEqual([node.character.allCaps,node.character.tracking],[true,100]);
+  assert.equal(pointText([0,0],v).character.tracking,undefined,'Defaults are not stored');
+  node.layout=await service.shape({...v,allCaps:true,tracking:100});const data=createDocument();data.layers[0].children=[node];assert.deepEqual(validateDocument(data),[]);
+  node.character.tracking=20000;assert.ok(validateDocument(data).some(e=>e.path.endsWith('.tracking')));
+  const wrapped=await service.shape({...v,text:'Horten Horten',kind:'area',frameWidth:plain.lineWidths[0]*2.4,frameHeight:100});assert.equal(wrapped.lineWidths.length,1);
+  const wrappedTracked=await service.shape({...v,text:'Horten Horten',kind:'area',frameWidth:plain.lineWidths[0]*2.4,frameHeight:100,tracking:200});assert.equal(wrappedTracked.lineWidths.length,2,'Tracking is part of line breaking');
+});
 test('installed OpenType/CFF fonts can produce editable glyph outlines',{skip:!otf},async()=>{
   const layout=await service.shape(values(otf,'AV fi'));assert.ok(layout.glyphs.some(g=>g.subpaths.length));
 });

@@ -220,6 +220,8 @@ export function validateDocument(doc) {
           if(c.fontSource!==undefined)enumeration(c.fontSource,['system','google'],`${p}.fontSource`);
           if(c.googleFont!==undefined&&(!validGoogleReference(c.googleFont)||c.fontSource!=='google'||c.googleFont.family!==c.fontFamily))fail(`${p}.googleFont`,'Invalid Google font reference');
           if(c.fontAxes!==undefined&&!validFontAxes(c.fontAxes))fail(`${p}.fontAxes`,'Invalid variable font axes');
+          if(c.tracking!==undefined)number(c.tracking,`${p}.tracking`,-1000,10000);
+          if(c.allCaps!==undefined)bool(c.allCaps,`${p}.allCaps`);
         }
       }
       if(value.layout!==undefined) {

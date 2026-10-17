@@ -1170,3 +1170,28 @@ deretter feilet bare den kjente autolagringstesten (`project-workflows.mjs:113`,
 edits continue»), som er ustabil i skymiljøet (se tidligere oppføringer).
 
 Neste: Character- og Paragraph-paneler.
+
+## 2026-10-17: D2.1e Character og Paragraph
+
+`feat/vector-draw` er spolt fram til Claudes arbeid etter brukerens ønske, og arbeidet fortsetter der.
+
+- `panels/registry.mjs`: panelene `character` og `paragraph` i gruppen `type` (ikon `typography`).
+  Nye Tabler-ikoner: `typography`, `align-left`, `align-right`, `letter-case-upper`.
+- `panels/ui.mjs`: `characterPanel` og `paragraphPanel`, brukt i flyouten, i Properties (prefiks `prop-`)
+  og delvis i kontrollinjen (`cb-font-family`, `cb-font-size`, justeringsknapper). Tallfeltene her har
+  ikke scrubby labels fordi hver endring må formes asynkront; `field()` har fått `scrubbable`.
+- `index.mjs`: `textStyle(changes, label)` former alle valgte tekster på nytt med `resolveText` og legger
+  dem i én historikktransaksjon. Byttes familie, fjernes lagret face, Google-referanse og variable akser.
+  `fontFamilies()` laster installerte familier én gang.
+- `doc/text.mjs` og `doc/schema.mjs`: `character.tracking` (-1000 til 10000) og `character.allCaps`.
+  Standardverdier lagres ikke. Edit Text tar dem med uendret.
+- `electron/font-service.mjs`: tracking legges til hver glyfs fremføring (også i bryting og på path);
+  All Caps former versaler uten å endre innholdet.
+
+Verifisering: 196 Draw-enhetstester, 25 main-tester (ny: tracking per glyf, All Caps med samme glyfer
+som versaler, validering, tracking i linjebryting). Ny E2E `draw-character-workflows.mjs`
+(`--draw-character`): Mod+T, størrelse, tracking, All Caps, fet face, familie og ukjent familie, ett
+angresteg per endring, Paragraph for flere tekster i ett steg, felt i Properties og kontrollinjen,
+lagring og eksport.
+
+Neste: D2.2 compound paths og clipping masks.

@@ -3,6 +3,7 @@ const UNAVAILABLE = { gradient: 'Gradients arrive in D2.3' };
 export const PANEL_DEFINITIONS = Object.freeze([
   ['properties', 'Properties', 'adjustments'], ['layers', 'Layers', 'layers-intersect'],
   ['artboards', 'Artboards', 'artboard'], ['swatches', 'Swatches', 'color-swatch'], ['color', 'Color', 'palette'],
+  ['character', 'Character', 'typography'], ['paragraph', 'Paragraph', 'align-left'],
   ['stroke', 'Stroke', 'line-dashed'], ['gradient', 'Gradient', 'contrast-2'], ['transparency', 'Transparency', 'blend-mode'], ['appearance', 'Appearance', 'stack-2'], ['align', 'Align', 'align-center'], ['transform', 'Transform', 'arrows-move'], ['pathfinder', 'Pathfinder', 'layers-subtract'],
 ].map(([id, name, icon]) => Object.freeze({ id, name, icon, ...(UNAVAILABLE[id] ? { unavailable: UNAVAILABLE[id] } : {}) })));
 export function panelIconHref(id) {
@@ -21,6 +22,7 @@ export const PANEL_GROUPS = Object.freeze([
   ['stroke', 'line-dashed', ['stroke', 'gradient', 'transparency']],
   ['appearance', 'stack-2', ['appearance']],
   ['transform', 'arrows-move', ['transform', 'align', 'pathfinder']],
+  ['type', 'typography', ['character', 'paragraph']],
   ['artboards', 'artboard', ['artboards']],
 ].map(([id, icon, tabs]) => Object.freeze({ id, icon, tabs: Object.freeze(tabs) })));
 export function groupForPanel(id) { return PANEL_GROUPS.find(group => group.tabs.includes(id)) ?? null; }

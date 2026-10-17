@@ -36,6 +36,16 @@
       "path": "icons/outline/align-center.svg",
       "sha256": "d3fea8f389e1ebf6b27c946715a8315a977c6f64f96d8513e2cf8b4817aaea0a"
     },
+    "align-left": {
+      "name": "align-left",
+      "path": "icons/outline/align-left.svg",
+      "sha256": "bf89a05b7bfea66ab2203c94eb417702103c66f253072df52540b2d44ee33c2a"
+    },
+    "align-right": {
+      "name": "align-right",
+      "path": "icons/outline/align-right.svg",
+      "sha256": "ea964def0ddcb60965220a68113f5dfa25f07e605d0f9f6c3b643fb1a93f75ef"
+    },
     "arrows-move": {
       "name": "arrows-move",
       "path": "icons/outline/arrows-move.svg",
@@ -171,6 +181,11 @@
       "path": "icons/outline/layout-grid.svg",
       "sha256": "eedad40587cfc6420b3c4dd734fa591b552b2c1eb7348e415471c694e6d7dabe"
     },
+    "letter-case-upper": {
+      "name": "letter-case-upper",
+      "path": "icons/outline/letter-case-upper.svg",
+      "sha256": "aa63a7b0babdbef0fe1fa0d010751b7cafa25bb5d8a23e1b1c0d250fe5a40267"
+    },
     "line-dashed": {
       "name": "line-dashed",
       "path": "icons/outline/line-dashed.svg",
@@ -265,6 +280,11 @@
       "name": "trash",
       "path": "icons/outline/trash.svg",
       "sha256": "94176fd47075e845088ac13745104d722daae7fa8be94ae9665c143f8e2705a7"
+    },
+    "typography": {
+      "name": "typography",
+      "path": "icons/outline/typography.svg",
+      "sha256": "ccf0ac7285d7f0e5bddd9a740752f5702365563cdb6146f4f263389ff80bef5e"
     },
     "unlink": {
       "name": "unlink",
