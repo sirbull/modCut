@@ -8,6 +8,7 @@
 import { artworkModel } from './io/vector-model.mjs';
 import { pdfDocument, JPEG_QUALITY, PDF_PRESETS } from './io/pdf.mjs';
 import { epsDocument } from './io/eps.mjs';
+import { AI_OPTIONS, aiMetadata, hasTransparency } from './io/ai.mjs';
 import { dxfDocument } from './io/dxf.mjs';
 import { exportTarget, artboardFilePath, scalePpi, screensFilePath } from './io/export-plan.mjs';
 import { exportFileName } from './io/export.mjs';
@@ -78,7 +79,8 @@ export function createExportController({ state, scope, renderer, withScope, expo
     const boards = indices.map((i) => state.document.data.artboards[i]).filter(Boolean), warnings = new Set();
     if (!boards.length) throw new Error('Choose at least one artboard.');
     const target = exportTarget(format); if (!target) throw new Error('Choose a file format.');
-    if (format === 'pdf') {
+    if (format === 'ai') options = { ...options, ...AI_OPTIONS };
+    if (format === 'pdf' || format === 'ai') {
       const images = imageReader({ ...options, jpeg: options.imageCompression === 'jpeg' ? JPEG_QUALITY[options.jpegQuality] ?? .85 : null });
       const pages = [];
       for (const board of boards) {
@@ -87,7 +89,8 @@ export function createExportController({ state, scope, renderer, withScope, expo
       }
       const name = state.document.data.name || 'Untitled';
       const attachment = options.preserveEditing ? { name: DRAW_ATTACHMENT, mime: 'application/json', bytes: new TextEncoder().encode(JSON.stringify(state.document.data)) } : null;
-      const bytes = pdfDocument(pages, { ...options, compress, title: name, documentName: name, attachment });
+      const metadata = format === 'ai' ? aiMetadata({ title: name, pages: boards, transparency: hasTransparency(pages.map((p) => p.model)) }) : null;
+      const bytes = pdfDocument(pages, { ...options, compress, title: name, documentName: name, attachment, metadata, artBox: format === 'ai' });
       return { files: [{ path, data: base64(bytes), encoding: 'base64' }], warnings: [...warnings] };
     }
     const files = [];

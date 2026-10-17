@@ -57,11 +57,12 @@ export function pageMargins({ marks = {}, bleed = null } = {}) {
 
 /**
  * @param pages [{model, thumbnail?:{width,height,rgb}}]
- * @param options see PDF_PRESETS; plus compress(bytes)→bytes (Flate), title, documentName, date, attachment {name,bytes,mime}
+ * @param options see PDF_PRESETS; plus compress(bytes)→bytes (Flate), title, documentName, date, attachment {name,bytes,mime},
+ *   metadata (an XMP packet) and artBox (each page's art box is the artboard)
  */
 export function pdfDocument(pages, options = {}) {
   const { version = '1.6', compress = null, compressArt = true, layers: wantLayers = true, title = '', documentName = title, marks = {}, bleed = null,
-    attachment = null, now = new Date() } = options;
+    attachment = null, metadata = null, artBox = false, now = new Date() } = options;
   if (!pages.length) throw new Error('Choose at least one artboard.');
   const objects = [];
   const reserve = () => { objects.push(null); return objects.length; };
@@ -175,7 +176,7 @@ export function pdfDocument(pages, options = {}) {
     const contentsId = add(stream('', body.join('\n'), { flate: compressArt }));
     const box = (l, t, r, bt) => `[${pt(mg.left - l)} ${pt(mg.bottom - bt)} ${pt(mg.left + model.width + r)} ${pt(mg.bottom + model.height + t)}]`;
     const thumb = thumbnail ? ` /Thumb ${add(stream(`/Width ${thumbnail.width} /Height ${thumbnail.height} /ColorSpace /DeviceRGB /BitsPerComponent 8`, thumbnail.rgb))} 0 R` : '';
-    pageIds.push(add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${pt(pw)} ${pt(ph)}] /BleedBox ${box(b.left, b.top, b.right, b.bottom)} /TrimBox ${box(0, 0, 0, 0)} /Resources ${resourcesId} 0 R /Contents ${contentsId} 0 R /Group << /S /Transparency /CS /DeviceRGB >>${thumb} >>`));
+    pageIds.push(add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${pt(pw)} ${pt(ph)}] /BleedBox ${box(b.left, b.top, b.right, b.bottom)} /TrimBox ${box(0, 0, 0, 0)}${artBox ? ` /ArtBox ${box(0, 0, 0, 0)}` : ''} /Resources ${resourcesId} 0 R /Contents ${contentsId} 0 R /Group << /S /Transparency /CS /DeviceRGB >>${thumb} >>`));
   });
   set(pagesId, `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pageIds.length} >>`);
   const dict = (map) => `<< ${[...map].map(([name, id]) => `/${name} ${id} 0 R`).join(' ')} >>`;
@@ -191,6 +192,8 @@ export function pdfDocument(pages, options = {}) {
     const spec = add(`<< /Type /Filespec /F ${pdfString(attachment.name)} /UF ${pdfString(attachment.name)} /EF << /F ${file} 0 R >> /Desc (modCut Draw document) >>`);
     extra += ` /Names << /EmbeddedFiles << /Names [${pdfString(attachment.name)} ${spec} 0 R] >> >>`;
   }
+  // XMP is read by other programs before the page tree, so it stays uncompressed and UTF-8.
+  if (metadata) extra += ` /Metadata ${add(stream('/Type /Metadata /Subtype /XML', new TextEncoder().encode(metadata), { flate: false }))} 0 R`;
   set(catalogId, `<< /Type /Catalog /Pages ${pagesId} 0 R${extra} >>`);
   const infoId = add(`<< /Title ${pdfString(title || documentName || 'Untitled')} /Creator (modCut Draw) /Producer (modCut) /CreationDate ${pdfString(date(now))} /ModDate ${pdfString(date(now))} >>`);
 

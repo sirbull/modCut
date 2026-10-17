@@ -1058,8 +1058,8 @@ async function openDrawFile() {
     let drawData = null;
     if (file.kind === "document") {
       openDocumentInNewTab(JSON.parse(file.text),file.path,file.name,"draw");
-    } else if (file.ext === "pdf" && (drawData = await pdfDrawDocument(file.dataUrl))) {
-      // A PDF saved with "Preserve modCut editing capabilities" opens as the Draw document it carries.
+    } else if (["pdf","ai"].includes(file.ext) && (drawData = await pdfDrawDocument(file.dataUrl))) {
+      // A PDF saved with "Preserve modCut editing capabilities", or an .ai from Draw, opens as the Draw document it carries.
       newDocument("draw", drawData);
     } else {
       const prepared = await prepareDrawArtwork(file);

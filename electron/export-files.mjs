@@ -7,7 +7,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { basename, dirname, extname, resolve, sep } from 'node:path';
 
 export const EXPORT_FILE_TYPES = Object.freeze({
-  pdf: 'PDF', svg: 'SVG', svgz: 'SVG Compressed', eps: 'EPS', dxf: 'DXF (AutoCAD R12)', png: 'PNG', jpg: 'JPEG', webp: 'WebP',
+  pdf: 'PDF', ai: 'Adobe Illustrator (PDF compatible)', svg: 'SVG', svgz: 'SVG Compressed', eps: 'EPS', dxf: 'DXF (AutoCAD R12)', png: 'PNG', jpg: 'JPEG', webp: 'WebP',
 });
 const TEXT_TYPES = new Set(['svg', 'eps', 'dxf']);
 

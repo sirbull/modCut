@@ -3,6 +3,7 @@
  */
 export const EXPORT_TARGETS = Object.freeze([
   { id: 'pdf', label: 'PDF', ext: 'pdf', vector: true, multipage: true },
+  { id: 'ai', label: 'Adobe Illustrator (PDF compatible)', ext: 'ai', vector: true, multipage: true },
   { id: 'svg', label: 'SVG', ext: 'svg', vector: true },
   { id: 'svgz', label: 'SVG Compressed', ext: 'svgz', vector: true },
   { id: 'eps', label: 'EPS', ext: 'eps', vector: true },

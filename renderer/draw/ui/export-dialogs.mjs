@@ -91,6 +91,7 @@ export function exportOptionsDialog({ format, boards, defaults = {} }) {
     fields.tolerance = select(ui.body, 'Curve accuracy', [['0.001', '0.001 mm (finest)'], ['0.01', '0.01 mm'], ['0.05', '0.05 mm'], ['0.1', '0.1 mm (smallest file)']], defaults.tolerance ?? 0.01, 'tolerance');
     make('p', 'draw-export-note', ui.body, 'Curves become polylines in millimetres; each layer becomes a DXF layer. Images are not part of DXF.');
   }
+  if (format === 'ai') make('p', 'draw-export-note', ui.body, 'Saved as a PDF compatible Illustrator file: every artboard is a page and each layer stays a layer. Illustrator opens live effects and text as expanded artwork; modCut opens the file with everything still editable.');
   if (format === 'eps') make('p', 'draw-export-note', ui.body, 'EPS has no transparency: opacity and blending are ignored and images are placed on white.');
   if (boards.length > 1 && !target.multipage) make('p', 'draw-export-note', ui.body, 'Each artboard is saved as its own file, named after the artboard.');
   return ui.open(() => {

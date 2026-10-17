@@ -93,6 +93,21 @@ export async function runDrawExportWorkflows(client) {
     await evaluate("document.querySelector('.draw-export-options form').requestSubmit()");
   });
   assert.equal(dxf.name, 'Export proof.dxf'); assert.match(dxf.text, /AC1009/); assert.match(dxf.text, /POLYLINE/);
+  // Adobe Illustrator: a PDF compatible .ai with Illustrator XMP, which modCut opens as the editable Draw document.
+  const [ai] = await exportAs('Export proof.ai', async () => {
+    await until("!!document.querySelector('.draw-export-options form')", 'AI options');
+    assert.equal(await evaluate("document.querySelector('.draw-export-options .panel__header').textContent"), 'Adobe Illustrator (PDF compatible) Options');
+    assert.match(await evaluate("document.querySelector('.draw-export-options .draw-export-note').textContent"), /PDF compatible Illustrator file/);
+    await evaluate("document.querySelector('.draw-export-options form').requestSubmit()");
+  });
+  const aiText = Buffer.from(ai.data, 'base64').toString('latin1');
+  assert.equal(ai.name, 'Export proof.ai'); assert.match(aiText, /^%PDF-1.6/); assert.match(aiText, /<illustrator:Type>Document<\/illustrator:Type>/); assert.match(aiText, /\/ArtBox \[/);
+  const beforeAi = await evaluate("document.querySelector('.doc-tab.is-active').dataset.tabId");
+  await evaluate(`window.modcut.setE2EImportResult(${JSON.stringify({ name: 'Export proof.ai', ext: 'ai', dataUrl: `data:application/pdf;base64,${ai.data}` })})`);
+  await evaluate("document.querySelector('#import').click()");
+  await until(`document.querySelector('.doc-tab.is-active').dataset.tabId!=='${beforeAi}'`, 'AI opened in a new tab');
+  await until(`(async()=>{const w=${active};return !!w&&!!w.state.document.getNode('ex-red')&&!!w.state.document.getNode('ex-blue');})()`, 'Editable objects from the AI file');
+  await evaluate(`document.querySelector('[data-tab-id="${beforeAi}"]').click()`);
   const [image] = await exportAs('Export proof.png', async () => {
     await until("!!document.querySelector('.draw-export-options form')", 'PNG options');
     await evaluate("(()=>{const f=document.querySelector('.draw-export-options form');f.elements.ppi.value='72';f.requestSubmit();})()");
@@ -134,5 +149,5 @@ export async function runDrawExportWorkflows(client) {
   assert.deepEqual(Object.fromEntries(sizes), { 'app-Artboard 1.png': 340, 'app-Artboard 1@2x.png': 680 });
   await evaluate(`(async()=>{${active}.handle('outline')})()`);
   await restoreTabs();
-  console.log('PASS Draw export: SVG in millimetres without templates, preview from Outline view, PNG transparency and size, JPEG on white, WebP with transparency, Export As via File > Export with PDF (Save PDF presets, editable reopen), DXF and PNG; Export for Screens with thumbnails, scale rows, sub-folders and prefix');
+  console.log('PASS Draw export: SVG in millimetres without templates, preview from Outline view, PNG transparency and size, JPEG on white, WebP with transparency, Export As via File > Export with PDF (Save PDF presets, editable reopen), Adobe Illustrator (PDF compatible, editable reopen), DXF and PNG; Export for Screens with thumbnails, scale rows, sub-folders and prefix');
 }

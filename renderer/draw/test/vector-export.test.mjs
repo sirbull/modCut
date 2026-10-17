@@ -6,6 +6,7 @@ import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { artworkModel, flattenSubpath, modelBounds } from '../io/vector-model.mjs';
 import { pdfDocument, pdfString, pageMargins } from '../io/pdf.mjs';
 import { epsDocument } from '../io/eps.mjs';
+import { AI_OPTIONS, aiMetadata, hasTransparency } from '../io/ai.mjs';
 import { dxfDocument, aciColor, dxfLayerNames } from '../io/dxf.mjs';
 
 const board = { x: 10, y: 20, width: 100, height: 50, name: 'Front' };
@@ -107,4 +108,20 @@ test('DXF writes R12 polylines per layer in millimetres with y up', () => {
   assert.match(text, /VERTEX\r\n8\r\nCUT_LINES\r\n10\r\n10\r\n20\r\n40\r\n/);
   assert.equal(aciColor([1, 0, 0]), 1); assert.equal(aciColor([0, 0, 0]), 7); assert.equal(aciColor(null), 7);
   assert.deepEqual(dxfLayerNames(['A b', 'A b', '']), ['A_B', 'A_B_2', 'LAYER']);
+});
+
+test('AI: a PDF compatible Illustrator file with XMP, art box, layers and the Draw document', async () => {
+  const m = model(), metadata = aiMetadata({ title: 'Logo & Co', pages: [board], transparency: hasTransparency([m]), now: new Date('2026-10-17T10:00:00Z') });
+  assert.match(metadata, /<illustrator:Type>Document<\/illustrator:Type>/); assert.match(metadata, /Logo &amp; Co/);
+  assert.match(metadata, /<xmpTPg:HasVisibleTransparency>True</); assert.match(metadata, /<stDim:w>100<\/stDim:w>/);
+  assert.equal(hasTransparency([{ layers: [{ items: [{ type: 'path', opacity: 1, blend: 'normal' }] }] }]), false);
+  const bytes = pdfDocument([{ model: m }], { ...AI_OPTIONS, compress: (b) => new Uint8Array(deflateSync(b)), title: 'Logo', metadata, artBox: true,
+    attachment: { name: 'modcut-draw.json', bytes: new TextEncoder().encode('{"a":1}'), mime: 'application/json' } });
+  const text = new TextDecoder('latin1').decode(bytes);
+  assert.match(text, /\/ArtBox \[/); assert.match(text, /\/Metadata \d+ 0 R/); assert.match(text, /illustrator:Type/, 'The XMP is stored uncompressed');
+  const pdf = await getDocument({ data: bytes, useSystemFonts: false, isEvalSupported: false }).promise;
+  assert.equal((await pdf.getMetadata()).metadata.get('xmp:creatortool'), 'modCut Draw');
+  assert.deepEqual([...(await pdf.getOptionalContentConfig())].map(([, group]) => group.name), ['Cut lines', 'Engrave']);
+  assert.ok((await pdf.getAttachments())['modcut-draw.json']);
+  await pdf.destroy();
 });
