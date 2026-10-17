@@ -20,7 +20,8 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
   const ISOLATION_DIM = .35;
   const items = new Map(), records = new Map(), boardItems = new Map(), thumbnails = new Map();
   const worldBounds = new Map(), paintedBounds = new Map();
-  const editPreviews=new Map();
+  const editPreviews=new Map(),pathPreviewHidden=new Set();
+  let pathPreview=null;
   const transformPreviewIds=new Set();let transformPreview=null,transformPreviewOptions=null;
   let destroyed = false, outline = !!state.ui?.outline;
   let textPreview = null, textPreviewFrame=null;
@@ -350,7 +351,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
       const b = paintedBounds.get(id);
       const visible = node.visible && (!!node.children || !!b?.intersects(viewport));
       const asOutline = outlineFor(id);
-      item.visible = visible && !(asOutline && node.type === 'image') && !editPreviews.has(id) && !transformPreviewIds.has(id);
+      item.visible = visible && !(asOutline && node.type === 'image') && !editPreviews.has(id) && !transformPreviewIds.has(id) && !pathPreviewHidden.has(id);
       if (asOutline && !node.children && node.type !== 'image') item.strokeWidth = 1 / scope.view.zoom;
       if (record.frame) { record.frame.visible = visible && asOutline && node.type==='image'; record.frame.strokeWidth = 1 / scope.view.zoom; }
       if(node.type==='text'&&['area','onPath'].includes(node.kind)&&visible&&!transformPreviewIds.has(id)&&state.document.ancestors(id).every(n=>n.visible)&&
@@ -588,6 +589,19 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     cornerHandle(point){return cornerWidgets().find(c=>c.point.getDistance(point)<=7/scope.view.zoom)??null;},
     editSpaceId(id){return state.document.getNode(id)?.type==='shape'?state.document.locate(id).parentId:id;},
     setEditPreview(nodes=[]){editPreviews.clear();for(const node of nodes)editPreviews.set(node.id,node);updateView();},
+    /** Proposed paths for Offset Path and Simplify: drawn with their paint over the artwork; `hide` lists originals to hide meanwhile. */
+    previewPaths(entries=[],hide=[]){
+      pathPreview?.remove();pathPreview=null;pathPreviewHidden.clear();for(const id of hide)pathPreviewHidden.add(id);
+      if(entries.length){
+        pathPreview=new scope.Group({insert:false});
+        for(const entry of entries){
+          const node={type:'path',subpaths:entry.subpaths,fillRule:entry.fillRule??'nonzero',appearance:entry.appearance,opacity:1,blendMode:'normal',transform:[1,0,0,1,0,0],...(entry.strokeScaling!==undefined?{strokeScaling:entry.strokeScaling}:{})};
+          const item=make(node);item.applyMatrix=false;item.matrix=new scope.Matrix(...entry.matrix);style(item,node,false,true);pathPreview.addChild(item);
+        }
+        overlay.addChild(pathPreview);
+      }
+      updateView();scope.view.update();
+    },
     previewTransform,clearTransformPreview,
     layerColor(id){return records.get(id)?.context.color??'#006B5C';},
     worldMatrix(id){return [...records.get(id).worldMatrix.values];},

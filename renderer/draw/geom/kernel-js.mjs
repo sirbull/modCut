@@ -3,7 +3,7 @@ export const DEFAULT_TOLERANCE = 0.001;
 export const LIMITS = Object.freeze({ coordinate: 1_000_000, anchors: 1_000_000, points: 1_000_000, depth: 32 });
 const SCALE = 1_000_000;
 export const BACKEND = Object.freeze({ name: 'js', library: 'clipper-lib@6.4.2', approximate: true,
-  toleranceMm: DEFAULT_TOLERANCE, capabilities: Object.freeze(['flatten', 'boolean:unite']) });
+  toleranceMm: DEFAULT_TOLERANCE, capabilities: Object.freeze(['flatten', 'boolean:unite', 'offset']) });
 
 export class GeometryError extends Error {
   constructor(message, code = 'INVALID_GEOMETRY') { super(message); this.name = 'GeometryError'; this.code = code; }
@@ -109,7 +109,35 @@ export async function unite(paths, { tolerance = DEFAULT_TOLERANCE, fillRule = '
   if (!result.length) return [];
   return [result.map((ring) => ({ closed: true, segments: ring.map(({ X, Y }) => ({ p: [X / SCALE, Y / SCALE], in: [0, 0], out: [0, 0] })) }))];
 }
+/**
+ * Offset Path: every subpath grown (positive) or shrunk (negative) by `distance` mm. Closed areas are
+ * normalised with their fill rule first so holes shrink when the outline grows. Open paths become
+ * closed outlines with butt ends. Joins: miter (with limit), round or bevel. Result: straight segments.
+ */
+export async function offsetPaths(paths, { distance, join = 'miter', miterLimit = 4, tolerance = .005, fillRule = 'nonzero' } = {}) {
+  if (!Array.isArray(paths)) throw new GeometryError('Expected an array of paths');
+  if (typeof distance !== 'number' || !Number.isFinite(distance) || Math.abs(distance) > 10000) throw new GeometryError('Offset must be between -10,000 and 10,000 mm');
+  if (!['miter', 'round', 'bevel'].includes(join)) throw new GeometryError('Invalid join');
+  positive(miterLimit, 'miter limit', 500); positive(tolerance, 'offset tolerance', 1);
+  if (!['nonzero', 'evenodd'].includes(fillRule)) throw new GeometryError('Invalid fill rule');
+  for (const path of paths) validatePath(path);
+  const lib = await clipper(), closed = [], open = [], fill = fillRule === 'evenodd' ? lib.PolyFillType.pftEvenOdd : lib.PolyFillType.pftNonZero;
+  const ints = (points) => points.map(([x, y]) => ({ X: Math.round(x * SCALE), Y: Math.round(y * SCALE) }));
+  for (const path of paths) {
+    const contours = flattenPath(path, tolerance / 4);
+    closed.push(...executeUnion(lib, contours.filter((c) => c.closed && c.points.length >= 3).map((c) => ints(c.points)), fill));
+    open.push(...contours.filter((c) => !c.closed && c.points.length >= 2).map((c) => ints(c.points)));
+  }
+  const engine = new lib.ClipperOffset(Math.max(1, miterLimit), tolerance * SCALE);
+  const joinType = { miter: lib.JoinType.jtMiter, round: lib.JoinType.jtRound, bevel: lib.JoinType.jtSquare }[join];
+  if (closed.length) engine.AddPaths(closed, joinType, lib.EndType.etClosedPolygon);
+  if (open.length) engine.AddPaths(open, joinType, lib.EndType.etOpenButt);
+  const result = new lib.Paths(); engine.Execute(result, distance * SCALE);
+  const rings = executeUnion(lib, result, lib.PolyFillType.pftNonZero).filter((ring) => ring.length >= 3);
+  return rings.map((ring) => ({ closed: true, segments: ring.map(({ X, Y }) => ({ p: [X / SCALE, Y / SCALE], in: [0, 0], out: [0, 0] })) }));
+}
 export async function runGeometry(method, params) {
+  if (method === 'offset') return offsetPaths(params.paths, { distance: params.distance, join: params.join, miterLimit: params.miterLimit });
   if (method === 'flatten') return flattenPath(params.path, params.tolerance);
   if (method === 'boolean' && params.op === 'unite') return unite(params.paths, params.options);
   throw new GeometryError(`Geometry operation not implemented: ${method}${method === 'boolean' ? `:${params.op}` : ''}`, 'NOT_IMPLEMENTED');

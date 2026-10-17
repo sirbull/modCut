@@ -20,15 +20,17 @@ import { TRANSFORM_TOOLS, operationMatrix, dialogOperation, panelMatrix } from '
 import { transformedBox } from './tools/selection.mjs';
 import { SHAPE_TOOLS, shapeFromDrag } from './tools/shapes.mjs';
 import { insertNode, removeNode, replaceLeaf, updateNode, updateDocument } from './doc/commands.mjs';
+import { createNode } from './doc/schema.mjs';
 import { activeArtboard } from './doc/artboards.mjs';
 import { changePaint, changeStroke, paintHex } from './doc/paint.mjs';
 import { importArtwork } from './import-artwork.mjs';
-import { shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog,layerOptionsDialog,swatchOptionsDialog,sendToCutDialog,averageDialog } from './ui/dialogs.mjs';
+import { shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog,layerOptionsDialog,swatchOptionsDialog,sendToCutDialog,averageDialog,offsetDialog,simplifyDialog } from './ui/dialogs.mjs';
 import { artboardCutSvg } from './io/cut-svg.mjs';
 import { EXPORT_FORMATS, rasterSize, svgDocument } from './io/export.mjs';
 import { createExportController } from './export-controller.mjs';
 import { layerOptionsPatch, templateLayerCommands, isOutputNode } from './doc/layers.mjs';
 import { compoundCommands, releaseCompoundCommands, clipCommands, releaseClipCommands } from './doc/compound.mjs';
+import { offsetPaths, flattenPath } from './geom/kernel-js.mjs';
 import { addAnchorPoints, removeAnchorPoints, reverseSubpaths, averagePoints, joinSubpaths, closeSubpath, cleanUpTargets, mapSubpath } from './geom/path-commands.mjs';
 import { toolCursor } from './tools/cursors.mjs';
 import { alignReference, alignOffsets, distributeOffsets, spacingOffsets } from './geom/align.mjs';
@@ -41,7 +43,7 @@ export function getDrawWorkspace(root) {return workspaces.get(root) || null;}
 const implementedTools=new Set(['select','hand','zoom','artboard','type','area-type','type-on-path',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
 const commands=new Set(['undo','redo','delete','select-all','select-artboard','deselect','cancel','fit-artboard','fit-all','actual-size','zoom-in','zoom-out','outline',
   'cut','copy','paste','paste-front','paste-back','paste-place','paste-all-artboards',
-  'edit-text','create-outlines','join','average','reverse-path','add-anchors','remove-anchors','clean-up','compound-make','compound-release','clip-make','clip-release','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
+  'edit-text','create-outlines','join','average','offset-path','simplify','reverse-path','add-anchors','remove-anchors','clean-up','compound-make','compound-release','clip-make','clip-release','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
   'paint-focus','paint-swap','paint-none','paint-solid','default-paint','smart-guides','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','toggle-panels','toggle-panels-except-tools',
   ...PANEL_DEFINITIONS.map(p=>`panel.${p.id}`),...['left','right','up','down'].flatMap(d=>[`nudge-${d}`,`nudge-large-${d}`,`duplicate-${d}`])]);
 export function createDrawWorkspace(root,{paper=window.paper,state=createProjectDraw(),onError=console.warn,onNotice=()=>{},onImport=()=>{},onSendToCut=null,cutIsEmpty=()=>false,cutClipboard=()=>null,onExport=null,getPreferences=()=>({}),statusHost=null}={}) {
@@ -509,6 +511,43 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
         });
         apply('Average',[...edits].map(([id,subpaths])=>updateNode(id,{subpaths},{label:'Average'})));
       });};
+    if(command==='offset-path')return async()=>{
+      const ids=editable();if(!ids.length)throw new Error('Select paths or shapes to offset.');
+      const sources=ids.map(id=>({id,node:base(id),world:parentWorld(id)}));
+      let revision=0;
+      const compute=values=>Promise.all(sources.map(async ({id,node})=>({id,node,subpaths:await offsetPaths([node.subpaths],{distance:values.distance,join:values.join,miterLimit:values.miterLimit,fillRule:node.fillRule})})));
+      const show=async values=>{const current=++revision;if(!values){renderer.previewPaths();return;}
+        try{const results=await compute(values);if(current!==revision||destroyed)return;
+          withScope(()=>renderer.previewPaths(results.map(r=>({subpaths:r.subpaths,appearance:r.node.appearance,strokeScaling:r.node.strokeScaling,matrix:sources.find(s=>s.id===r.id).world}))));}catch(error){if(current===revision)onError(error.message);}};
+      const values=await offsetDialog(state.ui.offsetDefaults??{},show);revision++;withScope(()=>renderer.previewPaths());
+      if(!values||destroyed)return;state.ui.offsetDefaults=values;
+      const results=await compute(values);if(destroyed)return;
+      const made=results.filter(r=>r.subpaths.length).map(r=>({id:r.id,node:createNode('path',{name:'',subpaths:r.subpaths,fillRule:'nonzero',appearance:structuredClone(r.node.appearance),
+        opacity:r.node.opacity,blendMode:r.node.blendMode,...(r.node.strokeScaling!==undefined?{strokeScaling:r.node.strokeScaling}:{})})}));
+      if(!made.length)throw new Error('The offset leaves nothing. Use a smaller negative offset.');
+      // The offset path goes directly above its source, which stays, as in Illustrator.
+      run(()=>{apply('Offset Path',[...made].reverse().map(({id,node})=>{const {parentId,index}=doc.locate(id);return insertNode(parentId,node,index+1);}));select(made.map(m=>m.node.id));});
+    };
+    if(command==='simplify')return async()=>{
+      const ids=editable();if(!ids.length)throw new Error('Select paths or shapes to simplify.');
+      const sources=ids.map(id=>({id,node:base(id),world:parentWorld(id)}));
+      const before=sources.reduce((sum,s)=>sum+s.node.subpaths.reduce((n,p)=>n+p.segments.length,0),0);
+      // Precision 100 keeps detail within 0.002 mm; every 10 % less doubles the allowed deviation.
+      const simplified=values=>withScope(()=>sources.map(({id,node})=>({id,node,subpaths:flattenPath(node.subpaths.map(s=>mapSubpath(s,[1,0,0,1,0,0])),.005).map(contour=>{
+        // Paper can fit a closed curve with a single looping anchor; halve the tolerance until the shape keeps at least three.
+        let path=new scope.Path({segments:contour.points,closed:contour.closed,insert:false});
+        for(let tolerance=.002*2**((100-values.precision)/10),tries=0;contour.points.length>2&&tries<12;tolerance/=2,tries++) {
+          const attempt=new scope.Path({segments:contour.points,closed:contour.closed,insert:false});attempt.simplify(tolerance);
+          if(attempt.segments.length>=(contour.closed?3:2)){path.remove();path=attempt;break;}attempt.remove();
+        }
+        const result={closed:contour.closed,segments:path.segments.map(s=>({p:[s.point.x,s.point.y],in:values.straight?[0,0]:[s.handleIn.x,s.handleIn.y],out:values.straight?[0,0]:[s.handleOut.x,s.handleOut.y]}))};
+        path.remove();return result;}).filter(p=>p.segments.length>1)})));
+      const count=values=>simplified(values).reduce((sum,r)=>sum+r.subpaths.reduce((n,p)=>n+p.segments.length,0),0);
+      const show=values=>withScope(()=>values?renderer.previewPaths(simplified(values).map(r=>({subpaths:r.subpaths,fillRule:r.node.fillRule,appearance:r.node.appearance,strokeScaling:r.node.strokeScaling,matrix:sources.find(s=>s.id===r.id).world})),ids):renderer.previewPaths());
+      const values=await simplifyDialog(state.ui.simplifyDefaults??{},{before,count},show);withScope(()=>renderer.previewPaths());
+      if(!values||destroyed)return;state.ui.simplifyDefaults=values;
+      run(()=>{apply('Simplify',simplified(values).map(r=>setPaths(r.id,r.subpaths)));select(ids);});
+    };
     if(command==='join')return()=>{
       const chosen=anchors(),ends=chosen.filter(a=>{const s=doc.getNode(a.nodeId).subpaths[a.subpath];return !s.closed&&(a.segment===0||a.segment===s.segments.length-1);});
       const end=a=>a.segment===0?'start':'end';

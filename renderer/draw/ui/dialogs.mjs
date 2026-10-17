@@ -391,3 +391,36 @@ export function averageDialog(axis='both') {
     {key:'axis',label:'Axis',type:'select',value:axis,options:[{value:'horizontal',label:'Horizontal'},{value:'vertical',label:'Vertical'},{value:'both',label:'Both'}]},
   ]}).then(values=>values?.axis??null);
 }
+/** Offset Path: distance (negative shrinks), joins and miter limit, with live preview. */
+export function offsetDialog(defaults,onPreview=()=>{}) {
+  const result=openDrawModal({title:'Offset Path',submitLabel:'OK',className:'draw-offset-dialog',fields:[
+    {key:'distance',label:'Offset (mm)',type:'number',value:defaults.distance??1,min:-10000,max:10000,step:'any',required:true},
+    {key:'join',label:'Joins',type:'select',value:defaults.join??'miter',options:[{value:'miter',label:'Miter'},{value:'round',label:'Round'},{value:'bevel',label:'Bevel'}]},
+    {key:'miterLimit',label:'Miter limit',type:'number',value:defaults.miterLimit??4,min:1,max:500,step:'any',required:true},
+    {key:'preview',label:'Preview',type:'checkbox',value:defaults.preview!==false},
+  ]});
+  const form=document.querySelector('.draw-offset-dialog form'),el=form.elements;
+  const read=()=>({distance:el.distance.valueAsNumber,join:el.join.value,miterLimit:el.miterLimit.valueAsNumber,preview:el.preview.checked});
+  const update=()=>{el.miterLimit.disabled=el.join.value!=='miter';const values=read();onPreview(form.checkValidity()&&values.preview&&Number.isFinite(values.distance)?values:null);};
+  form.addEventListener('input',update);form.addEventListener('change',update);update();
+  return result.then(values=>values&&read());
+}
+/** Simplify: curve precision with live preview and the anchor count before and after. */
+export function simplifyDialog(defaults,{before,count},onPreview=()=>{}) {
+  const result=openDrawModal({title:'Simplify',submitLabel:'OK',className:'draw-simplify-dialog',fields:[
+    {key:'precision',label:'Curve precision (%)',type:'number',value:defaults.precision??50,min:0,max:100,step:1,required:true},
+    {key:'straight',label:'Straight lines',type:'checkbox',value:!!defaults.straight},
+    {key:'preview',label:'Preview',type:'checkbox',value:defaults.preview!==false},
+  ]});
+  const form=document.querySelector('.draw-simplify-dialog form'),el=form.elements;
+  const slider=document.createElement('input');slider.type='range';slider.min='0';slider.max='100';slider.step='1';slider.value=el.precision.value;slider.className='draw-simplify-dialog__slider';
+  slider.setAttribute('aria-label','Curve precision');el.precision.closest('label').append(slider);
+  slider.addEventListener('input',()=>{el.precision.value=slider.value;el.precision.dispatchEvent(new Event('input',{bubbles:true}));});
+  const info=document.createElement('p');info.className='draw-simplify-dialog__count';info.dataset.drawSimplifyCount='';form.querySelector('.modal-actions').before(info);
+  const read=()=>({precision:el.precision.valueAsNumber,straight:el.straight.checked,preview:el.preview.checked});
+  const update=()=>{const values=read();if(!form.checkValidity()||!Number.isFinite(values.precision))return;slider.value=String(values.precision);
+    try{info.textContent=`Original: ${before} points. Current: ${count(values)} points.`;}catch(error){info.textContent=error.message;}
+    onPreview(values.preview?values:null);};
+  form.addEventListener('input',update);form.addEventListener('change',update);update();
+  return result.then(values=>values&&read());
+}

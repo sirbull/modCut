@@ -1232,3 +1232,23 @@ Verifisering: 207 Draw-enhetstester (6 nye), ny E2E `draw-path-commands-workflow
 prosjekt- og autolagringstestene.
 
 Neste: D2.4 del B, Simplify og Offset Path.
+
+## 2026-10-17: D2.4 del B, Offset Path og Simplify
+
+- `geom/kernel-js.mjs`: `offsetPaths` med ClipperOffset (miter med grense, round, bevel som square),
+  fyllregelnormalisering før offset, åpne baner med butt-ender, union av resultatet. Kjerneklientens
+  `offset` virker nå også i workeren (`runGeometry('offset')`).
+- `index.mjs`: `offset-path` (dialog `offsetDialog` med asynkron live forhåndsvisning; resultatet legges
+  over kilden) og `simplify` (dialog `simplifyDialog` med glider og punkttelling; utflating med
+  `flattenPath`, kurvetilpasning med Paper.js `simplify`, toleransen halveres hvis en lukket bane ville
+  falle sammen til under tre ankre).
+- `render/paper-adapter.mjs`: `previewPaths(entries, hide)` tegner foreslåtte baner i overlegget og kan
+  skjule originalene.
+- Object > Path har fått Offset Path… og Simplify….
+
+Verifisering: 211 Draw-enhetstester (4 nye i `offset.test.mjs`: miter, krymping, round og bevel, hull,
+stjerne med -2 mm og round joins uten selvkryssing, åpen linje; kjernetesten kjører offset i workeren).
+`--draw-path-commands` dekker Offset Path (forhåndsvisning endrer ikke dokumentet, mål 2 mm, over kilden,
+ett angresteg) og Simplify (punkttelling, lukket bane, ett angresteg).
+
+Neste: D2.3 gradienter.

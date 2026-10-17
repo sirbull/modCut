@@ -55,6 +55,28 @@ export async function runDrawPathCommandWorkflows(client) {
   await menu('Clean Up');
   assert.equal(await node(ids.stray),null);assert.equal(await node(ids.bare),null);
   await until("[...document.querySelectorAll('.toast')].some(t=>/Clean Up removed 2 objects/.test(t.textContent))",'Clean Up notice');
+  // Offset Path: live preview leaves the document alone; OK adds a grown copy above the source.
+  const more=await evaluate(`(async()=>{const w=${active},{createNode}=await import('./draw/doc/schema.mjs'),{insertNode}=await import('./draw/doc/commands.mjs'),{appearance}=await import('./draw/geometry.mjs');
+    const b=w.state.document.data.artboards[0],L=w.state.document.data.layers[0].id;
+    const sq=createNode('path',{subpaths:[{closed:true,segments:[[45,50],[60,50],[60,65],[45,65]].map(p=>({p:[b.x+p[0],b.y+p[1]],in:[0,0],out:[0,0]}))}],appearance:appearance(null,'#0000FF',.3)});
+    const ring=createNode('path',{subpaths:[{closed:true,segments:Array.from({length:60},(_,i)=>{const a=i/60*2*Math.PI;return {p:[b.x+85+8*Math.cos(a),b.y+60+8*Math.sin(a)],in:[0,0],out:[0,0]}})}],appearance:appearance('#00AA00',null)});
+    w.state.history.execute(insertNode(L,sq));w.state.history.execute(insertNode(L,ring));w.select([sq.id]);return {square:sq.id,ring:ring.id};})()`);
+  const before=await evaluate(`(async()=>(${active}.state.document.serialize()))()`);steps=await applied();
+  await menu('Offset Path…');await until("!!document.querySelector('.draw-offset-dialog form')",'Offset Path dialog');
+  await evaluate("(()=>{const f=document.querySelector('.draw-offset-dialog form');f.elements.distance.value='2';f.dispatchEvent(new Event('input',{bubbles:true}));})()");await wait(300);
+  assert.equal(await evaluate(`(async()=>(${active}.state.document.serialize()))()`),before,'The preview does not change the document');
+  await evaluate("document.querySelector('.draw-offset-dialog form').requestSubmit()");
+  await until(`(async()=>(${active}.state.selection.ids[0]!=='${more.square}'))()`,'offset path made');
+  const grown=await evaluate(`(async()=>{const w=${active},id=w.state.selection.ids[0],b=w.renderer.bounds(id),a=w.state.document.data.artboards[0],list=w.state.document.data.layers[0].children.map(n=>n.id);return {box:[b.x-a.x,b.y-a.y,b.width,b.height],above:list.indexOf(id)===list.indexOf('${more.square}')+1}})()`);
+  grown.box.forEach((v,i)=>assert.ok(Math.abs(v-[43,48,19,19][i])<.02,`Offset by 2 mm: ${grown.box}`));assert.ok(grown.above,'The offset path sits above its source');
+  assert.ok(await node(more.square),'The source path stays');assert.equal(await applied(),steps+1);
+  // Simplify: fewer anchors, still closed, one undo step, counts shown in the dialog.
+  await select([more.ring]);steps=await applied();await menu('Simplify…');await until("!!document.querySelector('.draw-simplify-dialog form')",'Simplify dialog');
+  assert.match(await evaluate("document.querySelector('[data-draw-simplify-count]').textContent"),/^Original: 60 points\. Current: \d+ points\.$/);
+  await evaluate("(()=>{const f=document.querySelector('.draw-simplify-dialog form');f.elements.precision.value='30';f.dispatchEvent(new Event('input',{bubbles:true}));f.requestSubmit();})()");
+  await until(`(async()=>(${active}.state.document.getNode('${more.ring}').subpaths[0].segments.length<60))()`,'Simplify applied');
+  const ring=await node(more.ring);assert.equal(ring.subpaths[0].closed,true);assert.ok(ring.subpaths[0].segments.length<=12,`Simplified to ${ring.subpaths[0].segments.length} points`);
+  assert.equal(await applied(),steps+1);
   await restore();
-  console.log('PASS Draw path commands: Join two paths (direction, top paint, one step), close one path from the menu, join chosen endpoints, Average horizontal, Reverse, Add/Remove Anchor Points on a live shape, Clean Up');
+  console.log('PASS Draw path commands: Join two paths (direction, top paint, one step), close one path from the menu, join chosen endpoints, Average horizontal, Reverse, Add/Remove Anchor Points on a live shape, Clean Up, Offset Path with preview, Simplify with point counts');
 }

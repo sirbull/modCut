@@ -4,7 +4,7 @@
 > Detaljer: [hovedplanen](../DRAW_WORKSPACE.md) (spesifikasjon og byggeplan),
 > [RIGHT_PANELS.md](RIGHT_PANELS.md) (høyresiden), [WORK_LOG.md](WORK_LOG.md) (hva som er gjort, dag for dag)
 > og [HANDOFF.md](HANDOFF.md) (overlevering til neste agent).
-> Sist oppdatert: 2026-10-17 (path-kommandoer del A). Arbeidsgren: `feat/vector-draw` (Claude og Codex
+> Sist oppdatert: 2026-10-17 (path-kommandoer del A og B). Arbeidsgren: `feat/vector-draw` (Claude og Codex
 > jobber begge der; hent alltid før du starter, og kjør `npm ci` ved endrede avhengigheter).
 
 ## 1. Kort oppsummert
@@ -290,8 +290,17 @@ Object > Path:
 * Live former blir paths med samme id når de redigeres slik. Hver kommando er ett angresteg.
 * Kode: `geom/path-commands.mjs` (rene funksjoner), `pathCommand` i `index.mjs`.
 
-Del B (neste): Simplify (glider med forhåndsvisning og antall ankre) og Offset Path (avstand, joins,
-miter limit, negativ avstand), deretter Outline Stroke (D3.1).
+Del B (2026-10-17):
+* **Offset Path…:** avstand i mm (negativ krymper), joins Miter, Round eller Bevel og miter limit, med
+  live forhåndsvisning. Kilden blir stående og den nye banen legges rett over, som i Illustrator. Hull i
+  compound paths krymper når omrisset vokser. Åpne baner blir et lukket omriss. Resultatet er rette
+  segmenter innen 0,005 mm (ClipperOffset i `geom/kernel-js.mjs`, `offsetPaths`).
+* **Simplify…:** kurvepresisjon i prosent med glider, «Straight lines», forhåndsvisning og antall punkter
+  før og nå. Banen flates ut og tilpasses kurver på nytt (Paper.js), og lukkede baner beholder minst tre
+  ankre.
+
+Gjenstår fra 10.3: Smooth, Split Into Grid, Divide Objects Below, hjørnevinkel i Simplify,
+Outline Stroke (D3.1) og Scissors/Knife-verktøy (D2.8).
 
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
@@ -306,7 +315,7 @@ miter limit, negativ avstand), deretter Outline Stroke (D3.1).
 | D2.1 Tekst | Punkt-, område- og path-tekst, system-/Google-fonter, shaping, variable akser, outlines, Character og Paragraph (2.6 til 2.11); se 2.11 for det som gjenstår |
 | D2.2 Pathfinder, Compound, Clipping | Pathfinder, compound paths og klippemasker ferdig (2.12); Draw Inside og lagklipping gjenstår |
 | D2.3 Gradienter og Swatches | Swatches ferdig (solide); gradienter og globale swatches gjenstår |
-| D2.4 Path-kommandoer | Del A ferdig (2.13): Join, Average, Reverse, Add/Remove Anchor Points, Clean Up; Simplify og Offset Path gjenstår |
+| D2.4 Path-kommandoer | Ferdig (2.13): Join, Average, Reverse, Add/Remove Anchor Points, Clean Up, Offset Path, Simplify; Smooth og Split Into Grid gjenstår |
 | D2.5 SVG eksport/import | SVG-eksport ferdig (se 2.5); SVG-import finnes i enkel form |
 | D2.6 PDF-eksport | Ferdig (Codex): Save PDF-dialog med forhåndsinnstillinger, lag, merker, bevar redigering; også EPS og DXF. Se WORK_LOG «Eksport del 1 og 2» |
 | D2.7 Raster-eksport | PNG og JPEG (2.5) og Export for Screens med skala og suffiks (WORK_LOG «Eksport del 3») ferdig; WebP gjenstår |
@@ -326,7 +335,7 @@ SVG-, PNG- og JPEG-eksport er gjort (2.5).
 1. **D2.1 Tekst** er ferdig i grunnform (2.6 til 2.11). Resten (kerning-modus, justert tekst, innrykk,
    blandede stiler, klammer for tekst på path, reflow med canvas-håndtak) tas senere.
    D2.2 compound paths og klippemasker er gjort (2.12).
-2. **D2.4 del B: Simplify og Offset Path.** Neste. (Del A er gjort, 2.13.)
+2. D2.4 path-kommandoer er gjort (2.13). **Neste: D2.3 gradienter** (Gradient-panel og -verktøy, lineær og radiell), deretter D2.8 flere verktøy.
 3. Draw Inside (rest av D2.2).
 4. D2.6 PDF-eksport, D2.3 gradienter, D2.8 flere verktøy, D2.9 History/Info/kommandosøk.
 5. D2.10 Send til Cut v2.

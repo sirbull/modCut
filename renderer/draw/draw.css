@@ -506,3 +506,5 @@ body[data-workspace="draw"] #sendToCut { display: inline-flex; }
 .draw-screens__remove { padding: 4px 0; justify-content: center; }
 .draw-screens__add { justify-self: stretch; justify-content: center; }
 @media (max-width: 760px) { .draw-screens { grid-template-columns: 1fr; } }
+.draw-simplify-dialog__slider { width: 100%; margin-top: 6px; }
+.draw-simplify-dialog__count { margin: 4px 0 12px; font-size: 12px; color: var(--text-muted); }

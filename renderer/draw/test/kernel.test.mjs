@@ -111,7 +111,8 @@ test('real Node worker runs the production dispatcher with isolated input and st
   assert.equal(area(await kernel.boolean('unite', [rect(), rect(5, 0)])), 150);
   const doc = new DrawDocument(), original = doc.serialize();
   await assert.rejects(kernel.flatten([{ closed: true, segments: [segment([Infinity, 0])] }]), { code: 'INVALID_GEOMETRY' });
-  const operations = [kernel.boolean('divide', []), kernel.offset([], 1, 'round', 4), kernel.outlineStroke([], {}),
+  assert.deepEqual(await kernel.offset([], 1, 'round', 4), [], 'Offset runs in the worker');
+  const operations = [kernel.boolean('divide', []), kernel.outlineStroke([], {}),
     kernel.simplify([], .1, {}), kernel.smooth([], .5), kernel.trace({}, {}), kernel.shapeText({}, {}), kernel.writePdf([], {}), kernel.writeEps([], {})];
   for (const operation of operations) await assert.rejects(operation, { code: 'NOT_IMPLEMENTED' });
   assert.equal(doc.serialize(), original); assert.equal(logs.length, 1);
