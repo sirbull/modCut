@@ -1627,3 +1627,7 @@ legges inn ved slipp som ett angresteg. `renderer.bounds` er geometriske grenser
 Full E2E 32 (for 3ccfb91) stoppet i `draw-effects` med «Promise was collected». Det er ikke en appfeil: V8
 kan samle opp et ventende løfte som bare DevTools venter på. `cdp.mjs` holder nå asynkrone uttrykk i et sett
 på siden til de er ferdige; `--draw-effects` passerte deretter 3 av 3. `--draw-export` (med .ai) passerer.
+
+Hele Draw-E2E 33 for 1146992 (Image Trace, AI-eksport, Width og CDP-retting) passerte helt: 40 av 40.
+
+Neste: D4.2 Blend.
