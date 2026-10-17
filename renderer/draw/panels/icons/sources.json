@@ -266,6 +266,11 @@
       "path": "icons/outline/palette.svg",
       "sha256": "0b462801eadbeeb017eb323aee44880c13336ea8b4ac2182afac81d79d58d45e"
     },
+    "photo-scan": {
+      "name": "photo-scan",
+      "path": "icons/outline/photo-scan.svg",
+      "sha256": "389a7ca96eb34dec2520351874f7c91a0ba031c83099056c426de3231cdfb0f8"
+    },
     "plus": {
       "name": "plus",
       "path": "icons/outline/plus.svg",

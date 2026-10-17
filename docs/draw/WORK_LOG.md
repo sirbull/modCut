@@ -1577,3 +1577,19 @@ Verifisering: 255 Draw-enhetstester (`document-info.test.mjs`, ny test for `crop
 `crop: undefined`. Hele E2E for 7385bbd (effekter del B) passerte helt: 38 av 38.
 
 Neste: D3.3 Image Trace.
+
+## 2026-10-17: D3.3 Image Trace
+
+- `geom/trace.mjs`: `TRACE_PRESETS` (også to laserpresets), `traceScale`, `quantize` (svart-hvitt, gråtoner,
+  k-means for farger), `removeNoise`, `contours` (lukkede ringer langs pikselkanter, hull motsatt vei),
+  `ringArea`, `simplifyRing` og `ringCorners`.
+- `index.mjs`: `traceImage` leser bildet (med beskjæring) på et lerret, sporer hver farge og setter inn gruppen
+  «Image Trace» over bildet og skjuler det, i ett angresteg. `traceSubpath` deler hver ring ved skarpe hjørner
+  og tilpasser kurver bare mellom dem; uten dette rundet Paper sin `simplify` en firkant til en klump.
+- `panels/ui.mjs`: `imageTracePanel` i egen gruppe (Tabler `photo-scan`).
+
+Verifisering: 4 enhetstester i `trace.test.mjs`; `--draw-links` sporer den svarte halvdelen av et testbilde
+til én bane med fire hjørner. Merk: rødt har luminans 76 og regnes som mørkt med terskel 128, så testen bruker
+terskel 50. Full E2E-kjøring 31 (for 49fc9c5) ble avbrutt av en omstart av arbeidsprosessen etter 13 PASS.
+
+Neste: D3.7 AI-eksport.

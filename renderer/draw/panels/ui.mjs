@@ -5,6 +5,7 @@ import { textValues } from '../doc/text.mjs';
 import { addStop, colorHex, defaultGradient, gradientCss, isGradient, removeStop, reverseGradient, setGradientAngle, setGradientType, updateStop } from '../doc/gradient.mjs';
 import { EFFECTS, effectLabel } from '../doc/effects.mjs';
 import { documentInfo } from '../doc/document-info.mjs';
+import { TRACE_PRESETS } from '../geom/trace.mjs';
 import { addSwatch, documentSwatches, editSwatch, groupSwatches, linkedPaints, rememberColor, removeSwatch } from '../doc/swatches.mjs';
 import { ROOT_CONTEXT, collectCommands, deleteLayerCommands, deleteRowCommands, duplicateCommands, filterLayerTree, flattenCommands, layerContext, mergeLayersCommands, moveCommand, moveToLayerCommands, newLayer, othersUpdates, releaseCommands, soloUpdates } from '../doc/layers.mjs';
 import { shortcutLabel } from '../keymap.mjs';
@@ -1025,6 +1026,24 @@ export function createPanels(shell, state, api) {
     section('Images',info.images,i => `${i.name}: ${i.pixels} px, ${i.ppi} ppi${i.cropped ? ', cropped' : ''}${i.reference ? ', reference' : ''}`);
     if (info.openPaths || info.emptyText) text(host,'Before Send to Cut: open paths are cut as lines, and empty text is left out.');
   }
+  /** Image Trace: a preset and its settings; Trace makes paths per colour above the image and hides the image. */
+  function imageTracePanel(host) {
+    const id = api.selectedIds().find(i => state.document.getNode(i)?.type === 'image'), o = state.ui.traceOptions ??= { preset: 'bw-logo', ...TRACE_PRESETS['bw-logo'] };
+    const fields = document.createElement('div'); fields.className = 'draw-fields'; host.append(fields);
+    const select = (label, key, value, options, change) => { const row = document.createElement('label'); row.className = 'draw-field'; const name = document.createElement('span'); name.textContent = label;
+      const input = document.createElement('select'); input.className = 'select'; input.dataset.drawField = key; for (const [v,l] of options) input.append(new Option(l,v)); input.value = value;
+      input.addEventListener('change',() => { change(input.value); render(); }); row.append(name,input); fields.append(row); };
+    select('Preset','trace-preset',o.preset,Object.entries(TRACE_PRESETS).map(([k,p]) => [k,p.label]),value => { state.ui.traceOptions = { preset: value, ...TRACE_PRESETS[value] }; });
+    select('Mode','trace-mode',o.mode,[['bw','Black and White'],['gray','Grayscale'],['color','Color']],value => { o.mode = value; });
+    const num = (label, key, min, max) => field(fields,label,o[key] ?? 0,value => { o[key] = value; render(); },{ min, max, key:`trace-${key}`, scrubbable: false });
+    if (o.mode === 'bw') num('Threshold (0–255)','threshold',0,255); else num(o.mode === 'gray' ? 'Grays' : 'Colors','colors',2,256);
+    num('Noise (px)','noise',0,10000); num('Paths (fidelity %)','fidelity',0,100);
+    for (const [label,key] of [['Ignore White','ignoreWhite'],['Outer contours only','outerOnly']]) { const box = check(host,label,`trace-${key}`,!!o[key],value => { o[key] = value; }); box.disabled = state.document.readOnly; }
+    const go = button('Trace',async () => { go.disabled = true; go.textContent = 'Tracing…'; const stats = await api.traceImage(id,{ ...o }); state.ui.traceStats = stats; render(); });
+    go.className = 'btn btn--primary btn--sm'; go.dataset.drawTrace = ''; go.disabled = state.document.readOnly || !id; host.append(go);
+    const s = state.ui.traceStats; if (s) { const p = document.createElement('p'); p.className = 'draw-panel__hint'; p.dataset.drawTraceStats = ''; p.textContent = `Paths: ${s.paths} · Anchors: ${s.anchors} · Colors: ${s.colors}`; host.append(p); }
+    text(host,id ? 'Trace makes filled paths per colour above the image and hides the image; undo brings it back.' : 'Select a placed image to trace it.');
+  }
   /** Links: every placed image, embedded in the document. Click to select; Replace keeps its place. */
   function linksPanel(host) {
     const images = state.document.descendants(null).filter(n => n.type === 'image');
@@ -1044,7 +1063,7 @@ export function createPanels(shell, state, api) {
     if (flyout.hidden || flyoutBody.dataset.drawPanelBody !== 'info') return;
     flyoutBody.replaceChildren(); infoPanel(flyoutBody);
   }
-  const PANEL_CONTENT = { gradient: gradientPanel, character: host => characterPanel(host), paragraph: host => paragraphPanel(host), swatches: swatchesPanel, color: colorPanel, stroke: strokePanel, transparency: transparencyPanel, pathfinder: pathfinderPanel, appearance: appearancePanel, transform: host => transform(host), align: alignPanel, artboards: artboardPanel, history: historyPanel, info: infoPanel, 'document-info': documentInfoPanel, links: linksPanel };
+  const PANEL_CONTENT = { gradient: gradientPanel, character: host => characterPanel(host), paragraph: host => paragraphPanel(host), swatches: swatchesPanel, color: colorPanel, stroke: strokePanel, transparency: transparencyPanel, pathfinder: pathfinderPanel, appearance: appearancePanel, transform: host => transform(host), align: alignPanel, artboards: artboardPanel, history: historyPanel, info: infoPanel, 'document-info': documentInfoPanel, links: linksPanel, 'image-trace': imageTracePanel };
   function renderFlyout() {
     const group = PANEL_GROUPS.find(g => g.id === state.ui.flyout);
     flyout.hidden = !group; if (!group) { flyoutTabs.replaceChildren(); flyoutBody.replaceChildren(); return; }

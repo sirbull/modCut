@@ -30,7 +30,7 @@ Wand og Lasso (2.21) er ferdig. D3.4 Shape Builder, Knife
 og Eraser (2.22) er ferdig. D3.6 Free Transform,
 Transform Each og Split Into Grid (2.23) er ferdig. D3.2 effekter (2.24) er ferdig.
 D3.8 Links, Crop Image, Document Info og
-Edit in Draw (2.25) er ferdig. **Neste oppgave er D3.3 Image Trace; se STATUS.md kapittel 4.** Kjør `npm ci` etter pull.
+Edit in Draw (2.25) er ferdig. D3.3 Image Trace (2.26) er ferdig i grunnform. **Neste oppgave er D3.7 AI-eksport; se STATUS.md kapittel 4.** Kjør `npm ci` etter pull.
 
 **Brukerstyrt tillegg etter D2.1c:** Google Fonts og automatisk tekst til outlines ved Send to Cut
 er implementert (STATUS.md 2.9). Tekst på path er fortsatt neste ordinære del.

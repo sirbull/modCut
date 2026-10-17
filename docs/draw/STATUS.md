@@ -593,6 +593,26 @@ og Preview i effektdialogene.
 
 Gjenstår i D3.8: lenkede (ikke innebygde) bilder med status, Crop Image med håndtak på lerretet.
 
+### 2.26 Image Trace (D3.3, 2026-10-17)
+
+* **Image Trace-panelet** (Window > Image Trace, egen panelgruppe): velg et plassert bilde, velg preset og
+  trykk Trace. Resultatet er en gruppe «Image Trace» med en fylt bane per farge (evenodd, så hull blir hull)
+  over bildet, og bildet skjules. Ett angresteg; angre henter bildet fram igjen.
+* **Presets:** Black and White Logo, Silhouettes, 3, 6 og 16 Colors, Shades of Gray, og to laserpresets:
+  «Laser: Cut outline» (bare ytre konturer, små detaljer under 0,5 mm fjernes) og «Laser: Engrave fill».
+* **Innstillinger:** modus (svart-hvitt, gråtoner, farge), terskel eller antall farger, støy (minste område
+  i piksler), fidelity (hvor tett banene følger pikslene), Ignore White og Outer contours only.
+* Hjørner holdes skarpe: konturen deles ved knekker over 60 grader, og bare strekkene mellom dem får
+  tilpassede kurver. En firkant blir fire ankerpunkter.
+* Beskårne bilder spores bare innenfor beskjæringen. Store bilder skaleres ned til maks 1 megapiksel først.
+* Statistikk etter sporing: antall baner, ankerpunkter og farger.
+* Kode: `geom/trace.mjs` (presets, kvantisering med k-means for farger, støyfjerning, konturer langs
+  pikselkanter, Douglas-Peucker og hjørner), `traceImage` og `traceSubpath` i `index.mjs`, `imageTracePanel`
+  i `panels/ui.mjs`.
+
+Gjenstår i D3.3: live trace som oppdateres når innstillingene endres (nå er sporingen alltid «Make and Expand»),
+og egen Object > Image Trace-meny.
+
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
 | Oppgave | Status |
@@ -615,7 +635,7 @@ Gjenstår i D3.8: lenkede (ikke innebygde) bilder med status, Crop Image med hå
 | D2.10 Send til Cut v2 | Ferdig (2.9 og 2.18): tekst til outlines, Outline Stroke, kutt ved artboard, validering, Update in Cut, bilder og alle artboards; varsel om objekter utenfor bedet gjenstår |
 | D3.1 Outline Stroke og Expand | Ferdig (2.18, 2.20): Outline Stroke, Expand, Expand Appearance; effekter, stiplede streker og pilspisser gjenstår |
 | D3.2 Appearance og effekter | Appearance, sju vektoreffekter og Drop Shadow (2.24); Glow, Feather, Blur og gruppeeffekter gjenstår |
-| D3.3 Image Trace | Gjenstår |
+| D3.3 Image Trace | Gjort i grunnform (2.26); live trace gjenstår |
 | D3.4 Shape Builder, Eraser og Knife | Ferdig (2.22); Path Eraser gjenstår |
 | D3.5 Magic Wand, Lasso, Select-meny | Ferdig (2.21) |
 | D3.6 Free Transform, Transform Each, Split Into Grid | Ferdig (2.23); perspektiv gjenstår |
@@ -640,7 +660,7 @@ SVG-, PNG- og JPEG-eksport er gjort (2.5).
    gjort. Fra D2.1 er skalering, baseline shift, kerning, avsnitt og blandede stiler gjort (2.11).
 6. Fase 3: D3.1 Expand og Expand Appearance (2.20) og D3.5 Select-meny, Magic Wand og Lasso (2.21) er gjort.
    D3.4 Shape Builder, Knife og Eraser (2.22) og D3.6 Free Transform, Transform Each og Split Into Grid
-   (2.23) er også gjort, og D3.2 effekter (2.24) og D3.8 (2.25). **Neste: D3.3 Image Trace, så D3.7 AI-eksport.**
+   (2.23) er også gjort, og D3.2 effekter (2.24), D3.8 (2.25) og D3.3 Image Trace (2.26). **Neste: D3.7 AI-eksport.**
 
 
 ## 5. Kjente begrensninger og risiko

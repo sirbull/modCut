@@ -46,6 +46,19 @@ export async function runDrawLinkWorkflows(client) {
   await evaluate("(()=>{const f=document.querySelector('.draw-crop-dialog form');f.elements.reset.checked=true;f.requestSubmit();})()"); await wait(80);
   assert.equal(await evaluate(`(async()=>(${active}.state.document.getNode('${image}').crop ?? null))()`), null, 'Reset shows the whole image');
 
+  // Image Trace: Black and White Logo with threshold 50 (red is darker than 128) traces the black half into one sharp-cornered path above the image, which is hidden.
+  await evaluate(`(async()=>{const w=${active};w.select(['${image}']);w.handle('panel.image-trace')})()`); await wait(50);
+  await evaluate(`(()=>{const s=document.querySelector('${root} [data-draw-field=trace-preset]');s.value='bw-logo';s.dispatchEvent(new Event('change',{bubbles:true}));})()`); await wait(30);
+  await evaluate(`(()=>{const s=document.querySelector('${root} [data-draw-field=trace-threshold]');s.value='50';s.dispatchEvent(new Event('change',{bubbles:true}));})()`); await wait(30);
+  await evaluate(`document.querySelector('${root} [data-draw-trace]').click()`);
+  await until(`!!document.querySelector('${root} [data-draw-trace-stats]')`, 'trace done');
+  const traced = await evaluate(`(async()=>{const w=${active},d=w.state.document,g=d.getNode(w.state.selection.ids[0]),b=d.data.artboards[0],img=d.getNode('${image}'),r=w.renderer.bounds(g.children[0].id);
+    return {anchors:g.children[0].subpaths[0].segments.length,type:g.type,kids:g.children.length,fill:(await import('./draw/doc/paint.mjs')).paintHex(g.children[0].appearance.fills[0]),hidden:!img.visible,box:[r.x-img.transform[4],r.y-img.transform[5],r.width,r.height].map(v=>Math.round(v)),stats:document.querySelector('${root} [data-draw-trace-stats]').textContent}})()`);
+  assert.equal(traced.type, 'group'); assert.equal(traced.kids, 1); assert.equal(traced.fill, '#000000'); assert.equal(traced.hidden, true, 'The image is hidden under the trace');
+  assert.deepEqual(traced.box, [0, 0, 20, 20], `The black half: ${JSON.stringify(traced)}`); assert.match(traced.stats, /Paths: 1/); assert.equal(traced.anchors, 4, 'A square stays four corner anchors');
+  await evaluate(`(async()=>{${active}.handle('undo')})()`);
+  assert.equal(await evaluate(`(async()=>${active}.state.document.getNode('${image}').visible)()`), true, 'Undo brings the image back');
+
   // Cut > Edit in Draw: send the line to Cut, right-click it there, and it comes back on a bed-sized artboard.
   await evaluate(`(async()=>{const w=${active};w.handle('undo');w.handle('undo');const {removeNode}=await import('./draw/doc/commands.mjs');w.state.history.execute(removeNode('${image}'));})()`);
   await evaluate("document.querySelector('#sendToCut').click()");
@@ -62,5 +75,5 @@ export async function runDrawLinkWorkflows(client) {
   assert.equal(back.count, 1); assert.equal(back.stroke, '#ff0000');
   assert.deepEqual([back.x, back.y], [70, 20], `Where it was on the bed (artboard origin at the bed origin): ${JSON.stringify(back)}`);
   await restore();
-  console.log('PASS Draw links: Document Info counts, Links selects, Crop Image is non-destructive (canvas and PNG) and resettable, Cut Edit in Draw makes a bed-sized artboard');
+  console.log('PASS Draw links: Document Info counts, Links selects, Crop Image is non-destructive (canvas and PNG) and resettable, Image Trace makes a path per colour and hides the image, Cut Edit in Draw makes a bed-sized artboard');
 }

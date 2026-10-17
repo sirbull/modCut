@@ -7,6 +7,7 @@ import { multiply as multiplyMatrix } from './doc/arrange.mjs';
 import { stackingOrder as objectOrder } from './doc/arrange.mjs';
 import { arrangeCommands, groupCommands, hideCommands, lockCommands, showAllCommands, ungroupCommands, unlockAllCommands } from './doc/arrange.mjs';
 import { PATHFINDER_LABELS, runPathfinder, toSubpaths } from './geom/pathfinder.mjs';
+import { TRACE_PRESETS, traceScale, quantize, removeNoise, contours, ringArea, simplifyRing, ringCorners } from './geom/trace.mjs';
 import { transformEachMatrix, gridCells, distortSubpaths, boxCorners, cropImage } from './geom/transform-each.mjs';
 import { pickRegions, mergeRegions, knifeCut, erase as eraseRegion, areaOf } from './geom/region-ops.mjs';
 import { fillHex, pathfinderCommands, stackingOrder } from './doc/pathfinder-commands.mjs';
@@ -444,6 +445,49 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     run(()=>{const fresh=state.document.getNode(id),list=[...fresh.appearance.effects];list[index]=effect(current.type,{...values,hidden:current.hidden});
       state.history.execute(updateNode(id,{appearance:{...fresh.appearance,effects:list}},{label:`Edit ${EFFECTS[current.type].label}`}));});
   }
+  /**
+   * Image Trace (Make and Expand): the selected image's visible pixels traced into one filled path per
+   * colour, in a group above the image, which is hidden (one undo step). Returns paths, anchors and colours.
+   */
+  /** One traced ring as a closed subpath: corners stay sharp, the runs between them get fitted curves. Call inside withScope. */
+  function traceSubpath(ring,toWorld,tolerance){
+    const segs=path=>{const out=path.segments.map(s=>({p:[s.point.x,s.point.y],in:[s.handleIn.x,s.handleIn.y],out:[s.handleOut.x,s.handleOut.y]}));path.remove();return out;};
+    const corners=ringCorners(ring);
+    if(!corners.length)return {closed:true,segments:segs(fitCurve(ring.map(toWorld),true,tolerance))};
+    const segments=[];
+    corners.forEach((c,k)=>{const next=corners[(k+1)%corners.length],run=[];for(let i=c;;i=(i+1)%ring.length){run.push(ring[i]);if(i===next&&run.length>1)break;}
+      const fitted=run.length>2?segs(fitCurve(run.map(toWorld),false,tolerance)):run.map(p=>({p:toWorld(p),in:[0,0],out:[0,0]}));
+      // Each run starts on the corner the previous one ended on: that anchor takes the new run's outgoing handle.
+      if(segments.length){segments.at(-1).out=fitted[0].out;segments.push(...fitted.slice(1));}else segments.push(...fitted);});
+    // The last anchor is the first corner again: its incoming handle goes to the first anchor.
+    const end=segments.pop();segments[0].in=end.in;return {closed:true,segments};
+  }
+  async function traceImage(id,options){
+    const doc=state.document,node=doc.getNode(id);if(node?.type!=='image'||!doc.isEditable(id))throw new Error('Select an image to trace.');
+    const asset=doc.data.assets[node.assetId],img=new Image();img.src=`data:${asset.mimeType??'image/png'};base64,${asset.data}`;await img.decode();if(destroyed)return null;
+    const crop=node.crop??{x:0,y:0,width:1,height:1},sw=img.naturalWidth*crop.width,sh=img.naturalHeight*crop.height,k=traceScale(sw,sh,options.maxPixels??1_000_000);
+    const width=Math.max(1,Math.round(sw*k)),height=Math.max(1,Math.round(sh*k)),canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
+    const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.drawImage(img,img.naturalWidth*crop.x,img.naturalHeight*crop.y,sw,sh,0,0,width,height);
+    const pixels=ctx.getImageData(0,0,width,height),{palette,labels:raw}=quantize(pixels,options);
+    const mmPerPx=node.width/width,labels=removeNoise(raw,width,height,Math.round((options.noise??0)*k*k));
+    const world=renderer.worldMatrix(id),toWorld=([x,y])=>{const u=x*node.width/width,v=y*node.height/height;return [world[0]*u+world[2]*v+world[4],world[1]*u+world[3]*v+world[5]];};
+    const {parentId,index}=doc.locate(id),tolerance=mmPerPx*(.35+(100-(options.fidelity??70))/30),minArea=options.minDetailMm?(options.minDetailMm/mmPerPx)**2:0;
+    const parts=[];let anchors=0;
+    for(const [j,colour] of palette.entries()){
+      let rings=contours(labels,width,height,j).filter(r=>Math.abs(ringArea(r))>=Math.max(1,minArea));
+      if(options.outerOnly&&rings.length){const sign=Math.sign(ringArea(rings.reduce((a,b)=>Math.abs(ringArea(b))>Math.abs(ringArea(a))?b:a)));rings=rings.filter(r=>Math.sign(ringArea(r))===sign);}
+      if(!rings.length)continue;
+      const subpaths=withScope(()=>rings.map(r=>traceSubpath(simplifyRing(r,.6),toWorld,tolerance)));
+      anchors+=subpaths.reduce((n,s)=>n+s.segments.length,0);
+      const hex='#'+colour.map(v=>Math.round(v).toString(16).padStart(2,'0')).join('').toUpperCase();
+      parts.push(toParentSpace(parentId,createNode('path',{name:hex,subpaths,fillRule:'evenodd',appearance:appearance(hex,null)})));
+      await new Promise(r=>setTimeout(r));if(destroyed)return null;
+    }
+    if(!parts.length)throw new Error('Nothing to trace with these settings. Try another threshold or preset.');
+    const group=createNode('group',{name:'Image Trace',children:parts});
+    run(()=>{state.history.transaction('Image Trace',()=>{state.history.execute(insertNode(parentId,group,index+1));state.history.execute(updateNode(id,{visible:false},{label:'Image Trace'}));});select([group.id]);});
+    return {paths:parts.length,anchors,colors:palette.length};
+  }
   /** Filled closed paths and shapes a Knife or Eraser stroke works on: the selection, or every one. */
   function cutTargets(){
     const doc=state.document,chosen=selectedIds(),pool=chosen.length?chosen.flatMap(id=>doc.getNode(id)?.children?doc.descendants(id).map(n=>n.id):[id]):doc.descendants(null).map(n=>n.id);
@@ -626,6 +670,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     command:id=>handle(id),
     addEffect:type=>addEffect(type).catch(error=>{if(!destroyed)onError(error.message);}),editEffect:(id,i)=>editEffect(id,i).catch(error=>{if(!destroyed)onError(error.message);}),
     pointer:()=>lastPoint,
+    traceImage:(id,options)=>traceImage(id,options).catch(error=>{if(!destroyed)onError(error.message);return null;}),
     // Links > Replace: a new image file in the same place, at the same width (height follows the new proportions).
     replaceImage:id=>run(()=>{const input=document.createElement('input');input.type='file';input.accept='image/*';
       input.addEventListener('change',async()=>{const file=input.files?.[0];if(!file||destroyed)return;
