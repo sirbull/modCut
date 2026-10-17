@@ -1619,5 +1619,11 @@ Neste: fase 4, D4.1 Width og width profiles.
   Send to Cut-omriss bruker profilen. `doc/paint.mjs`: `widthProfile` i `changeStroke`; skjemaet validerer punktene.
 - Stroke-panelet: Profile, Flip Along og Flip Across. Ny markør for Width-verktøyet.
 
-Verifisering: 265 Draw-enhetstester (`width-profile.test.mjs`, ny test i `stroke.test.mjs`). Ny E2E
-`draw-width-workflows.mjs` (`--draw-width`) er skrevet; kjøres etter full E2E 32.
+Verifisering: 265 Draw-enhetstester (`width-profile.test.mjs`, ny test i `stroke.test.mjs`) og ny E2E
+`draw-width-workflows.mjs` (`--draw-width`). E2E avslørte at hver dokumentendring avbryter en pågående gest
+(`state.subscribe` kaller `interactions.cancel`), så Width-dragningen forhåndsvises nå (`widthPreview`) og
+legges inn ved slipp som ett angresteg. `renderer.bounds` er geometriske grenser uten strek, som i Illustrator.
+
+Full E2E 32 (for 3ccfb91) stoppet i `draw-effects` med «Promise was collected». Det er ikke en appfeil: V8
+kan samle opp et ventende løfte som bare DevTools venter på. `cdp.mjs` holder nå asynkrone uttrykk i et sett
+på siden til de er ferdige; `--draw-effects` passerte deretter 3 av 3. `--draw-export` (med .ai) passerer.

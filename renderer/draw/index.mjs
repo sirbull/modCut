@@ -519,8 +519,8 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   }
   /**
    * Width tool. Pressing on a stroked path starts a session: on a width point's side end it resizes that
-   * point, on its centre it slides it along the path, elsewhere it adds a point there. Dragging is live and
-   * one undo step; Alt changes one side only.
+   * point, on its centre it slides it along the path, elsewhere it adds a point there. The drag is previewed
+   * and applied on release as one undo step; Alt changes one side only.
    */
   function widthTarget(id){const node=state.document.getNode(id),stroke=node&&shown(node.appearance?.strokes)[0];
     return ['path','shape'].includes(node?.type)&&state.document.isEditable(id)&&stroke?.width>0?{node,stroke}:null;}
@@ -534,19 +534,27 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   }
   function widthSession(point){
     if(state.document.readOnly)return null;
-    const handle=widthHandleAt(point);if(handle)return {...handle,side:handle.part==='point'?null:handle.part,mergeKey:`width-${Date.now()}`};
+    const handle=widthHandleAt(point);if(handle)return {...handle,side:handle.part==='point'?null:handle.part};
     const id=renderer.hit(point),target=id&&widthTarget(id);if(!target)return null;
     const loc=withScope(()=>renderer.strokeLocation(id,point));if(!loc)return null;
-    return {id,index:-1,t:loc.t,part:'new',side:loc.side,mergeKey:`width-${Date.now()}`};
+    return {id,index:-1,t:loc.t,part:'new',side:loc.side};
   }
-  function widthDrag(session,point,{alt=false}={}){
-    const target=widthTarget(session.id);if(!target)return;
-    const loc=withScope(()=>renderer.strokeLocation(session.id,point));if(!loc)return;
-    let points;
-    if(session.part==='point')points=moveWidthPoint(target.stroke.widthProfile,session.index,loc.t);
-    else{const share=loc.distance/target.stroke.width,result=setWidthPoint(target.stroke.widthProfile,{t:session.t,index:session.index,share,side:alt?session.side:'both'});
-      points=result.points;if(session.index<0)session.index=result.index;}
-    state.history.transaction('Width',()=>state.history.execute(updateNode(session.id,{appearance:changeStroke(target.node.appearance,{widthProfile:points},state.ui)})),{mergeKey:session.mergeKey});
+  /** The profile a Width drag to `point` gives; the document is unchanged until the drag ends. */
+  function widthProfileFor(session,point,{alt=false}={}){
+    const target=widthTarget(session.id);if(!target)return null;
+    const loc=withScope(()=>renderer.strokeLocation(session.id,point));if(!loc)return null;
+    if(session.part==='point')return {target,points:moveWidthPoint(target.stroke.widthProfile,session.index,loc.t)};
+    return {target,points:setWidthPoint(target.stroke.widthProfile,{t:session.t,index:session.index,share:loc.distance/target.stroke.width,side:alt?session.side:'both'}).points};
+  }
+  /** Live Width drag: the new stroke outline in world space, for the preview. */
+  function widthPreview(session,point,options){
+    const result=widthProfileFor(session,point,options);if(!result)return [];
+    const m=renderer.worldMatrix(session.id),local=withScope(()=>renderer.profiledStroke(session.id,{...result.target.stroke,widthProfile:result.points}))??[];
+    return local.map(sub=>sub.segments.map(g=>[m[0]*g.p[0]+m[2]*g.p[1]+m[4],m[1]*g.p[0]+m[3]*g.p[1]+m[5]]));
+  }
+  function widthDrag(session,point,options){
+    const result=widthProfileFor(session,point,options);if(!result)return;
+    state.history.execute(updateNode(session.id,{appearance:changeStroke(result.target.node.appearance,{widthProfile:result.points},state.ui)},{label:'Width'}));
   }
   async function widthPointEdit(point){
     const handle=widthHandleAt(point),target=handle&&widthTarget(handle.id);if(!target)return false;
@@ -1106,7 +1114,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       select(subtract?current.filter(id=>!found.includes(id)):add?[...new Set([...current,...found])]:found);},
     lasso:(points,options)=>paths.lasso(points,options),
     freeDistortSession,freeDistortPreview,freeDistort,
-    shapeBuilderSession,shapeBuilderPreview,shapeBuilder,knife,eraser,eraserSize:()=>state.ui.eraserSize??3,widthSession,widthDrag,widthPointEdit,
+    shapeBuilderSession,shapeBuilderPreview,shapeBuilder,knife,eraser,eraserSize:()=>state.ui.eraserSize??3,widthSession,widthDrag,widthPreview,widthPointEdit,
     widthHandles:point=>{const id=renderer.hit(point)??selectedIds()[0],target=id&&widthTarget(id);return target?withScope(()=>renderer.widthHandles(id,target.stroke)):[];},
     gradientVector(from,to,mergeKey){const kind=state.ui.paintFocus==='stroke'?'stroke':'fill',last=state.ui.lastGradient;
       gradient(kind,(current,box,node)=>{const a=renderer.pointToLocal(node.id,from),b=renderer.pointToLocal(node.id,to);

@@ -116,8 +116,9 @@ export function createInteractions(canvas, state, api) {
         else preview=new scope.Path({segments:gesture.points,strokeColor:gesture.mode==='knife'?'#D32F2F':'rgba(120,120,120,.5)',strokeCap:'round',strokeJoin:'round',
           strokeWidth:gesture.mode==='knife'?1/scope.view.zoom:api.eraserSize()});
       } else if (gesture.mode==='width') {
-        gesture.moved=true;api.run(()=>api.widthDrag(gesture.session,[p.x,p.y],{alt:event.altKey}));
-        preview=widthMarkers(api.widthHandles([gesture.start.x,gesture.start.y]));
+        gesture.moved=true;gesture.alt=event.altKey;
+        preview=new scope.CompoundPath({children:api.widthPreview(gesture.session,[p.x,p.y],{alt:event.altKey}).map(ring=>new scope.Path({segments:ring,closed:true})),
+          fillColor:'rgba(20,115,230,.25)',strokeColor:'#1473E6',strokeWidth:1/scope.view.zoom,fillRule:'nonzero'});
       } else if (gesture.mode==='lasso') {
         const last=gesture.points.at(-1);if(Math.hypot(p.x-last[0],p.y-last[1])>=1/scope.view.zoom)gesture.points.push([p.x,p.y]);
         preview=new scope.Path({segments:gesture.points,closed:true,strokeColor:'#1473E6',dashArray:[4/scope.view.zoom,3/scope.view.zoom],strokeWidth:1/scope.view.zoom});
@@ -259,6 +260,8 @@ export function createInteractions(canvas, state, api) {
         api.shapeBuilder(drag.session,drag.points,{alt:event.altKey||drag.modifiers.alt});
       }else if(drag.mode==='knife'||drag.mode==='eraser') {
         if(drag.points.length>1&&!api[drag.mode](drag.points))api.notify?.(drag.mode==='knife'?'The knife did not cross a filled shape.':'Nothing to erase there.');
+      }else if(drag.mode==='width') {
+        if(drag.moved)api.widthDrag(drag.session,[drag.end.x,drag.end.y],{alt:drag.alt??drag.modifiers.alt});
       }else if(drag.mode==='lasso') {
         if(drag.points.length>2)api.lasso(drag.points,{add:drag.modifiers.shift,subtract:drag.modifiers.alt});else if(!drag.modifiers.shift)api.select([]);
       }else if(drag.mode==='measure') {

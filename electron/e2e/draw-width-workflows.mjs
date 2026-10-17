@@ -21,7 +21,8 @@ export async function runDrawWidthWorkflows(client) {
     const b=w.state.document.data.artboards[0],n=createNode('path',{subpaths:[{closed:false,segments:[[20,40],[100,40]].map(p=>({p:[b.x+p[0],b.y+p[1]],in:[0,0],out:[0,0]}))}],appearance:appearance(null,'#000000',2)});
     w.state.history.execute(insertNode(w.state.document.data.layers[0].id,n));w.select([n.id]);return n.id;})()`);
   const profile = () => evaluate(`(async()=>(${active}.state.document.getNode('${line}').appearance.strokes[0].widthProfile??null))()`);
-  const height = () => evaluate(`(async()=>{const w=${active};return Math.round(w.renderer.bounds('${line}').height*10)/10})()`);
+  // Height of the drawn (profiled) stroke outline.
+  const height = () => evaluate(`(async()=>{const w=${active},s=w.state.document.getNode('${line}').appearance.strokes[0],ys=w.renderer.profiledStroke('${line}',s).flatMap(p=>p.segments.map(g=>g.p[1]));return Math.round((Math.max(...ys)-Math.min(...ys))*10)/10})()`);
 
   // Shift+W picks the Width tool; dragging from the middle of the line 3 mm up makes it 6 mm wide there, in one undo step.
   await evaluate("window.dispatchEvent(new KeyboardEvent('keydown',{key:'W',code:'KeyW',shiftKey:true,bubbles:true,cancelable:true}))");
@@ -29,7 +30,7 @@ export async function runDrawWidthWorkflows(client) {
   let steps = await applied();
   await drag([[60, 40], [60, 38.5], [60, 37]]);
   let points = await profile();
-  assert.deepEqual(points.map(p => p.t), [0, .5, 1], `A width point in the middle: ${JSON.stringify(points)}`);
+  assert.deepEqual(points.map(p => Math.round(p.t * 1000) / 1000), [0, .5, 1], `A width point in the middle: ${JSON.stringify(points)}`);
   assert.ok(Math.abs(points[1].left - 1.5) < .05 && Math.abs(points[1].right - 1.5) < .05, `Both sides 3 mm: ${JSON.stringify(points[1])}`);
   assert.equal(await applied(), steps + 1, 'The drag is one undo step');
   assert.equal(await height(), 6, 'The drawn stroke is 6 mm wide in the middle');
@@ -41,9 +42,9 @@ export async function runDrawWidthWorkflows(client) {
   const middle = await at(60, 40);
   await mouse('mouseMoved', middle); await evaluate(`document.querySelector('${root} canvas.draw-canvas').dispatchEvent(new MouseEvent('dblclick',{bubbles:true,clientX:${middle.x},clientY:${middle.y}}))`);
   await until("!!document.querySelector('.draw-width-dialog form')", 'Width Point Edit');
-  await evaluate("(()=>{const f=document.querySelector('.draw-width-dialog form');f.elements.left.value='1';f.elements.right.value='1';f.requestSubmit();})()"); await wait(80);
+  await evaluate("(()=>{const f=document.querySelector('.draw-width-dialog form');f.elements.left.value='1';f.elements.right.value='2';f.requestSubmit();})()"); await wait(80);
   points = await profile();
-  assert.deepEqual([points[1].left, points[1].right], [.5, .5], 'Side 1 and 2 are 1 mm each (half of the 2 mm weight)');
+  assert.deepEqual([points[1].left, points[1].right], [.5, 1], 'Side 1 is 1 mm and side 2 is 2 mm (shares of the 2 mm weight)');
 
   // Stroke panel: Profile lists the presets; Width Profile 3 tapers to the end, Flip Along reverses it, Uniform removes it.
   await evaluate(`(async()=>{const w=${active};w.select(['${line}']);w.handle('panel.stroke')})()`); await wait(50);
@@ -64,8 +65,8 @@ export async function runDrawWidthWorkflows(client) {
   await until(`(async()=>!${active}.state.document.getNode('${line}'))()`, 'outlined');
   const outlined = await evaluate(`(async()=>{const w=${active},n=w.state.document.getNode(w.state.selection.ids[0]),r=w.renderer.bounds(n.id),b=w.state.document.data.artboards[0];
     return {fill:(await import('./draw/doc/paint.mjs')).paintHex(n.appearance.fills[0]),strokes:n.appearance.strokes.length,box:[r.x-b.x,r.y-b.y,r.width,r.height].map(v=>Math.round(v))}})()`);
-  assert.equal(outlined.fill, '#000000'); assert.equal(outlined.strokes, 0); assert.deepEqual(outlined.box, [20, 39, 80, 2], `The tapered outline: ${JSON.stringify(outlined)}`);
-  await evaluate(`(async()=>{${active}.handle('undo')})()`);
+  assert.equal(outlined.fill, '#000000'); assert.equal(outlined.strokes, 0); assert.deepEqual(outlined.box, [20, 39, 81, 2], `The tapered outline with its round end cap: ${JSON.stringify(outlined)}`);
+  await evaluate(`(async()=>{const w=${active};w.handle('undo');w.select(['${line}']);w.handle('panel.stroke')})()`); await wait(50);
   await pick('uniform'); await wait(50);
   assert.equal(await profile(), null, 'Uniform is a plain stroke again');
   await restore();
