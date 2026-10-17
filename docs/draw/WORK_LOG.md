@@ -1488,3 +1488,18 @@ Hele Draw-E2E for 5b8ff8d (blandede stiler): alle 33 Draw-suiter og prosjekttest
 i krasj- og relanseringstesten («DevTools connection closed»), som passerte sist den ble nådd (run 14).
 
 Neste: D3.5 Lasso og Select-meny.
+
+## 2026-10-17: D3.5 Select-meny, Magic Wand og Lasso
+
+- `doc/select-rules.mjs`: `selectableObjects`, `inverseSelection`, `sameAs` (`SAME_MODES`), `magicWand`,
+  `objectsOfKind` (`OBJECT_KINDS`), `stackNeighbour`, `saveSelection`, `savedSelection` og `insidePolygon`.
+- `index.mjs`: `selectionCommand` (kommandoene `select-inverse`, `select-same-*`, `select-object-*`,
+  `select-next-above/below`, `reselect`, `save-selection`, `edit-selection`); Magic Wand og Lasso i
+  `implementedTools`; Magic Wand-toleranser på Enter (`magicWandDialog`).
+- `tools/paths.mjs`: `lasso` velger ankre innenfor polygonet; `tools/interactions.mjs`: gestene med stiplet forhåndsvisning.
+- `electron/main.mjs`: Select-menyen; `keymap.mjs`: Mod+Alt+] og [.
+
+Verifisering: 241 Draw-enhetstester (4 nye i `select-rules.test.mjs`), ny E2E `draw-select-workflows.mjs` (`--draw-select`).
+Hele E2E for eceff4a (Expand) passerte helt: 35 av 35, med prosjekt-, autolagrings- og relanseringstestene.
+
+Neste: D3.4 Shape Builder, Eraser og Knife.

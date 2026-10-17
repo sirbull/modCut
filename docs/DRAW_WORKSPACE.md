@@ -1439,7 +1439,7 @@ Oversikt over hva som er gjort og gjenstår, inkludert delvis ferdige oppgaver: 
 * [ ] D3.2 Appearance og effekter
 * [ ] D3.3 Image Trace
 * [ ] D3.4 Shape Builder, Eraser, Knife m.fl.
-* [ ] D3.5 Magic Wand, Lasso, Select-meny
+* [x] D3.5 Magic Wand, Lasso, Select-meny (se [STATUS.md](draw/STATUS.md))
 * [ ] D3.6 Free Transform, Transform Each, Split Into Grid
 * [ ] D3.7 AI- og DXF-eksport
 * [ ] D3.8 Links, Crop Image, Document Info, Rediger i Draw

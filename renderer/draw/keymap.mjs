@@ -26,7 +26,7 @@ const entries = [
     ['join', 'Mod+J'], ['average', 'Mod+Alt+J'], ['compound-make', 'Mod+Digit8'], ['compound-release', 'Mod+Shift+Alt+Digit8'],
     ['clip-make', 'Mod+Digit7'], ['clip-release', 'Mod+Alt+Digit7'], ['blend-make', 'Mod+Alt+B'], ['blend-release', 'Mod+Shift+Alt+B'],
     ['create-outlines', 'Mod+Shift+O'], ['panel.character', 'Mod+T'], ['panel.paragraph', 'Mod+Alt+T'],
-    ['select-all', 'Mod+A'], ['deselect', 'Mod+Shift+A'], ['select-artboard', 'Mod+Alt+A'], ['reselect', 'Mod+Digit6'],
+    ['select-all', 'Mod+A'], ['deselect', 'Mod+Shift+A'], ['select-artboard', 'Mod+Alt+A'], ['reselect', 'Mod+Digit6'], ['select-next-above', 'Mod+Alt+BracketRight'], ['select-next-below', 'Mod+Alt+BracketLeft'],
     ['outline', 'Mod+Y'], ['pixel-preview', 'Mod+Alt+Y'], ['fit-artboard', 'Mod+Digit0'], ['fit-all', 'Mod+Alt+Digit0'], ['actual-size', 'Mod+Digit1'],
     ['rulers', 'Mod+R'], ['guides', 'Mod+Semicolon'], ['guides-lock', 'Mod+Alt+Semicolon'], ['guides-make', 'Mod+Digit5'], ['guides-release', 'Mod+Alt+Digit5'],
     ['smart-guides', 'Mod+U'], ['grid', 'Mod+Quote'], ['snap-grid', 'Mod+Shift+Quote'], ['snap-point', 'Mod+Alt+Quote'],

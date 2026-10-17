@@ -459,6 +459,30 @@ export function placeOptionsDialog({template=false,count=1}={}) {
   form.querySelector('.modal-actions').before(note);
   return result;
 }
+/** Magic Wand options: which properties must be close, and how close (colours 0 to 255 per channel). */
+export function magicWandDialog(defaults={}) {
+  return openDrawModal({title:'Magic Wand',submitLabel:'OK',className:'draw-magic-wand-dialog',fields:[
+    {key:'fill',label:'Fill Color',type:'checkbox',value:defaults.fill!==false},
+    {key:'fillTolerance',label:'Fill tolerance (0–255)',type:'number',value:defaults.fillTolerance??32,min:0,max:255,step:1},
+    {key:'stroke',label:'Stroke Color',type:'checkbox',value:!!defaults.stroke},
+    {key:'strokeTolerance',label:'Stroke tolerance (0–255)',type:'number',value:defaults.strokeTolerance??32,min:0,max:255,step:1},
+    {key:'weight',label:'Stroke Weight',type:'checkbox',value:!!defaults.weight},
+    {key:'weightTolerance',label:'Weight tolerance (mm)',type:'number',value:defaults.weightTolerance??.5,min:0,max:1000,step:'any'},
+    {key:'opacity',label:'Opacity',type:'checkbox',value:!!defaults.opacity},
+    {key:'opacityTolerance',label:'Opacity tolerance (%)',type:'number',value:defaults.opacityTolerance??5,min:0,max:100,step:1},
+  ]}).then(v=>v&&{fill:!!v.fill,stroke:!!v.stroke,weight:!!v.weight,opacity:!!v.opacity,fillTolerance:Number(v.fillTolerance),strokeTolerance:Number(v.strokeTolerance),weightTolerance:Number(v.weightTolerance),opacityTolerance:Number(v.opacityTolerance)});
+}
+/** Select > Save Selection: a name for the current selection. */
+export function saveSelectionDialog(name) {
+  return openDrawModal({title:'Save Selection',submitLabel:'OK',className:'draw-save-selection-dialog',fields:[{key:'name',label:'Name',value:name,required:true}]}).then(values=>values?.name??null);
+}
+/** Select > Edit Selection: select or delete a saved selection. */
+export function editSelectionDialog(names) {
+  return openDrawModal({title:'Edit Selection',submitLabel:'OK',className:'draw-edit-selection-dialog',fields:[
+    {key:'name',label:'Saved selection',type:'select',value:names[0],options:names.map(n=>({value:n,label:escapeHtml(n)}))},
+    {key:'action',label:'Action',type:'select',value:'select',options:[{value:'select',label:'Select it'},{value:'delete',label:'Delete it'}]},
+  ]}).then(values=>values&&{name:values.name,action:values.action});
+}
 /** Object > Expand: which parts become plain filled paths. */
 export function expandDialog(defaults={}) {
   return openDrawModal({title:'Expand',submitLabel:'OK',className:'draw-expand-dialog',fields:[

@@ -496,6 +496,23 @@ Kode: `webp` i `EXPORT_FORMATS` (`io/export.mjs`), `EXPORT_TARGETS` (`io/export-
 
 Gjenstår i D3.1: utvidelse av effekter (kommer med D3.2), stiplede streker og pilspisser.
 
+### 2.21 Select-meny, Magic Wand og Lasso (D3.5, 2026-10-17)
+
+* **Select-menyen:** All, All on Active Artboard, Deselect, **Reselect** (Mod+6, gjentar siste Select-kommando
+  på nytt utvalg), **Inverse**, **Next Object Above/Below** (Mod+Alt+] og [), **Same** (Appearance, Fill &
+  Stroke, Fill Color, Opacity, Stroke Color, Stroke Weight, Shape, Text; sammenligner alle malte objekter,
+  også inne i grupper), **Object** (All on Same Layers, Stray Points, Open Paths, Clipping Masks, Text
+  Objects, Raster Images), **Save Selection…** og **Edit Selection…** (velg eller slett). Lagrede utvalg
+  ligger i dokumentet (`settings.savedSelections`), og lagring er ett angresteg.
+* **Magic Wand (Y):** klikk velger objekter med lignende fyll; Enter åpner toleranser for fyll- og
+  strekfarge (0 til 255 per kanal), strekbredde og opasitet. Shift legger til, Alt trekker fra.
+* **Lasso (Q):** dra rundt ankerpunkter for å velge dem (som Direct Selection); Shift legger til, Alt trekker fra.
+* Kode: `doc/select-rules.mjs` (rene regler), `selectionCommand` i `index.mjs`, `lasso` i `tools/paths.mjs`,
+  gestene i `tools/interactions.mjs`, Select-menyen i `electron/main.mjs`.
+
+Gjenstår i D3.5: Select > Same > Graphic Style (krever grafiske stiler), Direction Handles, og Lasso som
+velger hele objekter med Alt+Mod.
+
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
 | Oppgave | Status |
@@ -518,7 +535,9 @@ Gjenstår i D3.1: utvidelse av effekter (kommer med D3.2), stiplede streker og p
 | D2.10 Send til Cut v2 | Ferdig (2.9 og 2.18): tekst til outlines, Outline Stroke, kutt ved artboard, validering, Update in Cut, bilder og alle artboards; varsel om objekter utenfor bedet gjenstår |
 | D3.1 Outline Stroke og Expand | Ferdig (2.18, 2.20): Outline Stroke, Expand, Expand Appearance; effekter, stiplede streker og pilspisser gjenstår |
 | D3.2 Appearance og effekter | Appearance ferdig; effekter gjenstår |
-| D3.3 til D3.8, fase 4 og 5 | Gjenstår |
+| D3.3 Image Trace, D3.4 Shape Builder og Eraser | Gjenstår |
+| D3.5 Magic Wand, Lasso, Select-meny | Ferdig (2.21) |
+| D3.6 til D3.8, fase 4 og 5 | Gjenstår |
 
 ## 4. Rekkefølge videre
 
@@ -535,8 +554,8 @@ SVG-, PNG- og JPEG-eksport er gjort (2.5).
 4. D2.10 Send til Cut v2 (2.18) er gjort. Alle fase 2-oppgavene finnes nå i grunnform.
 5. Hullene i fase 2: D2.5 SVG-import, D2.7 WebP og D2.3 globale swatches og gradientswatches (2.19) er
    gjort. Fra D2.1 er skalering, baseline shift, kerning, avsnitt og blandede stiler gjort (2.11).
-6. Fase 3: D3.1 Expand og Expand Appearance (2.20) er gjort. **Neste: D3.5 Lasso og Select-meny, så D3.4
-   Shape Builder, Eraser og Knife, D3.6 Free Transform og Split Into Grid, D3.2 effekter.**
+6. Fase 3: D3.1 Expand og Expand Appearance (2.20) og D3.5 Select-meny, Magic Wand og Lasso (2.21) er gjort.
+   **Neste: D3.4 Shape Builder, Eraser og Knife, så D3.6 Free Transform og Split Into Grid, D3.2 effekter.**
 
 
 ## 5. Kjente begrensninger og risiko

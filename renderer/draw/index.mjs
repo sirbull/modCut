@@ -27,10 +27,11 @@ import { appearance } from './geometry.mjs';
 import { changeGradient, defaultGradient, isGradient, vectorGradient } from './doc/gradient.mjs';
 import { sampleAppearance, applySampleCommands, measure } from './doc/tool-rules.mjs';
 import { activeArtboard } from './doc/artboards.mjs';
+import { SAME_MODES, OBJECT_KINDS, magicWand, inverseSelection, sameAs, objectsOfKind, stackNeighbour, saveSelection, savedSelection } from './doc/select-rules.mjs';
 import { DRAW_MODE_LABELS, insideTarget, nextDrawMode, placement } from './doc/draw-mode.mjs';
 import { changePaint, changeStroke, paintHex } from './doc/paint.mjs';
 import { importArtwork } from './import-artwork.mjs';
-import { shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog,layerOptionsDialog,swatchOptionsDialog,sendToCutDialog,averageDialog,offsetDialog,simplifyDialog,pencilDialog,expandDialog } from './ui/dialogs.mjs';
+import { shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog,layerOptionsDialog,swatchOptionsDialog,sendToCutDialog,averageDialog,offsetDialog,simplifyDialog,pencilDialog,expandDialog,magicWandDialog,saveSelectionDialog,editSelectionDialog } from './ui/dialogs.mjs';
 import { ALL_ARTBOARDS, artboardCutSvg } from './io/cut-svg.mjs';
 import { EXPORT_FORMATS, rasterSize, svgDocument } from './io/export.mjs';
 import { createExportController } from './export-controller.mjs';
@@ -47,11 +48,12 @@ import { textDialog } from './ui/dialogs.mjs';
 
 const workspaces=new WeakMap();
 export function getDrawWorkspace(root) {return workspaces.get(root) || null;}
-const implementedTools=new Set(['select','group-selection','pencil','hand','zoom','artboard','gradient','eyedropper','measure','scissors','type','area-type','type-on-path',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
+const implementedTools=new Set(['select','group-selection','magic-wand','lasso','pencil','hand','zoom','artboard','gradient','eyedropper','measure','scissors','type','area-type','type-on-path',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
 const commands=new Set(['undo','redo','delete','select-all','select-artboard','deselect','cancel','fit-artboard','fit-all','actual-size','zoom-in','zoom-out','outline',
   'cut','copy','paste','paste-front','paste-back','paste-place','paste-all-artboards',
   'edit-text','create-outlines','join','average','offset-path','outline-stroke','expand','expand-appearance','simplify','reverse-path','add-anchors','remove-anchors','clean-up','compound-make','compound-release','clip-make','clip-release','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
-  'paint-focus','paint-swap','paint-none','paint-solid','paint-gradient','default-paint','smart-guides','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','shear-dialog','toggle-panels','toggle-panels-except-tools','command-search','draw-mode','draw-normal','draw-behind','draw-inside',
+  'paint-focus','paint-swap','paint-none','paint-solid','paint-gradient','default-paint','smart-guides','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','shear-dialog','toggle-panels','toggle-panels-except-tools','command-search','draw-mode','draw-normal','draw-behind','draw-inside','reselect','select-inverse','select-next-above','select-next-below','save-selection','edit-selection',
+  ...Object.keys(SAME_MODES).map(m=>`select-same-${m}`),...Object.keys(OBJECT_KINDS).map(k=>`select-object-${k}`),
   ...PANEL_DEFINITIONS.map(p=>`panel.${p.id}`),...['left','right','up','down'].flatMap(d=>[`nudge-${d}`,`nudge-large-${d}`,`duplicate-${d}`])]);
 export function createDrawWorkspace(root,{paper=window.paper,state=createProjectDraw(),onError=console.warn,onNotice=()=>{},onImport=()=>{},onSendToCut=null,cutIsEmpty=()=>false,cutClipboard=()=>null,onExport=null,getPreferences=()=>({}),statusHost=null}={}) {
   state.ui={tool:'select',flyout:null,layerId:state.document.data.layers[0]?.id,fill:'#FFFFFF',stroke:'#071411',strokeWidth:.5,paintFocus:'fill',...state.ui};
@@ -102,6 +104,8 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       tool.id==='gradient' ? 'Drag across the selection: gradient direction and length · Shift: 45° steps · Click: apply gradient' :
       tool.id==='eyedropper' ? 'Click: copy appearance to the selection · Alt: apply the selection\'s appearance · Shift: colour under the pointer' :
       tool.id==='measure' ? (state.ui.measurement?measurementText(state.ui.measurement):'Drag: distance and angle · Shift: 45° steps') :
+      tool.id==='magic-wand' ? 'Click: objects with a similar fill · Shift: add · Alt: remove · Enter: tolerance' :
+      tool.id==='lasso' ? 'Drag around anchor points to select them · Shift: add · Alt: remove' :
       tool.id==='pencil' ? 'Drag: draw freehand · End near the start: close · Enter: Pencil options' :
       tool.id==='scissors' ? 'Click a path: cut it there (a closed path opens, an open path splits)' :
       tool.id==='group-selection' ? 'Click: object · Click again: its group, one level up per click · Shift: add' :
@@ -756,6 +760,27 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     if(command==='show-all')return()=>{const before=new Set(doc.descendants(null).filter(n=>!n.visible&&n.type!=='layer').map(n=>n.id));apply('Show All',showAllCommands(doc));select([...before]);};
     return null;
   }
+  /** Select menu commands (D3.5); the ones Reselect repeats are remembered. */
+  function selectionCommand(command) {
+    const doc=state.document,ids=selectedIds(),remember=fn=>()=>{state.ui.lastSelectCommand=command;return fn();};
+    if(command==='select-inverse')return remember(()=>select(inverseSelection(doc,ids,isolation())));
+    if(command.startsWith('select-same-'))return remember(()=>select(sameAs(doc,ids,command.slice(12))));
+    if(command.startsWith('select-object-'))return remember(()=>select(objectsOfKind(doc,command.slice(14),ids)));
+    if(command==='select-next-above'||command==='select-next-below')return remember(()=>{if(!ids.length)throw new Error('Select an object first.');select(stackNeighbour(doc,ids,command==='select-next-above'?1:-1));});
+    if(command==='reselect')return()=>{if(!state.ui.lastSelectCommand)throw new Error('There is no selection command to repeat yet.');return handle(state.ui.lastSelectCommand);};
+    if(command==='save-selection')return async()=>{
+      if(!ids.length)throw new Error('Select objects to save.');if(doc.readOnly)return;
+      const name=await saveSelectionDialog(`Selection ${(doc.data.settings.savedSelections?.length??0)+1}`);if(!name||destroyed)return;
+      run(()=>state.history.execute(updateDocument({settings:saveSelection(state.document.data.settings,name,selectedIds())},{label:'Save Selection'})));
+    };
+    if(command==='edit-selection')return async()=>{
+      const names=(doc.data.settings.savedSelections??[]).map(s=>s.name);if(!names.length)throw new Error('No selections are saved in this document.');
+      const choice=await editSelectionDialog(names);if(!choice||destroyed)return;
+      run(()=>{if(choice.action==='delete'){const settings=state.document.data.settings;state.history.execute(updateDocument({settings:{...settings,savedSelections:settings.savedSelections.filter(s=>s.name!==choice.name)}},{label:'Delete Selection'}));}
+        else select(savedSelection(state.document,choice.name));});
+    };
+    return null;
+  }
   function handle(command) {return run(()=>{
     if(command.startsWith('tool.'))return setTool(command.slice(5));
     if(command.startsWith('panel.'))return openPanel(command.slice(6));
@@ -787,7 +812,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       if(!images.length)throw new Error('Select a placed image to use as a template.');
       const {commands:moves}=templateLayerCommands(state.document,state.document.ancestors(images[0]).find(n=>n.type==='layer').id,{name:state.document.getNode(images[0]).name||'Image',moveIds:images});
       state.history.transaction('Use as Template',()=>moves.forEach(c=>state.history.execute(c)));return select([]);}
-    const object=objectCommand(command)??pathCommand(command)??clipboardCommand(command);if(object){const result=object();if(result?.catch)result.catch(error=>{if(!destroyed)onError(error.message);});return;}
+    const object=selectionCommand(command)??objectCommand(command)??pathCommand(command)??clipboardCommand(command);if(object){const result=object();if(result?.catch)result.catch(error=>{if(!destroyed)onError(error.message);});return;}
     if(['rotate-dialog','reflect-dialog','scale-dialog','shear-dialog'].includes(command))return void transformToolDialog(command.split('-')[0]);
     if(command==='delete') {
       if(state.ui.tool==='artboard')return artboards.remove();
@@ -812,6 +837,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       });state.ui.fill=fill;state.ui.stroke=stroke;toolbar.update();panels.render();return;
     }
     if(command==='tool-dialog'&&SHAPE_TOOLS.includes(state.ui.tool))return void shapeDialog(state.ui.tool);
+    if(command==='tool-dialog'&&state.ui.tool==='magic-wand')return void magicWandDialog(state.ui.magicWand??{}).then(values=>{if(values&&!destroyed)state.ui.magicWand=values;});
     if(command==='tool-dialog'&&state.ui.tool==='pencil')return void pencilDialog(state.ui.pencil??{}).then(values=>{if(values&&!destroyed)state.ui.pencil=values;});
     if(command==='tool-dialog'&&state.ui.tool==='type-on-path'){const id=selectedIds()[0];if(id)return void editText(undefined,null,null,{pathFrom:id});return;}
     if(command==='tool-dialog'&&['type','area-type'].includes(state.ui.tool))return void editText(undefined,null,state.ui.tool==='area-type'?{width:60,height:30}:null);
@@ -830,6 +856,12 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   interactions=createInteractions(canvas,state,{scope,renderer,withScope,run,select,selectedIds,transform,artboards,status,shapeOptions,insertShape,shapeDialog,zoomAt,isolate,exitIsolation,
     transforms,transformDialog:transformToolDialog,editText,paintIds,command:id=>handle(id),
     eyedropper,scissors,setMeasure,pencil,
+    // Magic Wand selects leaves with a similar look; Lasso selects anchor points (as Direct Selection does).
+    magicWand(hit,{add=false,subtract=false}={}){
+      if(!hit){if(!add&&!subtract)select([]);return;}
+      const found=magicWand(state.document,hit,state.ui.magicWand??{}),current=selectedIds();
+      select(subtract?current.filter(id=>!found.includes(id)):add?[...new Set([...current,...found])]:found);},
+    lasso:(points,options)=>paths.lasso(points,options),
     gradientVector(from,to,mergeKey){const kind=state.ui.paintFocus==='stroke'?'stroke':'fill',last=state.ui.lastGradient;
       gradient(kind,(current,box,node)=>{const a=renderer.pointToLocal(node.id,from),b=renderer.pointToLocal(node.id,to);
         return vectorGradient(current??defaultGradient(box,last?{type:last.type,stops:last.stops}:{}),[a.x,a.y],[b.x,b.y]);},{label:'Gradient',mergeKey});},

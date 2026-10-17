@@ -1,5 +1,6 @@
 import { createNode } from '../doc/schema.mjs';
 import { updateNode,removeNode,replaceLeaf } from '../doc/commands.mjs';
+import { insidePolygon } from '../doc/select-rules.mjs';
 import { appearance } from '../geometry.mjs';
 import { anchor,reversePath,splitCurve,moveAnchors,deleteAnchors,convertAnchor,constrain } from '../geom/path-editing.mjs';
 import { editablePath,editCornerSource,bakeCorners,roundCorners } from '../geom/corners.mjs';
@@ -203,7 +204,17 @@ export function createPathInteractions(canvas,state,api) {
   }
   canvas.addEventListener('pointerdown',e=>run(()=>down(e)),events);canvas.addEventListener('pointermove',e=>run(()=>update(e)),events);canvas.addEventListener('pointerup',e=>run(()=>up(e)),events);
   canvas.addEventListener('pointercancel',cancelDrag,events);canvas.addEventListener('lostpointercapture',cancelDrag,events);window.addEventListener('blur',cancelDrag,events);
+  /** Lasso: anchors of editable paths and shapes inside the freehand polygon; Shift adds, Alt removes. */
+  function lasso(polygon,{add=false,subtract=false}={}){
+    const inside=[];
+    for(const original of state.document.descendants(null)){if(!['path','shape'].includes(original.type)||!state.document.isEditable(original.id))continue;
+      const node=renderer.editingNode(original.id);node.subpaths.forEach((path,subpath)=>path.segments.forEach((s,segment)=>{const w=renderer.editPointToWorld(node.id,s.p);if(insidePolygon([w.x,w.y],polygon))inside.push(descriptor(node.id,subpath,segment));}));}
+    const existing=state.selection.anchors??[];
+    selectAnchors(subtract?existing.filter(a=>!inside.some(b=>same(a,b))):add?[...existing,...inside.filter(a=>!existing.some(b=>same(a,b)))]:inside);
+    return inside.length;
+  }
   return {
+    lasso,
     finish,
     cornerInfo(){const anchors=cornerSelection();if(!anchors.length)return null;const values=renderer.cornerWidgets().map(c=>c.corner.radius);return {count:anchors.length,radius:values.every(r=>Math.abs(r-values[0])<1e-9)?values[0]:null};},
     setCornerRadius(radius){if(state.document.readOnly)return;const anchors=cornerSelection();if(!anchors.length)return;

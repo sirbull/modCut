@@ -255,6 +255,14 @@ function buildMenu(mode = "cut") {
     })));
     const objectItem=(label,command)=>({label,accelerator:acceleratorFor(command,{isMac}),click:()=>send(command)});
     template.find(item=>item.label==='Type').submenu=[objectItem('Edit Text…','edit-text'),objectItem('Create Outlines','create-outlines')];
+    // Select menu (D3.5): Same compares every painted object; Object picks kinds of objects.
+    template.find(item=>item.label==='Select').submenu=[objectItem('All','select-all'),objectItem('All on Active Artboard','select-artboard'),objectItem('Deselect','deselect'),
+      objectItem('Reselect','reselect'),objectItem('Inverse','select-inverse'),{type:'separator'},objectItem('Next Object Above','select-next-above'),objectItem('Next Object Below','select-next-below'),
+      {type:'separator'},{label:'Same',submenu:[['Appearance','appearance'],['Fill & Stroke','fill-stroke'],['Fill Color','fill-color'],['Opacity','opacity'],['Stroke Color','stroke-color'],
+        ['Stroke Weight','stroke-weight'],['Shape','shape'],['Text','text']].map(([label,mode])=>objectItem(label,`select-same-${mode}`))},
+      {label:'Object',submenu:[['All on Same Layers','same-layers'],['Stray Points','stray-points'],['Open Paths','open-paths'],['Clipping Masks','clipping-masks'],['Text Objects','text'],
+        ['Raster Images','images']].map(([label,kind])=>objectItem(label,`select-object-${kind}`))},
+      {type:'separator'},objectItem('Save Selection…','save-selection'),objectItem('Edit Selection…','edit-selection')];
     template.find(item=>item.label==='Object').submenu=[{label:'Transform',submenu:[
       ...['Rotate','Reflect','Scale','Shear'].map(label=>({label:`${label}…`,click:()=>send(`${label.toLowerCase()}-dialog`)})),
       {type:'separator'},{label:'Transform Again',accelerator:acceleratorFor('transform-again',{isMac}),click:()=>send('transform-again')},

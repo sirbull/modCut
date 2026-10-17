@@ -93,6 +93,9 @@ export function createInteractions(canvas, state, api) {
         // Live freehand line; points closer than half a screen pixel are skipped.
         const last=gesture.points.at(-1);if(Math.hypot(p.x-last[0],p.y-last[1])>=.5/scope.view.zoom)gesture.points.push([p.x,p.y]);
         preview=new scope.Path({segments:gesture.points,strokeColor:'#071411',strokeWidth:1/scope.view.zoom});
+      } else if (gesture.mode==='lasso') {
+        const last=gesture.points.at(-1);if(Math.hypot(p.x-last[0],p.y-last[1])>=1/scope.view.zoom)gesture.points.push([p.x,p.y]);
+        preview=new scope.Path({segments:gesture.points,closed:true,strokeColor:'#1473E6',dashArray:[4/scope.view.zoom,3/scope.view.zoom],strokeWidth:1/scope.view.zoom});
       } else if (gesture.mode==='measure') {
         let end=p;
         if(event.shiftKey){const d=p.subtract(gesture.start),a=Math.round(Math.atan2(d.y,d.x)/(Math.PI/4))*Math.PI/4;end=gesture.start.add(new scope.Point(Math.cos(a),Math.sin(a)).multiply(d.length));}
@@ -136,6 +139,11 @@ export function createInteractions(canvas, state, api) {
       const hit=renderer.hit(p);if(!hit){api.notify?.('Click a path, shape or text to sample its appearance.');return;}
       api.run(()=>api.eyedropper({mode:event.altKey?'apply':'sample',hitId:hit}));return;
     }
+    if(tool==='magic-wand') {
+      // Click: every object with a similar fill (Magic Wand options); Shift adds, Alt removes.
+      const hit=renderer.hit(p);api.run(()=>api.magicWand(hit,{add:event.shiftKey,subtract:event.altKey}));return;
+    }
+    if(tool==='lasso'){gesture={...base,mode:'lasso',points:[[p.x,p.y]]};return;}
     if(tool==='scissors') {
       const hit=renderer.curveHit(p,{shapes:true});
       if(!hit){api.notify?.('Click on a path or shape outline to cut it.');return;}
@@ -205,6 +213,8 @@ export function createInteractions(canvas, state, api) {
       if (state.document.readOnly)return;
       if(drag.mode==='pencil') {
         if(moved||drag.points.length>2)api.pencil(drag.points);
+      }else if(drag.mode==='lasso') {
+        if(drag.points.length>2)api.lasso(drag.points,{add:drag.modifiers.shift,subtract:drag.modifiers.alt});else if(!drag.modifiers.shift)api.select([]);
       }else if(drag.mode==='measure') {
         if(drag.end)api.setMeasure([drag.start.x,drag.start.y],[drag.end.x,drag.end.y]);
       }else if(drag.mode==='gradient') {
