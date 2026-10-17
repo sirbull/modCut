@@ -1593,3 +1593,31 @@ til én bane med fire hjørner. Merk: rødt har luminans 76 og regnes som mørkt
 terskel 50. Full E2E-kjøring 31 (for 49fc9c5) ble avbrutt av en omstart av arbeidsprosessen etter 13 PASS.
 
 Neste: D3.7 AI-eksport.
+
+## 2026-10-17: D3.7 Adobe Illustrator-eksport
+
+- `io/ai.mjs`: `AI_OPTIONS` (PDF 1.6, lag, miniatyrer, redigeringsdata, ingen nedsampling), `aiMetadata` (XMP med
+  `illustrator:Type`, `xmpTPg:NPages`, `MaxPageSize` i mm og `HasVisibleTransparency`) og `hasTransparency`.
+- `io/pdf.mjs`: valgene `metadata` (ukomprimert XMP-strøm i katalogen) og `artBox`.
+- Export As: målet `ai` i `EXPORT_TARGETS` og `EXPORT_FILE_TYPES`, merknad i alternativdialogen, og `app.js`
+  åpner en .ai med Draw-vedlegg som Draw-dokument (som PDF).
+
+Verifisering: 260 Draw-enhetstester (ny AI-test i `vector-export.test.mjs`); `--draw-export` eksporterer .ai,
+sjekker XMP og ArtBox og åpner filen igjen med de samme objektene. `electron/test-bridge.mjs` feiler også uten
+endringene (Java-sidecaren er ikke bygget i dette miljøet).
+
+Neste: fase 4, D4.1 Width og width profiles.
+
+## 2026-10-17: D4.1 Width-verktøy og breddeprofiler
+
+- `geom/width-profile.mjs`: `WIDTH_PROFILES`, `normalizeProfile`, `profileName`, `flipAlong`, `flipAcross`,
+  `widthAt` (myk overgang mellom punkter), `variableStrokeRings` (omriss for åpne og lukkede baner, runde ender),
+  `setWidthPoint`, `moveWidthPoint` og `removeWidthPoint`.
+- `render/paper-adapter.mjs`: en strek med profil går gjennom malingsstakken og tegnes som fylt omriss
+  (`variableStrokeSubpaths`, sampling per kurve så hjørner beholdes); `strokeLocation` og `widthHandles` for verktøyet.
+- `index.mjs`: Width-økter med `mergeKey` (ett angresteg per dragning), Width Point Edit, Outline Stroke og
+  Send to Cut-omriss bruker profilen. `doc/paint.mjs`: `widthProfile` i `changeStroke`; skjemaet validerer punktene.
+- Stroke-panelet: Profile, Flip Along og Flip Across. Ny markør for Width-verktøyet.
+
+Verifisering: 265 Draw-enhetstester (`width-profile.test.mjs`, ny test i `stroke.test.mjs`). Ny E2E
+`draw-width-workflows.mjs` (`--draw-width`) er skrevet; kjøres etter full E2E 32.

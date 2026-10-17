@@ -613,6 +613,43 @@ Gjenstår i D3.8: lenkede (ikke innebygde) bilder med status, Crop Image med hå
 Gjenstår i D3.3: live trace som oppdateres når innstillingene endres (nå er sporingen alltid «Make and Expand»),
 og egen Object > Image Trace-meny.
 
+### 2.27 Adobe Illustrator-eksport (D3.7, 2026-10-17)
+
+* **File > Export > Export As… > Adobe Illustrator (PDF compatible) (.ai):** samme filformat som Illustrator
+  skriver med «Create PDF Compatible File»: en PDF 1.6 der hvert artboard er en side, hvert lag et PDF-lag,
+  med Illustrators XMP-felt (`illustrator:Type`, sider, største sidestørrelse, gjennomsiktighet), ArtBox lik
+  artboardet, miniatyrbilder og Draw-dokumentet vedlagt.
+* Illustrator åpner filen som grafikk; levende effekter og tekst kommer som utvidet grafikk. modCut åpner
+  .ai-filen igjen som det redigerbare Draw-dokumentet (samme vedlegg som «Preserve modCut editing
+  capabilities» i PDF). Dialogen sier dette.
+* DXF-eksport fantes fra D2.6; D3.7 er dermed komplett.
+* Kode: `io/ai.mjs` (`AI_OPTIONS`, `aiMetadata`, `hasTransparency`), `metadata` og `artBox` i `pdfDocument`
+  (`io/pdf.mjs`), `ai` i `EXPORT_TARGETS` og `EXPORT_FILE_TYPES`, åpning i `app.js`.
+
+Gjenstår: Illustrators private AI-data (native lag, symboler og effekter som Illustrator selv kan redigere)
+skrives ikke; formatet er ikke offentlig.
+
+### 2.28 Width-verktøy og breddeprofiler (D4.1, 2026-10-17)
+
+* **Width-verktøyet (Shift+W):** dra på en strek der den skal bli bredere eller smalere; et nytt breddepunkt
+  legges til der. Dra i endene av et breddepunkt for å endre det, dra i midten (ruten) for å flytte det langs
+  banen. Alt endrer bare én side. Dobbeltklikk på et breddepunkt åpner **Width Point Edit** med hver side i mm
+  og «Delete this width point». Hver dragning er ett angresteg. Breddepunktene vises når pekeren er over en
+  strek med profil.
+* **Stroke-panelet > Profile:** Uniform og Width Profile 1 til 6, «Custom» for profiler laget med verktøyet,
+  og Flip Along og Flip Across.
+* Profilen lagres som `widthProfile` på streken (`{t, left, right}`, sidene som andel av strekvekten), så
+  profilen skaleres når vekten endres. Uniform fjerner profilen.
+* Tegning: en strek med profil tegnes som en fylt omriss-form (lerret, SVG, PDF, PNG). Outline Stroke og
+  Outline Stroke ved Send to Cut bruker samme omriss.
+* Kode: `geom/width-profile.mjs`, `variableStrokeSubpaths`, `strokeLocation` og `widthHandles` i
+  `render/paper-adapter.mjs`, `widthSession`, `widthDrag` og `widthPointEdit` i `index.mjs`, Width-grenen i
+  `tools/interactions.mjs`, Profile i `strokePanel`.
+
+Gjenstår i D4.1: stiplede streker med profil (stiplingen ignoreres når profilen er på), Inside og Outside
+justering med profil, egne lagrede profiler, og gradient langs eller på tvers av streken (gradient på strek
+finnes, men bare «within stroke»).
+
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
 | Oppgave | Status |
@@ -635,13 +672,14 @@ og egen Object > Image Trace-meny.
 | D2.10 Send til Cut v2 | Ferdig (2.9 og 2.18): tekst til outlines, Outline Stroke, kutt ved artboard, validering, Update in Cut, bilder og alle artboards; varsel om objekter utenfor bedet gjenstår |
 | D3.1 Outline Stroke og Expand | Ferdig (2.18, 2.20): Outline Stroke, Expand, Expand Appearance; effekter, stiplede streker og pilspisser gjenstår |
 | D3.2 Appearance og effekter | Appearance, sju vektoreffekter og Drop Shadow (2.24); Glow, Feather, Blur og gruppeeffekter gjenstår |
-| D3.3 Image Trace | Gjort i grunnform (2.26); live trace gjenstår |
+| D3.3 Image Trace | Ferdig i grunnform (2.26); live trace gjenstår |
 | D3.4 Shape Builder, Eraser og Knife | Ferdig (2.22); Path Eraser gjenstår |
 | D3.5 Magic Wand, Lasso, Select-meny | Ferdig (2.21) |
 | D3.6 Free Transform, Transform Each, Split Into Grid | Ferdig (2.23); perspektiv gjenstår |
-| D3.7 AI- og DXF-eksport | DXF finnes (D2.6); AI gjenstår |
+| D3.7 AI- og DXF-eksport | Ferdig (2.27); Illustrators private AI-data gjenstår |
 | D3.8 Links, Crop Image, Document Info, Edit in Draw | Ferdig (2.25); lenkede bilder og beskjæringshåndtak gjenstår |
-| Fase 4 og 5 | Gjenstår |
+| D4.1 Width og width profiles | Ferdig i grunnform (2.28); gradient langs strek og stiplet profil gjenstår |
+| Resten av fase 4 og fase 5 | Gjenstår |
 
 ## 4. Rekkefølge videre
 
@@ -660,7 +698,7 @@ SVG-, PNG- og JPEG-eksport er gjort (2.5).
    gjort. Fra D2.1 er skalering, baseline shift, kerning, avsnitt og blandede stiler gjort (2.11).
 6. Fase 3: D3.1 Expand og Expand Appearance (2.20) og D3.5 Select-meny, Magic Wand og Lasso (2.21) er gjort.
    D3.4 Shape Builder, Knife og Eraser (2.22) og D3.6 Free Transform, Transform Each og Split Into Grid
-   (2.23) er også gjort, og D3.2 effekter (2.24), D3.8 (2.25) og D3.3 Image Trace (2.26). **Neste: D3.7 AI-eksport.**
+   (2.23) er også gjort, og D3.2 effekter (2.24), D3.8 (2.25), D3.3 Image Trace (2.26) og D3.7 AI-eksport (2.27). Fase 3 er ferdig i grunnform. Fase 4: D4.1 Width (2.28) er gjort. **Neste: D4.2 Blend.**
 
 
 ## 5. Kjente begrensninger og risiko

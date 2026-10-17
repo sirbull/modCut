@@ -8,6 +8,7 @@ import { shapeSelectionKey } from '../doc/selection.mjs';
 import { scaledStrokeProperties } from '../geom/transforms.mjs';
 import { isOutputNode, layerContext, ROOT_CONTEXT } from '../doc/layers.mjs';
 import { arrowShapes } from '../geom/arrows.mjs';
+import { normalizeProfile, variableStrokeRings } from '../geom/width-profile.mjs';
 import { PT_TO_MM, textValues } from '../doc/text.mjs';
 import { applyVectorEffects, hasVectorEffects, dropShadow } from '../doc/effects.mjs';
 import { offsetPathsSync, geometryReady } from '../geom/kernel-js.mjs';
@@ -194,8 +195,41 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
   // Appearance entries can be hidden from the Appearance panel; hidden ones never draw.
   const shown = list => (list || []).filter(entry => !entry.hidden);
   // More than one visible fill or stroke: a paint stack draws every entry, the item itself only holds geometry.
+  // A stroke with a width profile is drawn as a filled outline, so it always goes through the paint stack.
+  const profiled = (node, entry) => ['path', 'shape'].includes(node.type) && !!normalizeProfile(entry?.widthProfile);
   function stacked(node) {
-    return !node.children && node.type !== 'image' && (shown(node.appearance?.fills).length > 1 || shown(node.appearance?.strokes).length > 1);
+    return !node.children && node.type !== 'image' && (shown(node.appearance?.fills).length > 1 || shown(node.appearance?.strokes).length > 1
+      || shown(node.appearance?.strokes).some(entry => profiled(node, entry)));
+  }
+  /**
+   * Variable-width stroke outline of `item`'s geometry (its own space) as subpaths: each curve is sampled
+   * by length, ends included, so corners keep their anchors (joins come out bevelled).
+   */
+  function variableStrokeSubpaths(item, stroke) {
+    const out = [];
+    for (const path of (item.children ?? [item]).filter(p => p.curves?.length && p.length > 0)) {
+      const total = path.length, samples = [];
+      let before = 0;
+      for (const curve of path.curves) {
+        const length = curve.length, steps = Math.min(400, Math.max(1, Math.ceil(length / .2)));
+        for (let i = 0; i <= steps; i++) {
+          const at = length * i / steps, p = curve.getPointAt(at), n = curve.getNormalAt(at);
+          if (n && Number.isFinite(n.x)) samples.push({ p: [p.x, p.y], n: [n.x, n.y], t: (before + at) / total });
+        }
+        before += length;
+      }
+      if (path.closed) samples.pop();
+      for (const ring of variableStrokeRings(samples, stroke.width, stroke.widthProfile, { closed: path.closed, cap: stroke.cap ?? 'butt' }))
+        out.push({ closed: true, segments: ring.map(p => ({ p, in: [0, 0], out: [0, 0] })) });
+    }
+    return out;
+  }
+  function variableStroke(item, stroke) {
+    const piece = new scope.CompoundPath({ insert: false, fillRule: 'nonzero',
+      children: variableStrokeSubpaths(item, stroke).map(s => new scope.Path({ insert: false, closed: true, segments: s.segments.map(g => g.p) })) });
+    piece.fillColor = color(stroke.paint, stroke.opacity ?? 1);
+    if (piece.fillColor && stroke.paint?.type === 'solid') piece.fillColor.alpha = stroke.opacity ?? 1;
+    return piece;
   }
   function style(item, node, asOutline = outlineFor(node.id), stackOwned = false) {
     item.opacity = asOutline ? 1 : node.opacity * (node.type === 'image' ? records.get(node.id)?.context.dim ?? 1 : 1);
@@ -227,6 +261,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     group.opacity = node.opacity; group.data.baseOpacity = node.opacity; group.blendMode = node.blendMode;
     const entries = [...shown(node.appearance.fills).map(e => ['fills', e]), ...shown(node.appearance.strokes).map(e => ['strokes', e])];
     for (const [kind, entry] of entries) {
+      if (kind === 'strokes' && profiled(node, entry)) { const piece = variableStroke(item, entry); piece.blendMode = entry.blendMode ?? 'normal'; group.addChild(piece); continue; }
       const piece = item.clone({ insert: false }); piece.matrix = new scope.Matrix();
       style(piece, { ...node, opacity: 1, blendMode: 'normal', appearance: { ...node.appearance, fills: kind === 'fills' ? [entry] : [], strokes: kind === 'strokes' ? [entry] : [] } }, false);
       piece.blendMode = entry.blendMode ?? 'normal'; group.addChild(piece);
@@ -646,7 +681,37 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     } catch { url = null; } finally { clone.remove(); }
     thumbnails.set(id, { key, url }); return url;
   }
-  return { render, select: updateView, updateView, bounds, selectionBounds, hit, items, setOutline, thumbnail, exportArtwork, clippedSubpaths, clipToRect, effectiveSubpaths, booleanOperand, selectionHandle:point=>selection.hit(point),
+  /**
+   * Width tool: where `point` (world) lies against node `id`'s outline: the subpath, its position `t` (0 to 1
+   * by length), the distance from the path and the side, in the node's own units (as the stroke weight).
+   */
+  function strokeLocation(id, point) {
+    const item = items.get(id), record = records.get(id); if (!item || !record?.worldMatrix) return null;
+    const local = record.worldMatrix.inverseTransform(new scope.Point(point[0], point[1]));
+    let best = null;
+    for (const [index, path] of (item.children ?? [item]).entries()) {
+      if (!path.curves?.length || !(path.length > 0)) continue;
+      const loc = path.getNearestLocation(local); if (!loc) continue;
+      const d = local.getDistance(loc.point); if (best && d >= best.distance) continue;
+      const n = loc.normal ?? path.getNormalAt(loc.offset), away = local.subtract(loc.point);
+      best = { subpath: index, t: loc.offset / path.length, distance: d, side: n && away.dot(n) < 0 ? 'right' : 'left' };
+    }
+    return best;
+  }
+  /** World positions of each width point of `stroke` on node `id`: the point on the path and both side ends. */
+  function widthHandles(id, stroke) {
+    const item = items.get(id), record = records.get(id), points = normalizeProfile(stroke?.widthProfile); if (!item || !record?.worldMatrix || !points) return [];
+    const out = [];
+    for (const path of (item.children ?? [item]).filter(p => p.curves?.length && p.length > 0)) for (const [index, w] of points.entries()) {
+      const at = Math.min(path.length, w.t * path.length), p = path.getPointAt(at), n = path.getNormalAt(at); if (!p || !n) continue;
+      const world = q => { const r = q.transform(record.worldMatrix); return [r.x, r.y]; };
+      out.push({ index, t: w.t, point: world(p), left: world(p.add(n.multiply(w.left * stroke.width))), right: world(p.add(n.multiply(-w.right * stroke.width))) });
+    }
+    return out;
+  }
+  /** The width-profiled stroke `entry` of node `id` as filled outline subpaths in the node's own space (Outline Stroke). */
+  const profiledStroke = (id, entry) => { const item = items.get(id); return item ? variableStrokeSubpaths(item, entry) : null; };
+  return { render, select: updateView, updateView, bounds, profiledStroke, strokeLocation, widthHandles, selectionBounds, hit, items, setOutline, thumbnail, exportArtwork, clippedSubpaths, clipToRect, effectiveSubpaths, booleanOperand, selectionHandle:point=>selection.hit(point),
     glyphBounds(id,subpaths) {const item=new scope.CompoundPath({insert:false,children:subpaths.map(path)});try{return item.getBounds(records.get(id).worldMatrix).clone();}finally{item.remove();}},
     previewText(node, parentId = null) {
       textPreview?.remove(); textPreview = null;textPreviewFrame?.remove();textPreviewFrame=null;

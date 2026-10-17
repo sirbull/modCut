@@ -6,6 +6,7 @@ import { addStop, colorHex, defaultGradient, gradientCss, isGradient, removeStop
 import { EFFECTS, effectLabel } from '../doc/effects.mjs';
 import { documentInfo } from '../doc/document-info.mjs';
 import { TRACE_PRESETS } from '../geom/trace.mjs';
+import { WIDTH_PROFILES, flipAcross, flipAlong, profileName } from '../geom/width-profile.mjs';
 import { addSwatch, documentSwatches, editSwatch, groupSwatches, linkedPaints, rememberColor, removeSwatch } from '../doc/swatches.mjs';
 import { ROOT_CONTEXT, collectCommands, deleteLayerCommands, deleteRowCommands, duplicateCommands, filterLayerTree, flattenCommands, layerContext, mergeLayersCommands, moveCommand, moveToLayerCommands, newLayer, othersUpdates, releaseCommands, soloUpdates } from '../doc/layers.mjs';
 import { shortcutLabel } from '../keymap.mjs';
@@ -726,6 +727,23 @@ export function createPanels(shell, state, api) {
         if (s.dash.array[i] === undefined) input.value = '';
         inputs.push(input);
       }
+    }
+    // Variable width profile (D4.1): a preset, or the custom profile made with the Width tool, and flips.
+    const profile = document.createElement('div'); profile.className = 'draw-fields'; host.append(profile);
+    {
+      const row = document.createElement('label'); row.className = 'draw-field'; const name = document.createElement('span'); name.textContent = 'Profile';
+      const select = document.createElement('select'); select.className = 'draw-select'; select.dataset.drawField = 'stroke-profile'; select.disabled = disabled;
+      const current = profileName(s.widthProfile);
+      for (const [id,preset] of Object.entries(WIDTH_PROFILES)) select.append(new Option(preset.label,id,false,id === current));
+      if (current === 'custom') select.append(new Option('Custom (Width tool)','custom',false,true));
+      select.addEventListener('change',() => { if (select.value !== 'custom') api.run(() => apply({ widthProfile: WIDTH_PROFILES[select.value].points })); });
+      row.append(name,select); profile.append(row);
+      const flips = document.createElement('div'); flips.className = 'draw-flip-row'; flips.setAttribute('role','group'); flips.setAttribute('aria-label','Flip profile');
+      for (const [label,flip,key] of [['Flip Along',flipAlong,'along'],['Flip Across',flipAcross,'across']]) {
+        const b = button(label,() => api.run(() => apply({ widthProfile: flip(s.widthProfile) }))); b.className = 'btn btn--sm'; b.dataset.drawStrokeFlip = key;
+        b.disabled = disabled || !s.widthProfile?.length; flips.append(b);
+      }
+      profile.append(flips);
     }
     const arrows = document.createElement('div'); arrows.className = 'draw-fields'; host.append(arrows);
     for (const [key,label] of [['startArrow','Start arrowhead'],['endArrow','End arrowhead']]) {

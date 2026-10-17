@@ -127,6 +127,10 @@ export function validateDocument(doc) {
             if (entry.dash.offset !== undefined) number(entry.dash.offset, `${p}.dash.offset`);
           }
         }
+        if (entry.widthProfile !== undefined && entry.widthProfile !== null) array(entry.widthProfile, `${p}.widthProfile`).forEach((point, j) => {
+          if (!object(point)) { fail(`${p}.widthProfile.${j}`, 'Expected a width point'); return; }
+          number(point.t, `${p}.widthProfile.${j}.t`, 0, 1); number(point.left, `${p}.widthProfile.${j}.left`, 0, 100); number(point.right, `${p}.widthProfile.${j}.right`, 0, 100);
+        });
         for (const end of ['startArrow', 'endArrow']) if (entry[end] !== undefined && entry[end] !== null) {
           if (!object(entry[end])) { fail(`${p}.${end}`, 'Expected an arrowhead'); continue; }
           enumeration(entry[end].type, ['arrow', 'triangle', 'circle', 'square', 'bar'], `${p}.${end}.type`);

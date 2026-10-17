@@ -23,6 +23,8 @@ export const CURSORS = Object.freeze({
   measure: url(`${cross(10,10,7)}${halo('M15 26L28 13M18 23l-2-2M21 20l-2-2M24 17l-2-2',1.4)}`,10,10,'crosshair'),
   scissors: url(halo('M9 9a3 3 0 1 0 0 .1M9 23a3 3 0 1 0 0 .1M11.5 11L27 24M11.5 21L27 8',1.5),16,16,'crosshair'),
   'group-select': arrow('white', halo('M22 18v8M18 22h8', 1.4)),
+  // Width: crosshair with a tapering stroke and its width arrows.
+  width: url(`${cross(10,10,7)}<path d='M14 24c4-5 9-7 14-7v4c-5 0-9 2-14 7z' fill='white' stroke='#111' stroke-width='1.3' stroke-linejoin='round'/>`,10,10,'crosshair'),
   gradient: url(`${cross(10,10,7)}<rect x='14' y='20' width='14' height='7' rx='1' fill='white' stroke='#111' stroke-width='1.4'/><rect x='14' y='20' width='7' height='7' fill='#111'/>`,10,10,'crosshair'),
   'type-on-path': url(halo('M12 4h8M16 4v15M12 19h8M4 28c6-6 18-6 24 0',1.4),16,16,'text'),
   'select-anchor': arrow('#111', box(18, 18, '#111')),
@@ -58,7 +60,7 @@ const TOOL_CURSORS = {
   'area-type': 'area-type',
   'type-on-path': 'type-on-path',
   eyedropper: 'eyedropper', measure: 'measure', pencil: 'pencil', shear: 'transform', scissors: 'scissors', 'group-selection': 'group-select',
-  gradient: 'gradient',
+  gradient: 'gradient', width: 'width',
   select: 'select', 'direct-selection': 'direct', 'group-selection': 'direct', pen: 'pen-new', 'add-anchor': 'anchor-add', 'delete-anchor': 'anchor-remove',
   'anchor-point': 'anchor-convert', hand: 'hand', zoom: 'zoom-in', artboard: 'artboard', rotate: 'transform', reflect: 'transform', scale: 'transform',
   rectangle: 'shape', 'rounded-rectangle': 'shape', ellipse: 'shape', polygon: 'shape', star: 'shape', line: 'shape',

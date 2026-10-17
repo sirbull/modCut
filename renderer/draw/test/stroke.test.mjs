@@ -45,3 +45,14 @@ test('arrowheads extend from the path end along the outward tangent', () => {
   assert.deepEqual(arrowShapes([0, 0], [1, 0], 1, null), []);
   assert.throws(() => arrowShapes([0, 0], [1, 0], 1, { type: 'star', scale: 1 }), /Unknown/);
 });
+test('width profiles are stored sorted, a uniform one is removed, and the schema checks them', () => {
+  const base = appearance(null, '#071411', 1);
+  const next = changeStroke(base, { widthProfile: [{ t: 1, left: 0, right: 0 }, { t: 0, left: .5, right: .5 }] }, defaults);
+  assert.deepEqual(next.strokes[0].widthProfile.map((p) => p.t), [0, 1]);
+  assert.equal(changeStroke(next, { widthProfile: [{ t: 0, left: .5, right: .5 }] }, defaults).strokes[0].widthProfile, undefined);
+  assert.equal(changeStroke(next, { widthProfile: null }, defaults).strokes[0].widthProfile, undefined);
+  const doc = createDocument({ layers: [createNode('layer', { children: [createNode('path', { appearance: next })] })] });
+  assert.deepEqual(validateDocument(doc), []);
+  doc.layers[0].children[0].appearance.strokes[0].widthProfile[0].t = 2;
+  assert.match(validateDocument(doc)[0].path, /widthProfile\.0\.t$/);
+});

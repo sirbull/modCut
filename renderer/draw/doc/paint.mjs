@@ -1,4 +1,5 @@
 import { appearance, solidPaint } from '../geometry.mjs';
+import { normalizeProfile } from '../geom/width-profile.mjs';
 
 /** `swatch`: the id of a global swatch the new solid paint stays linked to. */
 export function changePaint(original, kind, value, defaults, swatch = null) {
@@ -43,6 +44,10 @@ export function changeStroke(original, props, defaults) {
       if (value === null) { delete stroke[key]; continue; }
       if (!ARROW_TYPES.includes(value.type) || !(Number.isFinite(value.scale) && value.scale > 0 && value.scale <= 10)) throw new Error('Arrowhead scale must be between 1% and 1000%.');
       stroke[key] = { type: value.type, scale: value.scale };
+    } else if (key === 'widthProfile') {
+      // A uniform profile is no profile: the stroke is drawn as a plain stroke again.
+      const points = value === null ? null : normalizeProfile(value);
+      if (points) stroke.widthProfile = points; else delete stroke.widthProfile;
     } else throw new Error(`Unsupported stroke setting: ${key}`);
   }
   result.strokes = [stroke, ...result.strokes.slice(1)];

@@ -588,3 +588,11 @@ export function simplifyDialog(defaults,{before,count},onPreview=()=>{}) {
   form.addEventListener('input',update);form.addEventListener('change',update);update();
   return result.then(values=>values&&read());
 }
+/** Width Point Edit (double-click with the Width tool): each side's width in mm, or delete the point. */
+export function widthPointDialog({ left, right }) {
+  return openDrawModal({title:'Width Point Edit',submitLabel:'OK',className:'draw-width-dialog',fields:[
+    {key:'left',label:'Side 1 (mm)',type:'number',value:Number(left.toFixed(3)),min:0,max:1000,step:'any',required:true},
+    {key:'right',label:'Side 2 (mm)',type:'number',value:Number(right.toFixed(3)),min:0,max:1000,step:'any',required:true},
+    {key:'remove',label:'Delete this width point',type:'checkbox',value:false}]})
+    .then(v=>v&&{left:Number(v.left),right:Number(v.right),remove:!!v.remove});
+}
