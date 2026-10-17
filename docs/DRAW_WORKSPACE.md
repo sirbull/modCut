@@ -1425,8 +1425,7 @@ Oversikt over hva som er gjort og gjenstår, inkludert delvis ferdige oppgaver: 
 * [x] D1.10 Group, Arrange, Clipboard
 * [x] D1.11 Place bitmap og template-lag (høyreklikkmeny, Crop Image og Links gjenstår, se [STATUS.md](draw/STATUS.md))
 * [x] D1.12 Send til Cut v1 (se [STATUS.md](draw/STATUS.md) for hva v1 dekker)
-* [ ] D2.1 Tekst — punkt-/områdetekst, system-/Google-fonter, shaping, variable akser og Create Outlines ferdig.
-  Path-tekst, videre områdetekst, flere tekstegenskaper og Character/Paragraph gjenstår; se [STATUS.md](draw/STATUS.md).
+* [x] D2.1 Tekst (Small Caps, understreking, optisk kerning og redigering direkte på lerretet gjenstår, se [STATUS.md](draw/STATUS.md))
 * [x] D2.2 Pathfinder, Compound, Clipping (lagklipping gjenstår, se [STATUS.md](draw/STATUS.md))
 * [x] D2.3 Gradienter og Swatches (PDF-shading gjenstår, se [STATUS.md](draw/STATUS.md))
 * [x] D2.4 Path-kommandoer (Smooth og Split Into Grid gjenstår, se [STATUS.md](draw/STATUS.md))

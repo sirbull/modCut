@@ -7,13 +7,47 @@ import { validGoogleReference,validFontAxes } from './font-reference.mjs';
 export const PT_TO_MM = 25.4 / 72;
 export const DEFAULT_CHARACTER = Object.freeze({ fontFamily: 'Arial', fontSize: 24, leading: 28.8, fontWeight: 'normal', fontStyle: 'normal' });
 export function textContent(node) { return node.content.runs.map(run => run.text).join(''); }
+/** Character settings a styled run may override (mixed styles in one text object). */
+export const RUN_KEYS = Object.freeze(['fontFamily', 'fontWeight', 'fontStyle', 'fontSize', 'tracking', 'baselineShift', 'horizontalScale', 'verticalScale']);
+/** One run's overrides, validated; the same rules as the object's own character settings. */
+export function runCharacter(c) {
+  if (c === undefined || c === null) return null;
+  if (typeof c !== 'object' || Array.isArray(c)) throw new Error('Invalid text style.');
+  const out = {};
+  for (const [key, value] of Object.entries(c)) {
+    if (!RUN_KEYS.includes(key)) throw new Error(`Text runs cannot change ${key}.`);
+    const ok = key === 'fontFamily' ? typeof value === 'string' && !!value.trim()
+      : key === 'fontWeight' ? ['normal', 'bold'].includes(value) || Number.isFinite(value) && value >= 1 && value <= 1000
+      : key === 'fontStyle' ? ['normal', 'italic'].includes(value)
+      : key === 'fontSize' ? Number.isFinite(value) && value >= .1 && value <= 10000
+      : key === 'tracking' ? Number.isFinite(value) && value >= -1000 && value <= 10000
+      : key === 'baselineShift' ? Number.isFinite(value) && Math.abs(value) <= 10000
+      : Number.isFinite(value) && value >= 1 && value <= 10000;
+    if (!ok) throw new Error(`Invalid ${key} in a text run.`);
+    out[key] = key === 'fontFamily' ? value.trim() : value;
+  }
+  return Object.keys(out).length ? out : null;
+}
+/** Runs for `text`: empty runs dropped, neighbours with the same style merged, one plain run when nothing is styled. */
+export function normalizeRuns(text, runs) {
+  if (!Array.isArray(runs) || runs.map(r => String(r?.text ?? '').replace(/\r\n?/g, '\n')).join('') !== text) return [{ text }];
+  const out = [];
+  for (const run of runs) {
+    const piece = String(run.text).replace(/\r\n?/g, '\n'), character = runCharacter(run.character);
+    if (!piece) continue;
+    const previous = out.at(-1);
+    if (previous && JSON.stringify(previous.character ?? null) === JSON.stringify(character)) previous.text += piece;
+    else out.push({ text: piece, ...(character ? { character } : {}) });
+  }
+  return out.some(r => r.character) ? out : [{ text }];
+}
 export function textValues(node) {
-  return { text: textContent(node), ...DEFAULT_CHARACTER, ...node.character, ...node.paragraph, alignment: node.paragraph.alignment ?? 'left',
+  return { text: textContent(node), runs: node.content.runs.map(r => ({ text: r.text, ...(r.character ? { character: structuredClone(r.character) } : {}) })), ...DEFAULT_CHARACTER, ...node.character, ...node.paragraph, alignment: node.paragraph.alignment ?? 'left',
     kind:node.kind??'point', ...(node.kind==='area'?{frameWidth:node.frame.width,frameHeight:node.frame.height}:{}),
     ...(node.kind==='onPath'?{pathSubpath:node.onPath.subpath,pathOffset:node.onPath.offset??0,pathFlip:!!node.onPath.flip}:{}) };
 }
 export function textProperties(values) {
-  const { text, fontFamily, fontSize, leading, fontWeight, fontStyle, alignment, fontPostscriptName, kind='point', frameWidth, frameHeight,fontSource='system',googleFont,fontAxes,pathSubpath,pathOffset=0,pathFlip=false,tracking=0,allCaps=false,horizontalScale=100,verticalScale=100,baselineShift=0,kerning='metrics',leftIndent=0,rightIndent=0,firstLineIndent=0,spaceBefore=0,spaceAfter=0 } = values;
+  const { text, fontFamily, fontSize, leading, fontWeight, fontStyle, alignment, fontPostscriptName, kind='point', frameWidth, frameHeight,fontSource='system',googleFont,fontAxes,pathSubpath,pathOffset=0,pathFlip=false,runs,tracking=0,allCaps=false,horizontalScale=100,verticalScale=100,baselineShift=0,kerning='metrics',leftIndent=0,rightIndent=0,firstLineIndent=0,spaceBefore=0,spaceAfter=0 } = values;
   if(!['system','google'].includes(fontSource))throw new Error('Choose a font source.');
   if(googleFont!==undefined&&(!validGoogleReference(googleFont)||fontSource!=='google'||googleFont.family!==fontFamily))throw new Error('Invalid saved Google font reference.');
   if(fontAxes!==undefined&&!validFontAxes(fontAxes))throw new Error('Invalid variable font axes.');
@@ -33,7 +67,7 @@ export function textProperties(values) {
   for(const [label,n] of [['Left indent',leftIndent],['Right indent',rightIndent],['First-line indent',firstLineIndent],['Space before',spaceBefore],['Space after',spaceAfter]])
     if(!Number.isFinite(n)||Math.abs(n)>10000)throw new Error(`${label} must be between -10,000 and 10,000 pt.`);
   return { kind, ...(kind==='area'?{frame:{width:frameWidth,height:frameHeight}}:{}),
-    ...(kind==='onPath'?{onPath:{subpath:structuredClone(pathSubpath),offset:pathOffset,flip:!!pathFlip}}:{}), content: { runs: [{ text: text.replace(/\r\n?/g, '\n') }] },
+    ...(kind==='onPath'?{onPath:{subpath:structuredClone(pathSubpath),offset:pathOffset,flip:!!pathFlip}}:{}), content: { runs: normalizeRuns(text.replace(/\r\n?/g, '\n'), runs) },
     character: { fontFamily: fontFamily.trim(), fontSize, leading, fontWeight, fontStyle,
       ...(typeof fontPostscriptName==='string'&&fontPostscriptName?{fontPostscriptName}:{}),
       ...(fontSource==='google'?{fontSource,...(googleFont?{googleFont}:{})}:{}),

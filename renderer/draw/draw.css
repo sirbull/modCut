@@ -548,3 +548,7 @@ body[data-workspace="draw"] #sendToCut { display: inline-flex; }
 /* Global swatches carry a white corner, as in Illustrator; gradient swatches show the gradient. */
 .draw-swatch.is-global { position: relative; }
 .draw-swatch.is-global::after { content: ''; position: absolute; right: 0; bottom: 0; border-style: solid; border-width: 0 0 7px 7px; border-color: transparent transparent #fff transparent; filter: drop-shadow(0 0 1px rgba(0,0,0,.5)); }
+/* Edit Text: style the selected characters. */
+.draw-text-styles { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0 10px; }
+.draw-text-styles .input { width: 76px; }
+.draw-text-styles__note { font-size: 12px; color: var(--text-muted); }

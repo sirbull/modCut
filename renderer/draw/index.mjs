@@ -422,6 +422,8 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     try {
       const patches=await Promise.all(ids.map(async id=>{
         const node=state.document.getNode(id),values={...textValues(node),...changes};
+        // A change for the whole object replaces the same setting in its styled runs.
+        values.runs=values.runs.map(run=>run.character?{...run,character:Object.fromEntries(Object.entries(run.character).filter(([key])=>!(key in changes)))}:run);
         // A new family or source drops the saved face, Google reference and variable axes of the old font.
         if(changes.fontFamily!==undefined&&(changes.fontFamily!==node.character?.fontFamily||changes.fontSource!==(node.character?.fontSource??'system'))){delete values.fontPostscriptName;delete values.googleFont;delete values.fontAxes;}
         if(changes.fontWeight!==undefined||changes.fontStyle!==undefined)delete values.fontPostscriptName;

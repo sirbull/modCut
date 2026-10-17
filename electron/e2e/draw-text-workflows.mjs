@@ -64,8 +64,27 @@ export async function runDrawTextWorkflows(client) {
   await command('Input.insertText',{text:'Revised'});await ready();await evaluate("document.querySelector('.draw-text-dialog form').requestSubmit()");await wait(50);
   assert.equal(await evaluate(`(async()=>(${active}.state.document.getNode('${node.id}').content.runs[0].text))()`),'Revised',await evaluate("JSON.stringify({modal:document.querySelector('.draw-text-dialog')?.textContent,text:document.querySelector('.draw-text-dialog textarea')?.value,ready:document.querySelector('.draw-text-dialog form')?.dataset.textReady,toasts:[...document.querySelectorAll('.toast')].map(t=>t.textContent)})"));
   await evaluate(`(async()=>{${active}.handle('undo')})()`);assert.equal(await snapshot(),saved);
+  // Mixed styles: select "Horten" in Edit Text, make it bold and 40 pt; the rest keeps the object's style.
+  await evaluate("document.querySelector('.draw-project[style*=block] [data-draw-quick=edit-text]').click()");await ready();
+  await evaluate("(()=>{const t=document.querySelector('.draw-text-dialog textarea');t.focus();t.setSelectionRange(0,6);document.querySelector('[data-text-style=bold]').click();})()");await ready();
+  await evaluate("(()=>{const t=document.querySelector('.draw-text-dialog textarea');t.setSelectionRange(0,6);document.querySelector('[data-text-style=size-value]').value='40';document.querySelector('[data-text-style=size]').click();})()");await ready();
+  assert.match(await evaluate("document.querySelector('.draw-text-styles__note').textContent"),/1 styled part/);
+  // Typing after the styled word keeps the text's own style for the new characters in the plain part.
+  await evaluate("document.querySelector('.draw-text-dialog form').requestSubmit()");await wait(80);
+  const styled=await evaluate(`(async()=>{const n=${active}.state.document.getNode('${node.id}');return {runs:n.content.runs,glyphs:n.layout.glyphs.length}})()`);
+  assert.deepEqual(styled.runs[0],{text:'Horten',character:{fontWeight:'bold',fontSize:40}},'The selection becomes a styled run');
+  assert.equal(styled.runs.map(r=>r.text).join(''),'Horten ÆØÅ\nmodCut','The content is unchanged');
+  assert.equal(styled.runs.length,2);
+  // Reopening shows the styled part again; editing the plain part keeps the run.
+  await evaluate("document.querySelector('.draw-project[style*=block] [data-draw-quick=edit-text]').click()");await ready();
+  assert.match(await evaluate("document.querySelector('.draw-text-styles__note').textContent"),/1 styled part/);
+  await evaluate("(()=>{const t=document.querySelector('.draw-text-dialog textarea');t.focus();t.setSelectionRange(t.value.length,t.value.length);})()");
+  await command('Input.insertText',{text:'!'});await ready();await evaluate("document.querySelector('.draw-text-dialog form').requestSubmit()");await wait(80);
+  const edited=await evaluate(`(async()=>(${active}.state.document.getNode('${node.id}').content.runs))()`);
+  assert.deepEqual(edited.map(r=>r.text),['Horten',' ÆØÅ\nmodCut!']);
+  await evaluate(`(async()=>{${active}.handle('undo');${active}.handle('undo')})()`);assert.equal(await snapshot(),saved);
   // Same model after reload, including character and paragraph fields.
   assert.equal(await evaluate(`(async()=>{const w=${active},{createProjectDraw}=await import('./draw/io/project.mjs');return createProjectDraw(JSON.parse(w.state.document.serialize())).document.serialize()===w.state.document.serialize()})()`),true);
   await restore();
-  console.log('PASS Draw point text: live canvas preview, Unicode/multiline, style, SVG/raster export, cancel, save/reload, single-step undo and automatic Cut outlines');
+  console.log('PASS Draw point text: live canvas preview, Unicode/multiline, style, mixed styles in one text, SVG/raster export, cancel, save/reload, single-step undo and automatic Cut outlines');
 }

@@ -76,6 +76,26 @@ test('paragraphs: justified area text, indents and space between paragraphs',{sk
   assert.ok(Math.abs((y0(spaced,1)-y0(spaced,0))-(y0(tight,1)-y0(tight,0))-10*mm)<1e-9,'Space before and after separate paragraphs');
   const node=pointText([0,0],{...v,alignment:'justify',leftIndent:3});assert.deepEqual(node.paragraph,{alignment:'justify',leftIndent:3});
 });
+test('mixed styles: runs keep their own size, weight and shift, wrap together and are validated',{skip:!latin},async()=>{
+  const v=values(latin,'Big small'),plain=await service.shape(v);
+  const runs=[{text:'Big',character:{fontSize:v.fontSize*2}},{text:' small'}];
+  const mixed=await service.shape({...v,runs}),node=pointText([0,0],{...v,runs});
+  assert.deepEqual(node.content.runs,[{text:'Big',character:{fontSize:v.fontSize*2}},{text:' small'}]);
+  assert.ok(mixed.lineWidths[0]>plain.lineWidths[0]*1.2,'The larger run widens the line');
+  const height=g=>{const ys=g.subpaths.flatMap(s=>s.segments.map(x=>x.p[1]));return Math.max(...ys)-Math.min(...ys);};
+  assert.ok(height(mixed.glyphs[0])>height(plain.glyphs[0])*1.8,'B is twice as tall');
+  assert.ok(Math.abs(height(mixed.glyphs.at(-1))-height(plain.glyphs.at(-1)))<1e-9,'the last glyph keeps the base size');
+  const same=pointText([0,0],{...v,runs:[{text:'Big',character:{fontSize:v.fontSize}},{text:' small',character:{fontSize:v.fontSize}}]});
+  assert.equal(same.content.runs.length,1,'Neighbours with the same style merge');
+  assert.deepEqual(pointText([0,0],{...v,text:'Other',runs}).content.runs,[{text:'Other'}],'Runs that do not match the text are dropped');
+  assert.throws(()=>pointText([0,0],{...v,runs:[{text:'Big',character:{allCaps:true}},{text:' small'}]}),/cannot change allCaps/);
+  node.layout=mixed;const data=createDocument();data.layers[0].children=[node];assert.deepEqual(validateDocument(data),[]);
+  node.content.runs[0].character.fontSize=-1;assert.ok(validateDocument(data).some(e=>e.path.endsWith('.fontSize')));
+  // Two lines: the second gets auto leading from its larger run.
+  const two=await service.shape({...v,text:'A\nB',runs:[{text:'A\n'},{text:'B',character:{fontSize:v.fontSize*3}}]});
+  const base=g=>Math.max(...g.subpaths.flatMap(s=>s.segments.map(x=>x.p[1])));
+  assert.ok(base(two.glyphs[1])-base(two.glyphs[0])>=v.fontSize*3*1.2*25.4/72-1e-6,'Auto leading for the larger run');
+});
 const otf=faces.find(f=>f.format==='otf');
 test('area text wraps shaped words, fits lines vertically and preserves overset text',{skip:!latin},async()=>{
   const v={...values(latin,'AV fi Horten ÆØÅ Horten ÆØÅ'),kind:'area',frameWidth:28,frameHeight:100};

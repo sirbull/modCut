@@ -260,9 +260,16 @@ mellomrommene, siste linje i hvert avsnitt venstrestilles; punkttekst og tekst p
 og Edit Text. Område-tekst bryter linjene innenfor innrykkene, og avstanden telles med når det avgjøres
 hvilke linjer som får plass i rammen.
 
+**Blandede stiler (2026-10-17):** en tekst kan ha deler med egen font, vekt, stil, størrelse, tracking,
+baseline shift og skalering (`content.runs[].character`). I Edit Text markerer man tegn og bruker **Bold**,
+**Italic**, **Set size** eller **Clear style**; stilen følger tegnene når teksten redigeres (ny tekst arver
+stilen foran). Fontmotoren former hver del med sin egen font, bryter linjer over delene og gir linjer med
+større tekst automatisk linjeavstand (1,2 ganger største størrelse). Endres en egenskap for hele objektet i
+Character-panelet, overstyrer den samme egenskap i delene. Farge per del finnes ikke ennå.
+
 Gjenstår i Character/Paragraph (fra kapittel 10.8): optisk og manuell kerning, Small Caps, understreking,
-de andre justeringsvariantene (siste linje sentrert, høyre eller justert), blandede stiler i samme
-tekstobjekt (stiler gjelder hele objektet).
+de andre justeringsvariantene (siste linje sentrert, høyre eller justert), farge per tekstdel, og redigering
+med markør direkte på lerretet (i dag via Edit Text).
 
 ### 2.12 Compound paths og klippemasker (D2.2, 2026-10-17)
 
@@ -487,7 +494,7 @@ Kode: `webp` i `EXPORT_FORMATS` (`io/export.mjs`), `EXPORT_TARGETS` (`io/export-
 | D1.10 Group, Arrange, Clipboard, isolasjon | Ferdig |
 | D1.11 Place bitmap og template-lag | Ferdig (se 2.3); høyreklikkmeny, Crop Image og Links gjenstår |
 | D1.12 Send til Cut v1 | Ferdig (se 2.2) |
-| D2.1 Tekst | Punkt-, område- og path-tekst, system-/Google-fonter, shaping, variable akser, outlines, Character og Paragraph (2.6 til 2.11); se 2.11 for det som gjenstår |
+| D2.1 Tekst | Ferdig i hovedsak (2.6 til 2.11): punkt-, område- og path-tekst, fonter, Character, Paragraph og blandede stiler; se 2.11 for det som gjenstår |
 | D2.2 Pathfinder, Compound, Clipping | Pathfinder, compound paths, klippemasker (2.12) og Draw Normal/Behind/Inside (2.17) ferdig; lagklipping gjenstår |
 | D2.3 Gradienter og Swatches | Ferdig: swatches, gradienter (2.14), globale swatches og gradientswatches (2.19); PDF-shading gjenstår |
 | D2.4 Path-kommandoer | Ferdig (2.13): Join, Average, Reverse, Add/Remove Anchor Points, Clean Up, Offset Path, Simplify; Smooth og Split Into Grid gjenstår |
@@ -515,10 +522,10 @@ SVG-, PNG- og JPEG-eksport er gjort (2.5).
 3. Draw Normal, Behind og Inside (2.17) er gjort.
 4. D2.10 Send til Cut v2 (2.18) er gjort. Alle fase 2-oppgavene finnes nå i grunnform.
 5. Hullene i fase 2: D2.5 SVG-import, D2.7 WebP og D2.3 globale swatches og gradientswatches (2.19) er
-   gjort. Fra D2.1 er skalering, baseline shift, kerning og avsnitt gjort (2.11). **Neste: blandede stiler
-   i én tekst (tegnstiler per tekstbit).**
-6. Så fase 3: D3.1 Expand Appearance, D3.2 effekter, D3.5 Lasso og Select-meny, D3.4 Shape Builder,
-   Eraser og Knife, D3.6 Free Transform og Split Into Grid.
+   gjort. Fra D2.1 er skalering, baseline shift, kerning, avsnitt og blandede stiler gjort (2.11).
+6. **Neste: fase 3, i rekkefølgen D3.1 Expand Appearance, D3.5 Lasso og Select-meny, D3.4 Shape Builder,
+   Eraser og Knife, D3.6 Free Transform og Split Into Grid, D3.2 effekter.**
+
 
 ## 5. Kjente begrensninger og risiko
 

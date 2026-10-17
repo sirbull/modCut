@@ -207,7 +207,24 @@ export function validateDocument(doc) {
       if (!object(value.content)) fail(`${path}.content`, 'Expected rich text');
       else array(value.content.runs, `${path}.content.runs`).forEach((run, i) => {
         if (!object(run)) fail(`${path}.content.runs.${i}`, 'Expected a text run');
-        else string(run.text, `${path}.content.runs.${i}.text`);
+        else {
+          string(run.text, `${path}.content.runs.${i}.text`);
+          // A styled run may override these character settings only (see RUN_KEYS in text.mjs).
+          if (run.character !== undefined) {
+            const q = `${path}.content.runs.${i}.character`;
+            if (!object(run.character)) fail(q, 'Expected character settings');
+            else for (const [key, value] of Object.entries(run.character)) {
+              if (key === 'fontFamily') string(value, `${q}.fontFamily`);
+              else if (key === 'fontStyle') enumeration(value, ['normal', 'italic'], `${q}.fontStyle`);
+              else if (key === 'fontWeight') { if (!['normal', 'bold'].includes(value)) number(value, `${q}.fontWeight`, 1, 1000); }
+              else if (key === 'fontSize') number(value, `${q}.fontSize`, .1, 10000);
+              else if (key === 'tracking') number(value, `${q}.tracking`, -1000, 10000);
+              else if (key === 'baselineShift') number(value, `${q}.baselineShift`, -10000, 10000);
+              else if (['horizontalScale', 'verticalScale'].includes(key)) number(value, `${q}.${key}`, 1, 10000);
+              else fail(`${q}.${key}`, 'Not a run setting');
+            }
+          }
+        }
       });
       if (!object(value.paragraph)) fail(`${path}.paragraph`, 'Expected paragraph settings');
       else if (value.paragraph.alignment !== undefined) enumeration(value.paragraph.alignment, ['left', 'center', 'right', 'justify'], `${path}.paragraph.alignment`);

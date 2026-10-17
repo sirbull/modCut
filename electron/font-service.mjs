@@ -50,14 +50,13 @@ export function createFontService({directories=systemFontDirectories(),google}={
     })();
     return catalogPromise;
   }
-  async function shape(values) {
-    const patch=textProperties(values),v=textValues(patch);
-    if(v.text.length>10000)throw new Error('Text is limited to 10,000 characters per object.');
+  /** The face and Fontkit font for character settings `v` (a variable font set to its weight and axes). */
+  async function resolveFont(v) {
     const targetWeight=v.fontWeight==='bold'?700:v.fontWeight==='normal'?400:v.fontWeight;
     let face,font;
     if(v.fontSource==='google') {
       if(!google)throw new Error('Google Fonts is unavailable.');
-      ({face,font}=await google.resolve(v));patch.character.googleFont=face.reference;
+      ({face,font}=await google.resolve(v));
     } else {
       const catalog=await list();
       const candidates=catalog.filter(f=>f.family.toLowerCase()===v.fontFamily.toLowerCase()&&f.fontStyle===v.fontStyle&&
@@ -70,64 +69,87 @@ export function createFontService({directories=systemFontDirectories(),google}={
         if(cache.size>=12)cache.delete(cache.keys().next().value);cache.set(face.id,font);
       }
     }
-    patch.character.fontPostscriptName=face.postscriptName;
     const {axes,instances}=variableMetadata(font),settings={...v.fontAxes};
     if(axes.wght&&settings.wght===undefined)settings.wght=targetWeight;
     for(const [tag,value] of Object.entries(settings))if(!axes[tag]||value<axes[tag].min||value>axes[tag].max)throw new Error(`The ${tag} axis is outside this font’s range.`);
     if(Object.keys(settings).length)font=font.getVariation(settings);
-    const scale=v.fontSize*PT_TO_MM/font.unitsPerEm,glyphs=[],lineWidths=[],area=v.kind==='area';
+    return {face,font,axes,instances};
+  }
+  async function shape(values) {
+    const patch=textProperties(values),v=textValues(patch);
+    if(v.text.length>10000)throw new Error('Text is limited to 10,000 characters per object.');
+    const base=await resolveFont(v),{face}=base;
+    if(v.fontSource==='google')patch.character.googleFont=face.reference;
+    patch.character.fontPostscriptName=face.postscriptName;
+    // One style per run: its own face when it changes family, weight or style, and its own size and spacing.
     // Tracking adds the same advance after every glyph; All Caps changes only the shaped text, never the content.
     // Horizontal scale stretches glyphs and advances, vertical scale only glyphs; baseline shift raises the
-    // glyphs (pt); kerning 'none' turns the font's kern feature off.
-    const hs=(v.horizontalScale??100)/100,vs=(v.verticalScale??100)/100,rise=(v.baselineShift??0)*PT_TO_MM;
-    const track=(v.tracking??0)/1000*font.unitsPerEm,advance=p=>p.xAdvance*hs+track,shapeText=text=>font.layout(v.allCaps?text.toLocaleUpperCase():text,v.kerning==='none'?{kern:false}:undefined);
-    const width=run=>run.positions.reduce((sum,p)=>sum+advance(p),0);
-    const fontInfo={family:face.family,style:face.style,postscriptName:face.postscriptName,...(face.source==='google'?{source:'google',reference:face.reference}:{}),axes,instances};
-    const outlines=glyph=>{
-      if(glyph.id===0)throw new Error(`The font “${face.family}” does not contain every character in the text.`);
+    // glyphs (pt); kerning 'none' turns the font's kern feature off. Positions below are in mm.
+    const makeStyle=(c,{font,face})=>{
+      const scale=c.fontSize*PT_TO_MM/font.unitsPerEm,hs=(c.horizontalScale??100)/100,vs=(c.verticalScale??100)/100,track=(c.tracking??0)/1000*font.unitsPerEm;
+      return {font,face,scale,hs,vs,rise:(c.baselineShift??0)*PT_TO_MM,fontSize:c.fontSize,advance:p=>(p.xAdvance*hs+track)*scale,
+        shapeText:text=>font.layout(v.allCaps?text.toLocaleUpperCase():text,v.kerning==='none'?{kern:false}:undefined)};
+    };
+    const baseStyle=makeStyle(v,base),styles=[];let at=0;
+    for(const run of v.runs) {
+      const c=run.character,fontChange=c&&['fontFamily','fontWeight','fontStyle'].some(key=>c[key]!==undefined&&c[key]!==v[key]);
+      const resolved=fontChange?await resolveFont({...v,...c,fontSource:c.fontFamily&&c.fontFamily!==v.fontFamily?'system':v.fontSource,fontPostscriptName:undefined,fontAxes:undefined}):base;
+      styles.push({start:at,end:at+run.text.length,style:c?makeStyle({...v,...c},resolved):baseStyle});at+=run.text.length;
+    }
+    // The text between `start` and `end`, split where the style changes; tabs are four spaces.
+    const pieces=(start,end)=>styles.filter(r=>r.end>start&&r.start<end).map(r=>({style:r.style,text:v.text.slice(Math.max(start,r.start),Math.min(end,r.end))}))
+      .filter(p=>p.text).map(p=>({...p,run:p.style.shapeText(p.text.replace(/\t/g,'    '))}));
+    const widthOf=list=>list.reduce((sum,p)=>sum+p.run.positions.reduce((w,pos)=>w+p.style.advance(pos),0),0);
+    const glyphs=[],lineWidths=[],area=v.kind==='area';
+    const fontInfo={family:face.family,style:face.style,postscriptName:face.postscriptName,...(face.source==='google'?{source:'google',reference:face.reference}:{}),axes:base.axes,instances:base.instances};
+    const outlines=(glyph,style)=>{
+      if(glyph.id===0)throw new Error(`The font “${style.face.family}” does not contain every character in the text.`);
       let commands;try{commands=glyph.path.commands;}catch{throw new Error('This font cannot provide vector outlines for the text. Choose a monochrome vector font.');}
       if(!commands.length&&glyph.codePoints.some(cp=>!/[\s\u200B-\u200F\u202A-\u202E\u2060-\u206F]/u.test(String.fromCodePoint(cp))))throw new Error('This font uses a glyph without vector outlines. Choose a vector font.');
       return commands;
     };
     if(v.kind==='onPath') {
       // One line along the path: each glyph is centred on its arc length and turned to the tangent.
-      const run=shapeText(v.text.replace(/[ \t]*\n[ \t]*/g,' ').replace(/\t/g,'    ')),total=width(run)*scale;
-      const measure=measurePath(v.pathFlip?reverseSubpath(v.pathSubpath):v.pathSubpath);
-      let pen=pathRunStart(measure.length,total,{offset:v.pathOffset,alignment:v.alignment}),overflow=false;
-      for(let i=0;i<run.glyphs.length;i++) {
-        const glyph=run.glyphs[i],pos=run.positions[i],commands=outlines(glyph),step=advance(pos)*scale,centre=pen+pos.xAdvance*hs*scale/2;
+      // Line breaks become spaces; each run keeps its own style along the path.
+      const parts=pieces(0,v.text.length).map(p=>({...p,run:p.style.shapeText(p.text.replace(/\n/g,' ').replace(/\t/g,'    '))}));
+      const total=widthOf(parts),measure=measurePath(v.pathFlip?reverseSubpath(v.pathSubpath):v.pathSubpath);
+      let pen=pathRunStart(measure.length,total,{offset:v.pathOffset,alignment:v.alignment==='justify'?'left':v.alignment}),overflow=false;
+      for(const {style,run} of parts)for(let i=0;i<run.glyphs.length;i++) {
+        const glyph=run.glyphs[i],pos=run.positions[i],commands=outlines(glyph,style),step=style.advance(pos),half=pos.xAdvance*style.hs*style.scale/2,centre=pen+half;
         if(centre>measure.length+1e-9)overflow=true;
-        else {const map=glyphFrame(measure,centre);glyphs.push({line:0,glyphId:glyph.id,subpaths:glyphSubpaths(commands,(gx,gy)=>map((pos.xOffset+gx)*hs*scale-pos.xAdvance*hs*scale/2,(pos.yOffset+gy*vs)*scale+rise))});}
+        else {const map=glyphFrame(measure,centre);glyphs.push({line:0,glyphId:glyph.id,subpaths:glyphSubpaths(commands,(gx,gy)=>map((pos.xOffset+gx)*style.hs*style.scale-half,(pos.yOffset+gy*style.vs)*style.scale+style.rise))});}
         pen+=step;
       }
       return {version:1,signature:textSignature(patch),font:fontInfo,glyphs,lineWidths:[total],overflow};
     }
     // Paragraph indents (pt) narrow the lines; space before and after (pt) separates paragraphs.
     const pt=n=>(n??0)*PT_TO_MM,left=pt(v.leftIndent),right=pt(v.rightIndent),firstIndent=pt(v.firstLineIndent),gap=pt(v.spaceBefore)+pt(v.spaceAfter);
-    const lines=area?wrapLines(v.text,first=>(v.frameWidth-left-right-(first?firstIndent:0))/scale,text=>width(shapeText(text.replace(/\t/g,'    '))))
-      :v.text.split('\n').map((text,paragraph)=>({text,paragraph,first:true,last:true}));
-    const ascent=area?font.ascent*scale:0,lineHeight=area?(font.ascent-font.descent)*scale:0;
-    const lineTop=line=>line*v.leading*PT_TO_MM+lines[line].paragraph*gap;
+    const lines=area?wrapLines(v.text,first=>v.frameWidth-left-right-(first?firstIndent:0),(text,start)=>widthOf(pieces(start,start+text.length)))
+      :(()=>{let start=0;return v.text.split('\n').map((text,paragraph)=>{const line={text,start,paragraph,first:true,last:true};start+=text.length+1;return line;});})();
+    const shaped=lines.map(line=>pieces(line.start,line.start+line.text.length));
+    // A line is as far below the previous one as the leading, or more when a run on it is larger (auto leading).
+    const leadingOf=parts=>Math.max(v.leading,...parts.filter(p=>p.style!==baseStyle).map(p=>p.style.fontSize*1.2))*PT_TO_MM;
+    const tops=[];for(let line=0;line<lines.length;line++)tops.push(line?tops[line-1]+leadingOf(shaped[line])+(lines[line].paragraph!==lines[line-1].paragraph?gap:0):0);
+    const ascent=area?Math.max(base.font.ascent*baseStyle.scale,...(shaped[0]??[]).map(p=>p.style.font.ascent*p.style.scale)):0;
+    const lineHeight=area?(base.font.ascent-base.font.descent)*baseStyle.scale:0;
     let visibleLines=lines.length;
-    if(area){visibleLines=0;while(visibleLines<lines.length&&lineTop(visibleLines)+lineHeight<=v.frameHeight+1e-9)visibleLines++;}
-    for(const [line,{text,first,last}] of lines.entries()) {
-      const run=shapeText(text.replace(/\t/g,'    '));
-      const lineAdvance=width(run);lineWidths.push(lineAdvance*scale);
+    if(area){visibleLines=0;while(visibleLines<lines.length&&tops[visibleLines]+lineHeight<=v.frameHeight+1e-9)visibleLines++;}
+    for(const [line,{first,last}] of lines.entries()) {
+      const parts=shaped[line],lineAdvance=widthOf(parts);lineWidths.push(lineAdvance);
       const indent=left+(first?firstIndent:0),room=area?v.frameWidth-indent-right:0;
-      if(area&&lineAdvance*scale>room+1e-9)visibleLines=Math.min(visibleLines,line);
+      if(area&&lineAdvance>room+1e-9)visibleLines=Math.min(visibleLines,line);
       // Justified lines spread the free room over their spaces; a paragraph's last line stays left aligned.
-      const justify=area&&v.alignment==='justify'&&!last,spaces=justify?run.glyphs.filter(g=>g.codePoints.includes(32)).length:0;
-      const spread=spaces?Math.max(0,room/scale-lineAdvance)/spaces:0,align=v.alignment==='justify'?'left':v.alignment;
-      const offset=indent/scale+(align==='center'?-lineAdvance/2:align==='right'?-lineAdvance:0)+(area?(align==='center'?room/scale/2:align==='right'?room/scale:0):0);
-      let x=0,y=0;
-      for(let i=0;i<run.glyphs.length;i++) {
-        const glyph=run.glyphs[i],pos=run.positions[i];
-        const commands=outlines(glyph);
+      const justify=area&&v.alignment==='justify'&&!last,spaces=justify?parts.reduce((n,p)=>n+p.run.glyphs.filter(g=>g.codePoints.includes(32)).length,0):0;
+      const spread=spaces?Math.max(0,room-lineAdvance)/spaces:0,align=v.alignment==='justify'?'left':v.alignment;
+      const offset=indent+(align==='center'?-lineAdvance/2:align==='right'?-lineAdvance:0)+(area?(align==='center'?room/2:align==='right'?room:0):0);
+      let x=0;
+      for(const {style,run} of parts)for(let i=0;i<run.glyphs.length;i++) {
+        const glyph=run.glyphs[i],pos=run.positions[i],commands=outlines(glyph,style);
         if(line<visibleLines) {
-          const subpaths=glyphSubpaths(commands,(gx,gy)=>[(offset+x+(pos.xOffset+gx)*hs)*scale,ascent+lineTop(line)-(y+pos.yOffset+gy*vs)*scale-rise]);
+          const subpaths=glyphSubpaths(commands,(gx,gy)=>[offset+x+(pos.xOffset+gx)*style.hs*style.scale,ascent+tops[line]-(pos.yOffset+gy*style.vs)*style.scale-style.rise]);
           glyphs.push({line,glyphId:glyph.id,subpaths});
         }
-        x+=advance(pos)+(spaces&&glyph.codePoints.includes(32)?spread:0);y+=pos.yAdvance;
+        x+=style.advance(pos)+(spaces&&glyph.codePoints.includes(32)?spread:0);
       }
       await yieldEventLoop();
     }

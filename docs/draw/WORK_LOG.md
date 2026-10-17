@@ -1459,3 +1459,20 @@ Verifisering: ny test i `electron/test-font-service.mjs` (27 main-tester); `text
 Hele Draw-E2E for 218724f: alle 33 Draw-suiter passerte (outlines også); bare autolagringsflaken stoppet.
 
 Neste: blandede stiler i én tekst.
+
+## 2026-10-17: D2.1 blandede stiler i én tekst
+
+- `doc/text.mjs`: `RUN_KEYS`, `runCharacter` og `normalizeRuns` (tomme deler fjernes, like naboer slås sammen,
+  deler som ikke stemmer med teksten forkastes); `textValues` gir `runs`. `doc/schema.mjs` validerer delene.
+- `doc/text-wrap.mjs`: linjene har `start`, og målefunksjonen får posisjonen, så bredden kan regnes per del.
+- `electron/font-service.mjs`: `resolveFont` er skilt ut; `shape` lager én stil per del (egen font ved ny
+  familie, vekt eller stil), regner posisjoner i mm, og gir automatisk linjeavstand for større deler.
+- `ui/dialogs.mjs`: stilraden i Edit Text med stil per tegn som følger redigering. `index.mjs`: en endring for
+  hele objektet fjerner samme egenskap fra delene.
+
+Verifisering: ny test i `electron/test-font-service.mjs` (28 main-tester); `draw-text-workflows.mjs` gjør
+«Horten» fet og 40 pt, åpner igjen, skriver videre og angrer. Område-, path-, Character-, outlines- og
+SVG-import-suitene passerer med den nye motoren. Hele Draw-E2E for 5090d92 (avsnitt): alle 33 Draw-suiter
+passerte; bare autolagringsflaken stoppet.
+
+Neste: fase 3, først D3.1 Expand Appearance.
