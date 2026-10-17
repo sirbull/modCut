@@ -52,9 +52,11 @@ export async function runDrawPathCommandWorkflows(client) {
   await evaluate(`(async()=>{const w=${active};w.setTool('direct-selection');w.state.selection.setAnchors([{nodeId:'${ids.rect}',subpath:0,segment:1}]);w.handle('remove-anchors');w.setTool('select')})()`);
   rect=await node(ids.rect);assert.equal(rect.subpaths[0].segments.length,7);assert.equal(rect.subpaths[0].closed,true);
   // Clean Up removes the stray point and the unpainted path.
+  // Toasts disappear after 4 s, so they are recorded as they appear; a busy full run can poll later than that.
+  await evaluate("(()=>{window.__drawToasts=[];const host=document.getElementById('toasts');new MutationObserver(list=>list.forEach(m=>m.addedNodes.forEach(n=>window.__drawToasts.push(n.textContent)))).observe(host,{childList:true});})()");
   await menu('Clean Up');
   assert.equal(await node(ids.stray),null);assert.equal(await node(ids.bare),null);
-  await until("[...document.querySelectorAll('.toast')].some(t=>/Clean Up removed 2 objects/.test(t.textContent))",'Clean Up notice');
+  await until("window.__drawToasts.some(t=>/Clean Up removed 2 objects/.test(t))",'Clean Up notice');
   // Offset Path: live preview leaves the document alone; OK adds a grown copy above the source.
   const more=await evaluate(`(async()=>{const w=${active},{createNode}=await import('./draw/doc/schema.mjs'),{insertNode}=await import('./draw/doc/commands.mjs'),{appearance}=await import('./draw/geometry.mjs');
     const b=w.state.document.data.artboards[0],L=w.state.document.data.layers[0].id;

@@ -22,7 +22,8 @@ Create Outlines** og **D2.1c rektangulær områdetekst med linjebryting** er fer
 **Tekst på path (STATUS.md 2.10) og Character/Paragraph (2.11) er ferdige.** D2.1 er ferdig i grunnform;
 resten står i 2.11. D2.2 compound paths og klippemasker er ferdige (2.12).
 D2.4 path-kommandoer (2.13), D2.3 gradienter (2.14), D2.8 verktøy (2.15) og D2.9 History, Info og
-kommandosøk (2.16) og Draw Normal/Behind/Inside (2.17) er ferdige. **Neste oppgave er D2.10 Send til Cut v2.** Kjør `npm ci` etter pull.
+kommandosøk (2.16) og Draw Normal/Behind/Inside (2.17) er ferdige. D2.10 del A (2.18) er ferdig.
+**Neste oppgave er D2.10 del B: `cutLinks` og Oppdater i Cut.** Kjør `npm ci` etter pull.
 
 **Brukerstyrt tillegg etter D2.1c:** Google Fonts og automatisk tekst til outlines ved Send to Cut
 er implementert (STATUS.md 2.9). Tekst på path er fortsatt neste ordinære del.

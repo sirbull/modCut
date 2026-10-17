@@ -387,6 +387,28 @@ kommandosøk i hjelpemenyen.
 Gjenstår: stiplede hjørnemerker rundt Draw Inside-målet på lerretet, Paste i Draw Inside, og
 lagklipping fra Layers-menyen.
 
+### 2.18 Send til Cut v2, del A (D2.10, 2026-10-17)
+
+* **Object > Path > Outline Stroke:** en strek blir det fylte arealet den maler (Clipper-offset med
+  streken sin join, cap og miter limit). Et objekt med fyll blir en gruppe med fyllet og omrisset, som i
+  Illustrator. Ett angresteg. Stiplede streker og pilspisser tas ikke med ennå.
+* **Send to Cut-dialogen** har nye valg:
+  * **Strokes:** Centerline (standard, for skjæring og score) eller Outline Stroke (gravering av strekens
+    areal; fyllet sendes under omrisset).
+  * **Past the artboard:** send hele objekter (som før) eller kutt dem ved artboardkanten (fyll beholder
+    overlappet, streker delene innenfor).
+  * **Leave out duplicate paths** (på som standard): helt like baner sendes én gang, så laseren ikke
+    skjærer to ganger.
+* **Validering** i dialogen: antall noder, segmenter kortere enn 0,05 mm (ikke for tekst), duplikater,
+  objekter over kanten, i tillegg til det som fantes.
+* Med tom Cut og ett artboard sendes fortsatt alt direkte, men bare når det ikke finnes advarsler;
+  ellers åpner dialogen så valgene kan tas.
+* Kode: `outlineStroke` i `geom/kernel-js.mjs`, `outline-stroke` og `strokeOutlines` i `index.mjs`,
+  `clipToRect` i `render/paper-adapter.mjs`, valgene `clipToBoard`, `outlines` og `dedupe` i `io/cut-svg.mjs`.
+
+Gjenstår i D2.10: `cutLinks` med **Oppdater i Cut**, bilder som rastergravering, flere artboards i én
+sending, og objekter utenfor bedet.
+
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
 | Oppgave | Status |
@@ -406,8 +428,8 @@ lagklipping fra Layers-menyen.
 | D2.7 Raster-eksport | PNG og JPEG (2.5) og Export for Screens med skala og suffiks (WORK_LOG «Eksport del 3») ferdig; WebP gjenstår |
 | D2.8 Pencil, Shear, Eyedropper m.fl. | Ferdig (2.15): Eyedropper, Measure, Group Selection, Scissors, Pencil, Shear, Arc |
 | D2.9 Transparency, History, Info, kommandosøk | Ferdig (2.16); snapshots i History gjenstår |
-| D2.10 Send til Cut v2 | Automatisk tekst til outlines ferdig (2.9); øvrige v2-deler gjenstår |
-| D3.1 Outline Stroke og Expand | Gjenstår (Expand Shape finnes) |
+| D2.10 Send til Cut v2 | Tekst til outlines (2.9), Outline Stroke, kutt ved artboard og validering (2.18) ferdig; Oppdater i Cut, bilder og flere artboards gjenstår |
+| D3.1 Outline Stroke og Expand | Outline Stroke (2.18) og Expand Shape finnes; Expand Appearance gjenstår |
 | D3.2 Appearance og effekter | Appearance ferdig; effekter gjenstår |
 | D3.3 til D3.8, fase 4 og 5 | Gjenstår |
 
@@ -423,7 +445,7 @@ SVG-, PNG- og JPEG-eksport er gjort (2.5).
 2. D2.4 path-kommandoer (2.13), D2.3 gradienter (2.14), D2.8 verktøy (2.15) og D2.9 History, Info og
    kommandosøk (2.16) er gjort.
 3. Draw Normal, Behind og Inside (2.17) er gjort.
-4. **Neste: D2.10 Send til Cut v2.**
+4. D2.10 Send til Cut v2: del A (2.18) er gjort. **Neste: del B, `cutLinks` og Oppdater i Cut.**
 
 ## 5. Kjente begrensninger og risiko
 

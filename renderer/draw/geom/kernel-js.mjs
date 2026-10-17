@@ -3,7 +3,7 @@ export const DEFAULT_TOLERANCE = 0.001;
 export const LIMITS = Object.freeze({ coordinate: 1_000_000, anchors: 1_000_000, points: 1_000_000, depth: 32 });
 const SCALE = 1_000_000;
 export const BACKEND = Object.freeze({ name: 'js', library: 'clipper-lib@6.4.2', approximate: true,
-  toleranceMm: DEFAULT_TOLERANCE, capabilities: Object.freeze(['flatten', 'boolean:unite', 'offset']) });
+  toleranceMm: DEFAULT_TOLERANCE, capabilities: Object.freeze(['flatten', 'boolean:unite', 'offset', 'outline-stroke']) });
 
 export class GeometryError extends Error {
   constructor(message, code = 'INVALID_GEOMETRY') { super(message); this.name = 'GeometryError'; this.code = code; }
@@ -136,8 +136,31 @@ export async function offsetPaths(paths, { distance, join = 'miter', miterLimit 
   const rings = executeUnion(lib, result, lib.PolyFillType.pftNonZero).filter((ring) => ring.length >= 3);
   return rings.map((ring) => ({ closed: true, segments: ring.map(({ X, Y }) => ({ p: [X / SCALE, Y / SCALE], in: [0, 0], out: [0, 0] })) }));
 }
+/**
+ * Outline Stroke: the area a stroke of `width` mm paints, as closed filled rings (holes wind the other
+ * way). Closed subpaths give a band; open ones get butt, round or square caps. Result: straight segments.
+ */
+export async function outlineStroke(path, { width, join = 'miter', cap = 'butt', miterLimit = 4, tolerance = .005 } = {}) {
+  positive(width, 'stroke width', 10000);
+  if (!['miter', 'round', 'bevel'].includes(join)) throw new GeometryError('Invalid join');
+  if (!['butt', 'round', 'square'].includes(cap)) throw new GeometryError('Invalid cap');
+  positive(miterLimit, 'miter limit', 500); positive(tolerance, 'offset tolerance', 1);
+  validatePath(path);
+  const lib = await clipper(), ints = (points) => points.map(([x, y]) => ({ X: Math.round(x * SCALE), Y: Math.round(y * SCALE) }));
+  const engine = new lib.ClipperOffset(Math.max(1, miterLimit), tolerance * SCALE);
+  const joinType = { miter: lib.JoinType.jtMiter, round: lib.JoinType.jtRound, bevel: lib.JoinType.jtSquare }[join];
+  const endType = { butt: lib.EndType.etOpenButt, round: lib.EndType.etOpenRound, square: lib.EndType.etOpenSquare }[cap];
+  for (const contour of flattenPath(path, tolerance / 4)) {
+    if (contour.closed && contour.points.length >= 3) engine.AddPath(ints(contour.points), joinType, lib.EndType.etClosedLine);
+    else if (contour.points.length >= 2) engine.AddPath(ints(contour.points), joinType, endType);
+  }
+  const result = new lib.Paths(); engine.Execute(result, width / 2 * SCALE);
+  return executeUnion(lib, result, lib.PolyFillType.pftNonZero).filter((ring) => ring.length >= 3)
+    .map((ring) => ({ closed: true, segments: ring.map(({ X, Y }) => ({ p: [X / SCALE, Y / SCALE], in: [0, 0], out: [0, 0] })) }));
+}
 export async function runGeometry(method, params) {
   if (method === 'offset') return offsetPaths(params.paths, { distance: params.distance, join: params.join, miterLimit: params.miterLimit });
+  if (method === 'outline-stroke') return outlineStroke(params.path, params);
   if (method === 'flatten') return flattenPath(params.path, params.tolerance);
   if (method === 'boolean' && params.op === 'unite') return unite(params.paths, params.options);
   throw new GeometryError(`Geometry operation not implemented: ${method}${method === 'boolean' ? `:${params.op}` : ''}`, 'NOT_IMPLEMENTED');

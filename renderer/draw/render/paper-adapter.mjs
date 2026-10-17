@@ -446,6 +446,16 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     result.remove();
     return subpaths;
   }
+  /** Subpaths mapped by `matrix` and cut at `rect` (world space): filled art keeps the overlap, strokes the parts inside. */
+  function clipToRect(subpaths, matrix, rect, filled) {
+    const item = make({ type: 'path', subpaths, fillRule: 'nonzero', transform: [1, 0, 0, 1, 0, 0] }); item.transform(new scope.Matrix(...matrix));
+    item.fillColor = filled ? '#000' : null;
+    const region = new scope.Path.Rectangle({ rectangle: [rect.x, rect.y, rect.width, rect.height], insert: false });
+    const result = clipTo(item, region); item.remove(); region.remove();
+    const out = (result.children ?? [result]).filter(p => p.segments?.length).map(p => ({ closed: p.closed,
+      segments: p.segments.map(s => ({ p: [s.point.x, s.point.y], in: [s.handleIn.x, s.handleIn.y], out: [s.handleOut.x, s.handleOut.y] })) }));
+    result.remove(); return out;
+  }
   function exportArtwork({ resolveClips = false } = {}) {
     const wasOutline = outline; if (wasOutline) setOutline(false);
     try {
@@ -584,7 +594,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     } catch { url = null; } finally { clone.remove(); }
     thumbnails.set(id, { key, url }); return url;
   }
-  return { render, select: updateView, updateView, bounds, selectionBounds, hit, items, setOutline, thumbnail, exportArtwork, clippedSubpaths, booleanOperand, selectionHandle:point=>selection.hit(point),
+  return { render, select: updateView, updateView, bounds, selectionBounds, hit, items, setOutline, thumbnail, exportArtwork, clippedSubpaths, clipToRect, booleanOperand, selectionHandle:point=>selection.hit(point),
     glyphBounds(id,subpaths) {const item=new scope.CompoundPath({insert:false,children:subpaths.map(path)});try{return item.getBounds(records.get(id).worldMatrix).clone();}finally{item.remove();}},
     previewText(node, parentId = null) {
       textPreview?.remove(); textPreview = null;textPreviewFrame?.remove();textPreviewFrame=null;

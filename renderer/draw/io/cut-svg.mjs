@@ -37,36 +37,68 @@ export function pathData(subpaths, m) {
 }
 
 /**
- * @param geometry { worldMatrix(id), bounds(id) -> {x,y,width,height}, subpaths(id) -> local PathData for paths and shapes }
+ * @param geometry { worldMatrix(id), bounds(id) -> {x,y,width,height}, subpaths(id) -> local PathData for paths and shapes,
+ *   clip(subpaths, world, rect, filled) -> world PathData cut at `rect` (optional, for clipToBoard) }
+ * @param options `outlines`: Map of node id -> outlined stroke PathData in the node's space (Outline Stroke).
  * @returns {{ svg, count, warnings: string[], skipped: { images, outside, empty } }}
  */
-export function artboardCutSvg(doc, boardId, geometry, { only = null } = {}) {
+export function artboardCutSvg(doc, boardId, geometry, { only = null, clipToBoard = false, outlines = null, dedupe = false } = {}) {
   const board = doc.getArtboard(boardId);
   if (!board) throw new Error('Choose an artboard to send.');
   // `only`: copied objects and their descendants, sent whole wherever they are, for pasting in Cut.
   const picked = (id) => !only || only.has(id) || doc.ancestors(id).some((a) => only.has(a.id));
   const onBoard = (box) => !!box && (!!only || intersects(box, board));
   const toBoard = [1, 0, 0, 1, -board.x, -board.y], elements = [], skipped = { images: 0, outside: 0, empty: 0 };
-  let partly = 0, stacked = 0, openFilled = 0, textCount = 0;
-  const errors=[];
+  let partly = 0, clipped = 0, stacked = 0, openFilled = 0, textCount = 0, tiny = 0, duplicates = 0, nodes = 0;
+  const errors=[], seen = new Set();
+  // Segments shorter than this make the laser stall and burn; Clean Up or Simplify removes them. Glyphs are exempt.
+  const TINY = .05;
+  function countTiny(subpaths, m, text) {
+    for (const sub of subpaths) {
+      const points = sub.segments.map((seg) => apply(m, seg.p)), n = points.length;
+      nodes += n;
+      if (!text) for (let i = 0; i < (sub.closed ? n : n - 1); i++) { const a = points[i], b = points[(i + 1) % n]; if (n > 1 && Math.hypot(a[0] - b[0], a[1] - b[1]) < TINY) tiny++; }
+    }
+  }
+  /** One <path>; with `cut`, the geometry is first cut at the artboard edge. Returns the next insertion index. */
+  function push(node, subpaths, { fill, stroke, width, rule }, at, cut) {
+    const world = geometry.worldMatrix(node.id), m = multiply(toBoard, world);
+    let d;
+    if (cut) {
+      const parts = geometry.clip(subpaths, world, board, !!fill);
+      if (!parts?.length) { skipped.empty++; return at; }
+      d = pathData(parts, toBoard); countTiny(parts, toBoard, node.type === 'text');
+    } else { d = pathData(subpaths, m); if (d) countTiny(subpaths, m, node.type === 'text'); }
+    if (!d) { skipped.empty++; return at; }
+    // Stroke widths are in local units unless the node stores world millimetres (strokeScaling: false).
+    const scale = node.strokeScaling === false ? 1 : Math.sqrt(Math.abs(m[0] * m[3] - m[1] * m[2]));
+    const attrs = [`d="${d}"`, `fill="${fill ?? 'none'}"`];
+    if (fill && rule === 'evenodd') attrs.push('fill-rule="evenodd"');
+    if (stroke) attrs.push(`stroke="${stroke}"`, `stroke-width="${fmt((width ?? 0) * scale)}"`);
+    else attrs.push('stroke="none"');
+    const element = `  <path ${attrs.join(' ')}/>`;
+    // The same path twice would be cut twice.
+    if (seen.has(element)) { duplicates++; if (dedupe) return at; }
+    seen.add(element); elements.splice(at, 0, element); return at + 1;
+  }
   function emit(node,subpaths,box,at=elements.length) {
     if (!onBoard(box)) { skipped.outside++; return; }
-    if (!only && !inside(box, board)) partly++;
+    const outside = !only && !inside(box, board), cut = outside && clipToBoard && !!geometry.clip;
+    if (outside && !cut) partly++; if (cut) clipped++;
     const fills = shown(node.appearance?.fills), strokes = shown(node.appearance?.strokes);
     if (fills.length > 1 || strokes.length > 1) stacked++;
     // A gradient is one laser layer: its first stop's colour.
     const fill = paintHex(fills[0]) ?? gradientHex(fills[0]?.paint), stroke = paintHex(strokes[0]) ?? gradientHex(strokes[0]?.paint);
     if (!fill && !stroke) { skipped.empty++; return; }
     if (fill && subpaths.some((p) => !p.closed)) openFilled++;
-    const m = multiply(toBoard, geometry.worldMatrix(node.id)), d = pathData(subpaths, m);
-    if (!d) { skipped.empty++; return; }
-    // Stroke widths are in local units unless the node stores world millimetres (strokeScaling: false).
-    const scale = node.strokeScaling === false ? 1 : Math.sqrt(Math.abs(m[0] * m[3] - m[1] * m[2]));
-    const attrs = [`d="${d}"`, `fill="${fill ?? 'none'}"`];
-    if (fill && node.fillRule === 'evenodd') attrs.push('fill-rule="evenodd"');
-    if (stroke) attrs.push(`stroke="${stroke}"`, `stroke-width="${fmt((strokes[0].width ?? 0) * scale)}"`);
-    else attrs.push('stroke="none"');
-    elements.splice(at, 0, `  <path ${attrs.join(' ')}/>`);
+    // Outline Stroke: the stroke is sent as the filled area it paints, above the fill.
+    const outline = stroke && outlines?.get(node.id);
+    if (outline) {
+      if (fill) at = push(node, subpaths, { fill, rule: node.fillRule }, at, cut);
+      if (outline.length) push(node, outline, { fill: stroke, rule: 'nonzero' }, at, cut);
+      return;
+    }
+    push(node, subpaths, { fill, stroke, width: strokes[0]?.width, rule: node.fillRule }, at, cut);
   }
   // A clipping path that keeps its paint (Draw Inside) is filled under the clipped objects and stroked above them.
   const clipStart = new Map();
@@ -92,9 +124,12 @@ export function artboardCutSvg(doc, boardId, geometry, { only = null } = {}) {
   const warnings = [];
   if (skipped.images) warnings.push(`${skipped.images} image${skipped.images === 1 ? ' is' : 's are'} not sent yet (Send to Cut v2).`);
   if (partly) warnings.push(`${partly} object${partly === 1 ? ' extends' : 's extend'} past the artboard and ${partly === 1 ? 'is' : 'are'} sent whole.`);
+  if (clipped) warnings.push(`${clipped} object${clipped === 1 ? ' is' : 's are'} cut at the artboard edge.`);
+  if (tiny) warnings.push(`${tiny} segment${tiny === 1 ? ' is' : 's are'} shorter than 0.05 mm. Object > Path > Clean Up or Simplify can remove them.`);
+  if (duplicates) warnings.push(dedupe ? `${duplicates} duplicate path${duplicates === 1 ? ' is' : 's are'} left out so nothing is cut twice.` : `${duplicates} path${duplicates === 1 ? ' is' : 's are'} exactly on top of another and will be cut twice.`);
   if (stacked) warnings.push(`${stacked} object${stacked === 1 ? ' has' : 's have'} several fills or strokes; only the first of each is sent.`);
   if (openFilled) warnings.push(`${openFilled} open path${openFilled === 1 ? ' has' : 's have'} a fill; Cut follows the open line.`);
   const W = fmt(board.width), H = fmt(board.height);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}mm" height="${H}mm" viewBox="0 0 ${W} ${H}">\n${elements.join('\n')}\n</svg>\n`;
-  return { svg, count: elements.length, warnings, skipped, errors:[...new Set(errors)], textCount };
+  return { svg, count: elements.length, warnings, skipped, errors:[...new Set(errors)], textCount, nodes, duplicates, tiny };
 }

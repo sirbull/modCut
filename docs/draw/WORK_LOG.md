@@ -1334,3 +1334,23 @@ Verifisering: 228 Draw-enhetstester (4 nye i `draw-mode.test.mjs`), ny E2E `draw
 (`--draw-modes`) som sjekker piksler på lerretet (klipping, fyll og strek) og Send to Cut.
 
 Neste: D2.10 Send til Cut v2.
+
+## 2026-10-17: D2.10 del A, Outline Stroke, kutt ved artboard og validering
+
+- `geom/kernel-js.mjs`: `outlineStroke` (ClipperOffset med etClosedLine for lukkede baner og butt,
+  round eller square for åpne). Unionen gir hull med motsatt retning, så nonzero-fyll blir riktig.
+- `index.mjs`: kommandoen `outline-stroke` (Object > Path > Outline Stroke) og `strokeOutlines` for
+  Send to Cut, som omrisser den samme (eventuelt klippede) geometrien som ellers sendes.
+- `io/cut-svg.mjs`: `push` lager ett element; valgene `clipToBoard` (via `geometry.clip`), `outlines`
+  og `dedupe`; tellerne `nodes`, `tiny` og `duplicates`.
+- `ui/dialogs.mjs`: Strokes, Past the artboard og Leave out duplicate paths; sammendraget oppdateres ved hvert valg.
+- Direkte sending til tom Cut krever nå null advarsler.
+
+Verifisering: 233 Draw-enhetstester (`outline-stroke.test.mjs`, `cut-svg-options.test.mjs`), ny E2E
+`draw-cut-two-workflows.mjs` (`--draw-cut-two`).
+
+Hele Draw-E2E for Draw-modusene (16fe909) stoppet på Clean Up-varselet i `draw-path-commands-workflows.mjs`:
+toasten lever 4 s, og i en full kjøring kom pollingen for sent. Testen registrerer nå toasts med en
+MutationObserver før handlingen. Suiten passerte alene både før og etter endringen.
+
+Neste: D2.10 del B, `cutLinks` og Oppdater i Cut.

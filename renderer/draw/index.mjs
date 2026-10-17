@@ -36,7 +36,7 @@ import { EXPORT_FORMATS, rasterSize, svgDocument } from './io/export.mjs';
 import { createExportController } from './export-controller.mjs';
 import { layerOptionsPatch, templateLayerCommands, isOutputNode } from './doc/layers.mjs';
 import { compoundCommands, releaseCompoundCommands, clipCommands, releaseClipCommands } from './doc/compound.mjs';
-import { offsetPaths, flattenPath } from './geom/kernel-js.mjs';
+import { offsetPaths, flattenPath, outlineStroke } from './geom/kernel-js.mjs';
 import { cutSubpath } from './geom/path-commands.mjs';
 import { addAnchorPoints, removeAnchorPoints, reverseSubpaths, averagePoints, joinSubpaths, closeSubpath, cleanUpTargets, mapSubpath } from './geom/path-commands.mjs';
 import { toolCursor } from './tools/cursors.mjs';
@@ -50,7 +50,7 @@ export function getDrawWorkspace(root) {return workspaces.get(root) || null;}
 const implementedTools=new Set(['select','group-selection','pencil','hand','zoom','artboard','gradient','eyedropper','measure','scissors','type','area-type','type-on-path',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
 const commands=new Set(['undo','redo','delete','select-all','select-artboard','deselect','cancel','fit-artboard','fit-all','actual-size','zoom-in','zoom-out','outline',
   'cut','copy','paste','paste-front','paste-back','paste-place','paste-all-artboards',
-  'edit-text','create-outlines','join','average','offset-path','simplify','reverse-path','add-anchors','remove-anchors','clean-up','compound-make','compound-release','clip-make','clip-release','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
+  'edit-text','create-outlines','join','average','offset-path','outline-stroke','simplify','reverse-path','add-anchors','remove-anchors','clean-up','compound-make','compound-release','clip-make','clip-release','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
   'paint-focus','paint-swap','paint-none','paint-solid','paint-gradient','default-paint','smart-guides','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','shear-dialog','toggle-panels','toggle-panels-except-tools','command-search','draw-mode','draw-normal','draw-behind','draw-inside',
   ...PANEL_DEFINITIONS.map(p=>`panel.${p.id}`),...['left','right','up','down'].flatMap(d=>[`nudge-${d}`,`nudge-large-${d}`,`duplicate-${d}`])]);
 export function createDrawWorkspace(root,{paper=window.paper,state=createProjectDraw(),onError=console.warn,onNotice=()=>{},onImport=()=>{},onSendToCut=null,cutIsEmpty=()=>false,cutClipboard=()=>null,onExport=null,getPreferences=()=>({}),statusHost=null}={}) {
@@ -190,6 +190,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       worldMatrix,
       // Clipping masks are cut into the geometry, so the laser follows what is visible.
       subpaths(id){const node=state.document.getNode(id);return renderer.clippedSubpaths(id,worldMatrix(id))??(node.type==='shape'?renderer.expandedShape(id)?.subpaths:node.subpaths);},
+      clip:(subpaths,world,rect,filled)=>renderer.clipToRect(subpaths,world,rect,filled),
       resolvedText:id=>resolved.get(id),glyphBounds:(id,paths)=>renderer.glyphBounds(id,paths),
     },options));
   }
@@ -236,6 +237,19 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     return exporter.exportScreens();
   }
   let cutBusy=false;
+  /** Outline Stroke for Send to Cut: each stroked path or shape's stroke area, in the same space as its cut geometry. */
+  async function strokeOutlines(boardId) {
+    const outlines=new Map(),board=state.document.getArtboard(boardId);
+    for(const node of state.document.descendants(null)){
+      if(!['path','shape'].includes(node.type)||!isOutputNode(state.document,node.id))continue;
+      const stroke=(node.appearance?.strokes??[]).find(e=>!e.hidden);if(!stroke||!(stroke.width>0))continue;
+      const box=renderer.bounds(node.id);if(!box||box.x>board.x+board.width||box.y>board.y+board.height||box.x+box.width<board.x||box.y+box.height<board.y)continue;
+      const subpaths=withScope(()=>renderer.clippedSubpaths(node.id,worldMatrix(node.id))??(node.type==='shape'?renderer.expandedShape(node.id)?.subpaths:node.subpaths))??[];
+      const [a,b,c,d]=worldMatrix(node.id),width=node.strokeScaling===false?stroke.width/Math.sqrt(Math.abs(a*d-b*c)||1):stroke.width;
+      outlines.set(node.id,await outlineStroke(subpaths,{width,join:stroke.join??'miter',cap:stroke.cap??'butt',miterLimit:stroke.miterLimit??4}));
+    }
+    return outlines;
+  }
   async function sendToCut(boardId=state.ui.artboardId) {
     if(cutBusy||textBusy||document.querySelector('.modal-overlay'))return;
     if(!onSendToCut)throw new Error('Send to Cut is not available here.');
@@ -249,14 +263,17 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     }
     if(destroyed)return;if(state.document.data!==before)throw new Error('The artwork changed while preparing text. Try sending again.');
     // An empty Cut with one artboard needs no questions: the artboard goes straight into this tab's Cut.
-    // The dialog still opens when something blocks the send, so it can explain why.
+    // The dialog still opens when something blocks the send or needs a choice (warnings), so it can explain why.
     const boards=state.document.data.artboards,empty=cutIsEmpty();
-    const direct=empty&&boards.length===1&&(()=>{try{const s=cutSvg(boards[0].id,resolved);return s.count>0&&!s.errors.length;}catch{return false;}})();
+    const direct=empty&&boards.length===1&&(()=>{try{const s=cutSvg(boards[0].id,resolved);return s.count>0&&!s.errors.length&&!s.warnings.length;}catch{return false;}})();
     const options=direct?{boardId:boards[0].id,target:'add',placement:'origin'}
-      :await sendToCutDialog({boards,boardId,summary:id=>cutSvg(id,resolved),cutEmpty:empty});
+      :await sendToCutDialog({boards,boardId,summary:(id,o={})=>cutSvg(id,resolved,{clipToBoard:o.outside==='clip',dedupe:o.dedupe!==false}),cutEmpty:empty});
     if(!options||destroyed)return;
     if(state.document.data!==before)throw new Error('The artwork changed while preparing the cut. Try sending again.');
-    const board=state.document.getArtboard(options.boardId),{svg,count,warnings,errors}=cutSvg(board.id,resolved);
+    const board=state.document.getArtboard(options.boardId),cutOptions={clipToBoard:options.outside==='clip',dedupe:options.dedupe!==false};
+    if(options.strokes==='outline')cutOptions.outlines=await strokeOutlines(board.id);
+    if(destroyed)return;if(state.document.data!==before)throw new Error('The artwork changed while preparing the cut. Try sending again.');
+    const {svg,count,warnings,errors}=cutSvg(board.id,resolved,cutOptions);
     if(errors.length)throw new Error(errors.join(' '));
     if(!count)throw new Error('Nothing on this artboard can be sent to Cut.');
     await onSendToCut({svg,count,warnings,name:board.name,width:board.width,height:board.height,target:options.target,placement:options.placement});
@@ -625,6 +642,25 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       if(!made.length)throw new Error('The offset leaves nothing. Use a smaller negative offset.');
       // The offset path goes directly above its source, which stays, as in Illustrator.
       run(()=>{apply('Offset Path',[...made].reverse().map(({id,node})=>{const {parentId,index}=doc.locate(id);return insertNode(parentId,node,index+1);}));select(made.map(m=>m.node.id));});
+    };
+    if(command==='outline-stroke')return async()=>{
+      const visible=list=>(list??[]).filter(e=>!e.hidden),ids=editable().filter(id=>visible(doc.getNode(id).appearance?.strokes).some(e=>e.width>0));
+      if(!ids.length)throw new Error('Select paths or shapes with a stroke.');
+      const made=[];
+      for(const id of ids){
+        const node=base(id),stroke=visible(node.appearance.strokes)[0],[a,b,c,d]=parentWorld(id);
+        // A stroke that does not scale is in world millimetres; the outline is built in the parent's space.
+        const width=node.strokeScaling===false?stroke.width/Math.sqrt(Math.abs(a*d-b*c)||1):stroke.width;
+        const subpaths=await outlineStroke(node.subpaths,{width,join:stroke.join??'miter',cap:stroke.cap??'butt',miterLimit:stroke.miterLimit??4});
+        if(destroyed)return;if(!subpaths.length)continue;
+        const look=appearance('#000000',null);look.fills[0]={...look.fills[0],paint:structuredClone(stroke.paint),opacity:stroke.opacity??1,blendMode:stroke.blendMode??'normal'};
+        const outline=createNode('path',{name:'',subpaths,fillRule:'nonzero',appearance:look,opacity:node.opacity,blendMode:node.blendMode});
+        // A filled object becomes a group of its fill and the outlined stroke, as in Illustrator.
+        const filled=visible(node.appearance.fills).length?{...node,appearance:{...structuredClone(node.appearance),strokes:[]}}:null;
+        made.push({id,node:filled?createNode('group',{name:'',children:[filled,outline]}):outline});
+      }
+      if(!made.length)throw new Error('The strokes leave no outline.');
+      run(()=>{apply('Outline Stroke',made.flatMap(({id,node})=>{const {parentId,index}=doc.locate(id);return [removeNode(id),insertNode(parentId,node,index)];}));select(made.map(m=>m.node.id));});
     };
     if(command==='simplify')return async()=>{
       const ids=editable();if(!ids.length)throw new Error('Select paths or shapes to simplify.');

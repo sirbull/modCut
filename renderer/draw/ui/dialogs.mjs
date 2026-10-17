@@ -371,20 +371,25 @@ export function sendToCutDialog({boards,boardId,summary,cutEmpty=false}) {
     {key:'boardId',label:'Artboard',type:'select',value:boardId,options:boards.map((b,i)=>({value:b.id,label:escapeHtml(`${i+1}. ${b.name}`)}))},
     ...target,
     {key:'placement',label:'Placement',type:'select',value:'origin',options:[{value:'origin',label:'Artboard top left at the bed origin'},{value:'center',label:'Centered on the bed'}]},
+    {key:'strokes',label:'Strokes',type:'select',value:'centerline',options:[{value:'centerline',label:'Centerline (cut and score)'},{value:'outline',label:'Outline Stroke (engrave the stroke area)'}]},
+    {key:'outside',label:'Past the artboard',type:'select',value:'whole',options:[{value:'whole',label:'Send objects whole'},{value:'clip',label:'Cut at the artboard edge'}]},
+    {key:'dedupe',label:'Leave out duplicate paths',type:'checkbox',value:true},
   ]});
   const modal=document.querySelector('.draw-send-dialog'),form=modal.querySelector('form'),submit=form.querySelector('[type=submit]');
   const info=document.createElement('div');info.className='draw-send-dialog__summary';info.setAttribute('role','status');info.dataset.drawSendSummary='';
   form.querySelector('.modal-actions').before(info);
   const update=()=>{
-      let s;try{s=summary(form.elements.boardId.value);}catch(error){s={count:0,warnings:[],errors:[error.message]};}
+      const options={outside:form.elements.outside.value,dedupe:form.elements.dedupe.checked};
+      let s;try{s=summary(form.elements.boardId.value,options);}catch(error){s={count:0,warnings:[],errors:[error.message]};}
     info.replaceChildren();const p=document.createElement('p');info.append(p);
-      p.textContent=s.count?`${s.count} path${s.count===1?'':'s'} will be sent as centerline geometry. Colors become Cut layers.`:'Nothing on this artboard can be sent.';
+      const outline=form.elements.strokes.value==='outline';
+      p.textContent=s.count?`${s.count} path${s.count===1?'':'s'}${s.nodes?` (${s.nodes} node${s.nodes===1?'':'s'})`:''} will be sent${outline?'; strokes as filled outlines':' as centerline geometry'}. Colors become Cut layers.`:'Nothing on this artboard can be sent.';
       if(s.textCount){const note=document.createElement('p');note.textContent=`${s.textCount} text object${s.textCount===1?'':'s'} will be sent as outlines automatically. Text stays editable in Draw.`;info.append(note);}
       if(s.errors?.length){const p=document.createElement('p');p.setAttribute('role','alert');p.textContent=s.errors.join(' ');info.append(p);}
     if(s.warnings.length){const list=document.createElement('ul');for(const w of s.warnings){const li=document.createElement('li');li.textContent=w;list.append(li);}info.append(list);}
       submit.disabled=!s.count||!!s.errors?.length;
   };
-  form.elements.boardId.addEventListener('change',update);update();
+  for(const key of ['boardId','strokes','outside','dedupe'])form.elements[key].addEventListener('change',update);update();
   return result.then(values=>values&&{target:'add',...values});
 }
 /** Place options shown after choosing images, like the Template checkbox in Illustrator's Place dialog. */

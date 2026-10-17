@@ -48,7 +48,7 @@ export async function runDrawCutWorkflows(client) {
   await evaluate("document.querySelector('#sendToCut').click()");
   await until("!!document.querySelector('.draw-send-dialog form')", 'Send to Cut dialog');
   const summary = await evaluate("document.querySelector('[data-draw-send-summary]').textContent");
-  assert.match(summary, /^2 paths will be sent/, summary);
+  assert.match(summary, /^2 paths \(8 nodes\) will be sent as centerline geometry/, summary);
   assert.equal(await evaluate("document.querySelector('.draw-send-dialog form').elements.target.value"), 'new-tab', 'A new Cut tab is the default target');
   await evaluate("document.querySelector('.draw-send-dialog form').requestSubmit()");
   await until("document.body.dataset.workspace==='cut'", 'switch to Cut');
