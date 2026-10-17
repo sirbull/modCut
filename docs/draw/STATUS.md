@@ -434,6 +434,28 @@ Del C (2026-10-17):
 Gjenstår i D2.10: objekter utenfor bedet (krever bedmål fra Cut i dialogen), og å finne igjen en sending
 i en annen fane etter at prosjektet er lukket og åpnet (fane-id-er er per økt).
 
+### 2.19 SVG-import til Draw-modellen (D2.5, 2026-10-17)
+
+* Før ble en SVG med tekst, bilder, klipping eller gradienter importert som ett rasterbilde. Nå blir
+  innholdet redigerbare Draw-objekter:
+  * **Gradienter** (lineære og radiale, også `objectBoundingBox`) blir Draw-gradienter med stopp,
+    stoppopasitet og vektor.
+  * **`clip-path`** blir en klippegruppe med en umalt klippebane øverst (flere baner i klippebanen slås
+    sammen til én bane).
+  * **Innebygde bilder** (`data:`) blir bildenoder med PNG-asset, plassert, skalert og rotert som i filen.
+    `preserveAspectRatio` tas ikke hensyn til (bildet fyller rammen).
+  * **Tekst** blir punkttekst ved grunnlinjen, med familie, størrelse i punkt, vekt, kursiv, farge og
+    `text-anchor` som justering. Draw former teksten med installert font når den redigeres eller sendes.
+    `tspan`-oppsett med egne posisjoner slås sammen til én linje.
+* Bare `mask` og `filter` gir fortsatt rasterbilde (med beskjed). Bilder som lenker til filer utenfor SVG-en
+  fjernes som før.
+* Kode: `prepareVector` og `convert` i `import-artwork.mjs`.
+
+**WebP-eksport (D2.7, 2026-10-17):** Export As har WebP med oppløsning, bakgrunn (gjennomsiktig, hvit
+eller artboardfarge) og kvalitet 0 til 10, og Export for Screens har en WebP-rad (kvalitet 8, gjennomsiktig).
+Kode: `webp` i `EXPORT_FORMATS` (`io/export.mjs`), `EXPORT_TARGETS` (`io/export-plan.mjs`) og
+`EXPORT_FILE_TYPES` (`electron/export-files.mjs`).
+
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
 | Oppgave | Status |
@@ -448,9 +470,9 @@ i en annen fane etter at prosjektet er lukket og åpnet (fane-id-er er per økt)
 | D2.2 Pathfinder, Compound, Clipping | Pathfinder, compound paths, klippemasker (2.12) og Draw Normal/Behind/Inside (2.17) ferdig; lagklipping gjenstår |
 | D2.3 Gradienter og Swatches | Swatches (solide) og gradienter ferdig (2.14); globale swatches, gradientswatches og PDF-shading gjenstår |
 | D2.4 Path-kommandoer | Ferdig (2.13): Join, Average, Reverse, Add/Remove Anchor Points, Clean Up, Offset Path, Simplify; Smooth og Split Into Grid gjenstår |
-| D2.5 SVG eksport/import | SVG-eksport ferdig (se 2.5); SVG-import finnes i enkel form |
+| D2.5 SVG eksport/import | Ferdig: eksport (2.5) og import med gradienter, klipping, bilder og tekst (2.19); mask og filter rasteriseres |
 | D2.6 PDF-eksport | Ferdig (Codex): Save PDF-dialog med forhåndsinnstillinger, lag, merker, bevar redigering; også EPS og DXF. Se WORK_LOG «Eksport del 1 og 2» |
-| D2.7 Raster-eksport | PNG og JPEG (2.5) og Export for Screens med skala og suffiks (WORK_LOG «Eksport del 3») ferdig; WebP gjenstår |
+| D2.7 Raster-eksport | Ferdig: PNG og JPEG (2.5), Export for Screens (WORK_LOG «Eksport del 3») og WebP (2.19) |
 | D2.8 Pencil, Shear, Eyedropper m.fl. | Ferdig (2.15): Eyedropper, Measure, Group Selection, Scissors, Pencil, Shear, Arc |
 | D2.9 Transparency, History, Info, kommandosøk | Ferdig (2.16); snapshots i History gjenstår |
 | D2.10 Send til Cut v2 | Ferdig (2.9 og 2.18): tekst til outlines, Outline Stroke, kutt ved artboard, validering, Update in Cut, bilder og alle artboards; varsel om objekter utenfor bedet gjenstår |
@@ -471,8 +493,8 @@ SVG-, PNG- og JPEG-eksport er gjort (2.5).
    kommandosøk (2.16) er gjort.
 3. Draw Normal, Behind og Inside (2.17) er gjort.
 4. D2.10 Send til Cut v2 (2.18) er gjort. Alle fase 2-oppgavene finnes nå i grunnform.
-5. **Neste: hullene i fase 2 som står åpne i sjekklisten: D2.5 full SVG-import til Draw-modellen,
-   D2.7 WebP, D2.3 globale swatches og gradientswatches, deretter resten av D2.1 (se 2.11).**
+5. Hullene i fase 2: D2.5 SVG-import og D2.7 WebP (2.19) er gjort. **Neste: D2.3 globale swatches og
+   gradientswatches, deretter resten av D2.1 (se 2.11).**
 6. Så fase 3: D3.1 Expand Appearance, D3.2 effekter, D3.5 Lasso og Select-meny, D3.4 Shape Builder,
    Eraser og Knife, D3.6 Free Transform og Split Into Grid.
 

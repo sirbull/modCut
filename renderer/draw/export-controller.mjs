@@ -140,7 +140,7 @@ export function createExportController({ state, scope, renderer, withScope, expo
     for (const index of choice.indices) for (const row of choice.rows) {
       const board = boards[index], path = `${choice.folder}/${screensFilePath({ board, index, prefix: choice.prefix, suffix: row.suffix, scale: row.scale, format: row.target, subfolders: choice.subfolders })}`;
       const options = row.target === 'pdf' ? pdf : row.target === 'dxf' ? { tolerance: 0.01 }
-        : { ppi: scalePpi(row.scale), background: row.target === 'png' ? 'transparent' : 'white', quality: row.quality ?? 8 };
+        : { ppi: scalePpi(row.scale), background: ['png', 'webp'].includes(row.target) ? 'transparent' : 'white', quality: row.quality ?? 8 };
       const result = await build(row.target, path, [index], options);
       files.push(...result.files); result.warnings.forEach((w) => warnings.add(w));
     }

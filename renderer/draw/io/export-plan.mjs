@@ -9,6 +9,7 @@ export const EXPORT_TARGETS = Object.freeze([
   { id: 'dxf', label: 'DXF (AutoCAD R12)', ext: 'dxf', vector: true },
   { id: 'png', label: 'PNG', ext: 'png', vector: false },
   { id: 'jpg', label: 'JPEG', ext: 'jpg', vector: false },
+  { id: 'webp', label: 'WebP', ext: 'webp', vector: false },
 ]);
 export const exportTarget = (id) => EXPORT_TARGETS.find((t) => t.id === id) ?? null;
 export const targetForPath = (path) => {

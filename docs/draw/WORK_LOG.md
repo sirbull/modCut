@@ -1387,7 +1387,29 @@ Neste: D2.10 del C, bilder som rastergravering og flere artboards i én sending.
 Verifisering: 235 Draw-enhetstester (2 nye i `cut-svg-options.test.mjs`); `--draw-cut-two` sender et
 bilde rotert 90° og to artboards i én sending.
 
-Hele Draw-E2E for del B (36b1a21): alle suiter til og med `--draw-cut-two` passerte; `Draw outlines` stoppet
-med CDP-feilen «Promise was collected». Den passerte alene etterpå.
+Hele Draw-E2E for del B (36b1a21) og del C (c20cda2): alle suiter til og med `--draw-cut-two` passerte;
+`Draw outlines` stoppet begge gangene med CDP-feilen «Promise was collected». Den passerer alene, og
+Cut v2 etterfulgt av outlines passerer også; årsaken følges opp med logging av uttrykket som feiler.
 
 Neste: D2.5 full SVG-import til Draw-modellen (se STATUS.md kapittel 4).
+
+## 2026-10-17: D2.5 SVG-import til Draw-modellen
+
+- `import-artwork.mjs`: `prepareVector` rasteriserer bare ved `mask` eller `filter`. Innebygde `<image>`
+  byttes med navngitte plassholder-rektangler før Paper-importen; `convert` gjør dem til bildenoder ut fra
+  rektangelets hjørner (Paper lager rektangler som nede-venstre, oppe-venstre, oppe-høyre, nede-høyre).
+- Gradientfarger fra Paper blir Draw-gradienter (`gradientPaint`), klippede grupper blir klippegrupper,
+  `PointText` blir punkttekst (`pointText`) med Paper-matrisen som transform.
+- Paper lar klippede primitiver være `Shape` og gir rot-SVG-en en klippemaske for visningsvinduet:
+  `Shape` gjøres om til bane (satt inn ved siden av formen mens den leses), og rotens maske ignoreres.
+- Bildene gjøres om til PNG-assets etter importen, når Paper er tilbake på sitt eget scope; siden
+  `createNode` kopierer barna, settes asset-id-en etter node-id i det ferdige treet.
+
+Verifisering: ny E2E `draw-svg-import-workflows.mjs` (`--draw-svg-import`).
+
+
+WebP (D2.7): `webp` i `EXPORT_FORMATS`, `EXPORT_TARGETS` og `EXPORT_FILE_TYPES`; Export As-dialogen gir
+WebP gjennomsiktig bakgrunn og kvalitet; Export for Screens har en WebP-rad. `draw-export-workflows.mjs`
+sjekker MIME-type, størrelse og gjennomsiktighet, og `export-plan.test.mjs` filendelsen.
+
+Neste: D2.3 globale swatches og gradientswatches.

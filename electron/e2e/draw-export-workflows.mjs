@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { wait } from './cdp.mjs';
 import { activeDraw as active, submitNewDrawDialog, rememberTabs, enterDraw } from './draw-test-helpers.mjs';
 
-/** D2.5 and D2.7: Export As writes one artboard as SVG (mm), PNG with transparency or JPEG. */
+/** D2.5 and D2.7: Export As writes one artboard as SVG (mm), PNG or WebP with transparency, or JPEG. */
 export async function runDrawExportWorkflows(client) {
   const { evaluate } = client;
   const until = async (expression, label) => { for (let i = 0; i < 100; i++) { if (await evaluate(expression)) return; await wait(50); } assert.fail(`Timed out: ${label}`); };
@@ -41,6 +41,10 @@ export async function runDrawExportWorkflows(client) {
   assert.ok(png.red[0] > 150 && png.red[3] > 100, `The red outline is drawn at full preview width: ${png.red}`);
   const jpg = await pixels('jpg');
   assert.equal(jpg.mime, 'image/jpeg'); assert.ok(jpg.empty.slice(0, 3).every(v => v > 245), `JPEG has a white background: ${jpg.empty}`);
+  // WebP keeps transparency like PNG, at the same size.
+  const webp = await pixels('webp');
+  assert.equal(webp.mime, 'image/webp'); assert.deepEqual([webp.width, webp.height], [340, 227]);
+  assert.equal(webp.empty[3], 0, 'WebP keeps empty areas transparent'); assert.ok(webp.blue[2] > 180, `WebP keeps the blue: ${webp.blue}`);
   assert.equal(await evaluate(`(async()=>(${active}.renderer.outline))()`), true, 'Export leaves Outline view as it was');
 
   // Export lives in File > Export; the panels no longer offer it.
@@ -130,5 +134,5 @@ export async function runDrawExportWorkflows(client) {
   assert.deepEqual(Object.fromEntries(sizes), { 'app-Artboard 1.png': 340, 'app-Artboard 1@2x.png': 680 });
   await evaluate(`(async()=>{${active}.handle('outline')})()`);
   await restoreTabs();
-  console.log('PASS Draw export: SVG in millimetres without templates, preview from Outline view, PNG transparency and size, JPEG on white, Export As via File > Export with PDF (Save PDF presets, editable reopen), DXF and PNG; Export for Screens with thumbnails, scale rows, sub-folders and prefix');
+  console.log('PASS Draw export: SVG in millimetres without templates, preview from Outline view, PNG transparency and size, JPEG on white, WebP with transparency, Export As via File > Export with PDF (Save PDF presets, editable reopen), DXF and PNG; Export for Screens with thumbnails, scale rows, sub-folders and prefix');
 }

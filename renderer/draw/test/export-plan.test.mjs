@@ -17,6 +17,7 @@ test('several artboards are written beside the chosen file with their names', ()
   assert.equal(artboardFilePath('/out/v1.2/Logo', { name: 'a/b' }, 1), '/out/v1.2/Logo-a b');
   assert.equal(artboardFilePath('/out/Logo.svg', { name: '' }, 2), '/out/Logo-Artboard 3.svg');
   assert.equal(targetForPath('x.JPEG').id, 'jpg'); assert.equal(targetForPath('x.dxf').id, 'dxf'); assert.equal(targetForPath('x.ai'), null);
+  assert.equal(targetForPath('x.webp').id, 'webp');
 });
 
 test('screen scales and file paths follow Export for Screens', () => {

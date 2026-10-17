@@ -197,7 +197,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   /** One artboard as an SVG document (text) or a PNG/JPEG data URL, drawn from the printable artwork. */
   function exportBoard(boardId,format,{ppi=150,background='transparent',quality=.92}={}) {
     const board=state.document.getArtboard(boardId);if(!board)throw new Error('Choose an artboard to export.');
-    if(!EXPORT_FORMATS[format])throw new Error('Choose SVG, PNG or JPEG.');
+    if(!EXPORT_FORMATS[format])throw new Error('Choose SVG, PNG, JPEG or WebP.');
     const fill=background==='white'?'#FFFFFF':background==='artboard'?board.background??'#FFFFFF':format==='jpg'?'#FFFFFF':null;
     return withScope(()=>{
       const art=renderer.exportArtwork();

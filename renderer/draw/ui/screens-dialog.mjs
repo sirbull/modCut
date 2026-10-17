@@ -5,10 +5,10 @@
 import { frame, make, option, control, checkbox } from './export-dialogs.mjs';
 import { parseRange, scalePpi, screensFilePath, SCREEN_SCALES } from '../io/export-plan.mjs';
 
-/** Formats per row; JPEG rows carry their quality as in Illustrator. */
+/** Formats per row; JPEG and WebP rows carry their quality. */
 export const SCREEN_FORMATS = Object.freeze([
   { id: 'png', label: 'PNG', format: 'png' }, { id: 'jpg100', label: 'JPG 100', format: 'jpg', quality: 10 }, { id: 'jpg80', label: 'JPG 80', format: 'jpg', quality: 8 },
-  { id: 'jpg50', label: 'JPG 50', format: 'jpg', quality: 5 }, { id: 'svg', label: 'SVG', format: 'svg' }, { id: 'pdf', label: 'PDF', format: 'pdf' }, { id: 'dxf', label: 'DXF', format: 'dxf' },
+  { id: 'jpg50', label: 'JPG 50', format: 'jpg', quality: 5 }, { id: 'webp', label: 'WebP', format: 'webp', quality: 8 }, { id: 'svg', label: 'SVG', format: 'svg' }, { id: 'pdf', label: 'PDF', format: 'pdf' }, { id: 'dxf', label: 'DXF', format: 'dxf' },
 ]);
 const VECTOR = new Set(['svg', 'pdf', 'dxf']);
 const SCREENS_KEY = 'modcut.draw.exportScreens';

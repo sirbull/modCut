@@ -1,11 +1,12 @@
 /**
- * Export helpers (D2.5 SVG, D2.7 PNG/JPG). Pure: the renderer builds the artwork, these functions
+ * Export helpers (D2.5 SVG, D2.7 PNG/JPG/WebP). Pure: the renderer builds the artwork, these functions
  * name files, size raster output and turn Paper's SVG into a millimetre document for one artboard.
  */
 export const EXPORT_FORMATS = Object.freeze({
   svg: { label: 'SVG', mime: 'image/svg+xml' },
   png: { label: 'PNG', mime: 'image/png' },
   jpg: { label: 'JPEG', mime: 'image/jpeg' },
+  webp: { label: 'WebP', mime: 'image/webp' },
 });
 export const EXPORT_RESOLUTIONS = Object.freeze([72, 150, 300, 600]);
 const MAX_PIXELS = 16384;

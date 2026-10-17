@@ -79,11 +79,12 @@ export function exportOptionsDialog({ format, boards, defaults = {} }) {
   const target = exportTarget(format), ui = frame({ title: `${target.label} Options`, className: 'draw-export-options', submitLabel: 'Export' });
   const readRange = rangeControls(ui.body, boards, defaults);
   const fields = {};
-  if (format === 'png' || format === 'jpg') {
+  if (format === 'png' || format === 'jpg' || format === 'webp') {
     fields.ppi = select(ui.body, 'Resolution', [...EXPORT_RESOLUTIONS.map((r) => [String(r), `${r} ppi${r === 72 ? ' (Screen)' : r === 150 ? ' (Medium)' : r === 300 ? ' (High)' : ''}`])], defaults.ppi ?? 150, 'ppi');
-    fields.background = select(ui.body, 'Background', [...(format === 'png' ? [['transparent', 'Transparent']] : []), ['white', 'White'], ['artboard', 'Artboard color']],
-      format === 'jpg' && (defaults.background ?? 'white') === 'transparent' ? 'white' : defaults.background ?? (format === 'png' ? 'transparent' : 'white'), 'background');
-    if (format === 'jpg') fields.quality = number(ui.body, 'Quality (0–10)', defaults.quality ?? 8, 'quality', { min: 0, max: 10, step: 1 });
+    // JPEG has no transparency; PNG and WebP keep it.
+    fields.background = select(ui.body, 'Background', [...(format !== 'jpg' ? [['transparent', 'Transparent']] : []), ['white', 'White'], ['artboard', 'Artboard color']],
+      format === 'jpg' && (defaults.background ?? 'white') === 'transparent' ? 'white' : defaults.background ?? (format !== 'jpg' ? 'transparent' : 'white'), 'background');
+    if (format === 'jpg' || format === 'webp') fields.quality = number(ui.body, 'Quality (0–10)', defaults.quality ?? 8, 'quality', { min: 0, max: 10, step: 1 });
   }
   if (format === 'svg' || format === 'svgz') fields.precision = select(ui.body, 'Decimal places', [1, 2, 3, 4, 5, 6, 7].map((n) => [String(n), String(n)]), defaults.precision ?? 4, 'precision');
   if (format === 'dxf') {

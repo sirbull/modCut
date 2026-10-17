@@ -1430,9 +1430,9 @@ Oversikt over hva som er gjort og gjenstår, inkludert delvis ferdige oppgaver: 
 * [x] D2.2 Pathfinder, Compound, Clipping (lagklipping gjenstår, se [STATUS.md](draw/STATUS.md))
 * [ ] D2.3 Gradienter og Swatches (gradienter ferdig; globale swatches og PDF-shading gjenstår, se [STATUS.md](draw/STATUS.md))
 * [x] D2.4 Path-kommandoer (Smooth og Split Into Grid gjenstår, se [STATUS.md](draw/STATUS.md))
-* [ ] D2.5 SVG eksport/import (eksport ferdig, se [STATUS.md](draw/STATUS.md))
+* [x] D2.5 SVG eksport/import (mask og filter rasteriseres fortsatt, se [STATUS.md](draw/STATUS.md))
 * [ ] D2.6 PDF-eksport
-* [ ] D2.7 Raster-eksport (PNG og JPEG ferdig; WebP, Export for Screens og skala gjenstår)
+* [x] D2.7 Raster-eksport (PNG, JPEG, WebP og Export for Screens, se [STATUS.md](draw/STATUS.md))
 * [x] D2.8 Pencil, Shear, Eyedropper m.fl.
 * [x] D2.9 Transparency, History, Info, kommandosøk (snapshots i History gjenstår, se [STATUS.md](draw/STATUS.md))
 * [x] D2.10 Send til Cut v2 (varsel om objekter utenfor bedet gjenstår, se [STATUS.md](draw/STATUS.md))
