@@ -42,6 +42,22 @@ test('layout uses kerning and the same glyph coordinates for left/center/right a
   await assert.rejects(service.shape({...v,text:String.fromCodePoint(0x10ffff)}),/every character/);
   await assert.rejects(service.shape({...v,fontPostscriptName:'MissingFace'}),/not installed/);
 });
+test('horizontal and vertical scale, baseline shift and kerning shape the glyphs and are validated',{skip:!latin},async()=>{
+  const v=values(latin,'AV'),plain=await service.shape(v),wide=await service.shape({...v,horizontalScale:200}),tall=await service.shape({...v,verticalScale:200});
+  assert.ok(Math.abs(wide.lineWidths[0]-plain.lineWidths[0]*2)<1e-9,'Horizontal scale doubles the advances');
+  const ys=l=>l.glyphs.flatMap(g=>g.subpaths.flatMap(s=>s.segments.map(x=>x.p[1]))),top=l=>Math.min(...ys(l));
+  assert.ok(Math.abs(top(tall)-2*top(plain))<1e-9,'Vertical scale doubles the height above the baseline');
+  assert.equal(tall.lineWidths[0],plain.lineWidths[0],'Vertical scale keeps the advances');
+  const shifted=await service.shape({...v,baselineShift:10});
+  assert.ok(Math.abs(top(plain)-top(shifted)-10*25.4/72)<1e-9,'Baseline shift raises the glyphs by the points given');
+  const unkerned=await service.shape({...v,kerning:'none'});
+  assert.ok(unkerned.lineWidths[0]>plain.lineWidths[0],'Without kerning AV is wider');
+  const node=pointText([0,0],{...v,horizontalScale:150,verticalScale:100,baselineShift:2,kerning:'none'});
+  assert.deepEqual([node.character.horizontalScale,node.character.verticalScale,node.character.baselineShift,node.character.kerning],[150,undefined,2,'none']);
+  node.layout=await service.shape({...v,horizontalScale:150,baselineShift:2,kerning:'none'});const data=createDocument();data.layers[0].children=[node];assert.deepEqual(validateDocument(data),[]);
+  node.character.kerning='optical';assert.ok(validateDocument(data).some(e=>e.path.endsWith('.kerning')));
+  assert.throws(()=>pointText([0,0],{...v,horizontalScale:0}),/Horizontal scale/);
+});
 const otf=faces.find(f=>f.format==='otf');
 test('area text wraps shaped words, fits lines vertically and preserves overset text',{skip:!latin},async()=>{
   const v={...values(latin,'AV fi Horten ÆØÅ Horten ÆØÅ'),kind:'area',frameWidth:28,frameHeight:100};

@@ -77,7 +77,10 @@ export function createFontService({directories=systemFontDirectories(),google}={
     if(Object.keys(settings).length)font=font.getVariation(settings);
     const scale=v.fontSize*PT_TO_MM/font.unitsPerEm,glyphs=[],lineWidths=[],area=v.kind==='area';
     // Tracking adds the same advance after every glyph; All Caps changes only the shaped text, never the content.
-    const track=(v.tracking??0)/1000*font.unitsPerEm,advance=p=>p.xAdvance+track,shapeText=text=>font.layout(v.allCaps?text.toLocaleUpperCase():text);
+    // Horizontal scale stretches glyphs and advances, vertical scale only glyphs; baseline shift raises the
+    // glyphs (pt); kerning 'none' turns the font's kern feature off.
+    const hs=(v.horizontalScale??100)/100,vs=(v.verticalScale??100)/100,rise=(v.baselineShift??0)*PT_TO_MM;
+    const track=(v.tracking??0)/1000*font.unitsPerEm,advance=p=>p.xAdvance*hs+track,shapeText=text=>font.layout(v.allCaps?text.toLocaleUpperCase():text,v.kerning==='none'?{kern:false}:undefined);
     const width=run=>run.positions.reduce((sum,p)=>sum+advance(p),0);
     const fontInfo={family:face.family,style:face.style,postscriptName:face.postscriptName,...(face.source==='google'?{source:'google',reference:face.reference}:{}),axes,instances};
     const outlines=glyph=>{
@@ -92,9 +95,9 @@ export function createFontService({directories=systemFontDirectories(),google}={
       const measure=measurePath(v.pathFlip?reverseSubpath(v.pathSubpath):v.pathSubpath);
       let pen=pathRunStart(measure.length,total,{offset:v.pathOffset,alignment:v.alignment}),overflow=false;
       for(let i=0;i<run.glyphs.length;i++) {
-        const glyph=run.glyphs[i],pos=run.positions[i],commands=outlines(glyph),step=advance(pos)*scale,centre=pen+pos.xAdvance*scale/2;
+        const glyph=run.glyphs[i],pos=run.positions[i],commands=outlines(glyph),step=advance(pos)*scale,centre=pen+pos.xAdvance*hs*scale/2;
         if(centre>measure.length+1e-9)overflow=true;
-        else {const map=glyphFrame(measure,centre);glyphs.push({line:0,glyphId:glyph.id,subpaths:glyphSubpaths(commands,(gx,gy)=>map((pos.xOffset+gx)*scale-pos.xAdvance*scale/2,(pos.yOffset+gy)*scale))});}
+        else {const map=glyphFrame(measure,centre);glyphs.push({line:0,glyphId:glyph.id,subpaths:glyphSubpaths(commands,(gx,gy)=>map((pos.xOffset+gx)*hs*scale-pos.xAdvance*hs*scale/2,(pos.yOffset+gy*vs)*scale+rise))});}
         pen+=step;
       }
       return {version:1,signature:textSignature(patch),font:fontInfo,glyphs,lineWidths:[total],overflow};
@@ -112,7 +115,7 @@ export function createFontService({directories=systemFontDirectories(),google}={
         const glyph=run.glyphs[i],pos=run.positions[i];
         const commands=outlines(glyph);
         if(line<visibleLines) {
-          const subpaths=glyphSubpaths(commands,(gx,gy)=>[(offset+x+pos.xOffset+gx)*scale,ascent+line*v.leading*PT_TO_MM-(y+pos.yOffset+gy)*scale]);
+          const subpaths=glyphSubpaths(commands,(gx,gy)=>[(offset+x+(pos.xOffset+gx)*hs)*scale,ascent+line*v.leading*PT_TO_MM-(y+pos.yOffset+gy*vs)*scale-rise]);
           glyphs.push({line,glyphId:glyph.id,subpaths});
         }
         x+=advance(pos);y+=pos.yAdvance;

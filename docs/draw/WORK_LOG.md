@@ -1427,3 +1427,20 @@ omfarging i ett angresteg og gradientswatch. Hele Draw-E2E for 49730c0 (SVG-impo
 passerte, også outlines; kjøringen stoppet på autolagringsflaken (`project-workflows.mjs:113`).
 
 Neste: resten av D2.1, blandede stiler i én tekst først.
+
+## 2026-10-17: D2.1 skalering, baseline shift og kerning
+
+- `electron/font-service.mjs`: `horizontalScale` strekker glyfer og fremrykk, `verticalScale` bare glyfene,
+  `baselineShift` løfter glyfene, `kerning: 'none'` slår av fontens `kern`-funksjon i Fontkit.
+- `doc/text.mjs` og `doc/schema.mjs`: validering og lagring bare ved avvik fra standard. `ui/dialogs.mjs`:
+  Edit Text tar egenskapene med videre. `panels/ui.mjs`: fire nye felt i Character.
+
+Verifisering: ny test i `electron/test-font-service.mjs` (26 main-tester), `draw-character-workflows.mjs`
+setter skala, shift og kerning og angrer dem i tre steg.
+
+Årsaken til «Promise was collected» i `Draw outlines` er funnet med logging av uttrykket: kallet som starter
+Send to Cut ventet på en `import()`-promise som Chromium samlet opp sent i en full kjøring. Testen starter nå
+sendingen uten å vente på en promise og venter i stedet på byttet til Cut. Hele Draw-E2E for 15528ff (swatches)
+stoppet der; alle suiter før den passerte.
+
+Neste: avsnitt (justert tekst, innrykk og avstand), så blandede stiler.

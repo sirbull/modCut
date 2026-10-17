@@ -38,6 +38,17 @@ export async function runDrawCharacterWorkflows(client) {
   await set(`${fly} [data-draw-field=all-caps]`,true);
   await until(`(async()=>(${active}.state.document.getNode('${ids[0]}').character.allCaps===true))()`,'All Caps applied');
   n=await node(ids[0]);assert.equal(n.content.runs[0].text,'Horten modCut');assert.notDeepEqual(n.layout.glyphs.map(g=>g.glyphId),tracked.layout.glyphs.map(g=>g.glyphId));
+  // Horizontal scale widens the line; baseline shift and kerning are stored and shaped; each is one undo step.
+  steps=await applied();const before=n.layout.lineWidths[0];
+  await set(`${fly} [data-draw-field=horizontal-scale]`,150);
+  await until(`(async()=>(${active}.state.document.getNode('${ids[0]}').character.horizontalScale===150))()`,'horizontal scale applied');
+  n=await node(ids[0]);assert.ok(n.layout.lineWidths[0]>before*1.4,`Wider by the scale: ${n.layout.lineWidths[0]} vs ${before}`);assert.equal(await applied(),steps+1);
+  await set(`${fly} [data-draw-field=baseline-shift]`,4);
+  await until(`(async()=>(${active}.state.document.getNode('${ids[0]}').character.baselineShift===4))()`,'baseline shift applied');
+  await set(`${fly} [data-draw-field=kerning]`,'none');
+  await until(`(async()=>(${active}.state.document.getNode('${ids[0]}').character.kerning==='none'))()`,'kerning applied');
+  await evaluate(`(async()=>{${active}.handle('undo');${active}.handle('undo');${active}.handle('undo')})()`);
+  n=await node(ids[0]);assert.deepEqual([n.character.horizontalScale,n.character.baselineShift,n.character.kerning],[undefined,undefined,undefined],'Three undo steps restore the defaults');
   // Weight picks the real Bold face; another family replaces the face.
   await set(`${fly} [data-draw-field=font-weight]`,'bold');
   await until(`(async()=>(${active}.state.document.getNode('${ids[0]}').character.fontWeight==='bold'))()`,'Bold applied');
@@ -68,5 +79,5 @@ export async function runDrawCharacterWorkflows(client) {
   const svg=await evaluate(`(async()=>{const w=${active};return w.exportBoard(w.state.ui.artboardId,'svg')})()`);assert.match(svg,/<path[\s>]/);
   await evaluate(`(async()=>{${active}.handle('cancel')})()`);
   await restore();
-  console.log('PASS Draw Character and Paragraph: Mod+T, size, tracking, All Caps, Bold face, family and unknown family, one undo step each, Paragraph alignment for several texts, Properties and control bar fields, save and export');
+  console.log('PASS Draw Character and Paragraph: Mod+T, size, tracking, All Caps, horizontal scale, baseline shift, kerning, Bold face, family and unknown family, one undo step each, Paragraph alignment for several texts, Properties and control bar fields, save and export');
 }

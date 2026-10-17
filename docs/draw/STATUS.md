@@ -250,9 +250,13 @@ teksten med Edit Text, eller angre og tegn banen på nytt.
   innholdet. Eksport, Create Outlines og Send to Cut følger automatisk.
 * Google-fonter: panelet bytter til installerte fonter; ny Google-font velges i Edit Text.
 
-Gjenstår i Character/Paragraph (fra kapittel 10.8): kerning-modus (metrics, optical, manuell),
-horisontal og vertikal skalering, baseline shift, Small Caps, understreking, justert tekst, innrykk og
-avstand før og etter avsnitt, blandede stiler i samme tekstobjekt (stiler gjelder hele objektet).
+Tillegg 2026-10-17: **horisontal og vertikal skalering** (1 til 10 000 %), **baseline shift** (pt, opp) og
+**kerning** Metrics eller None, i Character-panelet og Properties, lagret bare når de avviker fra standard,
+med i linjebryting, tekst på path, eksport, outlines og Send to Cut.
+
+Gjenstår i Character/Paragraph (fra kapittel 10.8): optisk og manuell kerning, Small Caps, understreking,
+justert tekst, innrykk og avstand før og etter avsnitt, blandede stiler i samme tekstobjekt (stiler gjelder
+hele objektet).
 
 ### 2.12 Compound paths og klippemasker (D2.2, 2026-10-17)
 
@@ -505,7 +509,8 @@ SVG-, PNG- og JPEG-eksport er gjort (2.5).
 3. Draw Normal, Behind og Inside (2.17) er gjort.
 4. D2.10 Send til Cut v2 (2.18) er gjort. Alle fase 2-oppgavene finnes nå i grunnform.
 5. Hullene i fase 2: D2.5 SVG-import, D2.7 WebP og D2.3 globale swatches og gradientswatches (2.19) er
-   gjort. **Neste: resten av D2.1 (se 2.11), med blandede stiler i én tekst først.**
+   gjort. Fra D2.1 er skalering, baseline shift og kerning gjort (2.11). **Neste: avsnitt (justert tekst,
+   innrykk, avstand før og etter), så blandede stiler i én tekst.**
 6. Så fase 3: D3.1 Expand Appearance, D3.2 effekter, D3.5 Lasso og Select-meny, D3.4 Shape Builder,
    Eraser og Knife, D3.6 Free Transform og Split Into Grid.
 

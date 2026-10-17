@@ -36,7 +36,8 @@ export function textDialog(defaults, onPreview = () => {}, {fonts=[],resolve=pat
   input.value = defaults.text; original.replaceWith(input);
   const error = document.createElement('p'); error.setAttribute('role','alert'); form.insertBefore(error,form.querySelector('.modal-actions'));
   // Character settings edited in the Character panel ride along unchanged.
-  const read = () => ({kind:defaults.kind??'point',tracking:defaults.tracking??0,allCaps:!!defaults.allCaps,...(defaults.kind==='onPath'?{pathSubpath:defaults.pathSubpath}:{}),...Object.fromEntries(fields.map(f => {const el=form.elements[f.key];return [f.key,f.type==='checkbox'?el.checked:f.type==='number'?el.valueAsNumber:f.key==='fontWeight'&&!['normal','bold'].includes(el.value)?Number(el.value):el.value];})),
+  const read = () => ({kind:defaults.kind??'point',tracking:defaults.tracking??0,allCaps:!!defaults.allCaps,
+    horizontalScale:defaults.horizontalScale??100,verticalScale:defaults.verticalScale??100,baselineShift:defaults.baselineShift??0,kerning:defaults.kerning??'metrics',...(defaults.kind==='onPath'?{pathSubpath:defaults.pathSubpath}:{}),...Object.fromEntries(fields.map(f => {const el=form.elements[f.key];return [f.key,f.type==='checkbox'?el.checked:f.type==='number'?el.valueAsNumber:f.key==='fontWeight'&&!['normal','bold'].includes(el.value)?Number(el.value):el.value];})),
     axisValues:[...form.querySelectorAll('[data-font-axis]')].map(el=>el.value)});
   const submit=form.querySelector('[type=submit]');let revision=0,alive=true,resolved=null,accepted=null,lastInput=null;
   const preview = async () => {

@@ -13,7 +13,7 @@ export function textValues(node) {
     ...(node.kind==='onPath'?{pathSubpath:node.onPath.subpath,pathOffset:node.onPath.offset??0,pathFlip:!!node.onPath.flip}:{}) };
 }
 export function textProperties(values) {
-  const { text, fontFamily, fontSize, leading, fontWeight, fontStyle, alignment, fontPostscriptName, kind='point', frameWidth, frameHeight,fontSource='system',googleFont,fontAxes,pathSubpath,pathOffset=0,pathFlip=false,tracking=0,allCaps=false } = values;
+  const { text, fontFamily, fontSize, leading, fontWeight, fontStyle, alignment, fontPostscriptName, kind='point', frameWidth, frameHeight,fontSource='system',googleFont,fontAxes,pathSubpath,pathOffset=0,pathFlip=false,tracking=0,allCaps=false,horizontalScale=100,verticalScale=100,baselineShift=0,kerning='metrics' } = values;
   if(!['system','google'].includes(fontSource))throw new Error('Choose a font source.');
   if(googleFont!==undefined&&(!validGoogleReference(googleFont)||fontSource!=='google'||googleFont.family!==fontFamily))throw new Error('Invalid saved Google font reference.');
   if(fontAxes!==undefined&&!validFontAxes(fontAxes))throw new Error('Invalid variable font axes.');
@@ -21,6 +21,9 @@ export function textProperties(values) {
   if(kind==='onPath'){if(!validPathSubpath(pathSubpath))throw new Error('Type on a Path needs a path with at least two points.');if(!Number.isFinite(pathOffset)||pathOffset<0||pathOffset>100000)throw new Error('Start offset must be between 0 and 100,000 mm.');}
   if(kind==='area')for(const n of [frameWidth,frameHeight])if(!Number.isFinite(n)||n<.1||n>100000)throw new Error('Frame dimensions must be between 0.1 and 100,000 mm.');
   if(!Number.isFinite(tracking)||tracking<-1000||tracking>10000)throw new Error('Tracking must be between -1,000 and 10,000.');
+  for(const [label,n] of [['Horizontal scale',horizontalScale],['Vertical scale',verticalScale]])if(!Number.isFinite(n)||n<1||n>10000)throw new Error(`${label} must be between 1 and 10,000 %.`);
+  if(!Number.isFinite(baselineShift)||Math.abs(baselineShift)>10000)throw new Error('Baseline shift must be between -10,000 and 10,000 pt.');
+  if(!['metrics','none'].includes(kerning))throw new Error('Choose Metrics or None for kerning.');
   if (typeof text !== 'string' || !text.trim()) throw new Error('Enter some text.');
   if (typeof fontFamily !== 'string' || !fontFamily.trim()) throw new Error('Enter a font family.');
   for (const [label, n] of [['Font size', fontSize], ['Leading', leading]]) {
@@ -34,7 +37,9 @@ export function textProperties(values) {
       ...(fontSource==='google'?{fontSource,...(googleFont?{googleFont}:{})}:{}),
       ...(fontAxes&&Object.keys(fontAxes).length?{fontAxes}:{}),
       // Tracking is in thousandths of an em, as in Illustrator; both are left out at their defaults.
-      ...(tracking?{tracking}:{}),...(allCaps?{allCaps:true}:{}) }, paragraph: { alignment } };
+      ...(tracking?{tracking}:{}),...(allCaps?{allCaps:true}:{}),
+      // Scale (percent), baseline shift (pt, up) and kerning are also left out at their defaults.
+      ...(horizontalScale!==100?{horizontalScale}:{}),...(verticalScale!==100?{verticalScale}:{}),...(baselineShift?{baselineShift}:{}),...(kerning!=='metrics'?{kerning}:{}) }, paragraph: { alignment } };
 }
 /** Type on a Path from a path's first subpath, in the same coordinate space as the path. */
 export function pathText(subpath, values, paint = {}) {

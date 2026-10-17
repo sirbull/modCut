@@ -883,6 +883,12 @@ export function createPanels(shell, state, api) {
     field(sizes,compact ? 'Size' : 'Size (pt)',v.fontSize,value => set({ fontSize: value },'Font Size'),{ min:.1, max:10000, key:`${prefix}font-size`, disabled: ro, scrubbable: false });
     field(sizes,compact ? 'Leading' : 'Leading (pt)',v.leading,value => set({ leading: value },'Leading'),{ min:.1, max:10000, key:`${prefix}leading`, disabled: ro, scrubbable: false });
     field(sizes,'Tracking',v.tracking ?? 0,value => set({ tracking: value },'Tracking'),{ min:-1000, max:10000, key:`${prefix}tracking`, disabled: ro, scrubbable: false });
+    // Horizontal and vertical scale (%), baseline shift (pt) and kerning, as in Illustrator's Character panel.
+    const shape = document.createElement('div'); shape.className = 'draw-fields'; host.append(shape);
+    field(shape,compact ? 'H scale' : 'Horizontal scale (%)',v.horizontalScale ?? 100,value => set({ horizontalScale: value },'Horizontal Scale'),{ min:1, max:10000, key:`${prefix}horizontal-scale`, disabled: ro, scrubbable: false });
+    field(shape,compact ? 'V scale' : 'Vertical scale (%)',v.verticalScale ?? 100,value => set({ verticalScale: value },'Vertical Scale'),{ min:1, max:10000, key:`${prefix}vertical-scale`, disabled: ro, scrubbable: false });
+    field(shape,compact ? 'Shift' : 'Baseline shift (pt)',v.baselineShift ?? 0,value => set({ baselineShift: value },'Baseline Shift'),{ min:-10000, max:10000, key:`${prefix}baseline-shift`, disabled: ro, scrubbable: false });
+    select(shape,'Kerning',`${prefix}kerning`,v.kerning ?? 'metrics',[['metrics','Metrics'],['none','None']],value => set({ kerning: value },'Kerning'));
     const caps = check(host,'All Caps',`${prefix}all-caps`,!!v.allCaps,value => set({ allCaps: value },'All Caps')); caps.disabled = ro;
     if (!compact) text(host,'Sizes and leading are in points. Tracking is in thousandths of an em. Changes are shaped again with the font, so export, outlines and Send to Cut follow.');
   }

@@ -226,6 +226,9 @@ export function validateDocument(doc) {
           if(c.fontAxes!==undefined&&!validFontAxes(c.fontAxes))fail(`${p}.fontAxes`,'Invalid variable font axes');
           if(c.tracking!==undefined)number(c.tracking,`${p}.tracking`,-1000,10000);
           if(c.allCaps!==undefined)bool(c.allCaps,`${p}.allCaps`);
+          for(const key of ['horizontalScale','verticalScale'])if(c[key]!==undefined)number(c[key],`${p}.${key}`,1,10000);
+          if(c.baselineShift!==undefined)number(c.baselineShift,`${p}.baselineShift`,-10000,10000);
+          if(c.kerning!==undefined)enumeration(c.kerning,['metrics','none'],`${p}.kerning`);
         }
       }
       if(value.layout!==undefined) {
