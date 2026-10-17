@@ -1436,7 +1436,7 @@ Oversikt over hva som er gjort og gjenstår, inkludert delvis ferdige oppgaver: 
 * [x] D2.9 Transparency, History, Info, kommandosøk (snapshots i History gjenstår, se [STATUS.md](draw/STATUS.md))
 * [x] D2.10 Send til Cut v2 (varsel om objekter utenfor bedet gjenstår, se [STATUS.md](draw/STATUS.md))
 * [x] D3.1 Outline Stroke og Expand (effekter, stiplede streker og pilspisser gjenstår, se [STATUS.md](draw/STATUS.md))
-* [ ] D3.2 Appearance og effekter
+* [x] D3.2 Appearance og effekter (Glow, Feather, Blur og gruppeeffekter gjenstår, se [STATUS.md](draw/STATUS.md))
 * [ ] D3.3 Image Trace
 * [x] D3.4 Shape Builder, Eraser, Knife m.fl. (Path Eraser gjenstår, se [STATUS.md](draw/STATUS.md))
 * [x] D3.5 Magic Wand, Lasso, Select-meny (se [STATUS.md](draw/STATUS.md))

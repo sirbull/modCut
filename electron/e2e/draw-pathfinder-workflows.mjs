@@ -74,7 +74,9 @@ export async function runDrawPathfinderWorkflows(client) {
   await act('clear'); assert.deepEqual([(await look()).fills.length, (await look()).strokes.length], [0, 0], 'Clear Appearance');
   for (let i = 0; i < 6; i++) await command('undo');
   assert.deepEqual([(await look()).fills.length, (await look()).strokes.length], [1, 1], 'Each Appearance edit is one undo step');
-  assert.equal(await evaluate(`document.querySelector('${root} [data-draw-appearance-action=add-effect]').disabled`), true);
+  // Live effects exist now: Add Effect lists them for the selected path.
+  assert.equal(await evaluate(`document.querySelector('${root} [data-draw-add-effect]').disabled`), false);
+  assert.ok(await evaluate(`document.querySelectorAll('${root} [data-draw-add-effect] option').length`) >= 9, 'Add Effect lists the effects');
 
   // Properties: a title for the selection, quick actions, and a Document section with nothing selected.
   const title = () => evaluate(`document.querySelector('${root} [data-draw-selection-title]').textContent`);

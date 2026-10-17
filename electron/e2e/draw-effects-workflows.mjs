@@ -51,6 +51,15 @@ export async function runDrawEffectWorkflows(client) {
   await until(`(async()=>!${active}.state.document.getNode('${a}'))()`, 'expanded');
   const baked = await evaluate(`(async()=>{const w=${active},id=w.state.selection.ids[0],n=w.state.document.getNode(id);return {effects:n.appearance.effects.length,count:n.subpaths[0].segments.length}})()`);
   assert.equal(baked.effects, 0); assert.ok(baked.count > 4, 'The rounded, offset outline is now real anchors');
+  // Zig Zag on the other square; Drop Shadow draws a blurred raster under it, also in PNG export.
+  await evaluate(`(async()=>{const w=${active},{updateNode}=await import('./draw/doc/commands.mjs'),n=w.state.document.getNode('${b}');w.state.history.execute(updateNode('${b}',{appearance:{...n.appearance,effects:[]}}));w.select(['${b}']);w.handle('effect-zig-zag')})()`); await dialog({ size: 1, ridges: 2 });
+  assert.equal(await evaluate(`(async()=>(${active}.renderer.items.get('${b}').segments.length))()`), 12, 'Zig Zag: two ridges on each of the four sides');
+  await evaluate(`(async()=>{${active}.handle('effect-drop-shadow')})()`); await dialog({ x: 3, y: 3, blur: 1, opacity: 100, color: '#ff0000' });
+  assert.equal(await evaluate(`(async()=>!!${active}.renderer.items.get('${b}').previousSibling?.data?.shadow)()`), true, 'The shadow sits right under the object');
+  const shadowPixel = await evaluate(`(async()=>{const w=${active},bd=w.state.document.data.artboards[0],url=w.exportBoard(bd.id,'png',{ppi:72,background:'white'});
+    const img=new Image();img.src=url;await img.decode();const c=document.createElement('canvas');c.width=img.width;c.height=img.height;const g=c.getContext('2d');g.drawImage(img,0,0);
+    return [...g.getImageData(Math.round(102/25.4*72),Math.round(20/25.4*72),1,1).data]})()`);
+  assert.ok(shadowPixel[0] > 200 && shadowPixel[1] < 120, `The red shadow shows below and right of the square in PNG: ${shadowPixel}`);
   await restore();
-  console.log('PASS Draw effects: Round Corners, Offset Path and Transform as live effects (menu and commands, one undo step each), hide and delete in Appearance, Send to Cut and Apply Last Effect use them, Expand Appearance bakes them');
+  console.log('PASS Draw effects: Round Corners, Offset Path and Transform as live effects (menu and commands, one undo step each), hide and delete in Appearance, Send to Cut and Apply Last Effect use them, Expand Appearance bakes them; Zig Zag, and Drop Shadow on canvas and in PNG');
 }

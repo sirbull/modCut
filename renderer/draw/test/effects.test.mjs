@@ -31,3 +31,17 @@ test('Offset Path runs once the polygon library is loaded, in effect order', asy
   assert.deepEqual(bounds(grown).map((v) => Math.round(v * 1000) / 1000), [-2, -2, 12, 12]);
   assert.ok(grown[0].segments.length > 4, 'Rounded after the offset');
 });
+
+test('Zig Zag, Pucker & Bloat, Roughen and Twist distort the outline', () => {
+  const zig = applyVectorEffects(square, [effect('zig-zag', { size: 1, ridges: 3 })]);
+  assert.equal(zig[0].segments.length, 16, 'Four segments, three ridges each plus the anchor');
+  assert.deepEqual(bounds(zig), [-1, -1, 11, 11]);
+  const bloat = applyVectorEffects(square, [effect('pucker-bloat', { amount: 50 })]);
+  assert.deepEqual(bloat[0].segments[0].out, [-2.5, -2.5], 'Handles point away from the centre');
+  const rough = applyVectorEffects(square, [effect('roughen', { size: .5, detail: 1, seed: 7 })]);
+  assert.deepEqual(rough, applyVectorEffects(square, [effect('roughen', { size: .5, detail: 1, seed: 7 })]), 'Seeded');
+  assert.equal(rough[0].segments.length, 40);
+  const twisted = applyVectorEffects(square, [effect('twist', { angle: 90 })]);
+  assert.ok(twisted[0].segments.length > 16);
+  assert.equal(hasVectorEffects({ appearance: { effects: [effect('drop-shadow')] } }), false, 'Drop Shadow is a raster effect');
+});

@@ -562,8 +562,16 @@ Gjenstår i D3.6: perspektiv (Shift i Free Transform) og forhåndsvisning i Tran
   `render/paper-adapter.mjs`, `offsetPathsSync`/`loadGeometry` i `geom/kernel-js.mjs`, `addEffect`/`editEffect`
   i `index.mjs`, effektlisten i `panels/ui.mjs`. Skjemaet validerer kjente effekter.
 
-Gjenstår i D3.2: rastereffekter (Drop Shadow, Glow, Feather, Gaussian Blur), Pucker & Bloat, Roughen,
-Zig Zag, Twist, Free Distort som effekt, effekter på tekst og grupper, og Preview i effektdialogene.
+Del B (2026-10-17):
+* Nye vektoreffekter under Distort & Transform: **Zig Zag** (størrelse, rygger per segment, Smooth),
+  **Pucker & Bloat** (−200 til 200 %), **Roughen** (størrelse, detalj per mm og en variasjon som gjør
+  resultatet likt hver gang) og **Twist** (vinkel, mest i midten).
+* **Drop Shadow** (Stylize): X/Y-forskyvning, uskarphet, farge og opasitet. Skyggen er et raster laget med
+  dokumentets rastereffektoppløsning (standard 300 ppi) og ligger rett under objektet, så den følger med på
+  lerretet og i PNG, JPEG, WebP, SVG og PDF. Send to Cut tar ikke med skygger. Virker også på tekst.
+
+Gjenstår i D3.2: Inner/Outer Glow, Feather, Gaussian Blur, Free Distort som effekt, effekter på grupper,
+og Preview i effektdialogene.
 
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
@@ -586,7 +594,7 @@ Zig Zag, Twist, Free Distort som effekt, effekter på tekst og grupper, og Previ
 | D2.9 Transparency, History, Info, kommandosøk | Ferdig (2.16); snapshots i History gjenstår |
 | D2.10 Send til Cut v2 | Ferdig (2.9 og 2.18): tekst til outlines, Outline Stroke, kutt ved artboard, validering, Update in Cut, bilder og alle artboards; varsel om objekter utenfor bedet gjenstår |
 | D3.1 Outline Stroke og Expand | Ferdig (2.18, 2.20): Outline Stroke, Expand, Expand Appearance; effekter, stiplede streker og pilspisser gjenstår |
-| D3.2 Appearance og effekter | Appearance og vektoreffektene Offset Path, Round Corners og Transform (2.24); rastereffekter og flere vektoreffekter gjenstår |
+| D3.2 Appearance og effekter | Appearance, sju vektoreffekter og Drop Shadow (2.24); Glow, Feather, Blur og gruppeeffekter gjenstår |
 | D3.3 Image Trace | Gjenstår |
 | D3.4 Shape Builder, Eraser og Knife | Ferdig (2.22); Path Eraser gjenstår |
 | D3.5 Magic Wand, Lasso, Select-meny | Ferdig (2.21) |
@@ -610,8 +618,8 @@ SVG-, PNG- og JPEG-eksport er gjort (2.5).
    gjort. Fra D2.1 er skalering, baseline shift, kerning, avsnitt og blandede stiler gjort (2.11).
 6. Fase 3: D3.1 Expand og Expand Appearance (2.20) og D3.5 Select-meny, Magic Wand og Lasso (2.21) er gjort.
    D3.4 Shape Builder, Knife og Eraser (2.22) og D3.6 Free Transform, Transform Each og Split Into Grid
-   (2.23) er også gjort, og D3.2 del A (vektoreffekter, 2.24). **Neste: D3.2 del B, Drop Shadow og flere
-   vektoreffekter (Zig Zag, Pucker & Bloat, Roughen).**
+   (2.23) er også gjort, og D3.2 effekter (2.24). **Neste: D3.8 Links, Crop Image og Document Info, så D3.3
+   Image Trace og D3.7 AI- og DXF-eksport.**
 
 
 ## 5. Kjente begrensninger og risiko

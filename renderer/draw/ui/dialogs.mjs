@@ -478,10 +478,18 @@ export function effectDialog(type, values = {}) {
   const fields = type === 'offset-path' ? [n('distance','Offset (mm)',-1000,1000),
       {key:'join',label:'Joins',type:'select',value:values.join,options:[{value:'miter',label:'Miter'},{value:'round',label:'Round'},{value:'bevel',label:'Bevel'}]},n('miterLimit','Miter limit',1,500)]
     : type === 'round-corners' ? [n('radius','Radius (mm)',0,10000)]
+    : type === 'zig-zag' ? [n('size','Size (mm)',-1000,1000),n('ridges','Ridges per segment',0,100,1),{key:'smooth',label:'Smooth',type:'checkbox',value:!!values.smooth}]
+    : type === 'pucker-bloat' ? [n('amount','Pucker (−) or Bloat (+) (%)',-200,200)]
+    : type === 'roughen' ? [n('size','Size (mm)',0,1000),n('detail','Detail (per mm)',0,100),n('seed','Variation',0,1000000,1)]
+    : type === 'twist' ? [n('angle','Angle (°)',-3600,3600)]
+    : type === 'drop-shadow' ? [n('x','X offset (mm)',-1000,1000),n('y','Y offset (mm)',-1000,1000),n('blur','Blur (mm)',0,1000),
+      {key:'color',label:'Color',type:'color',value:String(values.color??'#000000').toLowerCase()},{...n('opacity','Opacity (%)',0,100),value:Math.round((values.opacity??.75)*100)}]
     : [n('scaleX','Scale horizontal (%)',-100000,100000),n('scaleY','Scale vertical (%)',-100000,100000),n('moveX','Move horizontal (mm)',-100000,100000),
       n('moveY','Move vertical (mm)',-100000,100000),n('angle','Rotate (°)',-360,360),n('copies','Copies',0,1000,1)];
-  const title = {'offset-path':'Offset Path','round-corners':'Round Corners',transform:'Transform Effect'}[type];
-  return openDrawModal({title,submitLabel:'OK',className:'draw-effect-dialog',fields}).then(v=>v&&Object.fromEntries(Object.entries(v).map(([k,x])=>[k,k==='join'?x:k==='copies'?Math.round(Number(x)):Number(x)])));
+  const title = {'offset-path':'Offset Path','round-corners':'Round Corners',transform:'Transform Effect','zig-zag':'Zig Zag','pucker-bloat':'Pucker & Bloat',roughen:'Roughen',twist:'Twist','drop-shadow':'Drop Shadow'}[type];
+  const whole = new Set(['copies','ridges','seed']);
+  return openDrawModal({title,submitLabel:'OK',className:'draw-effect-dialog',fields}).then(v=>v&&Object.fromEntries(Object.entries(v).map(([k,x])=>[k,
+    k==='join'?x:k==='color'?String(x).toUpperCase():k==='smooth'?!!x:k==='opacity'&&type==='drop-shadow'?Number(x)/100:whole.has(k)?Math.round(Number(x)):Number(x)])));
 }
 /** Transform Each: scale, move, rotate and reflect each object around its own reference point. */
 export function transformEachDialog(defaults={}) {

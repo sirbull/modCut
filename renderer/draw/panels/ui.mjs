@@ -651,7 +651,7 @@ export function createPanels(shell, state, api) {
       ['Duplicate Selected Item','copy',() => { const r = duplicateEntry(look,pick.kind,pick.index); commit('Duplicate Appearance',r.appearance,{ kind:pick.kind, index:r.index }); },readOnly || !pick,'duplicate'],
       ['Delete Selected Item','trash',() => commit('Delete Appearance',removeEntry(look,pick.kind,pick.index),null),readOnly || !pick,'delete'],
     ]) { const b = iconButton(label,iconId,action); b.disabled = disabled; b.dataset.drawAppearanceAction = key; actions.append(b); }
-    const addEffect = document.createElement('select'); addEffect.className = 'select draw-add-effect'; addEffect.dataset.drawAddEffect = ''; addEffect.disabled = readOnly || !['path','shape'].includes(node.type);
+    const addEffect = document.createElement('select'); addEffect.className = 'select draw-add-effect'; addEffect.dataset.drawAddEffect = ''; addEffect.disabled = readOnly || !['path','shape','text'].includes(node.type);
     addEffect.setAttribute('aria-label','Add New Effect'); addEffect.append(new Option('Add Effect…',''),...Object.entries(EFFECTS).map(([type,d]) => new Option(`${d.group}: ${d.label}…`,type)));
     addEffect.addEventListener('change',() => { const type = addEffect.value; addEffect.value = ''; if (type) api.addEffect(type); });
     bar.append(addEffect,actions); host.append(bar);

@@ -9,7 +9,7 @@ import { scaledStrokeProperties } from '../geom/transforms.mjs';
 import { isOutputNode, layerContext, ROOT_CONTEXT } from '../doc/layers.mjs';
 import { arrowShapes } from '../geom/arrows.mjs';
 import { PT_TO_MM, textValues } from '../doc/text.mjs';
-import { applyVectorEffects, hasVectorEffects } from '../doc/effects.mjs';
+import { applyVectorEffects, hasVectorEffects, dropShadow } from '../doc/effects.mjs';
 import { offsetPathsSync, geometryReady } from '../geom/kernel-js.mjs';
 import { toSubpaths } from '../geom/pathfinder.mjs';
 import { textSubpaths } from '../doc/text-layout.mjs';
@@ -87,6 +87,26 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     // Scale the view matrix, retaining the full resolution source pixels.
     item.matrix = new scope.Matrix(...node.transform)
       .translate(width / 2, height / 2).scale(width / item.width, height / item.height);
+  }
+  /**
+   * Drop Shadow: the object's outline filled with the shadow colour, blurred and offset, as a raster at the
+   * document's raster effects resolution, placed under the object in its own coordinates.
+   */
+  function shadowFor(item, node) {
+    const e = dropShadow(node);
+    if (!e || !['path', 'shape', 'text'].includes(node.type) || !item.pathData && !item.children?.length) return null;
+    const local = item.clone({ insert: false }); local.matrix = new scope.Matrix();
+    const b = local.bounds, pad = e.blur * 2 + .5, ppmm = Math.min((state.document.data.rasterEffectsPpi ?? 300) / 25.4, 4096 / Math.max(b.width + pad * 2, b.height + pad * 2, 1));
+    const width = Math.max(1, Math.ceil((b.width + pad * 2) * ppmm)), height = Math.max(1, Math.ceil((b.height + pad * 2) * ppmm));
+    const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;
+    const ctx = canvas.getContext('2d'); ctx.filter = e.blur > 0 ? `blur(${e.blur / 2 * ppmm}px)` : 'none';
+    ctx.setTransform(ppmm, 0, 0, ppmm, (pad - b.x) * ppmm, (pad - b.y) * ppmm); ctx.fillStyle = e.color; ctx.globalAlpha = e.opacity;
+    const d = local.className === 'CompoundPath' ? local.pathData : local.children ? local.children.map(c => c.pathData).join(' ') : local.pathData;
+    ctx.fill(new Path2D(d), (node.fillRule ?? 'nonzero') === 'evenodd' ? 'evenodd' : 'nonzero'); local.remove();
+    const raster = new scope.Raster({ insert: false, canvas }); raster.applyMatrix = false; raster.smoothing = 'high';
+    raster.matrix = new scope.Matrix(...node.transform).translate(b.x - pad + e.x + width / ppmm / 2, b.y - pad + e.y + height / ppmm / 2).scale(1 / ppmm);
+    raster.opacity = node.opacity; raster.data.baseOpacity = node.opacity; raster.data.shadow = true;
+    return raster;
   }
   /** The drawn item: the node's own geometry, then its live vector effects (paths and shapes). */
   function make(node) {
@@ -240,7 +260,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
       let record = records.get(node.id), item = items.get(node.id);
       const replaced = !record || record.node.type !== node.type || record.geometry !== geometry;
       if (replaced) {
-        item?.remove(); record?.frame?.remove(); record?.arrows?.remove(); record?.stack?.remove(); record?.maskStroke?.remove();
+        item?.remove(); record?.frame?.remove(); record?.arrows?.remove(); record?.stack?.remove(); record?.maskStroke?.remove(); record?.shadow?.remove();
         item = make(node); item.applyMatrix = false; item.data.nodeId = node.id;
         items.set(node.id, item);
         record = { node, geometry, context }; records.set(node.id, record);
@@ -259,9 +279,11 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
         style(item, node, outlineFor(node.id), true);
         record.arrows?.remove(); record.arrows = arrowGroup(item, node);
         record.stack?.remove(); record.stack = paintStack(item, node);
+        record.shadow?.remove(); record.shadow = shadowFor(item, node);
       }
       // Bounds must be measured before viewport visibility is applied.
       item.visible = node.visible;
+      if (record.shadow) place(parent, record.shadow, index++);
       place(parent, item, index++);
       if (record.frame) { record.frame.visible = false; place(parent, record.frame, index++); }
       if (record.arrows) place(parent, record.arrows, index++);
@@ -336,7 +358,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     for (const [id, record] of boardItems) if (!data.artboards.some(b => b.id === id)) { record.item.remove(); record.label.remove(); record.labelRect.remove(); boardItems.delete(id); }
     reconcile(data.layers, artwork, alive);
     for (const [id, item] of items) if (!alive.has(id)) {
-      item.remove(); records.get(id).frame?.remove(); records.get(id).arrows?.remove(); records.get(id).stack?.remove(); records.get(id).maskStroke?.remove(); items.delete(id); records.delete(id); thumbnails.delete(id);
+      item.remove(); records.get(id).frame?.remove(); records.get(id).arrows?.remove(); records.get(id).stack?.remove(); records.get(id).shadow?.remove(); records.get(id).maskStroke?.remove(); items.delete(id); records.delete(id); thumbnails.delete(id);
     }
     updateBounds(); updateView();
   }
@@ -402,6 +424,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
       if (record.stack) record.stack.visible = item.visible && !asOutline;
       if (record.maskFill) record.maskFill.visible = !asOutline;
       if (record.maskStroke) record.maskStroke.visible = item.visible && !asOutline;
+      if (record.shadow) { record.shadow.visible = item.visible && !asOutline; record.shadow.opacity = (record.shadow.data.baseOpacity ?? 1) * (dimmed?.has(id) ? ISOLATION_DIM : 1); }
       const factor = dimmed?.has(id) ? ISOLATION_DIM : 1;
       if (item.data.baseOpacity !== undefined) item.opacity = item.data.baseOpacity * factor;
       if (record.stack) record.stack.opacity = (record.stack.data.baseOpacity ?? 1) * factor;

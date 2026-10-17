@@ -256,8 +256,9 @@ function buildMenu(mode = "cut") {
     const objectItem=(label,command)=>({label,accelerator:acceleratorFor(command,{isMac}),click:()=>send(command)});
     // Effect menu (D3.2): live vector effects, kept in the object's Appearance.
     template.find(item=>item.label==='Effect').submenu=[objectItem('Apply Last Effect','effect-last'),objectItem('Last Effect…','effect-options'),{type:'separator'},
-      {label:'Distort & Transform',submenu:[objectItem('Transform…','effect-transform')]},{label:'Path',submenu:[objectItem('Offset Path…','effect-offset-path')]},
-      {label:'Stylize',submenu:[objectItem('Round Corners…','effect-round-corners')]}];
+      {label:'Distort & Transform',submenu:[objectItem('Pucker & Bloat…','effect-pucker-bloat'),objectItem('Roughen…','effect-roughen'),objectItem('Transform…','effect-transform'),
+        objectItem('Twist…','effect-twist'),objectItem('Zig Zag…','effect-zig-zag')]},{label:'Path',submenu:[objectItem('Offset Path…','effect-offset-path')]},
+      {label:'Stylize',submenu:[objectItem('Drop Shadow…','effect-drop-shadow'),objectItem('Round Corners…','effect-round-corners')]}];
     template.find(item=>item.label==='Type').submenu=[objectItem('Edit Text…','edit-text'),objectItem('Create Outlines','create-outlines')];
     // Select menu (D3.5): Same compares every painted object; Object picks kinds of objects.
     template.find(item=>item.label==='Select').submenu=[objectItem('All','select-all'),objectItem('All on Active Artboard','select-artboard'),objectItem('Deselect','deselect'),

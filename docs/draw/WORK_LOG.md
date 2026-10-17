@@ -1546,3 +1546,18 @@ Verifisering: 252 Draw-enhetstester (3 i `effects.test.mjs`), ny E2E `draw-effec
 Hele Draw-E2E for 28b34ec (D3.6): alle Draw-suitene passerte; autolagringsflaken stoppet prosjekttestene.
 
 Neste: D3.2 del B, Drop Shadow og flere vektoreffekter.
+
+## 2026-10-17: D3.2 del B, flere vektoreffekter og Drop Shadow
+
+- `doc/effects.mjs`: Zig Zag, Pucker & Bloat, Roughen (seedet tilfeldighet) og Twist, med kurvehjelpere
+  (`at`, `tangent`, `resample`); Drop Shadow er merket `raster` og hoppes over av `applyVectorEffects`;
+  `dropShadow(node)` gir skyggen som skal tegnes.
+- `render/paper-adapter.mjs`: `shadowFor` tegner objektets omriss med skyggefarge og `ctx.filter = blur()` på et
+  lerret med dokumentets rastereffektoppløsning og legger rasteret rett under objektet; skjules i Outline.
+- Dialogfelt, Effect-meny og kommandosøk for de nye effektene; Drop Shadow kan legges på tekst.
+
+Verifisering: 253 Draw-enhetstester; `--draw-effects` dekker Zig Zag og Drop Shadow på lerret og i PNG.
+Hele Draw-E2E for d88316e (del A) stoppet i `draw-pathfinder-workflows.mjs`, som ventet at Add New Effect
+var avslått; den sjekker nå at Add Effect lister effektene.
+
+Neste: D3.8 Links, Crop Image og Document Info.

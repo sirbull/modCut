@@ -423,8 +423,9 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   /** Live effects: added to every selected path and shape, edited in place; Apply Last Effect repeats the last one. */
   async function addEffect(type,{ask=true}={}){
     if(state.document.readOnly)return;
-    const ids=selectedIds().filter(id=>['path','shape'].includes(state.document.getNode(id)?.type)&&state.document.isEditable(id));
-    if(!ids.length)throw new Error('Select paths or shapes to add an effect to.');
+    // Drop Shadow also works on text; the vector effects change paths and shapes.
+    const kinds=EFFECTS[type].raster?['path','shape','text']:['path','shape'],ids=selectedIds().filter(id=>kinds.includes(state.document.getNode(id)?.type)&&state.document.isEditable(id));
+    if(!ids.length)throw new Error(EFFECTS[type].raster?'Select paths, shapes or text to add a drop shadow to.':'Select paths or shapes to add an effect to.');
     const last=state.ui.lastEffect?.type===type?state.ui.lastEffect:null;
     const values=ask?await effectDialog(type,{...EFFECTS[type].defaults,...last}):last??EFFECTS[type].defaults;if(!values||destroyed)return;
     const e=effect(type,values);state.ui.lastEffect=e;
