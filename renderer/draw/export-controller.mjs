@@ -54,8 +54,10 @@ export function createExportController({ state, scope, renderer, withScope, expo
   }
   function model(board, images = null) {
     return withScope(() => {
-      const art = renderer.exportArtwork();
-      try { return artworkModel(art, board, { layerName: (id) => state.document.getNode(id)?.name, image: images, viewZoom: scope.view.zoom }); }
+      // PDF, EPS and DXF get clipping masks as real geometry.
+      const art = renderer.exportArtwork({ resolveClips: true });
+      try { const result = artworkModel(art, board, { layerName: (id) => state.document.getNode(id)?.name, image: images, viewZoom: scope.view.zoom });
+        return { ...result, warnings: [...result.warnings, ...(art.data.warnings ?? [])] }; }
       finally { art.remove(); }
     });
   }

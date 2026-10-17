@@ -28,6 +28,7 @@ import { artboardCutSvg } from './io/cut-svg.mjs';
 import { EXPORT_FORMATS, rasterSize, svgDocument } from './io/export.mjs';
 import { createExportController } from './export-controller.mjs';
 import { layerOptionsPatch, templateLayerCommands, isOutputNode } from './doc/layers.mjs';
+import { compoundCommands, releaseCompoundCommands, clipCommands, releaseClipCommands } from './doc/compound.mjs';
 import { toolCursor } from './tools/cursors.mjs';
 import { alignReference, alignOffsets, distributeOffsets, spacingOffsets } from './geom/align.mjs';
 import { pointText, pathText, textValues, textProperties, textToOutlines, DEFAULT_CHARACTER } from './doc/text.mjs';
@@ -39,7 +40,7 @@ export function getDrawWorkspace(root) {return workspaces.get(root) || null;}
 const implementedTools=new Set(['select','hand','zoom','artboard','type','area-type','type-on-path',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
 const commands=new Set(['undo','redo','delete','select-all','select-artboard','deselect','cancel','fit-artboard','fit-all','actual-size','zoom-in','zoom-out','outline',
   'cut','copy','paste','paste-front','paste-back','paste-place','paste-all-artboards',
-  'edit-text','create-outlines','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
+  'edit-text','create-outlines','compound-make','compound-release','clip-make','clip-release','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
   'paint-focus','paint-swap','paint-none','paint-solid','default-paint','smart-guides','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','toggle-panels','toggle-panels-except-tools',
   ...PANEL_DEFINITIONS.map(p=>`panel.${p.id}`),...['left','right','up','down'].flatMap(d=>[`nudge-${d}`,`nudge-large-${d}`,`duplicate-${d}`])]);
 export function createDrawWorkspace(root,{paper=window.paper,state=createProjectDraw(),onError=console.warn,onImport=()=>{},onSendToCut=null,cutIsEmpty=()=>false,cutClipboard=()=>null,onExport=null,getPreferences=()=>({}),statusHost=null}={}) {
@@ -160,12 +161,14 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     return world.every((v,i)=>v===[1,0,0,1,0,0][i])?node:{...node,transform:multiplyMatrix(invertMatrix(world),node.transform)};
   }
   /** The artboard as a cut SVG; shapes are expanded and placed with their parent's world matrix. */
+  function worldMatrix(id){const node=state.document.getNode(id),parent=state.document.ancestors(id)[0];
+    return node.type==='shape'?(parent?renderer.worldMatrix(parent.id):[1,0,0,1,0,0]):renderer.worldMatrix(id);}
   function cutSvg(boardId,resolved=new Map(),options={}) {
     return withScope(()=>artboardCutSvg(state.document,boardId,{
       bounds:id=>renderer.bounds(id),
-      worldMatrix(id){const node=state.document.getNode(id),parent=state.document.ancestors(id)[0];
-        return node.type==='shape'?(parent?renderer.worldMatrix(parent.id):[1,0,0,1,0,0]):renderer.worldMatrix(id);},
-      subpaths(id){const node=state.document.getNode(id);return node.type==='shape'?renderer.expandedShape(id)?.subpaths:node.subpaths;},
+      worldMatrix,
+      // Clipping masks are cut into the geometry, so the laser follows what is visible.
+      subpaths(id){const node=state.document.getNode(id);return renderer.clippedSubpaths(id,worldMatrix(id))??(node.type==='shape'?renderer.expandedShape(id)?.subpaths:node.subpaths);},
       resolvedText:id=>resolved.get(id),glyphBounds:(id,paths)=>renderer.glyphBounds(id,paths),
     },options));
   }
@@ -469,6 +472,12 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     if(arrange)return()=>apply(arrange[1],arrangeCommands(doc,ids(),arrange[0]));
     if(command==='group')return()=>{const {commands,group}=groupCommands(doc,ids());apply('Group',commands);select([group.id]);};
     if(command==='ungroup')return()=>{const {commands,released}=ungroupCommands(doc,ids());apply('Ungroup',commands);select(released);};
+    if(command==='compound-make')return()=>{const {commands,id}=compoundCommands(doc,ids(),{
+      parentWorld:id=>renderer.worldMatrix(doc.locate(id).parentId),
+      subpaths:id=>doc.getNode(id).type==='shape'?withScope(()=>renderer.expandedShape(id)).subpaths:doc.getNode(id).subpaths});apply('Make Compound Path',commands);select([id]);};
+    if(command==='compound-release')return()=>{const {commands,ids:released}=releaseCompoundCommands(doc,ids());apply('Release Compound Path',commands);select(released);};
+    if(command==='clip-make')return()=>{const {commands,group}=clipCommands(doc,ids());apply('Make Clipping Mask',commands);select([group.id]);};
+    if(command==='clip-release')return()=>{apply('Release Clipping Mask',releaseClipCommands(doc,ids()));};
     if(command==='lock')return()=>{apply('Lock',lockCommands(doc,ids()));select([]);};
     if(command==='hide')return()=>{apply('Hide',hideCommands(doc,ids()));select([]);};
     if(command==='unlock-all')return()=>{const before=new Set(doc.descendants(null).filter(n=>n.locked&&n.type!=='layer').map(n=>n.id));apply('Unlock All',unlockAllCommands(doc));select([...before]);};

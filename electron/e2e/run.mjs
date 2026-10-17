@@ -26,6 +26,7 @@ import { runDrawGoogleFontWorkflows } from './draw-google-font-workflows.mjs';
 import { runDrawAreaTextWorkflows } from './draw-area-text-workflows.mjs';
 import { runDrawPathTextWorkflows } from './draw-path-text-workflows.mjs';
 import { runDrawCharacterWorkflows } from './draw-character-workflows.mjs';
+import { runDrawCompoundWorkflows } from './draw-compound-workflows.mjs';
 import { runDrawTextOutlineWorkflows } from './draw-text-outline-workflows.mjs';
 import { runDrawFeedbackWorkflows } from './draw-feedback-workflows.mjs';
 import { runWorkflows, verifyRecoveredSession } from "./workflows.mjs";
@@ -85,6 +86,9 @@ try {
   } else if (process.argv.includes('--draw-outlines')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawTextOutlineWorkflows(first);first.socket.close();
+  } else if (process.argv.includes('--draw-compound')) {
+    for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
+    await runDrawCompoundWorkflows(first);first.socket.close();
   } else if (process.argv.includes('--draw-character')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawCharacterWorkflows(first);first.socket.close();
@@ -169,6 +173,7 @@ try {
     await runDrawAreaTextWorkflows(first);
     await runDrawPathTextWorkflows(first);
     await runDrawCharacterWorkflows(first);
+    await runDrawCompoundWorkflows(first);
     await runDrawTextOutlineWorkflows(first);
     const expected = await runProjectWorkflows(first, profile);
     first.socket.close();

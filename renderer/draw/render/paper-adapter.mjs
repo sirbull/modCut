@@ -238,6 +238,14 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
       if (record.arrows) place(parent, record.arrows, index++);
       if (record.stack) place(parent, record.stack, index++);
       if (node.children) reconcile(node.children, item, alive, context);
+      // A clipping mask: the topmost child clips its siblings. Paper skips it when drawing and hit testing.
+      if (node.type === 'group') {
+        const mask = node.clip ? node.children.at(-1)?.id : null;
+        for (const child of node.children) {
+          const childItem = items.get(child.id), want = child.id === mask;
+          if (childItem && childItem.clipMask !== want) { childItem.clipMask = want; if (!want) style(childItem, child, outlineFor(child.id), true); }
+        }
+      }
     }
   }
   function union(a, b) { return a ? a.unite(b) : b.clone(); }
@@ -250,7 +258,8 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
         // Compose from the model: Paper may cache an old global matrix after reparenting.
         const matrix = new scope.Matrix(...node.transform).prepend(parentMatrix);
         records.get(node.id).worldMatrix = matrix;
-        const b = node.children ? visit(node.children, matrix) : records.get(node.id).frame
+        // A clipping group is as large as its clipping path.
+        const b = node.children ? (node.clip && node.children.length ? (visit(node.children, matrix), worldBounds.get(node.children.at(-1).id)?.clone() ?? null) : visit(node.children, matrix)) : records.get(node.id).frame
           ? records.get(node.id).frame.getBounds(matrix) : item.getBounds(matrix);
         if (b) {
           worldBounds.set(node.id, b.clone());
@@ -365,7 +374,55 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     selection.update(); anchors.update(); scope.view.update();
   }
   /** A detached group with the printable artwork in preview mode: no templates, hidden objects, dimming or culling. */
-  function exportArtwork() {
+  const filled = item => !!item.fillColor && item.fillColor.alpha !== 0;
+  /** Cut `item` (detached, world space) by a world-space region: filled art becomes the overlapping area, strokes keep the parts inside. */
+  const clipTo = (item, region) => item.intersect(region, { insert: false, trace: filled(item) });
+  function worldOf(item) { const m = item.matrix.clone(); for (let p = item.parent; p; p = p.parent) m.prepend(p.matrix); return m; }
+  /**
+   * Replaces clipping masks in a detached export group with real geometry, for formats and machines
+   * that cannot clip (PDF/EPS/DXF writers and Send to Cut). Images inside a mask stay whole.
+   */
+  function resolveClipping(group) {
+    const masks = group.getItems({ match: item => item.clipMask });
+    let images = false;
+    for (const mask of masks) {
+      const region = mask.clone({ insert: false }); region.applyMatrix = true; region.transform(worldOf(mask.parent));
+      const parts = mask.parent.getItems({ match: item => !item.clipMask && (item.className === 'Path' || item.className === 'CompoundPath') && !(item.parent?.className === 'CompoundPath') });
+      for (const part of parts) {
+        const parentWorld = worldOf(part.parent), copy = part.clone({ insert: false });
+        copy.applyMatrix = true; copy.transform(parentWorld);
+        const result = clipTo(copy, region); copy.remove();
+        result.transform(parentWorld.inverted()); result.data = { ...part.data }; result.visible = part.visible; result.opacity = part.opacity; result.blendMode = part.blendMode;
+        part.replaceWith(result);
+      }
+      if (mask.parent.getItems({ match: item => item.className === 'Raster' }).length) images = true;
+      region.remove();
+    }
+    for (const mask of masks) mask.remove();
+    group.data.warnings = images ? ['Images inside clipping masks are exported whole.'] : [];
+    return group;
+  }
+  /** Subpaths of a path or shape cut by every clipping mask above it, in the space of `matrix`; null when nothing clips it. */
+  function clippedSubpaths(id, matrix) {
+    const node = state.document.getNode(id);
+    let region = null;
+    for (const group of state.document.ancestors(id)) {
+      if (group.type !== 'group' || !group.clip || !group.children.length) continue;
+      const maskId = group.children.at(-1).id; if (maskId === id) continue;
+      const mask = make(state.document.getNode(maskId)); mask.transform(records.get(maskId).worldMatrix);
+      region = region ? region.intersect(mask, { insert: false }) : mask;
+    }
+    if (!region) return null;
+    const item = make(node); item.transform(records.get(id).worldMatrix);
+    if (!shown(node.appearance?.fills).length) item.fillColor = null; else item.fillColor = '#000';
+    const result = clipTo(item, region); item.remove(); region.remove();
+    result.transform(new scope.Matrix(...matrix).inverted());
+    const subpaths = (result.children ?? [result]).filter(p => p.segments?.length).map(p => ({ closed: p.closed,
+      segments: p.segments.map(s => ({ p: [s.point.x, s.point.y], in: [s.handleIn.x, s.handleIn.y], out: [s.handleOut.x, s.handleOut.y] })) }));
+    result.remove();
+    return subpaths;
+  }
+  function exportArtwork({ resolveClips = false } = {}) {
     const wasOutline = outline; if (wasOutline) setOutline(false);
     try {
       const isTextFrame=item=>{const record=records.get(item.data?.nodeId);return record?.node.type==='text'&&record.frame===item;};
@@ -387,7 +444,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
         const id = child.data?.nodeId; if (isTextFrame(child) || id && !isOutputNode(state.document, id)) continue;
         const copy = child.clone({ insert: false, deep: true }); fix(child, copy); group.addChild(copy);
       }
-      return group;
+      return resolveClips ? resolveClipping(group) : group;
     } finally { if (wasOutline) setOutline(true); }
   }
   function setOutline(value) {
@@ -503,7 +560,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     } catch { url = null; } finally { clone.remove(); }
     thumbnails.set(id, { key, url }); return url;
   }
-  return { render, select: updateView, updateView, bounds, selectionBounds, hit, items, setOutline, thumbnail, exportArtwork, booleanOperand, selectionHandle:point=>selection.hit(point),
+  return { render, select: updateView, updateView, bounds, selectionBounds, hit, items, setOutline, thumbnail, exportArtwork, clippedSubpaths, booleanOperand, selectionHandle:point=>selection.hit(point),
     glyphBounds(id,subpaths) {const item=new scope.CompoundPath({insert:false,children:subpaths.map(path)});try{return item.getBounds(records.get(id).worldMatrix).clone();}finally{item.remove();}},
     previewText(node, parentId = null) {
       textPreview?.remove(); textPreview = null;textPreviewFrame?.remove();textPreviewFrame=null;

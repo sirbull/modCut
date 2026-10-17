@@ -260,6 +260,8 @@ function buildMenu(mode = "cut") {
       {type:'separator'},{label:'Transform Again',accelerator:acceleratorFor('transform-again',{isMac}),click:()=>send('transform-again')},
     ]},{label:'Arrange',submenu:[objectItem('Bring to Front','bring-front'),objectItem('Bring Forward','bring-forward'),objectItem('Send Backward','send-backward'),objectItem('Send to Back','send-back')]},
     {type:'separator'},objectItem('Group','group'),objectItem('Ungroup','ungroup'),
+    {type:'separator'},{label:'Clipping Mask',submenu:[objectItem('Make','clip-make'),objectItem('Release','clip-release')]},
+    {label:'Compound Path',submenu:[objectItem('Make','compound-make'),objectItem('Release','compound-release')]},
     {type:'separator'},objectItem('Lock Selection','lock'),objectItem('Unlock All','unlock-all'),objectItem('Hide Selection','hide'),objectItem('Show All','show-all')];
   }
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));

@@ -184,6 +184,10 @@ export function validateDocument(doc) {
         if ((key==='sides' || key==='points') && (!Number.isInteger(v) || v<(key==='sides'?3:2))) fail(`${path}.params.${key}`,'Expected a whole number of vertices');
       }
     }
+    if (value.type === 'group' && value.clip !== undefined) {
+      bool(value.clip, `${path}.clip`);
+      if (value.clip === true && !['path', 'shape'].includes(value.children?.at(-1)?.type)) fail(`${path}.clip`, 'A clipping mask needs a path or shape on top');
+    }
     if (value.type === 'text') {
       enumeration(value.kind, ['point', 'area', 'onPath'], `${path}.kind`);
       if(value.kind==='area') {

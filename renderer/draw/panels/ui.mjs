@@ -176,7 +176,7 @@ export function createPanels(shell, state, api) {
         [`Delete "${name}"`,() => transaction(target.type === 'layer' ? 'Delete Layer' : 'Delete',deleteRowCommands(doc,target.id)),readOnly || (target.type === 'layer' && doc.data.layers.length === 1 && doc.locate(target.id).parentId === null),'delete'],
         [`Options for "${current.name}"…`,() => api.layerOptions(current.id),readOnly,'options'],
         null,
-        ['Make Clipping Mask',null,true,'clip'],
+        ['Make Clipping Mask',() => api.command('clip-make'),readOnly || api.selectedIds().length < 2,'clip'],
         ['Locate Object',() => dock.layers.body.querySelector('[data-draw-layer-action=focus-2]')?.click(),!api.selectedIds().length,'locate'],
         null,
         ['Merge Selected',() => { transaction('Merge Selected',mergeLayersCommands(doc,picked,current.id)); state.ui.pickedLayers = new Set(); },readOnly || picked.length < 2 || !picked.includes(current.id),'merge'],

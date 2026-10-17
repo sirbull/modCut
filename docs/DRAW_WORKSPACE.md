@@ -1427,7 +1427,7 @@ Oversikt over hva som er gjort og gjenstår, inkludert delvis ferdige oppgaver: 
 * [x] D1.12 Send til Cut v1 (se [STATUS.md](draw/STATUS.md) for hva v1 dekker)
 * [ ] D2.1 Tekst — punkt-/områdetekst, system-/Google-fonter, shaping, variable akser og Create Outlines ferdig.
   Path-tekst, videre områdetekst, flere tekstegenskaper og Character/Paragraph gjenstår; se [STATUS.md](draw/STATUS.md).
-* [ ] D2.2 Pathfinder, Compound, Clipping
+* [ ] D2.2 Pathfinder, Compound, Clipping (alt unntatt Draw Inside og lagklipping er ferdig, se [STATUS.md](draw/STATUS.md))
 * [ ] D2.3 Gradienter og Swatches
 * [ ] D2.4 Path-kommandoer
 * [ ] D2.5 SVG eksport/import (eksport ferdig, se [STATUS.md](draw/STATUS.md))

@@ -4,7 +4,7 @@
 > Detaljer: [hovedplanen](../DRAW_WORKSPACE.md) (spesifikasjon og byggeplan),
 > [RIGHT_PANELS.md](RIGHT_PANELS.md) (høyresiden), [WORK_LOG.md](WORK_LOG.md) (hva som er gjort, dag for dag)
 > og [HANDOFF.md](HANDOFF.md) (overlevering til neste agent).
-> Sist oppdatert: 2026-10-17 (Character og Paragraph). Arbeidsgren: `feat/vector-draw` (Claude og Codex
+> Sist oppdatert: 2026-10-17 (compound paths og klippemasker). Arbeidsgren: `feat/vector-draw` (Claude og Codex
 > jobber begge der; hent alltid før du starter, og kjør `npm ci` ved endrede avhengigheter).
 
 ## 1. Kort oppsummert
@@ -24,7 +24,7 @@ uten å endre Draw-teksten. Image Trace og effekter gjenstår.
 |---|---|---|---|
 | Dokk: Properties over Layers med delelinje | Ferdig | Ja | |
 | Panelstolpe med grupper og faner | Ferdig | Swatches, Color, Stroke/Gradient/Transparency, Appearance, Transform/Align/Pathfinder, Character/Paragraph, Artboards | Brushes, Symbols, Color Guide, Graphic Styles (ikke bygget). Gradient-fanen er deaktivert. |
-| Layers | Ferdig | Øye, lås, fargelinje, thumbnail, navn, målsirkel, søppelkasse, søk, filter, bunnlinje med teller, Layer Options, panelmeny (≡), flervalg av lag, dra utvalg til lag | Paste Remembers Layers; Make Clipping Mask (venter på D2.2) |
+| Layers | Ferdig | Øye, lås, fargelinje, thumbnail, navn, målsirkel, søppelkasse, søk, filter, bunnlinje med teller, Layer Options, panelmeny (≡) med Make Clipping Mask, flervalg av lag, dra utvalg til lag | Paste Remembers Layers; klipping av et helt lag |
 | Properties | Ferdig | Tittel, navn, Character og Paragraph for tekst, Transform (referansepunkt, X, Y, B, H, lenke, rotasjon, Flip), Appearance (fyll, strek, vekt, opacity), form, Align, Quick Actions, Document uten utvalg | |
 | Swatches | Ferdig for solide farger | Bibliotek, laserfarger, Recent Colors, ny/rediger/slett, liste/rutenett | Swatch-grupper, globale swatches, mønstre |
 | Color | Ferdig | Fill/Stroke, modus, glidere, hex, Recent Colors | Spekterfelt |
@@ -254,6 +254,27 @@ Gjenstår i Character/Paragraph (fra kapittel 10.8): kerning-modus (metrics, opt
 horisontal og vertikal skalering, baseline shift, Small Caps, understreking, justert tekst, innrykk og
 avstand før og etter avsnitt, blandede stiler i samme tekstobjekt (stiler gjelder hele objektet).
 
+### 2.12 Compound paths og klippemasker (D2.2, 2026-10-17)
+
+* **Object > Compound Path > Make (Mod+8):** valgte paths og former, også inne i grupper, blir én path
+  med alle delbanene og fyllregelen even-odd, så overlapp blir hull. Den får malingen til objektet
+  som ligger bakerst, og tar plassen til det øverste. **Release (Mod+Shift+Alt+8)** gir én path per
+  delbane. Tekst må gjøres om til konturer først.
+* **Object > Clipping Mask > Make (Mod+7)** og **Make Clipping Mask** i Layers-menyen: det øverste valgte
+  objektet (path eller form) blir klippebane for de andre i en klippegruppe (`group` med `clip: true`)
+  og mister fyll og strek, som i Illustrator. Gruppen er like stor som klippebanen, og det som er
+  klippet bort kan ikke klikkes. **Release (Mod+Alt+7)** slår av klippingen; gruppen og den umalte
+  banen blir stående.
+* Canvas, SVG og PNG/JPEG klipper med Paper.js. **PDF, EPS, DXF og Send to Cut** får klippingen som
+  ekte geometri (Paper.js-booleans): fylte objekter skjæres som flater, rene streker beholder bitene
+  innenfor. Laseren kutter altså det man ser. Bilder i en klippemaske eksporteres hele (advarsel).
+* Kode: `doc/compound.mjs` (rene kommandoer), `clip` i schema, `resolveClipping` og `clippedSubpaths`
+  i `render/paper-adapter.mjs`.
+
+Gjenstår i D2.2: Draw Inside (Shift+D), klippemaske for et helt lag fra Layers-menyen (Illustrators
+lagklipping), redigering av compound path som egne delbaner med Group Selection, tekst som klippebane,
+og compound shapes med Alt-klikk i Pathfinder (fase 4).
+
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
 | Oppgave | Status |
@@ -265,7 +286,7 @@ avstand før og etter avsnitt, blandede stiler i samme tekstobjekt (stiler gjeld
 | D1.11 Place bitmap og template-lag | Ferdig (se 2.3); høyreklikkmeny, Crop Image og Links gjenstår |
 | D1.12 Send til Cut v1 | Ferdig (se 2.2) |
 | D2.1 Tekst | Punkt-, område- og path-tekst, system-/Google-fonter, shaping, variable akser, outlines, Character og Paragraph (2.6 til 2.11); se 2.11 for det som gjenstår |
-| D2.2 Pathfinder, Compound, Clipping | Pathfinder ferdig; compound paths og clipping masks gjenstår |
+| D2.2 Pathfinder, Compound, Clipping | Pathfinder, compound paths og klippemasker ferdig (2.12); Draw Inside og lagklipping gjenstår |
 | D2.3 Gradienter og Swatches | Swatches ferdig (solide); gradienter og globale swatches gjenstår |
 | D2.4 Path-kommandoer | Gjenstår |
 | D2.5 SVG eksport/import | SVG-eksport ferdig (se 2.5); SVG-import finnes i enkel form |
@@ -286,9 +307,9 @@ SVG-, PNG- og JPEG-eksport er gjort (2.5).
 
 1. **D2.1 Tekst** er ferdig i grunnform (2.6 til 2.11). Resten (kerning-modus, justert tekst, innrykk,
    blandede stiler, klammer for tekst på path, reflow med canvas-håndtak) tas senere.
-   **Neste: D2.2 compound paths og clipping masks.**
-2. D2.2 Compound paths og clipping masks (Make Clipping Mask i Layers-menyen venter på dette). Neste.
-3. D2.4 Path-kommandoer (Join, Average, Offset Path, Simplify).
+   D2.2 compound paths og klippemasker er gjort (2.12).
+2. **D2.4 Path-kommandoer** (Join, Average, Offset Path, Simplify, Reverse, Add/Remove Anchor Points, Clean Up). Neste.
+3. Draw Inside (rest av D2.2).
 4. D2.6 PDF-eksport, D2.3 gradienter, D2.8 flere verktøy, D2.9 History/Info/kommandosøk.
 5. D2.10 Send til Cut v2.
 

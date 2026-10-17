@@ -1195,3 +1195,22 @@ angresteg per endring, Paragraph for flere tekster i ett steg, felt i Properties
 lagring og eksport.
 
 Neste: D2.2 compound paths og clipping masks.
+
+## 2026-10-17: D2.2 compound paths og klippemasker
+
+- `doc/compound.mjs`: `compoundCommands` (Make Compound Path, også fra grupper, i verdenskoordinater
+  regnet om til målforelderen, even-odd, bakerste objekts maling), `releaseCompoundCommands`,
+  `clipCommands` (klippegruppe; `clip` settes til slutt så hvert steg er gyldig) og `releaseClipCommands`.
+- Schema: `group.clip` (boolsk); en klippegruppe må ha en path eller form øverst.
+- Rendereren setter `clipMask` på øverste barn i klippegrupper, og gruppens grenser er klippebanens.
+  Paper.js tar seg av tegning og treff.
+- `exportArtwork({ resolveClips: true })` gjør klippingen om til geometri for PDF/EPS/DXF
+  (`export-controller.mjs`), og `clippedSubpaths` brukes av Send to Cut (`cutSvg` i `index.mjs`).
+- Object-menyen har fått undermenyene Clipping Mask og Compound Path; Make Clipping Mask i Layers-menyen
+  er aktivert (gjelder utvalget, ikke hele laget).
+
+Verifisering: 201 Draw-enhetstester (5 nye i `compound.test.mjs`). Ny E2E `draw-compound-workflows.mjs`
+(`--draw-compound`): Mod+8 med hull og bakerste maling, ett angresteg, release, klippemaske fra
+Layers-menyen, grenser og treff, PNG/SVG, klippet PDF/EPS/DXF-modell og Send to Cut, release.
+
+Neste: D2.4 path-kommandoer.
