@@ -1442,7 +1442,7 @@ Oversikt over hva som er gjort og gjenstår, inkludert delvis ferdige oppgaver: 
 * [x] D3.5 Magic Wand, Lasso, Select-meny (se [STATUS.md](draw/STATUS.md))
 * [x] D3.6 Free Transform, Transform Each, Split Into Grid (perspektiv gjenstår, se [STATUS.md](draw/STATUS.md))
 * [ ] D3.7 AI- og DXF-eksport
-* [ ] D3.8 Links, Crop Image, Document Info, Rediger i Draw
+* [x] D3.8 Links, Crop Image, Document Info, Rediger i Draw (lenkede bilder og beskjæringshåndtak gjenstår, se [STATUS.md](draw/STATUS.md))
 * [ ] D4.1 Width og width profiles
 * [ ] D4.2 Blend
 * [ ] D4.3 Warp, Live Pathfinder og opacity masks

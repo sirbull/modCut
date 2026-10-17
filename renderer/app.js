@@ -382,6 +382,17 @@ async function sendDrawToCut({ svg, name, count, images = [], warnings, target, 
   if (warnings.length) toast(warnings.join(" "), "info");
   return { cutTabId: activeTabId };
 }
+// Cut > Edit in Draw: the selected Cut objects become Draw objects on a new bed-sized artboard. Rasters stay in Cut.
+async function editInDraw() {
+  if (!bed.copySelection()) { toast("Select objects in Cut first.", "info"); return; }
+  const copied = bed.clipboardSVG(), tab = activeTab();
+  if (!copied?.svg) { toast(copied?.warning || "Nothing in the selection can be edited in Draw.", "info"); return; }
+  setWorkspace("draw");
+  if (!tab?.draw || document.body.dataset.workspace !== "draw") return;
+  const m = machine();
+  try { await tab.draw.editFromCut(copied, { width: m.bedW || 600, height: m.bedH || 400 }); }
+  catch (error) { toast(error.message, "err"); }
+}
 // Draw's Export As: SVG text or a PNG/JPEG data URL, written where the user chooses.
 // Draw export writes only where the user chose in the main process's save or folder dialog.
 const drawExportBridge = {
@@ -2495,6 +2506,8 @@ function openContextMenu(info) {
     <button data-act="move-to-top">Move to top <kbd>⇧⌘U</kbd></button>
     <button data-act="move-to-bottom">Move to bottom <kbd>⌥⇧⌘N</kbd></button>
     <div class="ctx-menu__sep"></div>
+    <button data-act="edit-in-draw">Edit in Draw</button>
+    <div class="ctx-menu__sep"></div>
     <button data-act="delete" class="ctx-menu__danger">${deleteLabel} <kbd>⌫</kbd></button>`;
   ctxMenu.style.left = Math.min(info.x, window.innerWidth - 252) + "px";
   ctxMenu.style.top = Math.max(8, Math.min(info.y, window.innerHeight - 420)) + "px";
@@ -2513,6 +2526,7 @@ function openContextMenu(info) {
     const b = e.target.closest("button[data-act]");
     if (!b || b.disabled) return;
     if (b.dataset.act === "advanced-image-editor") void openAdvancedImageEditor();
+    else if (b.dataset.act === "edit-in-draw") void editInDraw();
     else editAction(b.dataset.act);
     closeContextMenu();
   });

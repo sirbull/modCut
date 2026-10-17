@@ -5,7 +5,7 @@ export const PANEL_DEFINITIONS = Object.freeze([
   ['artboards', 'Artboards', 'artboard'], ['swatches', 'Swatches', 'color-swatch'], ['color', 'Color', 'palette'],
   ['character', 'Character', 'typography'], ['paragraph', 'Paragraph', 'align-left'],
   ['stroke', 'Stroke', 'line-dashed'], ['gradient', 'Gradient', 'contrast-2'], ['transparency', 'Transparency', 'blend-mode'], ['appearance', 'Appearance', 'stack-2'], ['align', 'Align', 'align-center'], ['transform', 'Transform', 'arrows-move'], ['pathfinder', 'Pathfinder', 'layers-subtract'],
-  ['info', 'Info', 'info-circle'], ['history', 'History', 'history'],
+  ['info', 'Info', 'info-circle'], ['history', 'History', 'history'], ['document-info', 'Document Info', 'file-info'], ['links', 'Links', 'link'],
 ].map(([id, name, icon]) => Object.freeze({ id, name, icon, ...(UNAVAILABLE[id] ? { unavailable: UNAVAILABLE[id] } : {}) })));
 export function panelIconHref(id) {
   const panel = PANEL_DEFINITIONS.find(panel => panel.id === id);
@@ -25,7 +25,7 @@ export const PANEL_GROUPS = Object.freeze([
   ['transform', 'arrows-move', ['transform', 'align', 'pathfinder']],
   ['type', 'typography', ['character', 'paragraph']],
   ['artboards', 'artboard', ['artboards']],
-  ['info', 'info-circle', ['info', 'history']],
+  ['info', 'info-circle', ['info', 'history', 'document-info', 'links']],
 ].map(([id, icon, tabs]) => Object.freeze({ id, icon, tabs: Object.freeze(tabs) })));
 export function groupForPanel(id) { return PANEL_GROUPS.find(group => group.tabs.includes(id)) ?? null; }
 export function panelAvailable(id) { return !PANEL_DEFINITIONS.find(panel => panel.id === id)?.unavailable; }

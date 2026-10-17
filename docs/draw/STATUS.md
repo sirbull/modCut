@@ -573,6 +573,26 @@ Del B (2026-10-17):
 Gjenstår i D3.2: Inner/Outer Glow, Feather, Gaussian Blur, Free Distort som effekt, effekter på grupper,
 og Preview i effektdialogene.
 
+### 2.25 Document Info, Links, Crop Image og Edit in Draw (D3.8, 2026-10-17)
+
+* **Document Info** (fane i Info-gruppen): artboards, lag, objekter per type, ankerpunkter, åpne baner,
+  klippemasker, objekter med effekter, skjulte eller ikke-utskrivbare objekter, fonter (også fra tekstdeler)
+  og bilder med piksler og ppi; for hele dokumentet eller bare utvalget. Påminnelse om åpne baner og tom tekst
+  før Send to Cut.
+* **Links** (fane i Info-gruppen): alle plasserte bilder med størrelse, ppi og «Embedded». Klikk velger
+  bildet; **Replace…** bytter bildefil og beholder plassering og bredde (høyden følger det nye bildet).
+* **Crop Image** (Object-menyen og Properties for bilder): beskjær i mm fra hver synlig kant; negative tall
+  henter fram beskåret del, og «Show the whole image again» nullstiller. Ikke-destruktivt: bildet i dokumentet
+  er helt, `crop` sier hvilken del som vises. Lerret, eksport og Send to Cut viser bare den beskårne delen.
+  Ett angresteg.
+* **Cut > høyreklikk > Edit in Draw:** valgte Cut-objekter kopieres til Draw på et nytt artboard i bedstørrelse
+  («From Cut»), på samme plass som på bedet. Bilder blir i Cut.
+* Kode: `doc/document-info.mjs`, `documentInfoPanel` og `linksPanel` i `panels/ui.mjs`, `cropImage` i
+  `geom/transform-each.mjs`, beskjæring ved lasting i `render/paper-adapter.mjs`, `replaceImage` og `editFromCut`
+  i `index.mjs`, `editInDraw` og menypunktet i `app.js`.
+
+Gjenstår i D3.8: lenkede (ikke innebygde) bilder med status, Crop Image med håndtak på lerretet.
+
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
 | Oppgave | Status |
@@ -599,7 +619,9 @@ og Preview i effektdialogene.
 | D3.4 Shape Builder, Eraser og Knife | Ferdig (2.22); Path Eraser gjenstår |
 | D3.5 Magic Wand, Lasso, Select-meny | Ferdig (2.21) |
 | D3.6 Free Transform, Transform Each, Split Into Grid | Ferdig (2.23); perspektiv gjenstår |
-| D3.7, D3.8, fase 4 og 5 | Gjenstår |
+| D3.7 AI- og DXF-eksport | DXF finnes (D2.6); AI gjenstår |
+| D3.8 Links, Crop Image, Document Info, Edit in Draw | Ferdig (2.25); lenkede bilder og beskjæringshåndtak gjenstår |
+| Fase 4 og 5 | Gjenstår |
 
 ## 4. Rekkefølge videre
 
@@ -618,8 +640,7 @@ SVG-, PNG- og JPEG-eksport er gjort (2.5).
    gjort. Fra D2.1 er skalering, baseline shift, kerning, avsnitt og blandede stiler gjort (2.11).
 6. Fase 3: D3.1 Expand og Expand Appearance (2.20) og D3.5 Select-meny, Magic Wand og Lasso (2.21) er gjort.
    D3.4 Shape Builder, Knife og Eraser (2.22) og D3.6 Free Transform, Transform Each og Split Into Grid
-   (2.23) er også gjort, og D3.2 effekter (2.24). **Neste: D3.8 Links, Crop Image og Document Info, så D3.3
-   Image Trace og D3.7 AI- og DXF-eksport.**
+   (2.23) er også gjort, og D3.2 effekter (2.24) og D3.8 (2.25). **Neste: D3.3 Image Trace, så D3.7 AI-eksport.**
 
 
 ## 5. Kjente begrensninger og risiko

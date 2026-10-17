@@ -1561,3 +1561,19 @@ Hele Draw-E2E for d88316e (del A) stoppet i `draw-pathfinder-workflows.mjs`, som
 var avslått; den sjekker nå at Add Effect lister effektene.
 
 Neste: D3.8 Links, Crop Image og Document Info.
+
+## 2026-10-17: D3.8 Document Info, Links, Crop Image og Edit in Draw
+
+- `doc/document-info.mjs`: `documentInfo(doc, ids)`; panelene `document-info` og `links` i Info-gruppen
+  (Tabler `file-info`, `link`, `crop`).
+- `geom/transform-each.mjs`: `cropImage` regner ny `crop`, synlig størrelse og transform slik at resten blir
+  stående. `render/paper-adapter.mjs` tegner bare den beskårne delen (lerret ved lasting, geometrinøkkelen
+  tar med `crop`); Send to Cut beskjærer data-URL-en før sending.
+- `index.mjs`: `crop-image`, `replaceImage` (Links) og `editFromCut`; `import-artwork.mjs` eksporterer `rasterAsset`.
+- `app.js`: «Edit in Draw» i Cuts høyreklikkmeny (`editInDraw`).
+
+Verifisering: 255 Draw-enhetstester (`document-info.test.mjs`, ny test for `cropImage`), ny E2E
+`draw-links-workflows.mjs` (`--draw-links`). Å fjerne `crop` gjøres med `replaceLeaf`, siden validatoren avviser
+`crop: undefined`. Hele E2E for 7385bbd (effekter del B) passerte helt: 38 av 38.
+
+Neste: D3.3 Image Trace.

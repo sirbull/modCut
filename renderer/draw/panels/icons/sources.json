@@ -106,6 +106,11 @@
       "path": "icons/outline/copy.svg",
       "sha256": "01da13d33d6163f37ee81f397e567832068d836af0307118156370716357be07"
     },
+    "crop": {
+      "name": "crop",
+      "path": "icons/outline/crop.svg",
+      "sha256": "2b29d40e99536b5f53c785a3caac370c5ae688eac971fc4455d75a64f6a7b9ba"
+    },
     "eye": {
       "name": "eye",
       "path": "icons/outline/eye.svg",
@@ -115,6 +120,11 @@
       "name": "eye-off",
       "path": "icons/outline/eye-off.svg",
       "sha256": "0b761c8c6d812f3e40068454614b49e372df1546d74f718988365b423ff9adac"
+    },
+    "file-info": {
+      "name": "file-info",
+      "path": "icons/outline/file-info.svg",
+      "sha256": "1c06cc4b04b3b84258b1aeeb6c76a23a6d88ddd88fe32e5f7266fe665c9d28b3"
     },
     "flip-horizontal": {
       "name": "flip-horizontal",

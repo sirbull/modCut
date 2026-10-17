@@ -4,6 +4,7 @@ import { createId } from '../doc/schema.mjs';
 import { textValues } from '../doc/text.mjs';
 import { addStop, colorHex, defaultGradient, gradientCss, isGradient, removeStop, reverseGradient, setGradientAngle, setGradientType, updateStop } from '../doc/gradient.mjs';
 import { EFFECTS, effectLabel } from '../doc/effects.mjs';
+import { documentInfo } from '../doc/document-info.mjs';
 import { addSwatch, documentSwatches, editSwatch, groupSwatches, linkedPaints, rememberColor, removeSwatch } from '../doc/swatches.mjs';
 import { ROOT_CONTEXT, collectCommands, deleteLayerCommands, deleteRowCommands, duplicateCommands, filterLayerTree, flattenCommands, layerContext, mergeLayersCommands, moveCommand, moveToLayerCommands, newLayer, othersUpdates, releaseCommands, soloUpdates } from '../doc/layers.mjs';
 import { shortcutLabel } from '../keymap.mjs';
@@ -862,7 +863,7 @@ export function createPanels(shell, state, api) {
     const shapes = ids.filter(id => state.document.getNode(id)?.type === 'shape' && state.document.isEditable(id));
     const groups = ids.filter(id => state.document.getNode(id)?.type === 'group');
     const images = ids.filter(id => state.document.getNode(id)?.type === 'image');
-    if (images.length) quickActions(host,[['Use as Template',() => api.command('use-as-template'),'use-as-template',ro]]);
+    if (images.length) quickActions(host,[['Use as Template',() => api.command('use-as-template'),'use-as-template',ro],['Crop Image…',() => api.command('crop-image'),'crop-image',ro]]);
     quickActions(host,[
       ['Group',() => api.command('group'),'group',ro],
       ['Ungroup',() => api.command('ungroup'),'ungroup',ro || !groups.length],
@@ -1005,12 +1006,45 @@ export function createPanels(shell, state, api) {
     const m = state.ui.measurement;
     if (m) { row('distance','D',mm(m.distance)); row('angle','Angle',`${m.angle.toFixed(1)}°`); }
   }
+  /** Document Info: the whole document, or the selection, with what matters before Send to Cut. */
+  function documentInfoPanel(host) {
+    const ids = api.selectedIds(), scope = state.ui.documentInfoScope === 'selection' && ids.length ? 'selection' : 'document';
+    const pick = document.createElement('select'); pick.className = 'select'; pick.dataset.drawField = 'document-info-scope';
+    pick.append(new Option('Document','document'),new Option('Selection only','selection')); pick.value = scope;
+    pick.addEventListener('change',() => { state.ui.documentInfoScope = pick.value; render(); }); host.append(pick);
+    const info = documentInfo(state.document, scope === 'selection' ? ids : null);
+    const grid = document.createElement('dl'); grid.className = 'draw-info'; host.append(grid);
+    const row = (key, label, value) => { const dt = document.createElement('dt'), dd = document.createElement('dd'); dt.textContent = label; dd.textContent = String(value); dd.dataset.drawDocInfo = key; grid.append(dt,dd); };
+    if (scope === 'document') { row('artboards','Artboards',info.artboards); row('layers','Layers',info.layers); }
+    for (const o of info.objects) row(o.label.toLowerCase().replace(/\s+/g,'-'),o.label,o.count);
+    row('anchors','Anchor points',info.anchors); row('open-paths','Open paths',info.openPaths); row('clipping','Clipping masks',info.clipping);
+    row('effects','Objects with effects',info.effects); row('hidden','Hidden or not printing',info.hidden);
+    const section = (title, items, line) => { const h = document.createElement('h3'); h.className = 'draw-panel__section'; h.textContent = title; host.append(h);
+      if (!items.length) { text(host,'None'); return; } const ul = document.createElement('ul'); ul.className = 'draw-doc-info-list'; for (const item of items) { const li = document.createElement('li'); li.textContent = line(item); ul.append(li); } host.append(ul); };
+    section('Fonts',info.fonts,f => `${f.family} ${f.weight === 'normal' ? 'Regular' : f.weight === 'bold' ? 'Bold' : f.weight}${f.style === 'italic' ? ' Italic' : ''} (${f.source === 'google' ? 'Google' : 'installed'}, ${f.count} text${f.count === 1 ? '' : 's'})`);
+    section('Images',info.images,i => `${i.name}: ${i.pixels} px, ${i.ppi} ppi${i.cropped ? ', cropped' : ''}${i.reference ? ', reference' : ''}`);
+    if (info.openPaths || info.emptyText) text(host,'Before Send to Cut: open paths are cut as lines, and empty text is left out.');
+  }
+  /** Links: every placed image, embedded in the document. Click to select; Replace keeps its place. */
+  function linksPanel(host) {
+    const images = state.document.descendants(null).filter(n => n.type === 'image');
+    if (!images.length) { text(host,'Placed images appear here.'); return; }
+    const list = document.createElement('div'); list.className = 'draw-appearance-list draw-links'; list.setAttribute('role','list');
+    for (const n of images) {
+      const asset = state.document.data.assets[n.assetId], row = document.createElement('div'); row.className = 'draw-appearance-row'; row.setAttribute('role','listitem'); row.dataset.drawLink = n.id;
+      const name = button(`${n.name || 'Image'} · ${asset ? `${asset.width} × ${asset.height} px` : '?'} · ${Math.round(n.ppiEffective ?? 0)} ppi · Embedded`,() => api.select([n.id]));
+      name.className = 'draw-appearance-name'; name.setAttribute('aria-pressed',String(api.selectedIds().includes(n.id)));
+      const replace = iconButton('Replace image…','link',() => api.replaceImage(n.id),'draw-layer-action'); replace.disabled = state.document.readOnly || !state.document.isEditable(n.id); replace.dataset.drawLinkReplace = n.id;
+      row.append(name,replace); list.append(row);
+    }
+    host.append(list); text(host,'Images are embedded in the document, so it opens anywhere. Replace keeps the position and width.');
+  }
   /** Updates the Info panel in place as the pointer moves, without rebuilding the other panels. */
   function updateInfo() {
     if (flyout.hidden || flyoutBody.dataset.drawPanelBody !== 'info') return;
     flyoutBody.replaceChildren(); infoPanel(flyoutBody);
   }
-  const PANEL_CONTENT = { gradient: gradientPanel, character: host => characterPanel(host), paragraph: host => paragraphPanel(host), swatches: swatchesPanel, color: colorPanel, stroke: strokePanel, transparency: transparencyPanel, pathfinder: pathfinderPanel, appearance: appearancePanel, transform: host => transform(host), align: alignPanel, artboards: artboardPanel, history: historyPanel, info: infoPanel };
+  const PANEL_CONTENT = { gradient: gradientPanel, character: host => characterPanel(host), paragraph: host => paragraphPanel(host), swatches: swatchesPanel, color: colorPanel, stroke: strokePanel, transparency: transparencyPanel, pathfinder: pathfinderPanel, appearance: appearancePanel, transform: host => transform(host), align: alignPanel, artboards: artboardPanel, history: historyPanel, info: infoPanel, 'document-info': documentInfoPanel, links: linksPanel };
   function renderFlyout() {
     const group = PANEL_GROUPS.find(g => g.id === state.ui.flyout);
     flyout.hidden = !group; if (!group) { flyoutTabs.replaceChildren(); flyoutBody.replaceChildren(); return; }

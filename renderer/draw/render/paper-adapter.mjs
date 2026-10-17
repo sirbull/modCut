@@ -165,6 +165,14 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
       raster.onLoad = () => {
         // A delayed load must not resurrect a removed/replaced item or use an old transform.
         if (destroyed || items.get(node.id) !== raster) return;
+        // Crop Image is non-destructive: the asset stays whole, the raster shows only the cropped part.
+        const crop = records.get(node.id).node.crop;
+        if (crop && !raster.data.cropped && raster.image) {
+          const img = raster.image, w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+          const canvas = document.createElement('canvas'); canvas.width = Math.max(1, Math.round(w * crop.width)); canvas.height = Math.max(1, Math.round(h * crop.height));
+          canvas.getContext('2d').drawImage(img, w * crop.x, h * crop.y, w * crop.width, h * crop.height, 0, 0, canvas.width, canvas.height);
+          raster.data.cropped = true; raster.setImage(canvas);
+        }
         withScope(() => {
           positionImage(raster, records.get(node.id).node);
           updateBounds(); updateView(); onImageLoad();
@@ -180,7 +188,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     const effects = hasVectorEffects(node) ? [node.appearance.effects.filter(e => !e.hidden), geometryReady()] : null;
     if (node.type === 'path') return JSON.stringify([node.subpaths, node.fillRule, effects]);
     if (node.type === 'shape') return JSON.stringify([node.shape, node.params, effects]);
-    if (node.type === 'image') return JSON.stringify([node.assetId, state.document.data.assets[node.assetId]]);
+    if (node.type === 'image') return JSON.stringify([node.assetId, state.document.data.assets[node.assetId], node.crop ?? null]);
     return node.type;
   }
   // Appearance entries can be hidden from the Appearance panel; hidden ones never draw.

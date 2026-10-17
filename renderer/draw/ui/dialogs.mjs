@@ -520,6 +520,12 @@ export function splitGridDialog(defaults={}) {
     {key:'columnGutter',label:'Column gutter (mm)',type:'number',value:defaults.columnGutter??2,min:0,max:10000,step:'any',required:true},
   ]}).then(v=>v&&{rows:Math.round(Number(v.rows)),columns:Math.round(Number(v.columns)),rowGutter:Number(v.rowGutter),columnGutter:Number(v.columnGutter)});
 }
+/** Crop Image: how much to cut from each visible edge (mm); negative values bring back cropped parts. */
+export function cropImageDialog() {
+  const n=(key,label)=>({key,label,type:'number',value:0,min:-100000,max:100000,step:'any',required:true});
+  return openDrawModal({title:'Crop Image',submitLabel:'Crop',className:'draw-crop-dialog',fields:[n('left','Left (mm)'),n('top','Top (mm)'),n('right','Right (mm)'),n('bottom','Bottom (mm)'),
+    {key:'reset',label:'Show the whole image again',type:'checkbox',value:false}]}).then(v=>v&&{left:Number(v.left),top:Number(v.top),right:Number(v.right),bottom:Number(v.bottom),reset:!!v.reset});
+}
 /** Eraser Tool Options: brush diameter in mm. */
 export function eraserDialog(size=3) {
   return openDrawModal({title:'Eraser Tool Options',submitLabel:'OK',className:'draw-eraser-dialog',fields:[

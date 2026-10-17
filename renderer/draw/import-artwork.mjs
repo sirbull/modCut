@@ -50,7 +50,7 @@ function prepareVector(prepared) {
   return { node: svg, widthMm: w, heightMm: h, complex, images,
     warning: complex ? 'SVG masks or filters were imported as an image to preserve appearance.' : null };
 }
-async function rasterAsset(dataUrl, widthMm, heightMm) {
+export async function rasterAsset(dataUrl, widthMm, heightMm) {
   const image = await imageFrom(dataUrl);
   // Normalize raster input to an embedded PNG so assets are self-contained in Draw.
   const canvas = document.createElement('canvas'); canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;

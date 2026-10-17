@@ -124,7 +124,7 @@ export function artboardCutSvg(doc, boardId, geometry, { only = null, clipToBoar
       if (Math.abs(x[0] * y[0] + x[1] * y[1]) > 1e-6 * Math.hypot(...x) * Math.hypot(...y) || x[0] * y[1] - x[1] * y[0] < 0) skewed++;
       if (doc.ancestors(original.id).some((a) => a.type === 'group' && a.clip)) maskedImages++;
       const [cx, cy] = apply(m, [w / 2, h / 2]);
-      images.push({ assetId: original.assetId, dataUrl: `data:${asset.mimeType ?? 'image/png'};base64,${asset.data}`, x: cx, y: cy, width: Math.hypot(...x), height: Math.hypot(...y), rotation: Math.atan2(x[1], x[0]) * 180 / Math.PI });
+      images.push({ assetId: original.assetId, ...(original.crop ? { crop: { ...original.crop } } : {}), dataUrl: `data:${asset.mimeType ?? 'image/png'};base64,${asset.data}`, x: cx, y: cy, width: Math.hypot(...x), height: Math.hypot(...y), rotation: Math.atan2(x[1], x[0]) * 180 / Math.PI });
       continue;
     }
     if (original.type === 'text') {

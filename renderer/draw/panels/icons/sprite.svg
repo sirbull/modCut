@@ -314,6 +314,20 @@
   <path d="M7 9.667a2.667 2.667 0 0 1 2.667 -2.667h8.666a2.667 2.667 0 0 1 2.667 2.667v8.666a2.667 2.667 0 0 1 -2.667 2.667h-8.666a2.667 2.667 0 0 1 -2.667 -2.667l0 -8.666" />
   <path d="M4.012 16.737a2.005 2.005 0 0 1 -1.012 -1.737v-10c0 -1.1 .9 -2 2 -2h10c.75 0 1.158 .385 1.5 1" />
 </symbol>
+<symbol id="icon-crop" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-crop"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M8 5v10a1 1 0 0 0 1 1h10" />
+  <path d="M5 8h10a1 1 0 0 1 1 1v10" />
+</symbol>
 <symbol id="icon-eye-off" width="24"
   height="24"
   viewBox="0 0 24 24"
@@ -342,6 +356,22 @@
   <path stroke="none" d="M0 0h24v24H0z" fill="none" />
   <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
   <path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6" />
+</symbol>
+<symbol id="icon-file-info" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-file-info"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M14 3v4a1 1 0 0 0 1 1h4" />
+  <path d="M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2" />
+  <path d="M11 14h1v4h1" />
+  <path d="M12 11h.01" />
 </symbol>
 <symbol id="icon-flip-horizontal" width="24"
   height="24"

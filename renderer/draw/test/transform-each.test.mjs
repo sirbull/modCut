@@ -39,3 +39,14 @@ test('free distort moves one corner and maps the rest bilinearly', async () => {
   const [s] = distortSubpaths([{ closed: true, segments: [{ p: [10, 0], in: [0, 0], out: [0, 5] }] }], b, corners);
   near(s.segments[0].p, [10, 0]); near(s.segments[0].out, [5, 10]);
 });
+
+test('Crop Image keeps the remaining part in place and can be undone by uncropping', async () => {
+  const { cropImage } = await import('../geom/transform-each.mjs');
+  const image = { width: 40, height: 20, transform: [1, 0, 0, 1, 100, 50] };
+  const cropped = cropImage(image, { left: 10, top: 5, right: 10 });
+  assert.deepEqual([cropped.width, cropped.height], [20, 15]); near(cropped.transform, [1, 0, 0, 1, 110, 55]);
+  near([cropped.crop.x, cropped.crop.y, cropped.crop.width, cropped.crop.height], [.25, .25, .5, .75]);
+  const back = cropImage({ ...cropped }, { left: -10, top: -5, right: -10 });
+  assert.equal(back.crop, null, 'Back to the whole image'); near(back.transform, [1, 0, 0, 1, 100, 50]);
+  assert.throws(() => cropImage(image, { left: 30, right: 20 }), /nothing/);
+});

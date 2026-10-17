@@ -52,3 +52,16 @@ export function distortSubpaths(subpaths, box, corners) {
   }) }));
 }
 export const boxCorners = (b) => [[b.x, b.y], [b.x + b.width, b.y], [b.x + b.width, b.y + b.height], [b.x, b.y + b.height]];
+/**
+ * Crop Image: insets (mm, from the visible edges; negative uncrops) give the new crop (fractions of the
+ * source), visible size and transform, keeping the remaining part where it is.
+ */
+export function cropImage({ width, height, transform, crop = { x: 0, y: 0, width: 1, height: 1 } }, { left = 0, top = 0, right = 0, bottom = 0 }) {
+  const fullW = width / crop.width, fullH = height / crop.height;
+  const x = Math.max(0, crop.x + left / fullW), y = Math.max(0, crop.y + top / fullH);
+  const x2 = Math.min(1, crop.x + crop.width - right / fullW), y2 = Math.min(1, crop.y + crop.height - bottom / fullH);
+  if (!(x2 - x > 1e-6) || !(y2 - y > 1e-6)) throw new Error('The crop leaves nothing of the image.');
+  const dx = (x - crop.x) * fullW, dy = (y - crop.y) * fullH, [a, b, c, d, e, f] = transform;
+  const next = { x, y, width: x2 - x, height: y2 - y }, whole = next.x < 1e-9 && next.y < 1e-9 && next.width > 1 - 1e-9 && next.height > 1 - 1e-9;
+  return { width: next.width * fullW, height: next.height * fullH, transform: [a, b, c, d, e + a * dx + c * dy, f + b * dx + d * dy], crop: whole ? null : next };
+}

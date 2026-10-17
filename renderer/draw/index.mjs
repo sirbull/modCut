@@ -7,7 +7,7 @@ import { multiply as multiplyMatrix } from './doc/arrange.mjs';
 import { stackingOrder as objectOrder } from './doc/arrange.mjs';
 import { arrangeCommands, groupCommands, hideCommands, lockCommands, showAllCommands, ungroupCommands, unlockAllCommands } from './doc/arrange.mjs';
 import { PATHFINDER_LABELS, runPathfinder, toSubpaths } from './geom/pathfinder.mjs';
-import { transformEachMatrix, gridCells, distortSubpaths, boxCorners } from './geom/transform-each.mjs';
+import { transformEachMatrix, gridCells, distortSubpaths, boxCorners, cropImage } from './geom/transform-each.mjs';
 import { pickRegions, mergeRegions, knifeCut, erase as eraseRegion, areaOf } from './geom/region-ops.mjs';
 import { fillHex, pathfinderCommands, stackingOrder } from './doc/pathfinder-commands.mjs';
 import { cancelActiveScrub } from './ui/number-field.mjs';
@@ -32,8 +32,8 @@ import { activeArtboard } from './doc/artboards.mjs';
 import { SAME_MODES, OBJECT_KINDS, magicWand, inverseSelection, sameAs, objectsOfKind, stackNeighbour, saveSelection, savedSelection } from './doc/select-rules.mjs';
 import { DRAW_MODE_LABELS, insideTarget, nextDrawMode, placement } from './doc/draw-mode.mjs';
 import { changePaint, changeStroke, paintHex } from './doc/paint.mjs';
-import { importArtwork } from './import-artwork.mjs';
-import { shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog,layerOptionsDialog,swatchOptionsDialog,sendToCutDialog,averageDialog,offsetDialog,simplifyDialog,pencilDialog,expandDialog,effectDialog,magicWandDialog,eraserDialog,transformEachDialog,splitGridDialog,saveSelectionDialog,editSelectionDialog } from './ui/dialogs.mjs';
+import { importArtwork, rasterAsset } from './import-artwork.mjs';
+import { shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog,layerOptionsDialog,swatchOptionsDialog,sendToCutDialog,averageDialog,offsetDialog,simplifyDialog,pencilDialog,expandDialog,cropImageDialog,effectDialog,magicWandDialog,eraserDialog,transformEachDialog,splitGridDialog,saveSelectionDialog,editSelectionDialog } from './ui/dialogs.mjs';
 import { ALL_ARTBOARDS, artboardCutSvg } from './io/cut-svg.mjs';
 import { EXPORT_FORMATS, rasterSize, svgDocument } from './io/export.mjs';
 import { createExportController } from './export-controller.mjs';
@@ -54,7 +54,7 @@ export function getDrawWorkspace(root) {return workspaces.get(root) || null;}
 const implementedTools=new Set(['select','group-selection','magic-wand','lasso','shape-builder','knife','eraser','free-transform','pencil','hand','zoom','artboard','gradient','eyedropper','measure','scissors','type','area-type','type-on-path',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
 const commands=new Set(['undo','redo','delete','select-all','select-artboard','deselect','cancel','fit-artboard','fit-all','actual-size','zoom-in','zoom-out','outline',
   'cut','copy','paste','paste-front','paste-back','paste-place','paste-all-artboards',
-  'edit-text','create-outlines','join','average','offset-path','outline-stroke','expand','expand-appearance','transform-each','split-into-grid','effect-last','effect-options',...Object.keys(EFFECTS).map(t=>`effect-${t}`),'simplify','reverse-path','add-anchors','remove-anchors','clean-up','compound-make','compound-release','clip-make','clip-release','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
+  'edit-text','create-outlines','join','average','offset-path','outline-stroke','expand','expand-appearance','transform-each','split-into-grid','crop-image','effect-last','effect-options',...Object.keys(EFFECTS).map(t=>`effect-${t}`),'simplify','reverse-path','add-anchors','remove-anchors','clean-up','compound-make','compound-release','clip-make','clip-release','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
   'paint-focus','paint-swap','paint-none','paint-solid','paint-gradient','default-paint','smart-guides','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','shear-dialog','toggle-panels','toggle-panels-except-tools','command-search','draw-mode','draw-normal','draw-behind','draw-inside','reselect','select-inverse','select-next-above','select-next-below','save-selection','edit-selection',
   ...Object.keys(SAME_MODES).map(m=>`select-same-${m}`),...Object.keys(OBJECT_KINDS).map(k=>`select-object-${k}`),
   ...PANEL_DEFINITIONS.map(p=>`panel.${p.id}`),...['left','right','up','down'].flatMap(d=>[`nudge-${d}`,`nudge-large-${d}`,`duplicate-${d}`])]);
@@ -300,7 +300,13 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     const board=all?{id:ALL_ARTBOARDS,name:`${state.document.data.name||'Artboards'} (all artboards)`}:state.document.getArtboard(options.boardId),cutOptions={clipToBoard:options.outside==='clip',dedupe:options.dedupe!==false};
     if(options.strokes==='outline')cutOptions.outlines=await strokeOutlines(board.id);
     if(destroyed)return;if(state.document.data!==before)throw new Error('The artwork changed while preparing the cut. Try sending again.');
-    const {svg,count,images,warnings,errors}=cutSvg(board.id,resolved,cutOptions);
+    const {svg,count,images:planned,warnings,errors}=cutSvg(board.id,resolved,cutOptions);
+    // Cropped images are cut to their visible part before they go to Cut.
+    const images=await Promise.all(planned.map(async image=>{if(!image.crop)return image;
+      const img=new Image();img.src=image.dataUrl;await img.decode();const c=image.crop,w=img.naturalWidth,h=img.naturalHeight,canvas=document.createElement('canvas');
+      canvas.width=Math.max(1,Math.round(w*c.width));canvas.height=Math.max(1,Math.round(h*c.height));
+      canvas.getContext('2d').drawImage(img,w*c.x,h*c.y,w*c.width,h*c.height,0,0,canvas.width,canvas.height);return {...image,dataUrl:canvas.toDataURL('image/png')};}));
+    if(destroyed)return;
     if(errors.length)throw new Error(errors.join(' '));
     if(!count&&!images.length)throw new Error('Nothing on this artboard can be sent to Cut.');
     const sent=await onSendToCut({svg,count,images,warnings,name:board.name,width:board.width,height:board.height,target:options.target,placement:options.placement,
@@ -620,6 +626,16 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     command:id=>handle(id),
     addEffect:type=>addEffect(type).catch(error=>{if(!destroyed)onError(error.message);}),editEffect:(id,i)=>editEffect(id,i).catch(error=>{if(!destroyed)onError(error.message);}),
     pointer:()=>lastPoint,
+    // Links > Replace: a new image file in the same place, at the same width (height follows the new proportions).
+    replaceImage:id=>run(()=>{const input=document.createElement('input');input.type='file';input.accept='image/*';
+      input.addEventListener('change',async()=>{const file=input.files?.[0];if(!file||destroyed)return;
+        try{const url=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(new Error('The image could not be read.'));r.readAsDataURL(file);});
+          const node=state.document.getNode(id);if(!node)return;const raster=await rasterAsset(url);
+          run(()=>{const current=state.document.getNode(id),height=current.width*raster.asset.height/raster.asset.width;
+            state.history.transaction('Replace Image',()=>{state.history.execute(updateDocument({assets:{...state.document.data.assets,[raster.id]:raster.asset}}));
+              {const {crop,...rest}=current;state.history.execute(replaceLeaf(id,{...rest,assetId:raster.id,height,ppiEffective:raster.asset.width/current.width*25.4}));}});});
+        }catch(error){if(!destroyed)onError(error.message);}});
+      input.click();}),
     cutStatus,updateInCut:boardId=>sendToCut(boardId,{update:true}).catch(error=>{if(!destroyed)onError(error.message);}),
     historyGoTo:index=>run(()=>{if(state.document.readOnly)return;interactions.cancel();paths.finish();
       const applied=()=>state.history.entries.filter(entry=>entry.applied).length;
@@ -805,6 +821,19 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
           const box=renderer.bounds(id);if(!box)continue;
           transforms.apply(transformEachMatrix(box,values,Math.random()),'Transform Each',{ids:[id],copy:values.copy,remember:false});created.push(...state.selection.ids);}});
         select(values.copy?created:targets);});
+    };
+    // Crop Image: non-destructive; the asset stays whole and the crop can be widened again or reset.
+    if(command==='crop-image')return async()=>{
+      const ids=selectedIds().filter(id=>doc.getNode(id)?.type==='image'&&doc.isEditable(id));if(!ids.length)throw new Error('Select an image to crop.');
+      const values=await cropImageDialog();if(!values||destroyed)return;
+      run(()=>state.history.transaction('Crop Image',()=>{for(const id of ids){
+        const node=doc.getNode(id),c=node.crop??{x:0,y:0,width:1,height:1},fullW=node.width/c.width,fullH=node.height/c.height;
+        const insets=values.reset?{left:-c.x*fullW,top:-c.y*fullH,right:-(1-c.x-c.width)*fullW,bottom:-(1-c.y-c.height)*fullH}:values;
+        const next=cropImage(node,insets);
+        // The whole image again: the node is replaced without `crop` (a key cannot be cleared with an update).
+        if(next.crop)state.history.execute(updateNode(id,{width:next.width,height:next.height,transform:next.transform,crop:next.crop},{label:'Crop Image'}));
+        else{const {crop,...rest}=node;state.history.execute(replaceLeaf(id,{...rest,width:next.width,height:next.height,transform:next.transform}));}
+      }}));
     };
     // Split Into Grid: each selected path or shape becomes rows x columns rectangles inside its bounds.
     if(command==='split-into-grid')return async()=>{
@@ -1005,6 +1034,14 @@ typeOnPath:id=>editText(undefined,null,null,{pathFrom:id}),cursor,
   outlineButton.addEventListener('click',()=>handle('outline'));fitButton.addEventListener('click',()=>fit());
   const workspace={state,scope,renderer,isolate,cutSvg,exportBoard,exporter,exportAs:()=>exportAs().catch(error=>onError(error.message)),exportScreens:()=>exportScreens().catch(error=>onError(error.message)),sendToCut:boardId=>sendToCut(boardId).catch(error=>onError(error.message)),exitIsolation,statusElement:controls,artboards,transforms,resize,select,setTool,handle,availableTool:id=>implementedTools.has(id),canHandle:command=>commands.has(command),
     setTemporaryTool(value){temporary=value;canvas.dataset.tool=temporary?.id || state.ui.tool;canvas.style.cursor=cursor();status();},
+    /** Cut > Edit in Draw: the copied Cut objects on a new bed-sized artboard, where they were on the bed. */
+    async editFromCut({svg,warning},{width,height}){
+      if(!svg)throw new Error(warning||'Nothing in the Cut selection can be edited in Draw.');
+      const boardId=run(()=>artboards.add({name:'From Cut',width,height}));const board=state.document.getArtboard(boardId);if(!board)return;
+      const result=await importArtwork(scope,state,{kind:'vector',svgText:svg},'',layerId(),{offset:[board.x,board.y],label:'Edit in Draw',unwrap:true,alive:()=>!destroyed});
+      if(destroyed)return;select(result.ids);fit(board.id);
+      if(warning||result.warning)onNotice([warning,result.warning].filter(Boolean).join(' '));
+    },
     async import(prepared,name,options={}){const result=await importArtwork(scope,state,prepared,name,layerId(),{...options,alive:()=>!destroyed});select(options.template?[]:result.ids);if(options.fitArtboard)fit();return result;},
     destroy(){destroyed=true;ownedTextModal?.querySelector('[data-x=cancel]').click();ownedTransformModal?.querySelector('[data-x=cancel]').click();paths.destroy();interactions.destroy();toolbar.destroy();unsubscribe();observer.disconnect();window.removeEventListener('modcut-theme-change',syncTheme);workspaces.delete(root);withScope(()=>{renderer.destroy();scope.remove();});controls.remove();root.replaceChildren();},
   };
