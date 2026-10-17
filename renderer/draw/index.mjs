@@ -23,12 +23,13 @@ import { insertNode, removeNode, replaceLeaf, updateNode, updateDocument } from 
 import { activeArtboard } from './doc/artboards.mjs';
 import { changePaint, changeStroke, paintHex } from './doc/paint.mjs';
 import { importArtwork } from './import-artwork.mjs';
-import { shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog,layerOptionsDialog,swatchOptionsDialog,sendToCutDialog } from './ui/dialogs.mjs';
+import { shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog,layerOptionsDialog,swatchOptionsDialog,sendToCutDialog,averageDialog } from './ui/dialogs.mjs';
 import { artboardCutSvg } from './io/cut-svg.mjs';
 import { EXPORT_FORMATS, rasterSize, svgDocument } from './io/export.mjs';
 import { createExportController } from './export-controller.mjs';
 import { layerOptionsPatch, templateLayerCommands, isOutputNode } from './doc/layers.mjs';
 import { compoundCommands, releaseCompoundCommands, clipCommands, releaseClipCommands } from './doc/compound.mjs';
+import { addAnchorPoints, removeAnchorPoints, reverseSubpaths, averagePoints, joinSubpaths, closeSubpath, cleanUpTargets, mapSubpath } from './geom/path-commands.mjs';
 import { toolCursor } from './tools/cursors.mjs';
 import { alignReference, alignOffsets, distributeOffsets, spacingOffsets } from './geom/align.mjs';
 import { pointText, pathText, textValues, textProperties, textToOutlines, DEFAULT_CHARACTER } from './doc/text.mjs';
@@ -40,10 +41,10 @@ export function getDrawWorkspace(root) {return workspaces.get(root) || null;}
 const implementedTools=new Set(['select','hand','zoom','artboard','type','area-type','type-on-path',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
 const commands=new Set(['undo','redo','delete','select-all','select-artboard','deselect','cancel','fit-artboard','fit-all','actual-size','zoom-in','zoom-out','outline',
   'cut','copy','paste','paste-front','paste-back','paste-place','paste-all-artboards',
-  'edit-text','create-outlines','compound-make','compound-release','clip-make','clip-release','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
+  'edit-text','create-outlines','join','average','reverse-path','add-anchors','remove-anchors','clean-up','compound-make','compound-release','clip-make','clip-release','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
   'paint-focus','paint-swap','paint-none','paint-solid','default-paint','smart-guides','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','toggle-panels','toggle-panels-except-tools',
   ...PANEL_DEFINITIONS.map(p=>`panel.${p.id}`),...['left','right','up','down'].flatMap(d=>[`nudge-${d}`,`nudge-large-${d}`,`duplicate-${d}`])]);
-export function createDrawWorkspace(root,{paper=window.paper,state=createProjectDraw(),onError=console.warn,onImport=()=>{},onSendToCut=null,cutIsEmpty=()=>false,cutClipboard=()=>null,onExport=null,getPreferences=()=>({}),statusHost=null}={}) {
+export function createDrawWorkspace(root,{paper=window.paper,state=createProjectDraw(),onError=console.warn,onNotice=()=>{},onImport=()=>{},onSendToCut=null,cutIsEmpty=()=>false,cutClipboard=()=>null,onExport=null,getPreferences=()=>({}),statusHost=null}={}) {
   state.ui={tool:'select',flyout:null,layerId:state.document.data.layers[0]?.id,fill:'#FFFFFF',stroke:'#071411',strokeWidth:.5,paintFocus:'fill',...state.ui};
   state.ui.artboardId=activeArtboard(state).id;
   // The control bar's visibility is a per-user view preference, like Illustrator's Window > Control.
@@ -466,6 +467,67 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     if(warning||result.warning)onError([warning,result.warning].filter(Boolean).join(' '));
   }
   // Object menu: Group, Ungroup, Arrange, Lock and Hide. Each is one undo step with a menu-style label.
+  /** Object > Path commands. Paths keep their identity; a live shape becomes a path with the same id. */
+  let averageAxis='both';
+  function pathCommand(command) {
+    const doc=state.document,apply=(label,commands)=>{if(commands.length)state.history.transaction(label,()=>commands.forEach(c=>state.history.execute(c)));};
+    const base=id=>{const n=doc.getNode(id);return n.type==='shape'?withScope(()=>renderer.expandedShape(id)):n;};
+    const setPaths=(id,subpaths)=>{const n=doc.getNode(id);return n.type==='shape'?replaceLeaf(id,{...base(id),subpaths}):updateNode(id,{subpaths},{label:'Edit Path'});};
+    const parentWorld=id=>renderer.worldMatrix(doc.locate(id).parentId);
+    const editable=()=>selectedIds().filter(id=>['path','shape'].includes(doc.getNode(id)?.type)&&doc.isEditable(id));
+    const anchors=()=>state.selection.anchors.filter(a=>!a.logical&&doc.getNode(a.nodeId)?.type==='path'&&doc.isEditable(a.nodeId));
+    function joinObjects(top,other,ends,topIndex,otherIndex) {
+      const A=base(top).subpaths,B=base(other).subpaths;
+      if(A.length!==1||B.length!==1)throw new Error('Join works on paths with one open subpath.');
+      const moved=mapSubpath(B[otherIndex],multiplyMatrix(invertMatrix(parentWorld(top)),parentWorld(other)));
+      // The joined path keeps the topmost object's paint and place.
+      apply('Join',[setPaths(top,[joinSubpaths(A[topIndex],moved,ends)]),removeNode(other)]);select([top]);
+    }
+    if(command==='reverse-path'||command==='add-anchors')return()=>{
+      const ids=editable();if(!ids.length)throw new Error('Select paths or shapes first.');
+      const edit=command==='reverse-path'?reverseSubpaths:subpaths=>subpaths.map(addAnchorPoints);
+      apply(command==='reverse-path'?'Reverse Path Direction':'Add Anchor Points',ids.map(id=>setPaths(id,edit(base(id).subpaths))));select(ids);};
+    if(command==='remove-anchors')return()=>{
+      const chosen=anchors();if(!chosen.length)throw new Error('Select anchor points with the Direct Selection tool first.');
+      const commands=[...new Set(chosen.map(a=>a.nodeId))].map(id=>{const subpaths=removeAnchorPoints(doc.getNode(id).subpaths,chosen.filter(a=>a.nodeId===id));return subpaths.length?updateNode(id,{subpaths},{label:'Remove Anchor Points'}):removeNode(id);});
+      const ids=[...new Set(chosen.map(a=>a.nodeId))];apply('Remove Anchor Points',commands);select(ids.filter(id=>doc.getNode(id)));};
+    if(command==='clean-up')return()=>{
+      const ids=cleanUpTargets(doc);if(!ids.length){onNotice('Clean Up found no stray points, unpainted objects or empty text.');return;}
+      apply('Clean Up',ids.map(id=>removeNode(id)));select([]);
+      onNotice(`Clean Up removed ${ids.length} object${ids.length===1?'':'s'}.`);};
+    if(command==='average')return async()=>{
+      let chosen=anchors();
+      if(!chosen.length)chosen=editable().filter(id=>doc.getNode(id).type==='path').flatMap(id=>doc.getNode(id).subpaths.flatMap((s,subpath)=>s.segments.map((_,segment)=>({nodeId:id,subpath,segment}))));
+      if(chosen.length<2)throw new Error('Select two or more anchor points to average.');
+      const axis=await averageDialog(averageAxis);if(!axis||destroyed)return;averageAxis=axis;
+      run(()=>{
+        const world=chosen.map(a=>{const m=parentWorld(a.nodeId),p=doc.getNode(a.nodeId).subpaths[a.subpath].segments[a.segment].p;return [m[0]*p[0]+m[2]*p[1]+m[4],m[1]*p[0]+m[3]*p[1]+m[5]];});
+        const moved=averagePoints(world,axis),edits=new Map();
+        chosen.forEach((a,i)=>{
+          if(!edits.has(a.nodeId))edits.set(a.nodeId,doc.getNode(a.nodeId).subpaths.map(s=>mapSubpath(s,[1,0,0,1,0,0])));
+          const [x,y]=moved[i],[A,B,C,D,E,F]=invertMatrix(parentWorld(a.nodeId));edits.get(a.nodeId)[a.subpath].segments[a.segment].p=[A*x+C*y+E,B*x+D*y+F];
+        });
+        apply('Average',[...edits].map(([id,subpaths])=>updateNode(id,{subpaths},{label:'Average'})));
+      });};
+    if(command==='join')return()=>{
+      const chosen=anchors(),ends=chosen.filter(a=>{const s=doc.getNode(a.nodeId).subpaths[a.subpath];return !s.closed&&(a.segment===0||a.segment===s.segments.length-1);});
+      const end=a=>a.segment===0?'start':'end';
+      if(chosen.length===2&&ends.length===2) {
+        const [p,q]=ends;
+        if(p.nodeId===q.nodeId&&p.subpath===q.subpath){const subpaths=structuredClone(doc.getNode(p.nodeId).subpaths);subpaths[p.subpath]=closeSubpath(subpaths[p.subpath]);apply('Join',[setPaths(p.nodeId,subpaths)]);select([p.nodeId]);return;}
+        if(p.nodeId===q.nodeId)throw new Error('Join two endpoints of open paths in different objects, or of the same path.');
+        const [other,top]=objectOrder(doc,[p.nodeId,q.nodeId]),[a,b]=top===p.nodeId?[p,q]:[q,p];
+        return joinObjects(top,other,{a:end(a),b:end(b)},a.subpath,b.subpath);
+      }
+      if(chosen.length)throw new Error('Select two endpoints of open paths to join them.');
+      const ids=editable();
+      if(ids.length===1){const subpaths=base(ids[0]).subpaths;if(subpaths.length!==1)throw new Error('Join closes a single open path.');apply('Join',[setPaths(ids[0],[closeSubpath(subpaths[0])])]);select(ids);return;}
+      if(ids.length!==2)throw new Error('Select two open paths, or two endpoints, to join.');
+      const [other,top]=objectOrder(doc,ids);
+      joinObjects(top,other,null,0,0);
+    };
+    return null;
+  }
   function objectCommand(command) {
     const doc=state.document,ids=()=>selectedIds(),apply=(label,commands)=>{if(commands.length)state.history.transaction(label,()=>commands.forEach(c=>state.history.execute(c)));};
     const arrange={'bring-front':['front','Bring to Front'],'bring-forward':['forward','Bring Forward'],'send-backward':['backward','Send Backward'],'send-back':['back','Send to Back']}[command];
@@ -512,7 +574,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       if(!images.length)throw new Error('Select a placed image to use as a template.');
       const {commands:moves}=templateLayerCommands(state.document,state.document.ancestors(images[0]).find(n=>n.type==='layer').id,{name:state.document.getNode(images[0]).name||'Image',moveIds:images});
       state.history.transaction('Use as Template',()=>moves.forEach(c=>state.history.execute(c)));return select([]);}
-    const object=objectCommand(command)??clipboardCommand(command);if(object)return object();
+    const object=objectCommand(command)??pathCommand(command)??clipboardCommand(command);if(object){const result=object();if(result?.catch)result.catch(error=>{if(!destroyed)onError(error.message);});return;}
     if(['rotate-dialog','reflect-dialog','scale-dialog'].includes(command))return void transformToolDialog(command.split('-')[0]);
     if(command==='delete') {
       if(state.ui.tool==='artboard')return artboards.remove();

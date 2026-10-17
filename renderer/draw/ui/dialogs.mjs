@@ -385,3 +385,9 @@ export function placeOptionsDialog({template=false,count=1}={}) {
   form.querySelector('.modal-actions').before(note);
   return result;
 }
+/** Average: line the selected anchors up horizontally, vertically or on one point. */
+export function averageDialog(axis='both') {
+  return openDrawModal({title:'Average',submitLabel:'OK',className:'draw-average-dialog',fields:[
+    {key:'axis',label:'Axis',type:'select',value:axis,options:[{value:'horizontal',label:'Horizontal'},{value:'vertical',label:'Vertical'},{value:'both',label:'Both'}]},
+  ]}).then(values=>values?.axis??null);
+}

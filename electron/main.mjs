@@ -262,6 +262,8 @@ function buildMenu(mode = "cut") {
     {type:'separator'},objectItem('Group','group'),objectItem('Ungroup','ungroup'),
     {type:'separator'},{label:'Clipping Mask',submenu:[objectItem('Make','clip-make'),objectItem('Release','clip-release')]},
     {label:'Compound Path',submenu:[objectItem('Make','compound-make'),objectItem('Release','compound-release')]},
+    {label:'Path',submenu:[objectItem('Join','join'),objectItem('Average…','average'),{type:'separator'},objectItem('Reverse Path Direction','reverse-path'),
+      objectItem('Add Anchor Points','add-anchors'),objectItem('Remove Anchor Points','remove-anchors'),{type:'separator'},objectItem('Clean Up','clean-up')]},
     {type:'separator'},objectItem('Lock Selection','lock'),objectItem('Unlock All','unlock-all'),objectItem('Hide Selection','hide'),objectItem('Show All','show-all')];
   }
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));

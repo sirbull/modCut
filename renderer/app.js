@@ -326,7 +326,7 @@ function setWorkspace(mode) {
     tab.drawRoot.className = "draw-project";
     tab.drawRoot.dataset.tabId = tab.id;
     $("drawWorkspace").append(tab.drawRoot);
-    tab.draw = createDrawWorkspace(tab.drawRoot, { state: drawState, onError: message => toast(message,"err"), onImport: () => importDrawFiles(), onSendToCut: sendDrawToCut, cutIsEmpty: () => !bed.getDesign(), cutClipboard: () => bed.clipboardTime() ? bed.clipboardSVG() : null, onExport: drawExportBridge, getPreferences:()=>preferences, statusHost: $("drawStatus") });
+    tab.draw = createDrawWorkspace(tab.drawRoot, { state: drawState, onError: message => toast(message,"err"), onNotice: message => toast(message,"info"), onImport: () => importDrawFiles(), onSendToCut: sendDrawToCut, cutIsEmpty: () => !bed.getDesign(), cutClipboard: () => bed.clipboardTime() ? bed.clipboardSVG() : null, onExport: drawExportBridge, getPreferences:()=>preferences, statusHost: $("drawStatus") });
   }
   drawKeymap.reset();
   tab.workspace = mode;

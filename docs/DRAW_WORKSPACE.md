@@ -1429,7 +1429,7 @@ Oversikt over hva som er gjort og gjenstår, inkludert delvis ferdige oppgaver: 
   Path-tekst, videre områdetekst, flere tekstegenskaper og Character/Paragraph gjenstår; se [STATUS.md](draw/STATUS.md).
 * [ ] D2.2 Pathfinder, Compound, Clipping (alt unntatt Draw Inside og lagklipping er ferdig, se [STATUS.md](draw/STATUS.md))
 * [ ] D2.3 Gradienter og Swatches
-* [ ] D2.4 Path-kommandoer
+* [ ] D2.4 Path-kommandoer (del A ferdig: Join, Average, Reverse, Add/Remove Anchor Points, Clean Up)
 * [ ] D2.5 SVG eksport/import (eksport ferdig, se [STATUS.md](draw/STATUS.md))
 * [ ] D2.6 PDF-eksport
 * [ ] D2.7 Raster-eksport (PNG og JPEG ferdig; WebP, Export for Screens og skala gjenstår)

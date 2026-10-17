@@ -1214,3 +1214,21 @@ Verifisering: 201 Draw-enhetstester (5 nye i `compound.test.mjs`). Ny E2E `draw-
 Layers-menyen, grenser og treff, PNG/SVG, klippet PDF/EPS/DXF-modell og Send to Cut, release.
 
 Neste: D2.4 path-kommandoer.
+
+## 2026-10-17: D2.4 del A, path-kommandoer
+
+- `geom/path-commands.mjs`: `joinSubpaths` (nærmeste eller valgte endepunkter, riktig retning,
+  sammenfallende ender blir ett anker), `closeSubpath`, `averagePoints`, `addAnchorPoints`
+  (de Casteljau ved t = 0,5, også lukkesegmentet), `removeAnchorPoints`, `reverseSubpaths`,
+  `cleanUpTargets` og `mapSubpath`. Live hjørner bakes først.
+- `index.mjs`: `pathCommand` for `join`, `average` (dialog `averageDialog`), `reverse-path`,
+  `add-anchors`, `remove-anchors` og `clean-up`. Former blir paths med samme id (`replaceLeaf`).
+  Join mellom objekter regner den nederste banen om til den øverstes koordinatsystem.
+- Object-menyen har fått undermenyen Path. `createDrawWorkspace` har fått `onNotice` (info-toast),
+  brukt av Clean Up.
+
+Verifisering: 207 Draw-enhetstester (6 nye), ny E2E `draw-path-commands-workflows.mjs`
+(`--draw-path-commands`). Hele Draw-E2E for forrige commit (6114094) passerte uten feil, også
+prosjekt- og autolagringstestene.
+
+Neste: D2.4 del B, Simplify og Offset Path.
