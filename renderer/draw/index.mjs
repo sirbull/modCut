@@ -748,7 +748,8 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   /** Moves a blend's keys to their places on its spine. */
   function placeKeys(blendId){
     const doc=state.document,node=doc.getNode(blendId),curve=spineCurve(node.blend.spine);
-    const keys=node.children.filter(child=>child.visible&&['path','shape'].includes(child.type));
+    // The same keys the blend draws: paths, shapes, and text whose glyphs are known.
+    const keys=node.children.filter(child=>child.visible&&(['path','shape'].includes(child.type)||child.type==='text'&&renderer.items.get(child.id)?.className==='CompoundPath'));
     const moves=withScope(()=>{const world=new scope.Matrix(...renderer.worldMatrix(blendId));
       return keys.map((key,k)=>{const target=world.transform(new scope.Point(...curve.at(keyPosition(k,keys.length)).p)),centre=renderer.bounds(key.id).center;return [key.id,target.x-centre.x,target.y-centre.y];});});
     for(const [id,dx,dy] of moves)if(Math.hypot(dx,dy)>1e-9)transforms.apply([1,0,0,1,dx,dy],'Replace Spine',{ids:[id],remember:false});

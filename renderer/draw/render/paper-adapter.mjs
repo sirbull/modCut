@@ -375,7 +375,8 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
       cap: stroke?.cap ?? 'butt', join: stroke?.join ?? 'miter', opacity: node.opacity ?? 1, fillRule: node.fillRule ?? 'nonzero' };
   }
   function keyShape(node) {
-    const item = items.get(node.id); if (!item || !['path', 'shape'].includes(node.type)) return null;
+    // Text counts when its glyphs are known (it is drawn as their outlines).
+    const item = items.get(node.id); if (!item || !(['path', 'shape'].includes(node.type) || node.type === 'text' && item.className === 'CompoundPath')) return null;
     const copy = item.clone({ insert: false }); copy.matrix = new scope.Matrix(...node.transform); copy.applyMatrix = true;
     const out = toSubpaths(copy); copy.remove(); return out.length ? out : null;
   }

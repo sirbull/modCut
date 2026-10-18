@@ -1858,4 +1858,6 @@ Verifisering: `envelope`-enhetstest (skjema), `--draw-warp-mask` (Arch løfter m
 
 Verifisering: effekt-enhetstest, `--draw-effects` (rød glød utenfor, myk kant etter Gaussian Blur).
 - Grupper: Drop Shadow, Rasterize og pikseleffektene virker på hele gruppen (pikslene lages etter barna).
+- Blend: tekst kan være nøkkel (glyfkonturene blendes). Ikke dekket av E2E ennå, fordi testmiljøet mangler de vanlige
+  fontene; koden bruker samme vei som baner.
 
