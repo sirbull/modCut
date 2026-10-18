@@ -54,7 +54,7 @@ export async function runDrawBrushWorkflows(client) {
   await evaluate(`(async()=>{const w=${active};w.handle('select-all');w.handle('delete')})()`);
   const zig = await evaluate(`(async()=>{const w=${active},{createNode}=await import('./draw/doc/schema.mjs'),{insertNode}=await import('./draw/doc/commands.mjs'),{appearance}=await import('./draw/geometry.mjs');
     const b=w.state.document.data.artboards[0],L=w.state.document.data.layers[0].id,mk=pts=>createNode('path',{subpaths:[{closed:false,segments:pts.map(p=>({p:[b.x+p[0],b.y+p[1]],in:[0,0],out:[0,0]}))}],appearance:appearance(null,'#000000',.5)});
-    const line=mk([[10,20],[130,20]]),wave=mk(Array.from({length:13},(_,i)=>[10+i*10,60+(i%2?3:-3)]));w.state.history.execute(insertNode(L,line));w.state.history.execute(insertNode(L,wave));w.select([line.id]);return [line.id,wave.id];})()`);
+    const line=mk([[10,20],[130,20]]),wave=mk(Array.from({length:13},(_,i)=>[10+i*10,60+(i%2?1:-1)]));w.state.history.execute(insertNode(L,line));w.state.history.execute(insertNode(L,wave));w.select([line.id]);return [line.id,wave.id];})()`);
   await evaluate(`(async()=>{${active}.setTool('path-eraser')})()`);
   let undoSteps = await applied();
   await drag(line([70, 10], [70, 30], 6));

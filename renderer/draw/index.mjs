@@ -469,8 +469,8 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   const pathEraser=points=>alongDrag('Path Eraser',points,(sp,drag)=>erasePath(sp,drag,(state.ui.pathEraserSize??4)/scope.view.zoom));
   /** Smooth: the anchors the drag passes near are fitted again more loosely, so the path gets fewer, rounder curves. */
   const smoothPath=points=>alongDrag('Smooth',points,(sp,drag)=>{
-    const range=smoothRange(sp,drag,8/scope.view.zoom);if(!range||range[1]-range[0]<2)return null;
-    const fitted=withScope(()=>{const path=fitCurve(sectionPoints(sp,range[0],range[1]),false,5/scope.view.zoom);
+    const range=smoothRange(sp,drag,12/scope.view.zoom);if(!range||range[1]-range[0]<2)return null;
+    const fitted=withScope(()=>{const path=fitCurve(sectionPoints(sp,range[0],range[1]),false,12/scope.view.zoom);
       const out=path.segments.map(s=>({p:[s.point.x,s.point.y],in:[s.handleIn.x,s.handleIn.y],out:[s.handleOut.x,s.handleOut.y]}));path.remove();return out;});
     if(fitted.length>=range[1]-range[0]+1)return null;
     const s=sp.segments;fitted[0].in=s[range[0]].in;fitted.at(-1).out=s[range[1]].out;fitted[0].p=s[range[0]].p;fitted.at(-1).p=s[range[1]].p;

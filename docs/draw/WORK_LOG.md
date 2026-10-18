@@ -1837,3 +1837,7 @@ Verifisering: effekt-enhetstest, `--draw-effects` (piksler ved valgt ppi, ankren
 
 Verifisering: `path-eraser`-enhetstester, `--draw-brush` (gap i linjen, færre ankre etter Smooth).
 
+E2E: hele Draw-E2E 40 passerte alle 45 Draw-suitene; den siste prosjektsuiten feilet på tid (gjenopprettingen ble ikke
+skrevet innen 2,4 s under full last; kort kjøring passerer). Testen venter nå inntil 6 s mens redigeringen fortsetter,
+med samme krav. `--draw-blend`, `--draw-warp-mask`, `--draw-effects` og `--draw-brush` passerer for spine, envelope,
+Rasterize, Path Eraser og Smooth (Smooth når nå 12 skjermpiksler).

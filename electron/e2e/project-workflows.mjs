@@ -107,10 +107,14 @@ export async function runProjectWorkflows({ evaluate }, directory) {
     let tick=0; window.__drawEdits=setInterval(()=>state.history.execute(updateNode('persisted-shape',{name:'Continuous '+(++tick)},{mergeKey:'name'})),100);
   })()`);
   try {
-    await wait(2400);
-    const recovery = await evaluate('window.modcut.readRecovery().then(JSON.parse)');
-    const tab = recovery.tabs.find(tab => tab.id === continuousTabId);
-    assert.match(tab.session.draw.layers[0].children[0].name, /^Continuous /, 'recovery runs while edits continue');
+    // The interval is two seconds; writing the snapshot takes longer under load, so wait up to six while edits go on.
+    let name = '';
+    for (let waited = 0; waited < 6000 && !/^Continuous /.test(name); waited += 200) {
+      await wait(200);
+      const recovery = await evaluate('window.modcut.readRecovery().then(JSON.parse)');
+      name = recovery.tabs.find(tab => tab.id === continuousTabId)?.session?.draw?.layers[0].children[0].name ?? '';
+    }
+    assert.match(name, /^Continuous /, 'recovery runs while edits continue');
   } finally { await evaluate('clearInterval(window.__drawEdits);delete window.__drawEdits'); }
 
   const firstTabId = await evaluate("document.querySelector('.doc-tab.is-active').dataset.tabId");
