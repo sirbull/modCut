@@ -7,7 +7,7 @@ import { insertNode } from '../doc/commands.mjs';
 import { appearance } from '../geometry.mjs';
 import { defaultGradient } from '../doc/gradient.mjs';
 import { cutPaint } from '../io/cut-paint.mjs';
-import { resolveCutPreviewProcess } from '../view/cut-process.mjs';
+import { resolveCutPreviewProcess, processColorsForDocument } from '../view/cut-process.mjs';
 import { matchingProcessLayer } from '../../layer-model.mjs';
 
 const square = [{ closed: true, segments: [[0,0],[10,0],[10,10],[0,10]].map(p => ({p,in:[0,0],out:[0,0]})) }];
@@ -128,4 +128,13 @@ test('a new snapshot reflects process edits without retaining a stale colour mat
   assert.equal(resolveCutPreviewProcess(doc,node.id,cut).operation,'Engrave');
   cut.layers=[];
   assert.equal(resolveCutPreviewProcess(doc,node.id,cut).status,'unresolved');
+});
+
+
+test('retained Draw process identities exclude references, keep vector/raster separate and deduplicate',()=>{
+  const a=vector(),b=vector(),image=createNode('image',{assetId:'missing'}),hidden=vector({visible:false,appearance:appearance('#00FF00',null)});
+  const {doc}=setup([a,b,image,hidden]);
+  assert.deepEqual(processColorsForDocument(doc),[{key:'vector:#000000',color:'#000000',raster:false},{key:'raster:#000000',color:'#000000',raster:true}]);
+  assert.deepEqual(processColorsForDocument(null),[]);
+  const ref=setup([vector()],{template:true});assert.deepEqual(processColorsForDocument(ref.doc),[]);
 });

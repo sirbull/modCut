@@ -33,6 +33,7 @@ contextBridge.exposeInMainWorld("modcut", {
   getE2EWorkspaceMenu: () => ipcRenderer.invoke("e2eWorkspaceMenu"),
   requestE2EQuit: () => ipcRenderer.invoke("e2eRequestQuit"),
   clickE2EMenuItem: (menu, item) => ipcRenderer.invoke("e2eClickMenuItem", menu, item),
+  setLaserPreviewState: value => ipcRenderer.invoke("setLaserPreviewState", value),
   setWorkspace: (mode) => ipcRenderer.invoke("setWorkspace", mode),
   onMenu: (cb) => ipcRenderer.on("menu", (_e, cmd) => cb(cmd)),
   openImageEditor: (payload) => ipcRenderer.invoke("openImageEditor", payload),

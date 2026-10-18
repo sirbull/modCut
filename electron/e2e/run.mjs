@@ -1,3 +1,4 @@
+import { runDrawLaserPreviewWorkflows,verifyLaserPreviewPreferences } from './draw-laser-preview-workflows.mjs';
 import { spawn } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -186,6 +187,13 @@ try {
   } else if (process.argv.includes('--draw-place')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawPlaceWorkflows(first);first.socket.close();
+  } else if (process.argv.includes('--draw-laser-preview')) {
+    for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
+    await runDrawLaserPreviewWorkflows(first);
+    await first.evaluate('window.modcut.requestE2EQuit()');
+    for(let i=0;i<60&&child?.exitCode==null;i++){try{await first.evaluate("document.querySelector('[data-x=discard]')?.click()");}catch{/* The renderer may close before Chromium finishes flushing storage. */}await wait(50);}
+    first.socket.close();await stop();await wait(500);launch();
+    const restarted=await connectToApp(port);await verifyLaserPreviewPreferences(restarted);restarted.socket.close();
   } else if (process.argv.includes('--draw-cut')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawCutWorkflows(first);first.socket.close();
@@ -286,6 +294,7 @@ try {
         await wait(750); continue;
       }
       await verifyProjectRecovery(recovered, expected);
+      await runDrawLaserPreviewWorkflows(recovered);
       recovered.socket.close();
       break;
     }

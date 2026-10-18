@@ -37,3 +37,15 @@ export function resolveCutPreviewProcess(doc, id, snapshot = null) {
   if (layer.output !== true) return unresolved('missing-output-setting', identity);
   return { status: 'resolved', operation: layer.op, ...identity, layer: structuredClone(layer) };
 }
+
+/** Printable identities keep explicitly configured Draw processes when Cut is still empty. */
+export function processColorsForDocument(doc) {
+  const colors=new Map();if(!doc)return [];
+  for(const node of doc.descendants(null)){
+    if(!LEAVES.has(node.type)||!isOutputNode(doc,node.id))continue;
+    const raster=node.type==='image',color=raster?'#000000':cutPaint(node).color?.toLowerCase();
+    if(!color)continue;const key=`${raster?'raster':'vector'}:${color}`;
+    colors.set(key,{key,color,raster});
+  }
+  return [...colors.values()];
+}

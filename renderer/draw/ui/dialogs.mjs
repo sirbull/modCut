@@ -659,17 +659,25 @@ export function workspacesDialog(names,current) {
     {key:'name',label:'Workspace',type:'select',value:current&&names.includes(current)?current:names[0],options:names.map(n=>({value:n,label:n}))},
     {key:'action',label:'Action',type:'select',value:'apply',options:[{value:'apply',label:'Switch to it'},{value:'delete',label:'Delete it'}]}]}).then(v=>v&&{name:v.name,action:v.action});
 }
-/** Shown the first time Cut Preview is turned on: what changes on the canvas. Resolves to { hide } or null. */
+/** Laser Preview explanation. Reused by Help; Cancel never saves suppression. */
 export function cutPreviewIntroDialog() {
-  const result=openDrawModal({title:'Cut Preview',submitLabel:'OK',className:'draw-cut-preview-dialog',fields:[
+  const result=openDrawModal({title:'Laser Preview',submitLabel:'Continue',className:'draw-cut-preview-dialog',fields:[
     {key:'hide',label:'Don’t show this again',type:'checkbox',value:false},
   ]});
   const form=document.querySelector('.draw-cut-preview-dialog form'),list=document.createElement('ul');list.className='draw-cut-preview-dialog__list';
-  for(const text of ['Fills show in grayscale, the way they engrave: darker is a deeper burn.',
-    'Strokes show as thin black lines, where the laser cuts or scores.',
-    'Transparency and blending modes show as they will engrave when you send with Engrave as seen.',
-    'Only the view changes. Colors, strokes and the document stay as they are, and you can keep drawing.',
-    'Turn it off again from View > Cut Preview or the Cut Preview button.']){const li=document.createElement('li');li.textContent=text;list.append(li);}
-  form.prepend(list);
-  return result;
+  for(const text of ['Solid red lines show Cut. Dashed red lines show Score. Black areas show vector engraving; images show in grayscale.',
+    'Dotted amber outlines or faded images mean the process or appearance is unresolved. Choose Laser processes to configure this tab’s Cut settings.',
+    'Effects, advanced composites and image dithering may need checking in Cut. This view does not simulate travel order, burn depth or the exact material result.',
+    'Only the view changes. Original artwork, exports and undo history stay unchanged. You can keep drawing.',
+    'Transparency and blending are not an Engrave as seen output option yet. Always review the final job in Cut.',
+    'Turn the view off with View > Laser Preview or the Laser Preview button.']){const li=document.createElement('li');li.textContent=text;list.append(li);}
+  form.prepend(list);return result;
+}
+
+export function laserProcessesDialog(entries) {
+  return openDrawModal({title:'Laser processes',submitLabel:'Apply',className:'draw-laser-processes-dialog',fields:entries.map((entry,i)=>({
+    key:`process${i}`,label:`${entry.raster?'Image':'Vector'} ${entry.color.toUpperCase()}`,type:'select',value:entry.operation??'Unresolved',
+    description:i===0?'Updates this tab’s Cut process settings. Review power and speed in Cut before running.':undefined,
+    options:['Unresolved','Cut','Score','Engrave','Ignore'].filter(op=>!entry.raster||!['Cut','Score'].includes(op)).map(value=>({value,label:value}))
+  }))}).then(values=>values&&entries.flatMap((entry,i)=>values[`process${i}`]==='Unresolved'?[]:[{key:entry.key,color:entry.color,raster:entry.raster,op:values[`process${i}`]}]));
 }

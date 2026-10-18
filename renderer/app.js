@@ -1,3 +1,4 @@
+import { processColorsForDocument } from './draw/view/cut-process.mjs';
 import { createKeymap, shortcutLabel } from "./draw/keymap.mjs";
 import { createDrawWorkspace } from "./draw/index.mjs";
 import { drawClipboard } from "./draw/doc/clipboard.mjs";
@@ -38,6 +39,7 @@ applyLanguage();
 function updatePreferences(values) {
   preferences = normalizePreferences(values, preferences);
   localStorage.setItem(PREFERENCES_KEY, JSON.stringify(preferences));
+  window.paper.activate();
   bed.setViewPreferences(preferences);
   applyLanguage();
   window.dispatchEvent(new Event("modcut-preferences-change"));
@@ -340,7 +342,7 @@ function setWorkspace(mode) {
     tab.drawRoot.className = "draw-project";
     tab.drawRoot.dataset.tabId = tab.id;
     $("drawWorkspace").append(tab.drawRoot);
-    tab.draw = createDrawWorkspace(tab.drawRoot, { state: drawState, onError: message => toast(message,"err"), onNotice: message => toast(message,"info"), onImport: () => importDrawFiles(), onSendToCut: sendDrawToCut, cutIsEmpty: () => !bed.getDesign(), cutClipboard: () => bed.clipboardTime() ? bed.clipboardSVG() : null, onExport: drawExportBridge, getPreferences:()=>preferences, statusHost: $("drawStatus") });
+    tab.draw = createDrawWorkspace(tab.drawRoot, { state: drawState, onError: message => toast(message,"err"), onNotice: message => toast(message,"info"), onImport: () => importDrawFiles(), onSendToCut: sendDrawToCut, cutIsEmpty: () => !bed.getDesign(), cutClipboard: () => bed.clipboardTime() ? bed.clipboardSVG() : null, onExport: drawExportBridge, getPreferences:()=>preferences,setPreferences:updatePreferences,getLaserProcesses:()=>{const source=tab===activeTab()?state:tab.session;return source?{mappingMode:source.mappingMode,layers:source.layers}:null;},setLaserProcesses:values=>{if(tab!==activeTab())return false;configureLaserProcesses(values);return true;}, statusHost: $("drawStatus") });
   }
   drawKeymap.reset();
   tab.workspace = mode;
@@ -368,7 +370,7 @@ function setWorkspace(mode) {
     toast(tab.drawState.warning, "info"); tab.drawWarningShown = true;
   }
   closeContextMenu();
-  void window.modcut.setWorkspace(mode);
+  void window.modcut.setWorkspace(mode).then(()=>{if(tab===activeTab()&&mode==="draw")tab.draw?.syncLaserMenu();});
   scheduleRecovery();
   if (mode === "draw" && !tab.draw) void setupDrawDocument(tab);
 }
@@ -784,7 +786,7 @@ function applyDocument(p, path, name) {
   bed.setGrid(state.gridXmm, state.gridYmm);
   if (p.pathOrder) { $("pathOrder").value = p.pathOrder; bed.setPathOrder(p.pathOrder); }
   [...$("mapmode").children].forEach((c) => c.classList.toggle("on", c.dataset.mode === state.mappingMode));
-  syncColorsAndLayers();
+  syncColorsAndLayers(drawState.document);
   attachDrawState(activeTab(), drawState);
   setWorkspace(p.workspace === "draw" ? "draw" : "cut");
   setFileLabel(name || pathBase(path) || "Untitled");
@@ -1343,13 +1345,29 @@ const newLayer = (color, op, raster = false, key = null) => ({
 });
 // Re-read colors from the bed (import + drawn shapes) and reconcile the layer list,
 // preserving settings for colors that still exist.
-function syncColorsAndLayers() {
+function syncColorsAndLayers(drawDocument = null) {
   state.colors = bed.getColors();
   if (state.colors.some((color) => color.raster) && ["cut", "score"].includes(state.mappingMode)) {
     state.mappingMode = "color";
     [...$("mapmode").children].forEach((c) => c.classList.toggle("on", c.dataset.mode === "color"));
   }
-  syncLayers();
+  syncLayers(drawDocument);
+}
+function configureLaserProcesses(values) {
+  window.paper.activate();
+  if(state.mappingMode!=="color"){
+    const global=state.layers.find(layer=>layer.color===null);
+    state.layers=state.colors.map(color=>({...newLayer(color.color,color.raster?"Engrave":global?.op??"Cut",color.raster,color.key),...global,key:color.key,color:color.color,raster:color.raster,op:color.raster?"Engrave":global?.op??"Cut"}));
+  }
+  state.mappingMode="color";
+  for(const choice of values){
+    if(!operationsForLayer(choice.raster).includes(choice.op))continue;
+    const existing=matchingProcessLayer(state.layers,choice),index=existing?state.layers.indexOf(existing):-1;
+    const layer={...(existing??newLayer(choice.color,choice.op,choice.raster,choice.key)),...choice,output:choice.op!=="Ignore"};
+    if(index<0)state.layers.push(layer);else state.layers[index]=layer;
+  }
+  [...$("mapmode").children].forEach(item=>item.classList.toggle("on",item.dataset.mode==="color"));
+  syncRasterModes();renderLayers();markDirty();
 }
 function syncRasterModes() {
   bed.setRasterModes(state.layers.filter((layer) => layer.raster).map((layer) => ({
@@ -1357,13 +1375,16 @@ function syncRasterModes() {
     mode: layer.dither || "Grayscale",
   })));
 }
-function syncLayers() {
+function syncLayers(drawDocument = null) {
   if (state.mappingMode === "color") {
     const prev = new Map(state.layers.filter((l) => l.key).map((l) => [l.key, l]));
-    const colorsByKey = new Map(state.colors.map((color) => [color.key, color]));
+    const drawColors=processColorsForDocument(drawDocument??activeTab()?.drawState?.document)
+      .filter(color=>matchingProcessLayer(state.layers,color)&&!state.colors.some(existing=>existing.key===color.key));
+    const availableColors=[...state.colors,...drawColors];
+    const colorsByKey = new Map(availableColors.map((color) => [color.key, color]));
     const orderedColors = [
       ...state.layers.map((layer) => colorsByKey.get(layer.key)).filter(Boolean),
-      ...state.colors.filter((color) => !prev.has(color.key)),
+      ...availableColors.filter((color) => !prev.has(color.key)),
     ];
     state.layers = orderedColors.map((c) => {
       const existing = matchingProcessLayer(state.layers, c);
@@ -2180,6 +2201,7 @@ async function openSettings() {
       { key: "gridY", label: "Grid spacing Y", description: "Vertical distance between horizontal grid lines, in the selected grid unit.", type: "number", step: "any", min: 0.001, value: +(state.gridYmm / UNIT[gu]).toFixed(3) },
       { key: "invertZoom", section: "Navigation & help", label: "Reverse zoom direction", type: "checkbox", value: preferences.invertZoom, description: "Reverse Cmd/Ctrl + scroll and trackpad pinch zoom in Cut. Panning stays the same. Applies immediately.", onChange: (value) => updatePreferences({ invertZoom: value }) },
       { key: "tooltips", label: "Show tooltips", type: "checkbox", value: preferences.tooltips, description: "Show explanations when hovering over or focusing toolbar buttons. Applies immediately.", onChange: (value) => updatePreferences({ tooltips: value }) },
+      { key: "hideLaserPreviewIntro", label: "Skip Laser Preview explanation", type: "checkbox", value: preferences.hideLaserPreviewIntro, description: "Turn this off to show the explanation on the next activation. You can also open it from Help.", onChange: value => updatePreferences({ hideLaserPreviewIntro: value }) },
       { key: "tooltipDelay", label: "Tooltip delay", type: "select", value: preferences.tooltipDelay, description: "How long to hover before showing a tooltip. Keyboard help appears sooner. Applies immediately.", showIf: (values) => values.tooltips, options: [{ value: 350, label: "Quick · 0.35 seconds" }, { value: 1000, label: "Normal · 1 second" }, { value: 1800, label: "Relaxed · 1.8 seconds" }], onChange: (value) => updatePreferences({ tooltipDelay: value }) },
       ...(mcp ? [
         { key: "mcp", section: "Automation", label: "Let AI agents draw in modCut (MCP server)", type: "switch", value: mcp.enabled,

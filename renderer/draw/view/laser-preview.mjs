@@ -11,12 +11,16 @@ export function laserPreviewIntent(doc, id, snapshot) {
   const ancestors=doc.ancestors(id);
   if([node,...ancestors].some(n=>!n.visible))return {status:'excluded',reason:'hidden'};
   if(nodeContext(doc,id).template)return {status:'reference'};
+  if(process.status==='excluded')return process;
+  if(node.children&&(node.blend||node.envelope||node.mask||node.appearance?.effects?.some(e=>!e.hidden)))return {status:'unresolved',reason:'expand-appearance'};
   if(process.status!=='resolved')return process;
   // These display composites do not have a one-to-one correspondence with a
   // leaf's emitted Cut paths. Keep them explicitly unresolved until expanded.
   if(ancestors.some(n=>n.blend||n.envelope||n.mask||n.appearance?.effects?.some(e=>!e.hidden)) ||
     node.appearance?.effects?.some(e=>!e.hidden))return {...process,status:'unresolved',reason:'expand-appearance'};
   if(node.type==='text'&&(!hasTextLayout(node)||node.layout.overflow))return {...process,status:'unresolved',reason:'text-layout'};
+  const fills=(node.appearance?.fills??[]).filter(e=>!e.hidden),strokes=(node.appearance?.strokes??[]).filter(e=>!e.hidden);
+  if(process.operation==='Engrave'&&node.type!=='image'&&(fills.length>1||strokes.length>1||strokes.some(s=>s.widthProfile?.length||s.dash?.array?.length||s.startArrow||s.endArrow||(s.align&&s.align!=='center'))))return {...process,status:'unresolved',reason:'expand-stroke'};
   if(node.type==='image' && process.layer.dither && process.layer.dither!=='Grayscale')return {...process,status:'unresolved',reason:'raster-dither'};
   return process;
 }
@@ -25,7 +29,7 @@ export function laserPreviewIntent(doc, id, snapshot) {
  * Export, hit testing, thumbnails and document data keep the original appearance.
  * `resolve` is evaluated once per node per draw by the caller.
  */
-export function withLaserAppearance(root, {resolve,zoom,roles=new Map()}, draw) {
+export function withLaserAppearance(root, {resolve,roles=new Map()}, draw) {
   const restore=[];
   const patch=(item,props)=>{const old={};for(const key of Object.keys(props))old[key]=item[key];restore.push(()=>Object.assign(item,old));Object.assign(item,props);};
   function walk(item,inherited=null) {
@@ -40,24 +44,24 @@ export function withLaserAppearance(root, {resolve,zoom,roles=new Map()}, draw) 
       if(intent?.status==='unresolved'){patch(item,{opacity:.25});return;}
       if(op==='Engrave') {
         const original=item.draw;
-        patch(item,{draw:function(ctx,...args){ctx.save();try{ctx.filter='grayscale(1)';return original.call(this,ctx,...args);}finally{ctx.restore();}}});
+        patch(item,{opacity:1,blendMode:'normal',draw:function(ctx,...args){ctx.save();try{ctx.filter='grayscale(1)';return original.call(this,ctx,...args);}finally{ctx.restore();}}});
       }
       return;
     }
     if(item.children && item.className!=='CompoundPath') {
       // Cut ignores appearance opacity/blending on the canonical SVG path.
-      if(op)patch(item,{opacity:1,blendMode:'normal'});
+      if(op||intent?.status==='container')patch(item,{opacity:1,blendMode:'normal'});
       for(const child of item.children)walk(child,id);
       return;
     }
     if(!intent||intent.status==='container')return;
     if(op==='Cut'||op==='Score'||intent.status==='unresolved') {
       patch(item,{fillColor:null,strokeColor:op?LASER_COLORS[op]:LASER_COLORS.unresolved,
-        strokeWidth:1.5/zoom,strokeScaling:false,strokeCap:'butt',strokeJoin:'miter',
-        dashArray:op==='Cut'?[]:op==='Score'?[6/zoom,3/zoom]:[2/zoom,3/zoom],dashOffset:0,opacity:1,blendMode:'normal'});
+        strokeWidth:1.5,strokeScaling:false,strokeCap:'butt',strokeJoin:'miter',
+        dashArray:op==='Cut'?[]:op==='Score'?[6,3]:[2,3],dashOffset:0,opacity:1,blendMode:'normal'});
     } else if(op==='Engrave') {
       // Vector engraving uses the painted silhouette (alpha), not RGB darkness.
-      patch(item,{fillColor:item.fillColor?LASER_COLORS.Engrave:null,strokeColor:item.strokeColor?LASER_COLORS.Engrave:null,opacity:1,blendMode:'normal'});
+      patch(item,{fillColor:item.fillColor?LASER_COLORS.Engrave:null,strokeColor:item.strokeColor?LASER_COLORS.Engrave:null,strokeCap:'butt',strokeJoin:'miter',miterLimit:4,opacity:1,blendMode:'normal'});
     }
   }
   try{walk(root);return draw();}finally{for(let i=restore.length-1;i>=0;i--)restore[i]();}

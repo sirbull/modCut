@@ -38,7 +38,7 @@ import { DRAW_MODE_LABELS, insideTarget, nextDrawMode, placement } from './doc/d
 import { changePaint, changeStroke, paintHex } from './doc/paint.mjs';
 import { setWidthPoint, moveWidthPoint, removeWidthPoint, normalizeProfile } from './geom/width-profile.mjs';
 import { importArtwork, rasterAsset } from './import-artwork.mjs';
-import { shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog,layerOptionsDialog,swatchOptionsDialog,sendToCutDialog,averageDialog,offsetDialog,simplifyDialog,pencilDialog,expandDialog,cropImageDialog,effectDialog,magicWandDialog,eraserDialog,transformEachDialog,splitGridDialog,saveSelectionDialog,editSelectionDialog,widthPointDialog,blendOptionsDialog,paintbrushDialog,blobBrushDialog,workspaceNameDialog,workspacesDialog } from './ui/dialogs.mjs';
+import { cutPreviewIntroDialog,laserProcessesDialog,shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog,layerOptionsDialog,swatchOptionsDialog,sendToCutDialog,averageDialog,offsetDialog,simplifyDialog,pencilDialog,expandDialog,cropImageDialog,effectDialog,magicWandDialog,eraserDialog,transformEachDialog,splitGridDialog,saveSelectionDialog,editSelectionDialog,widthPointDialog,blendOptionsDialog,paintbrushDialog,blobBrushDialog,workspaceNameDialog,workspacesDialog } from './ui/dialogs.mjs';
 import { shortcutsDialog } from './ui/shortcuts-dialog.mjs';
 import { ESSENTIALS, applyWorkspace, captureWorkspace, deleteWorkspace, loadWorkspaces, saveWorkspace } from './ui/workspaces.mjs';
 import { ALL_ARTBOARDS, artboardCutSvg } from './io/cut-svg.mjs';
@@ -63,15 +63,17 @@ export function getDrawWorkspace(root) {return workspaces.get(root) || null;}
 // Custom shortcuts live in the main process (it builds the menus); the canvas takes the same ones.
 const shortcutsReady=globalThis.window?.modcut?.getDrawShortcuts?.().then(map=>{try{setKeyOverrides(map??{});}catch{/* unreadable: defaults */}}).catch(()=>{});
 const implementedTools=new Set(['path-eraser','smooth','vertical-type','touch-type','rotate-view','select','group-selection','magic-wand','lasso','shape-builder','knife','eraser','width','blend','paintbrush','blob-brush','free-transform','pencil','hand','zoom','artboard','gradient','eyedropper','measure','scissors','type','area-type','type-on-path',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
-const commands=new Set(['undo','redo','delete','select-all','select-artboard','deselect','cancel','fit-artboard','fit-all','actual-size','zoom-in','zoom-out','outline',
+const commands=new Set(['undo','redo','delete','select-all','select-artboard','deselect','cancel','fit-artboard','fit-all','actual-size','zoom-in','zoom-out','outline','laser-preview','laser-preview-help','laser-processes',
   'cut','copy','paste','paste-front','paste-back','paste-place','paste-all-artboards',
   'edit-text','create-outlines','join','average','offset-path','outline-stroke','expand','expand-appearance','transform-each','split-into-grid','crop-image','effect-last','effect-options',...Object.keys(EFFECTS).map(t=>`effect-${t}`),...Object.keys(WARP_STYLES).map(t=>`warp-${t}`),...Object.keys(LIVE_LABELS).map(t=>`live-${t}`),'simplify','reverse-path','add-anchors','remove-anchors','clean-up','compound-make','compound-release','clip-make','clip-release','reset-rotate-view','package','keyboard-shortcuts','workspace-new','workspace-reset','workspace-manage','blend-make','blend-release','blend-expand','blend-options','blend-reverse','blend-replace-spine','blend-reverse-spine','envelope-make','envelope-warp','envelope-release','envelope-expand','mask-make','mask-release','mask-clip','mask-invert','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
   'paint-focus','paint-swap','paint-none','paint-solid','paint-gradient','default-paint','smart-guides','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','shear-dialog','toggle-panels','toggle-panels-except-tools','command-search','draw-mode','draw-normal','draw-behind','draw-inside','reselect','select-inverse','select-next-above','select-next-below','save-selection','edit-selection',
   ...Object.keys(SAME_MODES).map(m=>`select-same-${m}`),...Object.keys(OBJECT_KINDS).map(k=>`select-object-${k}`),'select-object-direction-handles',
   ...PANEL_DEFINITIONS.map(p=>`panel.${p.id}`),...['left','right','up','down'].flatMap(d=>[`nudge-${d}`,`nudge-large-${d}`,`duplicate-${d}`])]);
-export function createDrawWorkspace(root,{paper=window.paper,state=createProjectDraw(),onError=console.warn,onNotice=()=>{},onImport=()=>{},onSendToCut=null,cutIsEmpty=()=>false,cutClipboard=()=>null,onExport=null,getPreferences=()=>({}),statusHost=null}={}) {
+export function createDrawWorkspace(root,{paper=window.paper,state=createProjectDraw(),onError=console.warn,onNotice=()=>{},onImport=()=>{},onSendToCut=null,cutIsEmpty=()=>false,cutClipboard=()=>null,onExport=null,getPreferences=()=>({}),setPreferences=()=>{},getLaserProcesses=()=>null,setLaserProcesses=()=>false,statusHost=null}={}) {
   state.ui={tool:'select',flyout:null,layerId:state.document.data.layers[0]?.id,fill:'#FFFFFF',stroke:'#071411',strokeWidth:.5,paintFocus:'fill',...state.ui};
   state.ui.artboardId=activeArtboard(state).id;
+  state.ui.laserPreview??=!!getPreferences().laserPreviewEnabled;
+  if(state.ui.laserPreview&&state.ui.outline){state.ui.laserPreviousOutline=true;state.ui.outline=false;}
   // The control bar's visibility is a per-user view preference, like Illustrator's Window > Control.
   const CONTROL_BAR_KEY='modcut.draw.controlBar';
   try{state.ui.controlBar??=globalThis.localStorage?.getItem(CONTROL_BAR_KEY)!=='hidden';}catch{state.ui.controlBar??=true;}
@@ -87,6 +89,9 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   const zoomInput=element('input','draw-zoom-input',viewButtons);zoomInput.type='number';zoomInput.min='.0001';zoomInput.max='10000';zoomInput.step='any';zoomInput.setAttribute('aria-label','Zoom percent');
   element('span','draw-zoom-unit',viewButtons).textContent='%';
   const outlineButton=element('button','btn btn--ghost btn--sm',viewButtons);outlineButton.type='button';outlineButton.textContent='Outline';outlineButton.setAttribute('aria-label','Outline view');
+  const laserButton=element('button','btn btn--ghost btn--sm',viewButtons);laserButton.type='button';laserButton.textContent='Laser Preview';laserButton.setAttribute('aria-label','Laser Preview');
+  const processesButton=element('button','btn btn--ghost btn--sm',viewButtons);processesButton.type='button';processesButton.textContent='Laser processes';
+  const laserLegend=element('div','draw-laser-legend',stage);laserLegend.hidden=true;laserLegend.setAttribute('role','status');
   const fitButton=element('button','btn btn--ghost btn--sm',viewButtons);fitButton.type='button';fitButton.textContent='Fit';fitButton.setAttribute('aria-label','Fit Draw artboards');
   const statusLine=element('div','draw-tool-hint',shell);statusLine.setAttribute('role','status');
   const scope=new paper.PaperScope();try {scope.setup(canvas);} finally {paper.activate();}scope.view.autoUpdate=false;
@@ -95,7 +100,43 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   let panels,toolbar,interactions,paths,artboards,temporary=null,destroyed=false,fitted=false,lastPoint=null,ownedTransformModal=null,ownedTextModal=null,textBusy=false,fontCatalog;
   // A late thumbnail (big layers and groups) goes straight into the Layers rows that show it.
   const renderer=withScope(()=>createDrawRenderer(scope,state,{withScope,onImageLoad:()=>panels?.render(),
-    onThumbnail:(id,url)=>{if(!destroyed)for(const img of shell.querySelectorAll(`[data-draw-thumb="${CSS.escape(id)}"]`)){img.src=url;img.classList.remove('is-empty');}}}));
+    getLaserProcesses,onThumbnail:(id,url)=>{if(!destroyed)for(const img of shell.querySelectorAll(`[data-draw-thumb="${CSS.escape(id)}"]`)){img.src=url;img.classList.remove('is-empty');}}}));
+  let laserDialog=null;
+  function syncLaserMenu(){void window.modcut?.setLaserPreviewState?.(!!state.ui.laserPreview);}
+  function updateLaserView(){
+    const enabled=!!state.ui.laserPreview;
+    withScope(()=>renderer.setLaserPreview(enabled));shell.classList.toggle('draw-shell--laser-preview',enabled);
+    laserButton.setAttribute('aria-pressed',String(enabled));processesButton.hidden=!enabled;laserLegend.hidden=!enabled;
+    if(enabled){
+      const intents=state.document.descendants(null).map(n=>renderer.laserIntent(n.id));
+      const count=intents.filter(i=>i.status==='unresolved').length;
+      laserLegend.replaceChildren();
+      for(const [cls,text] of [['cut','Cut'],['score','Score'],['engrave','Engrave'],['unresolved','Unresolved']]){const span=document.createElement('span');span.className=`draw-laser-key draw-laser-key--${cls}`;span.textContent=text;laserLegend.append(span);}
+      const note=document.createElement('span');note.textContent=count?'Unresolved objects: {count}'.replace('{count}',String(count)):'This tab’s Cut settings · Review final job in Cut';laserLegend.append(note);
+    }
+    syncLaserMenu();
+  }
+  async function toggleLaserPreview(){
+    if(destroyed||laserDialog||document.querySelector('.modal-overlay'))return;
+    if(!state.ui.laserPreview&&!getPreferences().hideLaserPreviewIntro){
+      const pending=cutPreviewIntroDialog();laserDialog=document.querySelector('.draw-cut-preview-dialog');
+      const result=await pending;laserDialog=null;
+      if(destroyed||!result){syncLaserMenu();return;}
+      if(result.hide)setPreferences({hideLaserPreviewIntro:true});
+    }
+    if(!state.ui.laserPreview){state.ui.laserPreviousOutline=renderer.outline;state.ui.outline=false;withScope(()=>renderer.setOutline(false));}
+    else {state.ui.outline=!!state.ui.laserPreviousOutline;withScope(()=>renderer.setOutline(state.ui.outline));}
+    state.ui.laserPreview=!state.ui.laserPreview;setPreferences({laserPreviewEnabled:state.ui.laserPreview});
+    outlineButton.setAttribute('aria-pressed',String(renderer.outline));updateLaserView();
+  }
+  async function editLaserProcesses(){
+    if(document.querySelector('.modal-overlay')||state.document.readOnly)return;
+    const entries=new Map();for(const node of state.document.descendants(null)){const intent=renderer.laserIntent(node.id);if(intent.key)entries.set(intent.key,intent);}
+    if(!entries.size){onNotice('Draw some printable artwork first.');return;}
+    const pending=laserProcessesDialog([...entries.values()]);laserDialog=document.querySelector('.draw-laser-processes-dialog');
+    const values=await pending;laserDialog=null;if(destroyed||!values)return;
+    if(values.length)setLaserProcesses(values);updateLaserView();
+  }
   // The selection's top objects: ids inside a selected group are left out (one lookup set, not a list scan per id).
   const selectedIds=()=>{const ids=state.selection.ids,set=new Set(ids);return ids.filter(id=>!state.document.ancestors(id).some(n=>set.has(n.id)));};
   const paintIds=()=>[...new Set(selectedIds().flatMap(id=>{
@@ -183,7 +224,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     boardSelect.replaceChildren(...state.document.data.artboards.map((a,i)=>{const option=document.createElement('option');option.value=a.id;option.textContent=`${i+1}. ${a.name}`;return option;}));
     boardSelect.value=state.ui.artboardId;
     hint.hidden=state.document.data.layers.some(layer=>layer.children.length) || state.document.readOnly || state.ui.tool!=='select';
-    outlineButton.setAttribute('aria-pressed',String(renderer.outline));status();
+    outlineButton.setAttribute('aria-pressed',String(renderer.outline));updateLaserView();status();
   }
   function paint(kind,value,{mergeKey=null,swatch=null}={}) {
     if(state.document.readOnly)return;
@@ -1386,7 +1427,10 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     if(command==='fit-artboard')return fit();if(command==='fit-all')return fit(null);
     if(command==='zoom-in'||command==='zoom-out')return zoomAt(scope.view.center,command==='zoom-in'?1.25:.8);
     if(command==='actual-size')return zoomAt(scope.view.center,(96/25.4)/scope.view.zoom);
-    if(command==='outline'){state.ui.outline=!renderer.outline;renderer.setOutline(state.ui.outline);outlineButton.setAttribute('aria-pressed',String(renderer.outline));return;}
+    if(command==='laser-preview')return void toggleLaserPreview().catch(error=>onError(error.message));
+    if(command==='laser-processes')return void editLaserProcesses().catch(error=>onError(error.message));
+    if(command==='laser-preview-help'){if(!document.querySelector('.modal-overlay')){void cutPreviewIntroDialog().then(result=>{if(result?.hide)setPreferences({hideLaserPreviewIntro:true});});}return;}
+    if(command==='outline'){if(state.ui.laserPreview){state.ui.laserPreview=false;setPreferences({laserPreviewEnabled:false});updateLaserView();}state.ui.outline=!renderer.outline;withScope(()=>renderer.setOutline(state.ui.outline));outlineButton.setAttribute('aria-pressed',String(renderer.outline));return;}
     if(command==='deselect')return select([]);
     if(command==='select-all')return select((isolation()?state.document.getNode(isolation()).children:state.document.data.layers.flatMap(l=>l.children)).filter(n=>state.document.isEditable(n.id)).map(n=>n.id));
     if(command==='select-artboard'){const a=activeArtboard(state),rect=new scope.Rectangle(a.x,a.y,a.width,a.height);return select(state.document.data.layers.flatMap(l=>l.children).filter(n=>renderer.bounds(n.id)?.intersects(rect)).map(n=>n.id));}
@@ -1494,8 +1538,9 @@ typeOnPath:id=>editText(undefined,null,null,{pathFrom:id}),cursor,
   window.addEventListener('modcut-theme-change',syncTheme);
   boardSelect.addEventListener('change',()=>artboards.choose(boardSelect.value,true));
   zoomInput.addEventListener('change',()=>{if(Number.isFinite(zoomInput.valueAsNumber)&&zoomInput.valueAsNumber>=.0001&&zoomInput.valueAsNumber<=10000)zoomAt(scope.view.center,zoomInput.valueAsNumber/100*(96/25.4)/scope.view.zoom);else status();});
+  laserButton.addEventListener('click',()=>handle('laser-preview'));processesButton.addEventListener('click',()=>handle('laser-processes'));
   outlineButton.addEventListener('click',()=>handle('outline'));fitButton.addEventListener('click',()=>fit());
-  const workspace={state,scope,renderer,isolate,cutSvg,exportBoard,exporter,exportAs:()=>exportAs().catch(error=>onError(error.message)),exportScreens:()=>exportScreens().catch(error=>onError(error.message)),sendToCut:boardId=>sendToCut(boardId).catch(error=>onError(error.message)),exitIsolation,statusElement:controls,artboards,transforms,resize,select,setTool,handle,availableTool:id=>implementedTools.has(id),canHandle:command=>commands.has(command),commandNames:()=>[...commands].sort(),withScope,layerId,fit,
+  const workspace={state,scope,renderer,syncLaserMenu,refreshLaserPreview:updateLaserView,isolate,cutSvg,exportBoard,exporter,exportAs:()=>exportAs().catch(error=>onError(error.message)),exportScreens:()=>exportScreens().catch(error=>onError(error.message)),sendToCut:boardId=>sendToCut(boardId).catch(error=>onError(error.message)),exitIsolation,statusElement:controls,artboards,transforms,resize,select,setTool,handle,availableTool:id=>implementedTools.has(id),canHandle:command=>commands.has(command),commandNames:()=>[...commands].sort(),withScope,layerId,fit,
     setTemporaryTool(value){temporary=value;canvas.dataset.tool=temporary?.id || state.ui.tool;canvas.style.cursor=cursor();status();},
     /** Cut > Edit in Draw: the copied Cut objects on a new bed-sized artboard, where they were on the bed. */
     async editFromCut({svg,warning},{width,height}){
@@ -1506,7 +1551,7 @@ typeOnPath:id=>editText(undefined,null,null,{pathFrom:id}),cursor,
       if(warning||result.warning)onNotice([warning,result.warning].filter(Boolean).join(' '));
     },
     async import(prepared,name,options={}){const result=await importArtwork(scope,state,prepared,name,layerId(),{...options,alive:()=>!destroyed});select(options.template?[]:result.ids);if(options.fitArtboard)fit();return result;},
-    destroy(){destroyed=true;ownedTextModal?.querySelector('[data-x=cancel]').click();ownedTransformModal?.querySelector('[data-x=cancel]').click();paths.destroy();interactions.destroy();toolbar.destroy();unsubscribe();observer.disconnect();window.removeEventListener('modcut-theme-change',syncTheme);workspaces.delete(root);withScope(()=>{renderer.destroy();scope.remove();});controls.remove();root.replaceChildren();},
+    destroy(){destroyed=true;laserDialog?.querySelector('[data-x=cancel]')?.click();ownedTextModal?.querySelector('[data-x=cancel]').click();ownedTransformModal?.querySelector('[data-x=cancel]').click();paths.destroy();interactions.destroy();toolbar.destroy();unsubscribe();observer.disconnect();window.removeEventListener('modcut-theme-change',syncTheme);workspaces.delete(root);withScope(()=>{renderer.destroy();scope.remove();});controls.remove();root.replaceChildren();},
   };
   workspaces.set(root,workspace);refresh();syncTheme();setTool(state.ui.tool);resize();return workspace;
 }

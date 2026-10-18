@@ -1960,3 +1960,26 @@ mørkhet. Derfor er vektorgravering svart i denne modusen. «Engrave as seen» e
 Ingen dybde eller fysisk brennstyrke loves av visningen. Seks nye tester dekker røde linjer,
 zoom, stiplemønster, svart silhuett, feilopprydding, referanser, Ignore og klippemasker.
 Meny/UI og dialog kobles i neste trinn; funksjonen er ennå ikke tilgjengelig for brukeren.
+
+## 2026-10-18: Laser Preview — brukerflyt koblet og verifisert
+
+- Knapp ved Outline, View-meny med avkrysning, og forklaring fra Help.
+- Solid rød Cut, stiplet rød Score, svart vektorgravering, gråtonebilder, hvitt artboard og tegnforklaring.
+- Første aktivering/Continue/Cancel og «Ikke vis dette igjen»; brukerpreferanser huskes etter normal
+  appomstart. Preferences kan tilbakestille forklaringen. Vanlig visning er standard for nye brukere.
+- «Laser processes» lar brukeren sette faktiske Cut/Score/Engrave/Ignore-valg på denne fanens
+  prosesslag. Dette er en eksplisitt endring av Cut-innstillinger; selve togglen endrer bare visning.
+- Eksplisitte Draw-prosessvalg beholdes når Cut er tom, også ved fanebytte og filåpning.
+- Feil funnet med pikseltest: preferanseoppdatering under Draw-scope kunne tegne Cuts rutenett i
+  Draw. Cut-scope aktiveres nå før slike endringer. Paper har allerede skjermfast strek ved
+  strokeScaling=false; å dele på zoom igjen gjorde Cut-linjene for tynne. Dette er rettet.
+
+Verifisert med faktisk Electron: forklaring, Cancel, gjentakelse uten avkrysning, undertrykking,
+normal appomstart, røde Cut-piksler og svarte graveringer, uendrede originalstiler/dokument/
+historikk/dirty/SVG, én virkelig musegest med ett angresteg, prosessoppsett, filåpning og
+fanebytte, native meny, Help og gjenoppretting av forrige Outline-visning. Skjermbildet er
+visuelt kontrollert. Full regresjonskontroll følger i neste trinn før sluttstatus.
+
+Avgrensning: avanserte kompositter, uekspanderte effekter, avanserte graveringsstreker og
+rasterdithering vises som uavklart (ravfarget prikkontur eller dempet bilde), ikke som lovet output.
+«Engrave as seen», fysisk materialresultat og kjørerekkefølge er fortsatt separate oppgaver.

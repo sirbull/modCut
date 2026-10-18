@@ -93,7 +93,7 @@ function requestQuit() {
 
 const send = createWindowCommandRouter({ getWindow: () => win, createWindow });
 
-let menuMode = "cut";
+let menuMode = "cut", menuLaserPreview = false;
 // The renderer reports the language it shows (Preferences > Language); until then, the system's.
 let language = "en";
 // Edit > Cut is "Klipp ut" in a menu; elsewhere "Cut" is the laser operation.
@@ -254,6 +254,8 @@ function buildMenu(mode = "cut") {
       ...(isMac ? [] : [{ type: "separator" }, { label: "Preferences…", accelerator: acceleratorFor("preferences", { isMac }), click: () => send("preferences") }]),
     ];
     viewMenu.submenu = [viewMenu.submenu[0], { type: "separator" },
+      { id:"laser-preview",label:"Laser Preview",type:"checkbox",checked:menuLaserPreview,click:()=>send("laser-preview") },
+      { label:"Laser processes…",click:()=>send("laser-processes") },
       { label: "Outline / Preview", accelerator: acceleratorFor("outline", { isMac }), click: () => send("outline") },
       { label: "Reset Rotate View", click: () => send("reset-rotate-view") },
       { label: "Control Bar", click: () => send("toggle-control-bar") },
@@ -266,6 +268,7 @@ function buildMenu(mode = "cut") {
     template.splice(editIndex + 1, 0, ...["Object", "Type", "Select", "Effect"].map((label) => ({
       label, submenu: [{ label: "No commands available", enabled: false }],
     })));
+    template.find(item=>item.label==='Help').submenu.unshift({label:"Laser Preview explained…",click:()=>send("laser-preview-help")});
     const objectItem=(label,command)=>({label,accelerator:acceleratorFor(command,{isMac}),click:()=>send(command)});
     // Effect menu (D3.2): live vector effects, kept in the object's Appearance.
     template.find(item=>item.label==='Effect').submenu=[objectItem('Apply Last Effect','effect-last'),objectItem('Last Effect…','effect-options'),{type:'separator'},
@@ -356,6 +359,10 @@ app.whenReady().then(async () => {
       window.setBackgroundColor(nativeTheme.shouldUseDarkColors ? "#071411" : "#FFFFFF");
     }
     return true;
+  });
+  ipcMain.handle("setLaserPreviewState",(event,value)=>{
+    if(event.sender!==win?.webContents||typeof value!=="boolean")return false;
+    menuLaserPreview=value;const item=Menu.getApplicationMenu()?.getMenuItemById("laser-preview");if(item)item.checked=value;return true;
   });
   ipcMain.handle("setWorkspace", (event, mode) => {
     if (event.sender !== win?.webContents || !["cut", "draw"].includes(mode)) return false;

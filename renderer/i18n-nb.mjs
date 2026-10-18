@@ -1,6 +1,30 @@
 // Norwegian bokmål. Keys are the English interface text exactly as written in the code; {name} marks a
 // value that is carried over. Product and workspace names (modCut, Cut, Draw) stay as they are.
 export const NB = Object.freeze({
+  // Laser Preview
+  "Laser Preview": "Laserforhåndsvisning",
+  "Laser processes": "Laserprosesser",
+  "Laser processes…": "Laserprosesser…",
+  "Laser Preview explained…": "Forklaring av laserforhåndsvisning…",
+  "Unresolved": "Uavklart",
+  "Continue": "Fortsett",
+  "Don’t show this again": "Ikke vis dette igjen",
+  "Skip Laser Preview explanation": "Hopp over forklaringen av laserforhåndsvisning",
+  "Turn this off to show the explanation on the next activation. You can also open it from Help.": "Slå av dette for å vise forklaringen neste gang du aktiverer visningen. Du kan også åpne den fra Hjelp.",
+  "Solid red lines show Cut. Dashed red lines show Score. Black areas show vector engraving; images show in grayscale.": "Heltrukne røde linjer viser kutting. Stiplede røde linjer viser risping. Svarte områder viser vektorgravering; bilder vises i gråtoner.",
+  "Dotted amber outlines or faded images mean the process or appearance is unresolved. Choose Laser processes to configure this tab’s Cut settings.": "Prikkede ravfargede konturer eller dempede bilder betyr at prosessen eller utseendet er uavklart. Velg Laserprosesser for å konfigurere Cut-innstillingene i denne fanen.",
+  "Effects, advanced composites and image dithering may need checking in Cut. This view does not simulate travel order, burn depth or the exact material result.": "Effekter, avanserte sammensetninger og bildedithering kan måtte kontrolleres i Cut. Visningen simulerer ikke kjørerekkefølge, brenndybde eller det nøyaktige resultatet på materialet.",
+  "Only the view changes. Original artwork, exports and undo history stay unchanged. You can keep drawing.": "Bare visningen endres. Originaltegning, eksport og angrehistorikk beholdes. Du kan fortsette å tegne.",
+  "Transparency and blending are not an Engrave as seen output option yet. Always review the final job in Cut.": "Gjennomsiktighet og blandingsmoduser kan ennå ikke sendes som «Graver som vist». Kontroller alltid den endelige jobben i Cut.",
+  "Turn the view off with View > Laser Preview or the Laser Preview button.": "Slå av visningen med Vis > Laserforhåndsvisning eller knappen Laserforhåndsvisning.",
+  "Updates this tab’s Cut process settings. Review power and speed in Cut before running.": "Oppdaterer Cut-prosessinnstillingene i denne fanen. Kontroller effekt og hastighet i Cut før kjøring.",
+  "Unresolved objects: {count}": "Uavklarte objekter: {count}",
+  "This tab’s Cut settings": "Cut-innstillinger i denne fanen",
+  "Review final job in Cut": "Kontroller endelig jobb i Cut",
+  "Draw some printable artwork first.": "Tegn noe utskrivbart innhold først.",
+  "Vector {color}": "Vektor {color}",
+  "Image {color}": "Bilde {color}",
+
   // Application and File menu
   "About modCut": "Om modCut", "Preferences…": "Innstillinger…", "Services": "Tjenester", "Hide modCut": "Skjul modCut",
   "Hide Others": "Skjul andre", "Show All": "Vis alle", "Quit modCut": "Avslutt modCut", "Quit": "Avslutt",

@@ -10,7 +10,7 @@ test('Cut and Score use distinct red centre lines at every zoom and restore orig
   for(const operation of ['Cut','Score'])for(const zoom of [.5,2,8]){
     const item=path(),before=structuredClone(item);
     withLaserAppearance(item,{resolve:()=>resolved(operation),zoom},()=>{
-      assert.equal(item.fillColor,null);assert.equal(item.strokeColor,'#C5221F');assert.equal(item.strokeWidth*zoom,1.5);
+      assert.equal(item.fillColor,null);assert.equal(item.strokeColor,'#C5221F');assert.equal(item.strokeWidth,1.5);assert.equal(item.strokeScaling,false);
       assert.equal(item.dashArray.length,operation==='Cut'?0:2);assert.equal(item.opacity,1);
     });
     // Paper style properties absent from the fixture become undefined after restore.

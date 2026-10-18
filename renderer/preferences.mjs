@@ -1,10 +1,10 @@
-export const DEFAULT_PREFERENCES = Object.freeze({ showGrid: true, invertZoom: false, tooltips: true, tooltipDelay: 1000, language: "system" });
+export const DEFAULT_PREFERENCES = Object.freeze({ showGrid: true, invertZoom: false, tooltips: true, tooltipDelay: 1000, language: "system", laserPreviewEnabled: false, hideLaserPreviewIntro: false });
 export const PREFERENCES_KEY = "modcut_preferences";
 
 export function normalizePreferences(value, defaults = DEFAULT_PREFERENCES) {
   const result = { ...defaults };
   if (!value || typeof value !== "object") return result;
-  for (const key of ["showGrid", "invertZoom", "tooltips"]) {
+  for (const key of ["showGrid", "invertZoom", "tooltips", "laserPreviewEnabled", "hideLaserPreviewIntro"]) {
     if (typeof value[key] === "boolean") result[key] = value[key];
   }
   const delay = Number(value.tooltipDelay);
