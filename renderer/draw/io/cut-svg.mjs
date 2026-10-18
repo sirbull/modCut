@@ -39,6 +39,7 @@ export function pathData(subpaths, m) {
 
 /**
  * @param geometry { worldMatrix(id), bounds(id) -> {x,y,width,height}, subpaths(id) -> local PathData for paths and shapes,
+ *   blendSteps(id) -> a blend group's steps per key pair (optional),
  *   clip(subpaths, world, rect, filled) -> world PathData cut at `rect` (optional, for clipToBoard) }
  * @param options `outlines`: Map of node id -> outlined stroke PathData in the node's space (Outline Stroke).
  * @returns {{ svg, count, warnings: string[], skipped: { images, outside, empty } }}
@@ -110,7 +111,22 @@ export function artboardCutSvg(doc, boardId, geometry, { only = null, clipToBoar
   }
   // A clipping path that keeps its paint (Draw Inside) is filled under the clipped objects and stroked above them.
   const clipStart = new Map();
+  // Blend steps are sent as the paths they draw, between their keys (just before the upper key).
+  const blendBefore = new Map();
+  const solid = (rgb, extra = {}) => ({ paint: { type: 'solid', color: { space: 'rgb', values: rgb } }, ...extra });
   for (const original of doc.descendants(null)) {
+    if (original.type === 'group' && original.blend && isOutputNode(doc, original.id) && geometry.blendSteps)
+      for (const pair of geometry.blendSteps(original.id)) blendBefore.set(pair.before, { group: original, steps: pair.steps });
+    const blend = blendBefore.get(original.id);
+    if (blend && picked(blend.group.id)) {
+      const world = geometry.worldMatrix(blend.group.id);
+      for (const { subpaths, look } of blend.steps) {
+        const pts = subpaths.flatMap((sp) => sp.segments.map((g) => apply(world, g.p)));
+        if (!pts.length) continue;
+        const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]), box = { x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) };
+        emit({ id: blend.group.id, type: 'path', fillRule: look.fillRule, appearance: { fills: look.fill ? [solid(look.fill)] : [], strokes: look.stroke && look.width > 0 ? [solid(look.stroke, { width: look.width })] : [] } }, subpaths, box);
+      }
+    }
     if (original.type === 'group' && original.clip) clipStart.set(original.children.at(-1)?.id, elements.length);
     if (original.children || !isOutputNode(doc, original.id) || !picked(original.id)) continue;
     if (original.type === 'image') {

@@ -170,6 +170,7 @@ export function createInteractions(canvas, state, api) {
       const hit=renderer.hit(p);api.run(()=>api.magicWand(hit,{add:event.shiftKey,subtract:event.altKey}));return;
     }
     if(tool==='lasso'){gesture={...base,mode:'lasso',points:[[p.x,p.y]]};return;}
+    if(tool==='blend'){const hit=renderer.hit(p);api.run(()=>api.blendClick(hit&&targetId(hit)));return;}
     if(tool==='shape-builder'){
       const session=api.shapeBuilderSession();if(!session){api.notify?.('Select at least two overlapping shapes for Shape Builder.');return;}
       gesture={...base,mode:'shape-builder',session,points:[[p.x,p.y]]};return;

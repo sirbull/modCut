@@ -596,3 +596,12 @@ export function widthPointDialog({ left, right }) {
     {key:'remove',label:'Delete this width point',type:'checkbox',value:false}]})
     .then(v=>v&&{left:Number(v.left),right:Number(v.right),remove:!!v.remove});
 }
+/** Object > Blend > Blend Options (and double-click on the Blend tool). */
+export function blendOptionsDialog(defaults) {
+  return openDrawModal({title:'Blend Options',submitLabel:'OK',className:'draw-blend-dialog',fields:[
+    {key:'spacing',label:'Spacing',type:'select',value:defaults.spacing,options:[{value:'smooth',label:'Smooth Color'},{value:'steps',label:'Specified Steps'},{value:'distance',label:'Specified Distance'}]},
+    {key:'steps',label:'Steps',type:'number',value:defaults.steps,min:1,max:1000,step:1,required:true},
+    {key:'distance',label:'Distance (mm)',type:'number',value:defaults.distance,min:.01,max:10000,step:'any',required:true},
+    {key:'orientation',label:'Orientation',type:'select',value:defaults.orientation,options:[{value:'page',label:'Align to Page'},{value:'path',label:'Align to Path'}]}]})
+    .then(v=>v&&{spacing:v.spacing,steps:Number(v.steps),distance:Number(v.distance),orientation:v.orientation});
+}

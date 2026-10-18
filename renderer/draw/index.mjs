@@ -24,7 +24,8 @@ import { createTransformController } from './tools/transforms.mjs';
 import { TRANSFORM_TOOLS, operationMatrix, dialogOperation, panelMatrix } from './geom/transforms.mjs';
 import { transformedBox } from './tools/selection.mjs';
 import { SHAPE_TOOLS, shapeFromDrag } from './tools/shapes.mjs';
-import { insertNode, removeNode, replaceLeaf, updateNode, updateDocument } from './doc/commands.mjs';
+import { insertNode, moveNode, removeNode, replaceLeaf, updateNode, updateDocument } from './doc/commands.mjs';
+import { BLEND_DEFAULTS, blendOptions } from './geom/blend.mjs';
 import { createNode } from './doc/schema.mjs';
 import { appearance } from './geometry.mjs';
 import { changeGradient, defaultGradient, isGradient, vectorGradient } from './doc/gradient.mjs';
@@ -35,7 +36,7 @@ import { DRAW_MODE_LABELS, insideTarget, nextDrawMode, placement } from './doc/d
 import { changePaint, changeStroke, paintHex } from './doc/paint.mjs';
 import { setWidthPoint, moveWidthPoint, removeWidthPoint, normalizeProfile } from './geom/width-profile.mjs';
 import { importArtwork, rasterAsset } from './import-artwork.mjs';
-import { shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog,layerOptionsDialog,swatchOptionsDialog,sendToCutDialog,averageDialog,offsetDialog,simplifyDialog,pencilDialog,expandDialog,cropImageDialog,effectDialog,magicWandDialog,eraserDialog,transformEachDialog,splitGridDialog,saveSelectionDialog,editSelectionDialog,widthPointDialog } from './ui/dialogs.mjs';
+import { shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog,layerOptionsDialog,swatchOptionsDialog,sendToCutDialog,averageDialog,offsetDialog,simplifyDialog,pencilDialog,expandDialog,cropImageDialog,effectDialog,magicWandDialog,eraserDialog,transformEachDialog,splitGridDialog,saveSelectionDialog,editSelectionDialog,widthPointDialog,blendOptionsDialog } from './ui/dialogs.mjs';
 import { ALL_ARTBOARDS, artboardCutSvg } from './io/cut-svg.mjs';
 import { EXPORT_FORMATS, rasterSize, svgDocument } from './io/export.mjs';
 import { createExportController } from './export-controller.mjs';
@@ -53,10 +54,10 @@ import { textDialog } from './ui/dialogs.mjs';
 
 const workspaces=new WeakMap();
 export function getDrawWorkspace(root) {return workspaces.get(root) || null;}
-const implementedTools=new Set(['select','group-selection','magic-wand','lasso','shape-builder','knife','eraser','width','free-transform','pencil','hand','zoom','artboard','gradient','eyedropper','measure','scissors','type','area-type','type-on-path',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
+const implementedTools=new Set(['select','group-selection','magic-wand','lasso','shape-builder','knife','eraser','width','blend','free-transform','pencil','hand','zoom','artboard','gradient','eyedropper','measure','scissors','type','area-type','type-on-path',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
 const commands=new Set(['undo','redo','delete','select-all','select-artboard','deselect','cancel','fit-artboard','fit-all','actual-size','zoom-in','zoom-out','outline',
   'cut','copy','paste','paste-front','paste-back','paste-place','paste-all-artboards',
-  'edit-text','create-outlines','join','average','offset-path','outline-stroke','expand','expand-appearance','transform-each','split-into-grid','crop-image','effect-last','effect-options',...Object.keys(EFFECTS).map(t=>`effect-${t}`),'simplify','reverse-path','add-anchors','remove-anchors','clean-up','compound-make','compound-release','clip-make','clip-release','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
+  'edit-text','create-outlines','join','average','offset-path','outline-stroke','expand','expand-appearance','transform-each','split-into-grid','crop-image','effect-last','effect-options',...Object.keys(EFFECTS).map(t=>`effect-${t}`),'simplify','reverse-path','add-anchors','remove-anchors','clean-up','compound-make','compound-release','clip-make','clip-release','blend-make','blend-release','blend-expand','blend-options','blend-reverse','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
   'paint-focus','paint-swap','paint-none','paint-solid','paint-gradient','default-paint','smart-guides','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','shear-dialog','toggle-panels','toggle-panels-except-tools','command-search','draw-mode','draw-normal','draw-behind','draw-inside','reselect','select-inverse','select-next-above','select-next-below','save-selection','edit-selection',
   ...Object.keys(SAME_MODES).map(m=>`select-same-${m}`),...Object.keys(OBJECT_KINDS).map(k=>`select-object-${k}`),
   ...PANEL_DEFINITIONS.map(p=>`panel.${p.id}`),...['left','right','up','down'].flatMap(d=>[`nudge-${d}`,`nudge-large-${d}`,`duplicate-${d}`])]);
@@ -111,6 +112,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       tool.id==='measure' ? (state.ui.measurement?measurementText(state.ui.measurement):'Drag: distance and angle · Shift: 45° steps') :
       tool.id==='free-transform' ? 'Drag a corner of the selection: free distort (the other corners stay)' :
       tool.id==='shape-builder' ? 'Drag across regions of the selected shapes: merge · Alt+drag: delete regions' :
+      tool.id==='blend' ? (state.ui.blendFirst?'Click a second object: blend the two · Click empty canvas: start over':'Click an object, then another, to blend them · Double-click the tool: Blend Options') :
       tool.id==='width' ? 'Drag a stroke: width there · Drag a width point: resize, its centre slides it · Alt: one side · Double-click a point: edit' :
       tool.id==='knife' ? 'Drag across filled shapes to cut them (the selection, or every shape)' :
       tool.id==='eraser' ? 'Drag to erase from filled shapes (the selection, or every shape) · Enter: diameter' :
@@ -205,6 +207,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       // Clipping masks are cut into the geometry, so the laser follows what is visible.
       subpaths(id){const node=state.document.getNode(id);return renderer.clippedSubpaths(id,worldMatrix(id))??renderer.effectiveSubpaths(id)??(node.type==='shape'?renderer.expandedShape(id)?.subpaths:node.subpaths);},
       clip:(subpaths,world,rect,filled)=>renderer.clipToRect(subpaths,world,rect,filled),
+      blendSteps:id=>renderer.blendSteps(id),
       resolvedText:id=>resolved.get(id),glyphBounds:(id,paths)=>renderer.glyphBounds(id,paths),
     },options));
   }
@@ -565,6 +568,30 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       points=values.remove?removeWidthPoint(points,handle.index):points.map((p,i)=>i===handle.index?{...p,left:values.left/current.stroke.width,right:values.right/current.stroke.width}:p);
       state.history.execute(updateNode(handle.id,{appearance:changeStroke(current.node.appearance,{widthProfile:points},state.ui)},{label:'Width Point Edit'}));});
     return true;
+  }
+  /** Object > Blend > Make: the objects (in stacking order) become the keys of one blend group. */
+  function makeBlend(chosen){
+    const doc=state.document,members=stackingOrder(doc,chosen);
+    if(members.length<2)throw new Error('Select at least two objects to blend.');
+    if(new Set(members.map(id=>doc.locate(id).parentId)).size>1)throw new Error('Blend objects in the same layer or group.');
+    const {commands,group}=groupCommands(doc,members),options=blendOptions(state.ui.blendOptions??BLEND_DEFAULTS);
+    state.history.transaction('Make Blend',()=>{commands.forEach(c=>state.history.execute(c));state.history.execute(updateNode(group.id,{name:'Blend',blend:options}));});
+    select([group.id]);return group.id;
+  }
+  /** Blend Options: for the selected blends, or the options new blends get. */
+  async function blendOptionsCommand(){
+    const doc=state.document,list=selectedIds().map(id=>doc.getNode(id)?.blend?id:doc.ancestors(id).find(n=>n.blend)?.id).filter(Boolean);
+    const current=list.length?doc.getNode(list[0]).blend:state.ui.blendOptions??BLEND_DEFAULTS,values=await blendOptionsDialog(current);
+    if(!values||destroyed)return;
+    run(()=>{const options=blendOptions(values);state.ui.blendOptions=options;
+      if(list.length)state.history.transaction('Blend Options',()=>[...new Set(list)].forEach(id=>state.history.execute(updateNode(id,{blend:options}))));});
+  }
+  /** Blend tool: click one object, then another; the second click makes the blend. */
+  function blendClick(id){
+    const doc=state.document,first=state.ui.blendFirst;
+    if(!id){state.ui.blendFirst=null;status();return 'none';}
+    if(!first||first===id||!doc.getNode(first)){state.ui.blendFirst=id;select([id]);status();return 'first';}
+    state.ui.blendFirst=null;makeBlend([first,id]);return 'made';
   }
   const knife=points=>cutWith('Knife',world=>knifeCut(scope,world,points));
   const eraser=points=>cutWith('Eraser',world=>eraseRegion(scope,world,points,state.ui.eraserSize??3));
@@ -999,6 +1026,22 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       parentWorld:id=>renderer.worldMatrix(doc.locate(id).parentId),
       subpaths:id=>doc.getNode(id).type==='shape'?withScope(()=>renderer.expandedShape(id)).subpaths:doc.getNode(id).subpaths});apply('Make Compound Path',commands);select([id]);};
     if(command==='compound-release')return()=>{const {commands,ids:released}=releaseCompoundCommands(doc,ids());apply('Release Compound Path',commands);select(released);};
+    // Blends (D4.2): a group whose children are the keys and whose `blend` holds the options.
+    const blends=()=>{const found=ids().map(id=>doc.getNode(id)?.blend?id:doc.ancestors(id).find(n=>n.blend)?.id).filter(Boolean);if(!found.length)throw new Error('Select a blend.');return [...new Set(found)];};
+    if(command==='blend-make')return()=>makeBlend(ids());
+    if(command==='blend-release')return()=>{const list=blends();apply('Release Blend',list.map(id=>updateNode(id,{blend:null})));select(list);};
+    if(command==='blend-reverse')return()=>{const list=blends();apply('Reverse Front to Back',list.flatMap(id=>doc.getNode(id).children.map(child=>moveNode(child.id,id,0))));select(list);};
+    if(command==='blend-options')return()=>void blendOptionsCommand();
+    if(command==='blend-expand')return()=>{const list=blends(),hex=c=>c&&'#'+c.map(v=>Math.round(Math.min(1,Math.max(0,v))*255).toString(16).padStart(2,'0')).join('').toUpperCase();
+      // The steps become paths between their keys; the group stays, as a plain group.
+      const made=list.map(id=>({id,pairs:withScope(()=>renderer.blendSteps(id))}));
+      state.history.transaction('Expand Blend',()=>{for(const {id,pairs} of made){state.history.execute(updateNode(id,{blend:null}));
+        for(const pair of pairs){const at=state.document.getNode(id).children.findIndex(c=>c.id===pair.after)+1;
+          pair.steps.forEach((step,i)=>{const look=appearance(hex(step.look.fill),hex(step.look.stroke),step.look.width);
+            if(look.fills[0])look.fills[0].opacity=step.look.fillAlpha;if(look.strokes[0])Object.assign(look.strokes[0],{opacity:step.look.strokeAlpha,cap:step.look.cap,join:step.look.join});
+            if(!step.look.stroke||!(step.look.width>0))look.strokes=[];
+            state.history.execute(insertNode(id,createNode('path',{name:'',subpaths:step.subpaths,fillRule:step.look.fillRule,appearance:look,opacity:step.look.opacity}),at+i));});}}});
+      select(list);};
     if(command==='clip-make')return()=>{const {commands,group}=clipCommands(doc,ids());apply('Make Clipping Mask',commands);select([group.id]);};
     if(command==='clip-release')return()=>{apply('Release Clipping Mask',releaseClipCommands(doc,ids()));};
     if(command==='lock')return()=>{apply('Lock',lockCommands(doc,ids()));select([]);};
@@ -1089,6 +1132,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     if(command==='tool-dialog'&&SHAPE_TOOLS.includes(state.ui.tool))return void shapeDialog(state.ui.tool);
     if(command==='tool-dialog'&&state.ui.tool==='eraser')return void eraserDialog(state.ui.eraserSize??3).then(size=>{if(size&&!destroyed)state.ui.eraserSize=size;});
     if(command==='tool-dialog'&&state.ui.tool==='magic-wand')return void magicWandDialog(state.ui.magicWand??{}).then(values=>{if(values&&!destroyed)state.ui.magicWand=values;});
+    if(command==='tool-dialog'&&state.ui.tool==='blend')return void blendOptionsCommand();
     if(command==='tool-dialog'&&state.ui.tool==='pencil')return void pencilDialog(state.ui.pencil??{}).then(values=>{if(values&&!destroyed)state.ui.pencil=values;});
     if(command==='tool-dialog'&&state.ui.tool==='type-on-path'){const id=selectedIds()[0];if(id)return void editText(undefined,null,null,{pathFrom:id});return;}
     if(command==='tool-dialog'&&['type','area-type'].includes(state.ui.tool))return void editText(undefined,null,state.ui.tool==='area-type'?{width:60,height:30}:null);
@@ -1114,7 +1158,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       select(subtract?current.filter(id=>!found.includes(id)):add?[...new Set([...current,...found])]:found);},
     lasso:(points,options)=>paths.lasso(points,options),
     freeDistortSession,freeDistortPreview,freeDistort,
-    shapeBuilderSession,shapeBuilderPreview,shapeBuilder,knife,eraser,eraserSize:()=>state.ui.eraserSize??3,widthSession,widthDrag,widthPreview,widthPointEdit,
+    shapeBuilderSession,shapeBuilderPreview,shapeBuilder,knife,eraser,eraserSize:()=>state.ui.eraserSize??3,widthSession,widthDrag,widthPreview,widthPointEdit,blendClick,blendOptions:()=>void blendOptionsCommand(),
     widthHandles:point=>{const id=renderer.hit(point)??selectedIds()[0],target=id&&widthTarget(id);return target?withScope(()=>renderer.widthHandles(id,target.stroke)):[];},
     gradientVector(from,to,mergeKey){const kind=state.ui.paintFocus==='stroke'?'stroke':'fill',last=state.ui.lastGradient;
       gradient(kind,(current,box,node)=>{const a=renderer.pointToLocal(node.id,from),b=renderer.pointToLocal(node.id,to);

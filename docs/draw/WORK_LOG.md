@@ -1630,4 +1630,17 @@ på siden til de er ferdige; `--draw-effects` passerte deretter 3 av 3. `--draw-
 
 Hele Draw-E2E 33 for 1146992 (Image Trace, AI-eksport, Width og CDP-retting) passerte helt: 40 av 40.
 
-Neste: D4.2 Blend.
+
+## 2026-10-18: D4.2 Blend
+
+- `geom/blend.mjs`: `blendOptions`, `blendStepCount` (Smooth Color, steg, avstand), `withAnchors` (deler lengste
+  segment med de Casteljau), `matchShapes` (rotering og reversering for lukkede baner, manglende delbaner fra eget
+  sentrum), `interpolateShapes`, `lerpColor` og `stepPositions`.
+- En blend er en gruppe med `blend` (validert i skjemaet). `render/paper-adapter.mjs` lager mellomformene som
+  visningselementer under den øvre nøkkelen og bygger dem bare på nytt når nøkler eller valg endres.
+- `index.mjs`: Make, Release, Expand, Blend Options, Reverse Front to Back og Blend-verktøyet; Object > Blend i
+  menyen. `io/cut-svg.mjs` sender mellomformene til Cut.
+
+Verifisering: 268 Draw-enhetstester (`blend.test.mjs`), ny E2E `draw-blend-workflows.mjs` (`--draw-blend`).
+
+Neste: D4.3 Warp, Live Pathfinder og opacity masks.

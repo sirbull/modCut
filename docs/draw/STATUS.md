@@ -650,6 +650,25 @@ Gjenstår i D4.1: stiplede streker med profil (stiplingen ignoreres når profile
 justering med profil, egne lagrede profiler, og gradient langs eller på tvers av streken (gradient på strek
 finnes, men bare «within stroke»).
 
+### 2.29 Blend (D4.2, 2026-10-18)
+
+* **Object > Blend > Make (Alt+Mod+B):** de valgte objektene (samme lag eller gruppe) blir nøkler i en
+  blend-gruppe («Blend»). Mellomformene tegnes mellom hvert nabopar av nøkler, med form, fyll, strek,
+  strekbredde og opasitet interpolert. Ett angresteg.
+* **Blend Options** (Object-menyen, eller dobbeltklikk på Blend-verktøyet): Smooth Color, Specified Steps og
+  Specified Distance. Uten valgt blend settes valgene for nye blends.
+* **Release (Alt+Shift+Mod+B)** beholder nøklene og fjerner mellomformene; **Expand** gjør mellomformene til
+  vanlige baner mellom nøklene i en vanlig gruppe; **Reverse Front to Back** snur stablingen.
+* **Blend-verktøyet (W):** klikk ett objekt og så et annet.
+* Former med ulikt antall ankerpunkter matches ved å dele de lengste segmentene; lukkede baner roteres og
+  snus så hvert punkt går korteste vei, og en delbane bare den ene nøkkelen har vokser fra sitt eget sentrum.
+* Mellomformene er med på lerret (også i Outline), i SVG, PDF, PNG og i Send to Cut (mellom nøklene).
+* Kode: `geom/blend.mjs`, `blendData` og `placeBlend` i `render/paper-adapter.mjs`, `makeBlend`,
+  `blendOptionsCommand`, `blendClick` og blend-kommandoene i `index.mjs`, blend i `io/cut-svg.mjs`.
+
+Gjenstår i D4.2: Replace Spine og Reverse Spine (blend langs en bane; «Align to Path» har ingen virkning ennå),
+tekst og grupper som nøkler (bare baner og former blir med), og Object > Expand på blends.
+
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
 | Oppgave | Status |
@@ -679,6 +698,7 @@ finnes, men bare «within stroke»).
 | D3.7 AI- og DXF-eksport | Ferdig (2.27); Illustrators private AI-data gjenstår |
 | D3.8 Links, Crop Image, Document Info, Edit in Draw | Ferdig (2.25); lenkede bilder og beskjæringshåndtak gjenstår |
 | D4.1 Width og width profiles | Ferdig i grunnform (2.28); gradient langs strek og stiplet profil gjenstår |
+| D4.2 Blend | Ferdig i grunnform (2.29); spine gjenstår |
 | Resten av fase 4 og fase 5 | Gjenstår |
 
 ## 4. Rekkefølge videre
@@ -698,7 +718,7 @@ SVG-, PNG- og JPEG-eksport er gjort (2.5).
    gjort. Fra D2.1 er skalering, baseline shift, kerning, avsnitt og blandede stiler gjort (2.11).
 6. Fase 3: D3.1 Expand og Expand Appearance (2.20) og D3.5 Select-meny, Magic Wand og Lasso (2.21) er gjort.
    D3.4 Shape Builder, Knife og Eraser (2.22) og D3.6 Free Transform, Transform Each og Split Into Grid
-   (2.23) er også gjort, og D3.2 effekter (2.24), D3.8 (2.25), D3.3 Image Trace (2.26) og D3.7 AI-eksport (2.27). Fase 3 er ferdig i grunnform. Fase 4: D4.1 Width (2.28) er gjort. **Neste: D4.2 Blend.**
+   (2.23) er også gjort, og D3.2 effekter (2.24), D3.8 (2.25), D3.3 Image Trace (2.26) og D3.7 AI-eksport (2.27). Fase 3 er ferdig i grunnform. Fase 4: D4.1 Width (2.28) og D4.2 Blend (2.29) er gjort. **Neste: D4.3 Warp, Live Pathfinder og opacity masks.**
 
 
 ## 5. Kjente begrensninger og risiko

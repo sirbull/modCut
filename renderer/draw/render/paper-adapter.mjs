@@ -9,6 +9,7 @@ import { scaledStrokeProperties } from '../geom/transforms.mjs';
 import { isOutputNode, layerContext, ROOT_CONTEXT } from '../doc/layers.mjs';
 import { arrowShapes } from '../geom/arrows.mjs';
 import { normalizeProfile, variableStrokeRings } from '../geom/width-profile.mjs';
+import { blendStepCount, matchShapes, interpolateShapes, stepPositions, lerpColor } from '../geom/blend.mjs';
 import { PT_TO_MM, textValues } from '../doc/text.mjs';
 import { applyVectorEffects, hasVectorEffects, dropShadow } from '../doc/effects.mjs';
 import { offsetPathsSync, geometryReady } from '../geom/kernel-js.mjs';
@@ -291,6 +292,59 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     }
     return group.children.length ? group : null;
   }
+  // Blends (D4.2): a group with `blend` draws the in-between shapes of each pair of neighbouring keys,
+  // stacked between them. Only paths and shapes are keys; the steps are view items, not nodes.
+  const BLEND_LIMIT = 2000;
+  function keyLook(node) {
+    const first = e => e?.paint?.stops ? { type: 'solid', color: [...e.paint.stops].sort((a, b) => a.offset - b.offset)[0].color } : e?.paint;
+    const rgb = e => { const c = e && color(first(e)); return c ? [c.red, c.green, c.blue] : null; };
+    const fill = shown(node.appearance?.fills)[0], stroke = shown(node.appearance?.strokes)[0];
+    return { fill: rgb(fill), fillAlpha: fill?.opacity ?? 1, stroke: rgb(stroke), strokeAlpha: stroke?.opacity ?? 1, width: stroke?.width ?? 0,
+      cap: stroke?.cap ?? 'butt', join: stroke?.join ?? 'miter', opacity: node.opacity ?? 1, fillRule: node.fillRule ?? 'nonzero' };
+  }
+  function keyShape(node) {
+    const item = items.get(node.id); if (!item || !['path', 'shape'].includes(node.type)) return null;
+    const copy = item.clone({ insert: false }); copy.matrix = new scope.Matrix(...node.transform); copy.applyMatrix = true;
+    const out = toSubpaths(copy); copy.remove(); return out.length ? out : null;
+  }
+  const mixLook = (a, b, t) => ({ fill: a.fill && b.fill ? lerpColor(a.fill, b.fill, t) : a.fill ?? b.fill, fillAlpha: a.fillAlpha + (b.fillAlpha - a.fillAlpha) * t,
+    stroke: a.stroke && b.stroke ? lerpColor(a.stroke, b.stroke, t) : a.stroke ?? b.stroke, strokeAlpha: a.strokeAlpha + (b.strokeAlpha - a.strokeAlpha) * t,
+    width: a.width + (b.width - a.width) * t, cap: a.cap, join: a.join, opacity: a.opacity + (b.opacity - a.opacity) * t, fillRule: a.fillRule });
+  /** In-between shapes of blend group `node`, in the group's space: per neighbouring key pair, its steps. */
+  function blendData(node) {
+    const keys = node.children.filter(child => child.visible).map(child => ({ node: child, shape: keyShape(child), look: keyLook(child) })).filter(k => k.shape);
+    const pairs = []; let total = 0;
+    for (let i = 0; i + 1 < keys.length; i++) {
+      const a = keys[i], b = keys[i + 1];
+      const count = Math.min(BLEND_LIMIT - total, blendStepCount(node.blend, { subpaths: a.shape, colors: [a.look.fill ?? a.look.stroke] }, { subpaths: b.shape, colors: [b.look.fill ?? b.look.stroke] }));
+      if (count < 1) break; total += count;
+      const [sa, sb] = matchShapes(a.shape, b.shape);
+      pairs.push({ after: a.node.id, before: b.node.id, steps: stepPositions(count).map(t => ({ subpaths: interpolateShapes(sa, sb, t), look: mixLook(a.look, b.look, t) })) });
+    }
+    return pairs;
+  }
+  function stepItem({ subpaths, look }, asOutline) {
+    const item = new scope.CompoundPath({ insert: false, children: subpaths.map(path), fillRule: look.fillRule });
+    if (asOutline) Object.assign(item, { strokeColor: '#071411', strokeWidth: 1, strokeScaling: false });
+    else {
+      if (look.fill) { item.fillColor = new scope.Color(...look.fill); item.fillColor.alpha = look.fillAlpha; }
+      if (look.stroke && look.width > 0) { item.strokeColor = new scope.Color(...look.stroke); item.strokeColor.alpha = look.strokeAlpha; Object.assign(item, { strokeWidth: look.width, strokeCap: look.cap, strokeJoin: look.join }); }
+      item.opacity = look.opacity;
+    }
+    return item;
+  }
+  function placeBlend(node, record) {
+    if (!node.blend) { record.blendSteps = null; record.blendKey = null; return; }
+    const asOutline = outlineFor(node.id), key = JSON.stringify([node.blend, node.children, asOutline]);
+    if (record.blendKey !== key) {
+      record.blendKey = key;
+      record.blendSteps = blendData(node).map(pair => { const group = new scope.Group({ insert: false, children: pair.steps.map(step => stepItem(step, asOutline)) }); group.data.blendBefore = pair.before; return group; });
+    }
+    // Each pair's steps sit right under the upper key (under its shadow, if it has one).
+    for (const group of record.blendSteps) { const before = records.get(group.data.blendBefore), below = before?.shadow ?? items.get(group.data.blendBefore); if (below) group.insertBelow(below); }
+  }
+  /** Blend steps as data for Expand: per pair, after which key, and each step's subpaths and look. */
+  const blendSteps = id => { const node = state.document.getNode(id); return node?.blend ? blendData(node) : []; };
   function place(parent, item, index) {
     if (parent.children[index] !== item) parent.insertChild(index, item);
   }
@@ -331,7 +385,9 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
       if (record.frame) { record.frame.visible = false; place(parent, record.frame, index++); }
       if (record.arrows) place(parent, record.arrows, index++);
       if (record.stack) place(parent, record.stack, index++);
+      record.blendSteps?.forEach(g => g.remove());
       if (node.children) reconcile(node.children, item, alive, context);
+      if (node.type === 'group') placeBlend(node, record);
       // A clipping mask: the topmost child clips its siblings. Paper skips it when drawing and hit testing.
       if (node.type === 'group') {
         const mask = node.clip ? node.children.at(-1)?.id : null;
@@ -711,7 +767,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
   }
   /** The width-profiled stroke `entry` of node `id` as filled outline subpaths in the node's own space (Outline Stroke). */
   const profiledStroke = (id, entry) => { const item = items.get(id); return item ? variableStrokeSubpaths(item, entry) : null; };
-  return { render, select: updateView, updateView, bounds, profiledStroke, strokeLocation, widthHandles, selectionBounds, hit, items, setOutline, thumbnail, exportArtwork, clippedSubpaths, clipToRect, effectiveSubpaths, booleanOperand, selectionHandle:point=>selection.hit(point),
+  return { render, select: updateView, updateView, bounds, profiledStroke, blendSteps, strokeLocation, widthHandles, selectionBounds, hit, items, setOutline, thumbnail, exportArtwork, clippedSubpaths, clipToRect, effectiveSubpaths, booleanOperand, selectionHandle:point=>selection.hit(point),
     glyphBounds(id,subpaths) {const item=new scope.CompoundPath({insert:false,children:subpaths.map(path)});try{return item.getBounds(records.get(id).worldMatrix).clone();}finally{item.remove();}},
     previewText(node, parentId = null) {
       textPreview?.remove(); textPreview = null;textPreviewFrame?.remove();textPreviewFrame=null;

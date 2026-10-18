@@ -1,6 +1,7 @@
 /** Versioned JSON data in millimetres. No renderer or Paper.js dependencies. */
 import { EFFECTS, effect } from './effects.mjs';
 import { resolveCorners } from '../geom/corners.mjs';
+import { blendOptions } from '../geom/blend.mjs';
 import { textSignature, validPathSubpath } from './text-layout.mjs';
 import { validGoogleReference,validFontAxes } from './font-reference.mjs';
 export const DOCUMENT_VERSION = 1;
@@ -192,6 +193,10 @@ export function validateDocument(doc) {
         if (dimension || /^(x|y|x1|y1|x2|y2|angle|rotation|sides|points|turns|length|startAngle|endAngle)$/.test(key) || typeof v === 'number') number(v, `${path}.params.${key}`, dimension ? 0 : -Infinity);
         if ((key==='sides' || key==='points') && (!Number.isInteger(v) || v<(key==='sides'?3:2))) fail(`${path}.params.${key}`,'Expected a whole number of vertices');
       }
+    }
+    if (value.type === 'group' && value.blend !== undefined && value.blend !== null) {
+      try { blendOptions(value.blend); } catch (error) { fail(`${path}.blend`, error.message); }
+      if (value.clip) fail(`${path}.blend`, 'A blend cannot also be a clipping group');
     }
     if (value.type === 'group' && value.clip !== undefined) {
       bool(value.clip, `${path}.clip`);
