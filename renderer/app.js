@@ -20,10 +20,21 @@ import { defaultMotionTiming, motionTimingForMachine } from "./motion-timing.mjs
 import { EPILOG_NATIVE_MAX_RASTER_SAMPLES, MAX_RASTER_SAMPLES } from "./output-quality.mjs";
 import { openModal, showMessageModal } from "./ui.js";
 import { loadPreferences, normalizePreferences, PREFERENCES_KEY } from "./preferences.mjs";
+import { LANGUAGES, localizeTree, resolveLanguage, translator, watchLocalization } from "./i18n.mjs";
 import { DOCUMENT_FORMATS, IMAGE_FORMATS, PDF_FORMATS, TEXT_FORMATS, TIFF_FORMATS } from "../electron/import-formats.mjs";
 
 const $ = (id) => document.getElementById(id);
 let preferences = loadPreferences(localStorage);
+// Language: the window is translated as it changes; the main process translates the menus.
+let language = resolveLanguage(preferences.language, navigator.languages), t = translator(language);
+function applyLanguage() {
+  const next = resolveLanguage(preferences.language, navigator.languages);
+  if (next !== language) { language = next; t = translator(language); localizeTree(document.body, t); }
+  document.documentElement.lang = language === "nb" ? "nb" : "en";
+  window.modcut.setLanguage?.(language);
+}
+watchLocalization(document.body, () => t);
+applyLanguage();
 function updatePreferences(values) {
   preferences = normalizePreferences(values, preferences);
   localStorage.setItem(PREFERENCES_KEY, JSON.stringify(preferences));
@@ -42,6 +53,7 @@ window.modcut.onMcpCall?.(async ({ id, name, args }) => {
     window.modcut.mcpResult(id, { result });
   } catch (error) { window.modcut.mcpResult(id, { error: error?.message || String(error) }); }
 });
+  applyLanguage();
   window.dispatchEvent(new Event("modcut-preferences-change"));
 }
 const OPS = OPERATIONS;
@@ -426,6 +438,7 @@ function setFileLabel(name) {
   const title = name || "Untitled";
   const changed = activeDocumentDirty();
   $("file").textContent = `${title}${changed ? " *" : ""}`;
+  $("file").translate = !name;
   const tab = activeTab();
   if (tab) { tab.title = title; tab.dirty = changed; renderTabs(); }
 }
@@ -452,6 +465,7 @@ function renderTabs() {
     }
     const title = document.createElement("span");
     title.className = "doc-tab__title";
+    title.translate = false;
     title.textContent = tab.title || "Untitled";
     const close = document.createElement("span");
     close.className = "doc-tab__close";
@@ -2168,6 +2182,8 @@ async function openSettings() {
         onChange: (value) => window.modcutTheme.setPreference(value),
         description: "System follows your device’s appearance automatically. Light and Dark keep a fixed theme. Changes apply and save immediately.",
         options: [{ value: "system", label: "System", icon: "system" }, { value: "light", label: "Light", icon: "light" }, { value: "dark", label: "Dark", icon: "dark" }] },
+      { key: "language", label: "Language", type: "select", value: preferences.language, description: "The language of menus, panels and messages. Applies immediately.",
+        options: LANGUAGES.map(({ id, label }) => ({ value: id, label })), onChange: (value) => updatePreferences({ language: value }) },
       { key: "uiScale", label: "Interface size", type: "select", value: window.modcutUiScale.preference,
         description: "Scale menus, icons, text and panels. Smaller sizes leave more room for the workspace. Applies and saves immediately.",
         options: window.modcutUiScale.levels.map((value, index) => ({ value, label: `${uiScaleLabels[index]} (${Math.round(value * 100)}%)` })),

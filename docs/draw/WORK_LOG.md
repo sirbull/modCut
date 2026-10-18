@@ -1768,3 +1768,15 @@ Neste: MCP-server og lokalisering.
 Verifisering: `electron/test-mcp-server.mjs` (protokoll, HTTP, token, Origin), `--draw-mcp` (ekte HTTP-kall mot appen).
 
 Neste: lokalisering.
+
+
+## 2026-10-18: Fase 5 del F, lokalisering
+
+- `renderer/i18n.mjs`: språkvalg (System, English, Norsk bokmål), oversetter med plassholdere, DOM-gjennomgang med
+  MutationObserver og `translate="no"` som unntak, og oversetting av menymaler.
+- `renderer/i18n-nb.mjs`: rundt 1 600 bokmålsoppføringer for menyer, Draw, Cut og innstillinger.
+- Hovedprosessen oversetter menyer og filvelgere og bygger menyen på nytt når språket byttes.
+
+Verifisering: `renderer/test-i18n.mjs`, `--draw-language` (bytte til norsk og tilbake i appen).
+
+Fase 5 er ferdig i grunnform. Neste: hullene i STATUS.md.

@@ -22,6 +22,7 @@ import { runDrawPlaceWorkflows } from './draw-place-workflows.mjs';
 import { runDrawControlWorkflows } from './draw-control-workflows.mjs';
 import { runDrawExportWorkflows } from './draw-export-workflows.mjs';
 import { runDrawMcpWorkflows } from './draw-mcp-workflows.mjs';
+import { runDrawLanguageWorkflows } from './draw-language-workflows.mjs';
 import { runDrawTextWorkflows } from './draw-text-workflows.mjs';
 import { runDrawGoogleFontWorkflows } from './draw-google-font-workflows.mjs';
 import { runDrawAreaTextWorkflows } from './draw-area-text-workflows.mjs';
@@ -113,6 +114,9 @@ try {
   } else if (process.argv.includes('--draw-perf')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawPerfWorkflows(first,{report:process.argv.includes('--report'),count:Number(process.argv.find(a=>a.startsWith('--paths='))?.slice(8)??5000)});first.socket.close();
+  } else if (process.argv.includes('--draw-language')) {
+    for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
+    await runDrawLanguageWorkflows(first);first.socket.close();
   } else if (process.argv.includes('--draw-mcp')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawMcpWorkflows(first);first.socket.close();
@@ -263,6 +267,7 @@ try {
     await runDrawBrushWorkflows(first);
     await runDrawWindowWorkflows(first);
     await runDrawMcpWorkflows(first);
+    await runDrawLanguageWorkflows(first);
     await runDrawPerfWorkflows(first);
     await runDrawTextOutlineWorkflows(first);
     const expected = await runProjectWorkflows(first, profile);

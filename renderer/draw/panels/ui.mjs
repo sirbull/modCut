@@ -294,7 +294,7 @@ export function createPanels(shell, state, api) {
         const url = thumbs++ < 200 ? api.thumbnail?.(node.id) : null;
         if (url) thumb.src = url; else thumb.classList.add('is-empty');
         thumb.dataset.drawThumb = node.id;
-        const choose = document.createElement('button'); choose.type = 'button'; choose.className = 'draw-layer-name'; choose.textContent = name;
+        const choose = document.createElement('button'); choose.type = 'button'; choose.className = 'draw-layer-name'; choose.textContent = name; choose.translate = false;
         choose.dataset.tooltip = 'Double-click: rename';
         const pick = event => api.run(() => {
           const layer = layerOf(node);

@@ -39,7 +39,8 @@ export function shortcutsDialog({ isMac = false } = {}) {
       const keysNow = current.find((e) => e.id === entry.id).keys;
       keys.textContent = recording === entry.id ? 'Press keys…' : keysNow.length ? keysNow.map((k) => formatShortcut(k, { isMac })).join(' / ') : 'None';
       keys.classList.toggle('is-changed', Object.hasOwn(map, entry.id));
-      row.hidden = !!query && !label.includes(query) && !keys.textContent.toLowerCase().includes(query);
+      // The shown name may be translated, so both it and the English name match.
+      row.hidden = !!query && !label.includes(query) && !row.firstChild.textContent.toLowerCase().includes(query) && !keys.textContent.toLowerCase().includes(query);
     }
     ui.error.textContent = '';
   }

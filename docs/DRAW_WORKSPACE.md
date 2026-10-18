@@ -1452,7 +1452,7 @@ Oversikt over hva som er gjort og gjenstår, inkludert delvis ferdige oppgaver: 
 * [x] D4.4 Paintbrush og Blob Brush (art-, scatter- og pattern-pensler gjenstår, se [STATUS.md](draw/STATUS.md))
 * [x] D4.5 EPS/TIFF, Graphic Styles, Navigator, Rotate View og Asset Export (se [STATUS.md](draw/STATUS.md) 2.32)
 * [x] D4.6 Ytelsespass (se [STATUS.md](draw/STATUS.md) 2.33)
-* [ ] Fase 5 (gjort: PLT, GIF, Package, hurtigtaster, Glyphs, Scribble, Touch Type, Vertical Type, PDF/X-4, EPS-import, MCP-server; gjenstår: lokalisering, AVIF; se [STATUS.md](draw/STATUS.md) 2.34 til 2.38)
+* [x] Fase 5 (PLT, GIF, Package, hurtigtaster, Glyphs, Scribble, Touch Type, Vertical Type, PDF/X-4, EPS-import, MCP-server og lokalisering; AVIF venter på Chromium; se [STATUS.md](draw/STATUS.md) 2.34 til 2.39)
 
 ### Implementasjonsnotater D0.1
 

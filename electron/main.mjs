@@ -14,6 +14,7 @@ import { createFontService } from './font-service.mjs';
 import { registerExportFiles } from './export-files.mjs';
 import { createGoogleFonts } from './google-fonts.mjs';
 import { createMcpHost } from './mcp-host.mjs';
+import { localizeMenuTemplate, resolveLanguage, translator } from '../renderer/i18n.mjs';
 
 app.name = "modCut"; // makes the macOS app menu read "modCut", not "Electron"
 
@@ -93,6 +94,11 @@ function requestQuit() {
 const send = createWindowCommandRouter({ getWindow: () => win, createWindow });
 
 let menuMode = "cut";
+// The renderer reports the language it shows (Preferences > Language); until then, the system's.
+let language = "en";
+// Edit > Cut is "Klipp ut" in a menu; elsewhere "Cut" is the laser operation.
+const MENU_WORDS = { nb: { Cut: "Klipp ut" } };
+const menuText = () => { const t = translator(language), words = MENU_WORDS[language] ?? {}; return (text) => words[text] ?? t(text); };
 const shortcutsPath = () => join(app.getPath("userData"), "draw-shortcuts.json");
 function buildMenu(mode = "cut") {
   const template = [
@@ -297,16 +303,21 @@ function buildMenu(mode = "cut") {
       objectItem('Add Anchor Points','add-anchors'),objectItem('Remove Anchor Points','remove-anchors'),{type:'separator'},objectItem('Clean Up','clean-up')]},
     {type:'separator'},objectItem('Lock Selection','lock'),objectItem('Unlock All','unlock-all'),objectItem('Hide Selection','hide'),objectItem('Show All','show-all')];
   }
-  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+  Menu.setApplicationMenu(Menu.buildFromTemplate(localizeMenuTemplate(template, menuText())));
 }
 
 app.whenReady().then(async () => {
+  if (!isE2E) language = resolveLanguage("system", app.getPreferredSystemLanguages?.() ?? [app.getLocale()]);
   googleFonts=createGoogleFonts({directory:join(app.getPath('userData'),'google-fonts')});
   fonts=createFontService({google:googleFonts});
   recoveryStore = createRecoveryStore(app.getPath("userData"));
   if (!isE2E) try { setKeyOverrides(JSON.parse(await readFile(shortcutsPath(), "utf8"))); } catch { /* none saved yet, or unreadable: the defaults stay */ }
   // MCP server (off until the person turns it on in Preferences): tool calls run in the main window's renderer.
   mcpHost = createMcpHost({ configPath: join(app.getPath("userData"), "mcp.json"), getWindow: () => win, version: app.getVersion(), ephemeral: isE2E });
+  ipcMain.handle("setLanguage", (event, value) => {
+    if (event.sender !== win?.webContents || !["en", "nb"].includes(value) || value === language) return language;
+    language = value; buildMenu(menuMode); return language;
+  });
   ipcMain.handle("getMcpServer", (event) => { if (event.sender !== win?.webContents) throw new Error("Unavailable."); return mcpHost.status(); });
   ipcMain.handle("setMcpServer", (event, enabled) => { if (event.sender !== win?.webContents) throw new Error("Unavailable."); return mcpHost.setEnabled(enabled === true); });
   ipcMain.handle("mcpResult", (event, id, payload) => { if (event.sender !== win?.webContents) return false; return mcpHost.settle(id, payload); });
@@ -444,6 +455,7 @@ app.whenReady().then(async () => {
     ipcMain.handle("e2eExports", () => e2eExports.splice(0));
     ipcMain.handle("e2eWorkspaceMenu", () => ({
       label: Menu.getApplicationMenu()?.getMenuItemById("workspace-toggle")?.label,
+      top: Menu.getApplicationMenu()?.items.map((item) => item.label),
       edit: Menu.getApplicationMenu()?.items.find((item) => item.label === "Edit")?.submenu.items.map((item) => item.accelerator || null),
       file: Menu.getApplicationMenu()?.items.find((item) => item.label === "File")?.submenu.items.map((item) => ({ label: item.label, accelerator: item.accelerator || null })),
       view: Menu.getApplicationMenu()?.items.find((item) => item.label === "View")?.submenu.items.map((item) => ({ label: item.label, accelerator: item.accelerator || null })),
@@ -473,8 +485,9 @@ app.whenReady().then(async () => {
       ...PDF_FORMATS,
       ...(allowDocuments ? ["modcut"] : []),
     ];
+    const t = translator(language);
     const { canceled, filePaths } = await dialog.showOpenDialog(win, {
-      title: options.intent === "draw-open" ? "Open Draw document" : options.intent === "draw-import" ? "Import artwork into Draw" : multiple ? "Add files to project" : "Import file",
+      title: t(options.intent === "draw-open" ? "Open Draw document" : options.intent === "draw-import" ? "Import artwork into Draw" : multiple ? "Add files to project" : "Import file"),
       properties: ["openFile", ...(multiple ? ["multiSelections"] : [])],
       filters: [
         { name: "All supported files", extensions: supported },
@@ -484,7 +497,7 @@ app.whenReady().then(async () => {
         { name: "PDF / Illustrator", extensions: PDF_FORMATS },
         { name: "Images", extensions: [...IMAGE_FORMATS, ...TIFF_FORMATS] },
         { name: "All files", extensions: ["*"] },
-      ],
+      ].map((filter) => ({ ...filter, name: t(filter.name) })),
     });
     if (canceled || !filePaths.length) return null;
     const files = await Promise.all(filePaths.map(async (path) => {

@@ -39,6 +39,7 @@ contextBridge.exposeInMainWorld("modcut", {
   finishImageEditor: (result) => ipcRenderer.invoke("finishImageEditor", result),
   onImageEditorInit: (cb) => ipcRenderer.on("image-editor-init", (_event, payload) => cb(payload)),
   setImageEditorAvailable: (available) => ipcRenderer.invoke("setImageEditorAvailable", !!available),
+  setLanguage: (language) => ipcRenderer.invoke("setLanguage", language),
   getMcpServer: () => ipcRenderer.invoke("getMcpServer"),
   setMcpServer: (enabled) => ipcRenderer.invoke("setMcpServer", !!enabled),
   onMcpCall: (cb) => ipcRenderer.on("mcp-call", (_event, request) => cb(request)),

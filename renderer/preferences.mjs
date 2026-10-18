@@ -1,4 +1,4 @@
-export const DEFAULT_PREFERENCES = Object.freeze({ showGrid: true, invertZoom: false, tooltips: true, tooltipDelay: 1000 });
+export const DEFAULT_PREFERENCES = Object.freeze({ showGrid: true, invertZoom: false, tooltips: true, tooltipDelay: 1000, language: "system" });
 export const PREFERENCES_KEY = "modcut_preferences";
 
 export function normalizePreferences(value, defaults = DEFAULT_PREFERENCES) {
@@ -9,6 +9,7 @@ export function normalizePreferences(value, defaults = DEFAULT_PREFERENCES) {
   }
   const delay = Number(value.tooltipDelay);
   if ([350, 1000, 1800].includes(delay)) result.tooltipDelay = delay;
+  if (["system", "en", "nb"].includes(value.language)) result.language = value.language;
   return result;
 }
 
