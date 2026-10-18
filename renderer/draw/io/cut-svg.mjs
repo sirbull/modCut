@@ -9,6 +9,7 @@ import { paintHex } from '../doc/paint.mjs';
 import { gradientHex } from '../doc/gradient.mjs';
 import { multiply } from '../doc/arrange.mjs';
 import { hasTextLayout } from '../doc/text-layout.mjs';
+import { livePathfinder } from '../doc/effects.mjs';
 
 export const ALL_ARTBOARDS = 'all';
 const fmt = (n) => { const v = Math.abs(n) < 5e-5 ? 0 : n; return String(Number(v.toFixed(4))); };
@@ -39,7 +40,7 @@ export function pathData(subpaths, m) {
 
 /**
  * @param geometry { worldMatrix(id), bounds(id) -> {x,y,width,height}, subpaths(id) -> local PathData for paths and shapes,
- *   blendSteps(id) -> a blend group's steps per key pair (optional),
+ *   blendSteps(id) -> a blend group's steps per key pair, liveSteps(id) -> a live Pathfinder group's results (optional),
  *   clip(subpaths, world, rect, filled) -> world PathData cut at `rect` (optional, for clipToBoard) }
  * @param options `outlines`: Map of node id -> outlined stroke PathData in the node's space (Outline Stroke).
  * @returns {{ svg, count, warnings: string[], skipped: { images, outside, empty } }}
@@ -112,7 +113,8 @@ export function artboardCutSvg(doc, boardId, geometry, { only = null, clipToBoar
   // A clipping path that keeps its paint (Draw Inside) is filled under the clipped objects and stroked above them.
   const clipStart = new Map();
   // Blend steps are sent as the paths they draw, between their keys (just before the upper key).
-  const blendBefore = new Map();
+  const blendBefore = new Map(), maskArt = new Set();
+  let opacityMasks = 0;
   const solid = (rgb, extra = {}) => ({ paint: { type: 'solid', color: { space: 'rgb', values: rgb } }, ...extra });
   for (const original of doc.descendants(null)) {
     if (original.type === 'group' && original.blend && isOutputNode(doc, original.id) && geometry.blendSteps)
@@ -128,6 +130,21 @@ export function artboardCutSvg(doc, boardId, geometry, { only = null, clipToBoar
       }
     }
     if (original.type === 'group' && original.clip) clipStart.set(original.children.at(-1)?.id, elements.length);
+    // Opacity masks only change how bright things look: the mask art itself is not cut, the rest is sent whole.
+    if (original.type === 'group' && original.mask && original.children.length > 1 && picked(original.id) && isOutputNode(doc, original.id)) { maskArt.add(original.children.at(-1).id); opacityMasks++; }
+    // A live Pathfinder group is cut as its result, not as its parts.
+    if (original.type === 'group' && geometry.liveSteps && livePathfinder(original) && picked(original.id) && isOutputNode(doc, original.id)) {
+      const world = geometry.worldMatrix(original.id);
+      for (const child of original.children) if (['path', 'shape'].includes(child.type)) maskArt.add(child.id);
+      for (const { subpaths, sourceId, kind } of geometry.liveSteps(original.id)) {
+        const source = doc.getNode(sourceId); if (!source) continue;
+        const pts = subpaths.flatMap((sp) => sp.segments.map((g) => apply(world, g.p))); if (!pts.length) continue;
+        const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]), box = { x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) };
+        const look = kind === 'outline' ? { fills: [], strokes: [{ ...(source.appearance.fills?.[0] ?? {}), width: .1 }] } : source.appearance;
+        emit({ ...source, id: original.id, type: 'path', fillRule: 'nonzero', appearance: look }, subpaths, box);
+      }
+    }
+    if (maskArt.has(original.id) || doc.ancestors(original.id).some((a) => maskArt.has(a.id))) continue;
     if (original.children || !isOutputNode(doc, original.id) || !picked(original.id)) continue;
     if (original.type === 'image') {
       // Images go to Cut as engraving rasters: centre, size and rotation on the artboard, in mm.
@@ -163,6 +180,7 @@ export function artboardCutSvg(doc, boardId, geometry, { only = null, clipToBoar
   if (skewed) warnings.push(`${skewed} image${skewed === 1 ? ' is' : 's are'} skewed or flipped; Cut gets ${skewed === 1 ? 'it' : 'them'} rotated and scaled only.`);
   if (maskedImages) warnings.push(`${maskedImages} image${maskedImages === 1 ? ' is' : 's are'} inside a clipping mask and ${maskedImages === 1 ? 'is' : 'are'} sent whole.`);
   if (partly) warnings.push(`${partly} object${partly === 1 ? ' extends' : 's extend'} past the artboard and ${partly === 1 ? 'is' : 'are'} sent whole.`);
+  if (opacityMasks) warnings.push(`${opacityMasks} opacity mask${opacityMasks === 1 ? ' is' : 's are'} not applied in Cut; the masked artwork is sent whole.`);
   if (clipped) warnings.push(`${clipped} object${clipped === 1 ? ' is' : 's are'} cut at the artboard edge.`);
   if (tiny) warnings.push(`${tiny} segment${tiny === 1 ? ' is' : 's are'} shorter than 0.05 mm. Object > Path > Clean Up or Simplify can remove them.`);
   if (duplicates) warnings.push(dedupe ? `${duplicates} duplicate path${duplicates === 1 ? ' is' : 's are'} left out so nothing is cut twice.` : `${duplicates} path${duplicates === 1 ? ' is' : 's are'} exactly on top of another and will be cut twice.`);

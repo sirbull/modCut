@@ -669,6 +669,40 @@ finnes, men bare «within stroke»).
 Gjenstår i D4.2: Replace Spine og Reverse Spine (blend langs en bane; «Align to Path» har ingen virkning ennå),
 tekst og grupper som nøkler (bare baner og former blir med), og Object > Expand på blends.
 
+### 2.30 Warp, Live Pathfinder og opacity masks (D4.3, 2026-10-18)
+
+* **Effect > Warp** med alle 15 stilene (Arc, Arc Lower, Arc Upper, Arch, Bulge, Shell Lower og Upper, Flag,
+  Wave, Fish, Rise, Fisheye, Inflate, Squeeze, Twist): menypunktet åpner **Warp Options** med stilen valgt,
+  med Bend, Horizontal/Vertical og Distortion. En levende effekt som de andre: ankerpunktene beholdes, og
+  Appearance viser «Warp: Arch» osv.
+* **Effect > Pathfinder** (Add, Intersect, Exclude, Subtract, Minus Back, Divide, Trim, Merge, Crop, Outline)
+  på en gruppe: banene og formene i gruppen tegnes kombinert, med kildens utseende, og delene er fortsatt
+  redigerbare. Send to Cut får resultatet; Expand Appearance gjør det til vanlige baner.
+* **Opacity masks** (Transparency-panelet): **Make Mask** gjør det øverste av de valgte objektene til maske
+  for resten (lys viser, mørk skjuler), med **Clip** og **Invert Mask**, og **Release**. Ett angresteg.
+  Masken tegnes som alfa med `destination-in` i gruppens eget lag. PNG får masken direkte; SVG, PDF, EPS og
+  DXF får maskerte grupper som bilder i 300 ppi. Send to Cut sender det maskerte uten masken og varsler.
+* Kode: `geom/warp.mjs`, `warp` og `pathfinder` i `doc/effects.mjs`, `placeLivePathfinder`,
+  `placeOpacityMask` og `rasterMasks` i `render/paper-adapter.mjs`, `mask-*`, `live-*` og `warp-*` i `index.mjs`,
+  Transparency-panelet, `io/cut-svg.mjs`.
+
+Gjenstår i D4.3: Rasterize-effekten, Envelope Distort (Make with Warp/Mesh), redigering av maskekunsten
+(den er skjult; Release først), og Live Pathfinder med grupper eller tekst som deler.
+
+### 2.31 Paintbrush og Blob Brush (D4.4, 2026-10-18)
+
+* **Paintbrush (B):** frihånd som Pencil, men streket med en kalligrafisk pensel: flat spiss med vinkel og
+  rundhet, så streken er tynn langs spissen og bred på tvers. Resultatet er en vanlig bane med strekvekt lik
+  penselstørrelsen og en breddeprofil (D4.1), runde ender og hjørner. **Paintbrush Tool Options** (Enter eller
+  dobbeltklikk): størrelse, vinkel, rundhet, fidelity, Fill new brush strokes og Keep selected.
+* **Blob Brush (Shift+B):** draget blir en fylt form i strekfargen (uten strek), som slås sammen med fylte,
+  ustrekede baner i samme farge som den berører (eller bare de valgte, med Merge only with selection). Ett
+  angresteg. **Blob Brush Tool Options**: størrelse, fidelity, Keep selected og Merge only with selection.
+* Kode: `geom/brush.mjs` (`nibWidth`, `calligraphicProfile`, validering), `paintbrush` og `blobBrush` i
+  `index.mjs`, grenene i `tools/interactions.mjs`, dialogene i `ui/dialogs.mjs`.
+
+Gjenstår i D4.4: art-, scatter- og pattern-pensler, Brushes-panelet og trykkfølsomhet.
+
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
 | Oppgave | Status |
@@ -699,6 +733,8 @@ tekst og grupper som nøkler (bare baner og former blir med), og Object > Expand
 | D3.8 Links, Crop Image, Document Info, Edit in Draw | Ferdig (2.25); lenkede bilder og beskjæringshåndtak gjenstår |
 | D4.1 Width og width profiles | Ferdig i grunnform (2.28); gradient langs strek og stiplet profil gjenstår |
 | D4.2 Blend | Ferdig i grunnform (2.29); spine gjenstår |
+| D4.3 Warp, Live Pathfinder, opacity masks | Ferdig i grunnform (2.30); Rasterize og Envelope gjenstår |
+| D4.4 Paintbrush og Blob Brush | Ferdig i grunnform (2.31); art-, scatter- og pattern-pensler gjenstår |
 | Resten av fase 4 og fase 5 | Gjenstår |
 
 ## 4. Rekkefølge videre
@@ -718,7 +754,7 @@ SVG-, PNG- og JPEG-eksport er gjort (2.5).
    gjort. Fra D2.1 er skalering, baseline shift, kerning, avsnitt og blandede stiler gjort (2.11).
 6. Fase 3: D3.1 Expand og Expand Appearance (2.20) og D3.5 Select-meny, Magic Wand og Lasso (2.21) er gjort.
    D3.4 Shape Builder, Knife og Eraser (2.22) og D3.6 Free Transform, Transform Each og Split Into Grid
-   (2.23) er også gjort, og D3.2 effekter (2.24), D3.8 (2.25), D3.3 Image Trace (2.26) og D3.7 AI-eksport (2.27). Fase 3 er ferdig i grunnform. Fase 4: D4.1 Width (2.28) og D4.2 Blend (2.29) er gjort. **Neste: D4.3 Warp, Live Pathfinder og opacity masks.**
+   (2.23) er også gjort, og D3.2 effekter (2.24), D3.8 (2.25), D3.3 Image Trace (2.26) og D3.7 AI-eksport (2.27). Fase 3 er ferdig i grunnform. Fase 4: D4.1 Width (2.28), D4.2 Blend (2.29) D4.3 Warp, Live Pathfinder og opacity masks (2.30) og D4.4 Paintbrush og Blob Brush (2.31) er gjort. **Neste: D4.5 EPS/TIFF, Graphic Styles, Navigator, Rotate View og Asset Export.**
 
 
 ## 5. Kjente begrensninger og risiko

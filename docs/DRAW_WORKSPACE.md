@@ -1445,8 +1445,8 @@ Oversikt over hva som er gjort og gjenstår, inkludert delvis ferdige oppgaver: 
 * [x] D3.8 Links, Crop Image, Document Info, Rediger i Draw (lenkede bilder og beskjæringshåndtak gjenstår, se [STATUS.md](draw/STATUS.md))
 * [x] D4.1 Width og width profiles (gradient langs strek og stiplet profil gjenstår, se [STATUS.md](draw/STATUS.md))
 * [x] D4.2 Blend (spine og tekst som nøkkel gjenstår, se [STATUS.md](draw/STATUS.md))
-* [ ] D4.3 Warp, Live Pathfinder og opacity masks
-* [ ] D4.4 Paintbrush og Blob Brush
+* [x] D4.3 Warp, Live Pathfinder og opacity masks (Rasterize-effekt og Envelope gjenstår, se [STATUS.md](draw/STATUS.md))
+* [x] D4.4 Paintbrush og Blob Brush (art-, scatter- og pattern-pensler gjenstår, se [STATUS.md](draw/STATUS.md))
 * [ ] D4.5 EPS/TIFF, Graphic Styles, Navigator, Rotate View og Asset Export
 * [ ] D4.6 Ytelsespass
 * [ ] Fase 5

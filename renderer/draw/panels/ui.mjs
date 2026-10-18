@@ -552,8 +552,15 @@ export function createPanels(shell, state, api) {
     const opacity = field(host,'Opacity (%)',(node?.opacity ?? 1)*100,value => set('Opacity',{ opacity: value/100 }),{ min:0, max:100, step:1, disabled, key:'transparency-opacity' });
     if (node && mixed('opacity')) { opacity.value = ''; opacity.placeholder = 'Mixed'; }
     const masks = document.createElement('div'); masks.className = 'draw-transparency-masks';
-    const make = button('Make Mask',() => {}); make.disabled = true; make.dataset.tooltip = 'Opacity masks arrive in D4.3'; masks.append(make);
-    for (const label of ['Clip','Invert Mask']) { const c = document.createElement('label'); c.className = 'draw-check'; const i = document.createElement('input'); i.type = 'checkbox'; i.disabled = true; c.append(i,document.createTextNode(label)); masks.append(c); }
+    // Opacity mask: the top selected object masks the others by its brightness (white shows, black hides).
+    const maskNode = node?.mask ? node : null;
+    const make = button(maskNode ? 'Release' : 'Make Mask',() => api.command(maskNode ? 'mask-release' : 'mask-make')); make.className = 'btn btn--sm';
+    make.dataset.drawMask = maskNode ? 'release' : 'make'; make.disabled = state.document.readOnly || (maskNode ? false : ids.length < 2); masks.append(make);
+    for (const [label,key] of [['Clip','clip'],['Invert Mask','invert']]) {
+      const c = document.createElement('label'); c.className = 'draw-check'; const i = document.createElement('input'); i.type = 'checkbox'; i.dataset.drawMaskOption = key;
+      i.checked = !!maskNode?.mask[key]; i.disabled = !maskNode || state.document.readOnly; i.addEventListener('change',() => api.command(`mask-${key}`));
+      c.append(i,document.createTextNode(label)); masks.append(c);
+    }
     host.append(masks);
     text(host,ids.length ? 'Applies to the whole selected object. Fill and stroke opacity are set per entry in Appearance (coming).' : 'Select artwork to change its blending mode and opacity.');
   }

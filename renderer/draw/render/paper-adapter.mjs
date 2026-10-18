@@ -11,9 +11,9 @@ import { arrowShapes } from '../geom/arrows.mjs';
 import { normalizeProfile, variableStrokeRings } from '../geom/width-profile.mjs';
 import { blendStepCount, matchShapes, interpolateShapes, stepPositions, lerpColor } from '../geom/blend.mjs';
 import { PT_TO_MM, textValues } from '../doc/text.mjs';
-import { applyVectorEffects, hasVectorEffects, dropShadow } from '../doc/effects.mjs';
+import { applyVectorEffects, hasVectorEffects, dropShadow, livePathfinder } from '../doc/effects.mjs';
 import { offsetPathsSync, geometryReady } from '../geom/kernel-js.mjs';
-import { toSubpaths } from '../geom/pathfinder.mjs';
+import { toSubpaths, runPathfinder } from '../geom/pathfinder.mjs';
 import { textSubpaths } from '../doc/text-layout.mjs';
 
 export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withScope = fn => fn() } = {}) {
@@ -343,6 +343,90 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     // Each pair's steps sit right under the upper key (under its shadow, if it has one).
     for (const group of record.blendSteps) { const before = records.get(group.data.blendBefore), below = before?.shadow ?? items.get(group.data.blendBefore); if (below) group.insertBelow(below); }
   }
+  /**
+   * Opacity masks (D4.3): a group with `mask` uses its top child's luminance as the alpha of the rest.
+   * The mask art is hidden; a black copy whose alpha is that luminance is drawn last with destination-in.
+   * A group blend other than normal makes Paper draw the group in its own layer, so only it is masked.
+   * Without Clip the mask's background counts as white (outside the art stays visible); Invert flips both.
+   */
+  // Children not drawn themselves: opacity-mask art, and the parts of a live Pathfinder group.
+  const coveredIds = new Set();
+  const luminance = c => .2126 * c.red + .7152 * c.green + .0722 * c.blue;
+  function alphaPaint(item, factor) {
+    const convert = c => { if (!c) return c;
+      if (c.gradient) { const g = c.clone(); for (const stop of g.gradient.stops) stop.color = new scope.Color(0, 0, 0, factor(luminance(stop.color), stop.color.alpha)); return g; }
+      return new scope.Color(0, 0, 0, factor(luminance(c), c.alpha)); };
+    if (item.className === 'Raster') {
+      const w = item.width, h = item.height; if (!w || !h) return;
+      const data = item.getImageData(new scope.Rectangle(0, 0, w, h));
+      for (let i = 0; i < data.data.length; i += 4) { const a = factor((.2126 * data.data[i] + .7152 * data.data[i + 1] + .0722 * data.data[i + 2]) / 255, data.data[i + 3] / 255); data.data[i] = data.data[i + 1] = data.data[i + 2] = 0; data.data[i + 3] = Math.round(a * 255); }
+      item.setImageData(data, new scope.Point(0, 0)); return;
+    }
+    if (item.fillColor) item.fillColor = convert(item.fillColor);
+    if (item.strokeColor) item.strokeColor = convert(item.strokeColor);
+    for (const child of item.children ?? []) alphaPaint(child, factor);
+  }
+  function placeOpacityMask(node, record, item) {
+    const art = node.mask && node.children.length > 1 ? node.children.at(-1) : null, asOutline = outlineFor(node.id);
+    record.maskView = null;
+    if (!art) { if (item.blendMode === 'source-over') item.blendMode = node.blendMode ?? 'normal'; return; }
+    coveredIds.add(art.id);
+    if (asOutline) { item.blendMode = 'normal'; return; }
+    if ((node.blendMode ?? 'normal') === 'normal') item.blendMode = 'source-over';
+    // Clip makes the background black (hidden); Invert flips it, so it is white when both or neither are on.
+    const background = !!node.mask.clip === !!node.mask.invert ? 1 : 0;
+    const value = l => node.mask.invert ? 1 - l : l;
+    const view = new scope.Group({ insert: false }); view.blendMode = 'destination-in'; view.data.opacityMask = true;
+    const artRecord = records.get(art.id), source = artRecord?.stack ?? items.get(art.id);
+    if (art.visible && source) {
+      // The copy is only paint: without node ids, export and hit testing never take it for the hidden art.
+      const copy = source.clone({ insert: false, deep: true }); copy.visible = true;
+      for (const part of [copy, ...copy.getItems({ recursive: true })]) part.data = {};
+      copy.matrix = (artRecord?.stack ? artRecord.stack.matrix : items.get(art.id).matrix).clone();
+      if (background) {
+        const box = item.internalBounds?.expand(1); if (box?.width > 0) view.addChild(new scope.Path.Rectangle({ rectangle: box, fillColor: new scope.Color(0, 0, 0, 1), insert: false }));
+        alphaPaint(copy, (l, a) => a * (1 - value(l))); copy.blendMode = 'destination-out';
+      } else alphaPaint(copy, (l, a) => a * value(l));
+      view.addChild(copy);
+    } else if (background) { const box = item.internalBounds?.expand(1); if (box?.width > 0) view.addChild(new scope.Path.Rectangle({ rectangle: box, fillColor: '#000', insert: false })); }
+    item.addChild(view); record.maskView = view;
+  }
+  /**
+   * Live Pathfinder (D4.3): a group with a Pathfinder effect draws the combination of its paths and
+   * shapes (in the group's space) with each result's source look; the parts stay as they are, hidden.
+   */
+  function liveResults(node) {
+    const op = livePathfinder(node); if (!op) return null;
+    const operands = node.children.filter(child => child.visible && ['path', 'shape'].includes(child.type)).map(child => {
+      const item = make(child); item.applyMatrix = true; item.transform(new scope.Matrix(...child.transform));
+      return { id: child.id, item, fill: (child.appearance?.fills ?? []).find(e => !e.hidden)?.paint?.color?.values?.join(',') ?? null };
+    });
+    if (operands.length < 2) { operands.forEach(o => o.item.remove()); return null; }
+    try { return runPathfinder(operands, op).results; } catch { return null; } finally { operands.forEach(o => o.item.remove()); }
+  }
+  function placeLivePathfinder(node, record, item) {
+    const op = livePathfinder(node), asOutline = outlineFor(node.id);
+    if (!op) { record.liveView = null; record.liveKey = null; return; }
+    for (const child of node.children) if (['path', 'shape'].includes(child.type)) coveredIds.add(child.id);
+    if (asOutline) { for (const child of node.children) coveredIds.delete(child.id); record.liveView = null; return; }
+    const key = JSON.stringify([node.appearance.effects, node.children]);
+    if (record.liveKey !== key || !record.liveView) {
+      record.liveKey = key;
+      const view = new scope.Group({ insert: false }); view.data.livePathfinder = true;
+      for (const result of liveResults(node) ?? []) {
+        const source = state.document.getNode(result.sourceId); if (!source) continue;
+        const piece = new scope.CompoundPath({ insert: false, children: result.subpaths.map(path), fillRule: 'nonzero' });
+        // Outline gives the edges as lines in the source's fill colour, as in Illustrator.
+        const look = result.kind === 'outline' ? { ...source, appearance: { ...source.appearance, fills: [], strokes: [{ paint: (source.appearance.fills ?? [])[0]?.paint ?? { type: 'solid', color: { space: 'rgb', values: [0, 0, 0] } }, opacity: 1, width: .1, cap: 'butt', join: 'miter', miterLimit: 4, align: 'center', blendMode: 'normal', effects: [] }] } } : source;
+        style(piece, { ...look, type: 'path', fillRule: 'nonzero', opacity: source.opacity ?? 1, blendMode: source.blendMode ?? 'normal' }, false);
+        view.addChild(piece);
+      }
+      record.liveView = view;
+    }
+    item.addChild(record.liveView);
+  }
+  /** A live Pathfinder group's results in its own space, with the node each takes its look from. */
+  const liveSteps = id => { const node = state.document.getNode(id); return livePathfinder(node) ? liveResults(node) ?? [] : []; };
   /** Blend steps as data for Expand: per pair, after which key, and each step's subpaths and look. */
   const blendSteps = id => { const node = state.document.getNode(id); return node?.blend ? blendData(node) : []; };
   function place(parent, item, index) {
@@ -385,9 +469,12 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
       if (record.frame) { record.frame.visible = false; place(parent, record.frame, index++); }
       if (record.arrows) place(parent, record.arrows, index++);
       if (record.stack) place(parent, record.stack, index++);
-      record.blendSteps?.forEach(g => g.remove());
+      record.blendSteps?.forEach(g => g.remove()); record.maskView?.remove(); record.liveView?.remove();
       if (node.children) reconcile(node.children, item, alive, context);
-      if (node.type === 'group') placeBlend(node, record);
+      if (node.type === 'group') {
+        for (const child of node.children) coveredIds.delete(child.id);
+        placeBlend(node, record); placeLivePathfinder(node, record, item); placeOpacityMask(node, record, item);
+      }
       // A clipping mask: the topmost child clips its siblings. Paper skips it when drawing and hit testing.
       if (node.type === 'group') {
         const mask = node.clip ? node.children.at(-1)?.id : null;
@@ -514,7 +601,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
       const b = paintedBounds.get(id);
       const visible = node.visible && (!!node.children || !!b?.intersects(viewport));
       const asOutline = outlineFor(id);
-      item.visible = visible && !(asOutline && node.type === 'image') && !editPreviews.has(id) && !transformPreviewIds.has(id) && !pathPreviewHidden.has(id);
+      item.visible = visible && !(asOutline && node.type === 'image') && !editPreviews.has(id) && !transformPreviewIds.has(id) && !pathPreviewHidden.has(id) && !(coveredIds.has(id) && !asOutline);
       if (asOutline && !node.children && node.type !== 'image') item.strokeWidth = 1 / scope.view.zoom;
       if (record.frame) { record.frame.visible = visible && asOutline && node.type==='image'; record.frame.strokeWidth = 1 / scope.view.zoom; }
       if(node.type==='text'&&['area','onPath'].includes(node.kind)&&visible&&!transformPreviewIds.has(id)&&state.document.ancestors(id).every(n=>n.visible)&&
@@ -599,7 +686,8 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
       segments: p.segments.map(s => ({ p: [s.point.x, s.point.y], in: [s.handleIn.x, s.handleIn.y], out: [s.handleOut.x, s.handleOut.y] })) }));
     result.remove(); return out;
   }
-  function exportArtwork({ resolveClips = false } = {}) {
+  /** `rasterMasks`: ppi at which opacity-masked groups become images, for formats without luminance masks. */
+  function exportArtwork({ resolveClips = false, rasterMasks = null } = {}) {
     const wasOutline = outline; if (wasOutline) setOutline(false);
     try {
       const isTextFrame=item=>{const record=records.get(item.data?.nodeId);return record?.node.type==='text'&&record.frame===item;};
@@ -607,7 +695,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
         const id = original.data?.nodeId;
         if (id) {
           const node = state.document.getNode(id), record = records.get(id);
-          copy.visible = original !== record?.frame;
+          copy.visible = original !== record?.frame && !coveredIds.has(id);
           if (original.data.baseOpacity !== undefined) copy.opacity = node?.type === 'image' && original === items.get(id) ? node.opacity : original.data.baseOpacity;
         }
         const children = [...(copy.children ?? [])];
@@ -615,6 +703,10 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
           const childId = child.data?.nodeId;
           if (isTextFrame(child) || childId && !isOutputNode(state.document, childId)) children[i].remove(); else fix(child, children[i]);
         });
+        if (rasterMasks && id && records.get(id)?.maskView && copy.parent) {
+          const box = copy.strokeBounds, resolution = Math.min(rasterMasks / 25.4 * 72, 6000 / Math.max(box.width, box.height, 1e-6) * 72);
+          const raster = copy.rasterize({ resolution, insert: false }); raster.data.nodeId = id; copy.replaceWith(raster);
+        }
       };
       const group = new scope.Group({ insert: false });
       for (const child of artwork.children) {
@@ -767,7 +859,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
   }
   /** The width-profiled stroke `entry` of node `id` as filled outline subpaths in the node's own space (Outline Stroke). */
   const profiledStroke = (id, entry) => { const item = items.get(id); return item ? variableStrokeSubpaths(item, entry) : null; };
-  return { render, select: updateView, updateView, bounds, profiledStroke, blendSteps, strokeLocation, widthHandles, selectionBounds, hit, items, setOutline, thumbnail, exportArtwork, clippedSubpaths, clipToRect, effectiveSubpaths, booleanOperand, selectionHandle:point=>selection.hit(point),
+  return { render, select: updateView, updateView, bounds, profiledStroke, blendSteps, liveSteps, strokeLocation, widthHandles, selectionBounds, hit, items, setOutline, thumbnail, exportArtwork, clippedSubpaths, clipToRect, effectiveSubpaths, booleanOperand, selectionHandle:point=>selection.hit(point),
     glyphBounds(id,subpaths) {const item=new scope.CompoundPath({insert:false,children:subpaths.map(path)});try{return item.getBounds(records.get(id).worldMatrix).clone();}finally{item.remove();}},
     previewText(node, parentId = null) {
       textPreview?.remove(); textPreview = null;textPreviewFrame?.remove();textPreviewFrame=null;

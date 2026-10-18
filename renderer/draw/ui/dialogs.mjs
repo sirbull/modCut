@@ -7,6 +7,8 @@ import { NAMED_LAYER_COLORS, layerColorName } from '../doc/layers.mjs';
 import { enhanceNumberFields } from './number-field.mjs';
 import { textProperties } from '../doc/text.mjs';
 import { createFontPicker } from './font-picker.mjs';
+import { WARP_STYLES } from '../geom/warp.mjs';
+import { LIVE_LABELS } from '../doc/effects.mjs';
 
 let dialogId=0;
 /** Uniform text editor. Preview is detached; Apply is a single document command. */
@@ -482,14 +484,18 @@ export function effectDialog(type, values = {}) {
     : type === 'pucker-bloat' ? [n('amount','Pucker (−) or Bloat (+) (%)',-200,200)]
     : type === 'roughen' ? [n('size','Size (mm)',0,1000),n('detail','Detail (per mm)',0,100),n('seed','Variation',0,1000000,1)]
     : type === 'twist' ? [n('angle','Angle (°)',-3600,3600)]
+    : type === 'pathfinder' ? [{key:'op',label:'Operation',type:'select',value:values.op,options:Object.entries(LIVE_LABELS).map(([value,label])=>({value,label}))}]
+    : type === 'warp' ? [{key:'style',label:'Style',type:'select',value:values.style,options:Object.entries(WARP_STYLES).map(([value,label])=>({value,label}))},
+      {key:'orientation',label:'Orientation',type:'select',value:values.orientation,options:[{value:'horizontal',label:'Horizontal'},{value:'vertical',label:'Vertical'}]},
+      n('bend','Bend (%)',-100,100),n('horizontal','Distortion horizontal (%)',-100,100),n('vertical','Distortion vertical (%)',-100,100)]
     : type === 'drop-shadow' ? [n('x','X offset (mm)',-1000,1000),n('y','Y offset (mm)',-1000,1000),n('blur','Blur (mm)',0,1000),
       {key:'color',label:'Color',type:'color',value:String(values.color??'#000000').toLowerCase()},{...n('opacity','Opacity (%)',0,100),value:Math.round((values.opacity??.75)*100)}]
     : [n('scaleX','Scale horizontal (%)',-100000,100000),n('scaleY','Scale vertical (%)',-100000,100000),n('moveX','Move horizontal (mm)',-100000,100000),
       n('moveY','Move vertical (mm)',-100000,100000),n('angle','Rotate (°)',-360,360),n('copies','Copies',0,1000,1)];
-  const title = {'offset-path':'Offset Path','round-corners':'Round Corners',transform:'Transform Effect','zig-zag':'Zig Zag','pucker-bloat':'Pucker & Bloat',roughen:'Roughen',twist:'Twist','drop-shadow':'Drop Shadow'}[type];
+  const title = {'offset-path':'Offset Path','round-corners':'Round Corners',transform:'Transform Effect','zig-zag':'Zig Zag','pucker-bloat':'Pucker & Bloat',roughen:'Roughen',twist:'Twist','drop-shadow':'Drop Shadow',warp:'Warp Options',pathfinder:'Pathfinder'}[type];
   const whole = new Set(['copies','ridges','seed']);
   return openDrawModal({title,submitLabel:'OK',className:'draw-effect-dialog',fields}).then(v=>v&&Object.fromEntries(Object.entries(v).map(([k,x])=>[k,
-    k==='join'?x:k==='color'?String(x).toUpperCase():k==='smooth'?!!x:k==='opacity'&&type==='drop-shadow'?Number(x)/100:whole.has(k)?Math.round(Number(x)):Number(x)])));
+    k==='join'||k==='style'||k==='orientation'||k==='op'?x:k==='color'?String(x).toUpperCase():k==='smooth'?!!x:k==='opacity'&&type==='drop-shadow'?Number(x)/100:whole.has(k)?Math.round(Number(x)):Number(x)])));
 }
 /** Transform Each: scale, move, rotate and reflect each object around its own reference point. */
 export function transformEachDialog(defaults={}) {
@@ -604,4 +610,24 @@ export function blendOptionsDialog(defaults) {
     {key:'distance',label:'Distance (mm)',type:'number',value:defaults.distance,min:.01,max:10000,step:'any',required:true},
     {key:'orientation',label:'Orientation',type:'select',value:defaults.orientation,options:[{value:'page',label:'Align to Page'},{value:'path',label:'Align to Path'}]}]})
     .then(v=>v&&{spacing:v.spacing,steps:Number(v.steps),distance:Number(v.distance),orientation:v.orientation});
+}
+/** Paintbrush Tool Options with its calligraphic brush. */
+export function paintbrushDialog(d) {
+  return openDrawModal({title:'Paintbrush Tool Options',submitLabel:'OK',className:'draw-paintbrush-dialog',fields:[
+    {key:'size',label:'Brush size (mm)',type:'number',value:d.size,min:.01,max:1000,step:'any',required:true},
+    {key:'angle',label:'Angle (°)',type:'number',value:d.angle,min:-180,max:180,step:'any',required:true},
+    {key:'roundness',label:'Roundness (%)',type:'number',value:d.roundness,min:0,max:100,step:'any',required:true},
+    {key:'fidelity',label:'Fidelity',type:'select',value:String(d.fidelity),options:[{value:'1',label:'Accurate'},{value:'2',label:'More accurate'},{value:'3',label:'Balanced'},{value:'4',label:'Smoother'},{value:'5',label:'Smooth'}]},
+    {key:'fillNew',label:'Fill new brush strokes',type:'checkbox',value:d.fillNew},
+    {key:'keepSelected',label:'Keep selected',type:'checkbox',value:d.keepSelected}]})
+    .then(v=>v&&{size:Number(v.size),angle:Number(v.angle),roundness:Number(v.roundness),fidelity:Number(v.fidelity),fillNew:!!v.fillNew,keepSelected:!!v.keepSelected});
+}
+/** Blob Brush Tool Options. */
+export function blobBrushDialog(d) {
+  return openDrawModal({title:'Blob Brush Tool Options',submitLabel:'OK',className:'draw-blob-dialog',fields:[
+    {key:'size',label:'Size (mm)',type:'number',value:d.size,min:.01,max:1000,step:'any',required:true},
+    {key:'fidelity',label:'Fidelity',type:'select',value:String(d.fidelity),options:[{value:'1',label:'Accurate'},{value:'2',label:'More accurate'},{value:'3',label:'Balanced'},{value:'4',label:'Smoother'},{value:'5',label:'Smooth'}]},
+    {key:'keepSelected',label:'Keep selected',type:'checkbox',value:d.keepSelected},
+    {key:'mergeWithSelection',label:'Merge only with selection',type:'checkbox',value:d.mergeWithSelection}]})
+    .then(v=>v&&{size:Number(v.size),fidelity:Number(v.fidelity),keepSelected:!!v.keepSelected,mergeWithSelection:!!v.mergeWithSelection});
 }

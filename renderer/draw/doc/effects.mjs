@@ -5,6 +5,8 @@
  */
 import { roundCorners } from '../geom/corners.mjs';
 import { transformEachMatrix } from '../geom/transform-each.mjs';
+import { WARP_STYLES, warpMapping } from '../geom/warp.mjs';
+import { PATHFINDER_LABELS } from '../geom/pathfinder.mjs';
 
 export const EFFECTS = Object.freeze({
   'offset-path': { label: 'Offset Path', group: 'Path', defaults: { distance: 2, join: 'miter', miterLimit: 4 } },
@@ -14,6 +16,9 @@ export const EFFECTS = Object.freeze({
   'pucker-bloat': { label: 'Pucker & Bloat', group: 'Distort & Transform', defaults: { amount: 30 } },
   roughen: { label: 'Roughen', group: 'Distort & Transform', defaults: { size: .5, detail: 2, seed: 1 } },
   twist: { label: 'Twist', group: 'Distort & Transform', defaults: { angle: 45 } },
+  warp: { label: 'Warp', group: 'Warp', defaults: { style: 'arc', bend: 50, horizontal: 0, vertical: 0, orientation: 'horizontal' } },
+  // Live Pathfinder: on a group, its paths and shapes are drawn combined; the group keeps them editable.
+  pathfinder: { label: 'Pathfinder', group: 'Pathfinder', container: true, defaults: { op: 'unite' } },
   'drop-shadow': { label: 'Drop Shadow', group: 'Stylize', raster: true, defaults: { x: 1.5, y: 1.5, blur: 1.5, color: '#000000', opacity: .75 } },
 });
 const finite = (value, min, max) => Number.isFinite(value) && value >= min && value <= max;
@@ -28,6 +33,8 @@ export function effect(type, settings = {}) {
     : type === 'pucker-bloat' ? finite(e.amount, -200, 200)
     : type === 'roughen' ? finite(e.size, 0, 1000) && finite(e.detail, 0, 100) && Number.isInteger(e.seed)
     : type === 'twist' ? finite(e.angle, -3600, 3600)
+    : type === 'pathfinder' ? !!PATHFINDER_LABELS[e.op]
+    : type === 'warp' ? !!WARP_STYLES[e.style] && finite(e.bend, -100, 100) && finite(e.horizontal, -100, 100) && finite(e.vertical, -100, 100) && ['horizontal', 'vertical'].includes(e.orientation)
     : type === 'drop-shadow' ? finite(e.x, -1000, 1000) && finite(e.y, -1000, 1000) && finite(e.blur, 0, 1000) && /^#[0-9A-Fa-f]{6}$/.test(e.color) && finite(e.opacity, 0, 1)
     : finite(e.scaleX, -100000, 100000) && finite(e.scaleY, -100000, 100000) && Math.abs(e.scaleX) > 1e-6 && Math.abs(e.scaleY) > 1e-6
       && finite(e.moveX, -100000, 100000) && finite(e.moveY, -100000, 100000) && finite(e.angle, -360, 360) && Number.isInteger(e.copies) && e.copies >= 0 && e.copies <= 1000;
@@ -37,8 +44,12 @@ export function effect(type, settings = {}) {
   if (settings.hidden) out.hidden = true;
   return out;
 }
-export const effectLabel = (e) => EFFECTS[e.type]?.label ?? e.type;
-export const hasVectorEffects = (node) => (node.appearance?.effects ?? []).some((e) => !e.hidden && EFFECTS[e.type] && !EFFECTS[e.type].raster);
+/** Illustrator's names in Effect > Pathfinder. */
+export const LIVE_LABELS = Object.freeze({ unite: 'Add', intersect: 'Intersect', exclude: 'Exclude', minusFront: 'Subtract', minusBack: 'Minus Back', divide: 'Divide', trim: 'Trim', merge: 'Merge', crop: 'Crop', outline: 'Outline' });
+export const effectLabel = (e) => e.type === 'pathfinder' ? `Pathfinder: ${LIVE_LABELS[e.op] ?? e.op}` : e.type === 'warp' ? `Warp: ${WARP_STYLES[e.style] ?? e.style}` : EFFECTS[e.type]?.label ?? e.type;
+export const hasVectorEffects = (node) => (node.appearance?.effects ?? []).some((e) => !e.hidden && EFFECTS[e.type] && !EFFECTS[e.type].raster && !EFFECTS[e.type].container);
+/** The live Pathfinder operation of a group, or null. */
+export const livePathfinder = (node) => node?.type === 'group' ? (node.appearance?.effects ?? []).filter((e) => !e.hidden && e.type === 'pathfinder').at(-1)?.op ?? null : null;
 /** The drop shadow drawn under an object: its last visible Drop Shadow effect, or null. */
 export const dropShadow = (node) => (node.appearance?.effects ?? []).filter((e) => !e.hidden && e.type === 'drop-shadow').at(-1) ?? null;
 
@@ -75,7 +86,7 @@ const mapSubpath = (s, [a, b, c, d, e, f]) => ({ closed: s.closed, segments: s.s
 export function applyVectorEffects(subpaths, effects = [], { offset = () => null, fillRule = 'nonzero' } = {}) {
   let out = subpaths;
   for (const e of effects) {
-    if (e.hidden || !EFFECTS[e.type] || EFFECTS[e.type].raster || !out.length) continue;
+    if (e.hidden || !EFFECTS[e.type] || EFFECTS[e.type].raster || EFFECTS[e.type].container || !out.length) continue;
     if (e.type === 'round-corners') out = out.map((s) => { const r = roundCorners(s, s.segments.map((_, i) => i), e.radius); const { cornerData, ...plain } = r; return plain; });
     else if (e.type === 'offset-path') { const result = offset([out], { distance: e.distance, join: e.join, miterLimit: e.miterLimit, fillRule }); if (result) out = result; }
     else if (e.type === 'zig-zag') out = out.map((s) => {
@@ -100,6 +111,11 @@ export function applyVectorEffects(subpaths, effects = [], { offset = () => null
       out = out.map((s) => ({ closed: s.closed, segments: resample(s, (a, b) => Math.max(4, Math.ceil(segmentLength(a, b) / Math.max(r / 24, .2))), (a, b, t) => {
         const p = at(a, b, t), dx = p[0] - cx, dy = p[1] - cy, angle = -e.angle * Math.PI / 180 * Math.max(0, 1 - Math.hypot(dx, dy) / r), c = Math.cos(angle), n = Math.sin(angle);
         return corner([cx + dx * c - dy * n, cy + dx * n + dy * c]); }) }));
+    }
+    else if (e.type === 'warp') {
+      // Curves are sampled densely enough that the bent outline stays smooth.
+      const box = boundsOf(out), map = warpMapping(box, e), r = Math.hypot(box.width, box.height) / 2 || 1;
+      out = out.map((s) => ({ closed: s.closed, segments: resample(s, (a, b) => Math.max(4, Math.ceil(segmentLength(a, b) / Math.max(r / 32, .1))), (a, b, t) => corner(map(at(a, b, t)))) }));
     }
     else if (e.type === 'transform') {
       // Transform with copies: each copy applies the transform once more to the previous one.

@@ -198,6 +198,11 @@ export function validateDocument(doc) {
       try { blendOptions(value.blend); } catch (error) { fail(`${path}.blend`, error.message); }
       if (value.clip) fail(`${path}.blend`, 'A blend cannot also be a clipping group');
     }
+    if (value.type === 'group' && value.mask !== undefined && value.mask !== null) {
+      if (!object(value.mask)) fail(`${path}.mask`, 'Expected opacity mask settings');
+      else { bool(value.mask.clip, `${path}.mask.clip`); bool(value.mask.invert, `${path}.mask.invert`); }
+      if (value.clip || value.blend) fail(`${path}.mask`, 'An opacity mask group cannot also be a clipping group or a blend');
+    }
     if (value.type === 'group' && value.clip !== undefined) {
       bool(value.clip, `${path}.clip`);
       if (value.clip === true && !['path', 'shape'].includes(value.children?.at(-1)?.type)) fail(`${path}.clip`, 'A clipping mask needs a path or shape on top');

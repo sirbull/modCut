@@ -55,8 +55,8 @@ export function createExportController({ state, scope, renderer, withScope, expo
   }
   function model(board, images = null) {
     return withScope(() => {
-      // PDF, EPS and DXF get clipping masks as real geometry.
-      const art = renderer.exportArtwork({ resolveClips: true });
+      // PDF, EPS and DXF get clipping masks as real geometry, and opacity-masked groups as images.
+      const art = renderer.exportArtwork({ resolveClips: true, rasterMasks: 300 });
       try { const result = artworkModel(art, board, { layerName: (id) => state.document.getNode(id)?.name, image: images, viewZoom: scope.view.zoom });
         return { ...result, warnings: [...result.warnings, ...(art.data.warnings ?? [])] }; }
       finally { art.remove(); }

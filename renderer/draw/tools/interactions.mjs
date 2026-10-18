@@ -101,6 +101,11 @@ export function createInteractions(canvas, state, api) {
           Object.assign(gesture.node.params,{outerRadius:gesture.innerControl.radius,innerRadius:gesture.innerControl.radius*ratio});
         } else gesture.innerControl=null;
         preview=renderer.shapePreview(gesture.node);
+      } else if (gesture.mode==='paintbrush'||gesture.mode==='blob-brush') {
+        // Paintbrush previews a thin line; Blob Brush the round brush at its size.
+        const last=gesture.points.at(-1);if(Math.hypot(p.x-last[0],p.y-last[1])>=.5/scope.view.zoom)gesture.points.push([p.x,p.y]);
+        preview=new scope.Path({segments:gesture.points,strokeColor:gesture.mode==='blob-brush'?'rgba(20,115,230,.45)':'#071411',strokeCap:'round',strokeJoin:'round',
+          strokeWidth:gesture.mode==='blob-brush'?api.brushSize():1/scope.view.zoom});
       } else if (gesture.mode==='pencil') {
         // Live freehand line; points closer than half a screen pixel are skipped.
         const last=gesture.points.at(-1);if(Math.hypot(p.x-last[0],p.y-last[1])>=.5/scope.view.zoom)gesture.points.push([p.x,p.y]);
@@ -192,6 +197,7 @@ export function createInteractions(canvas, state, api) {
       api.run(()=>api.scissors(hit));return;
     }
     if(tool==='pencil'){gesture={...base,mode:'pencil',points:[[p.x,p.y]]};return;}
+    if(tool==='paintbrush'||tool==='blob-brush'){gesture={...base,mode:tool,points:[[p.x,p.y]]};return;}
     if(tool==='measure'){api.setMeasure(null);gesture={...base,mode:'measure'};return;}
     if(tool==='group-selection') {
       const hit=renderer.hit(p);
@@ -253,7 +259,11 @@ export function createInteractions(canvas, state, api) {
     if (drag.tool==='zoom') {if(!drag.scrubbed)api.zoomAt(drag.start,event.altKey || api.zoomOut() ? .8 : 1.25);return;}
     run(()=>{
       if (state.document.readOnly)return;
-      if(drag.mode==='pencil') {
+      if(drag.mode==='paintbrush') {
+        if(drag.points.length>2)api.paintbrush(drag.points);
+      }else if(drag.mode==='blob-brush') {
+        api.blobBrush(drag.points);
+      }else if(drag.mode==='pencil') {
         if(moved||drag.points.length>2)api.pencil(drag.points);
       }else if(drag.mode==='free-transform') {
         if(drag.moved)api.freeDistort(drag.session,drag.corners);else api.freeDistortPreview(null);

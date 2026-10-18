@@ -1643,4 +1643,32 @@ Hele Draw-E2E 33 for 1146992 (Image Trace, AI-eksport, Width og CDP-retting) pas
 
 Verifisering: 268 Draw-enhetstester (`blend.test.mjs`), ny E2E `draw-blend-workflows.mjs` (`--draw-blend`).
 
-Neste: D4.3 Warp, Live Pathfinder og opacity masks.
+
+## 2026-10-18: D4.3 Warp, Live Pathfinder og opacity masks
+
+- `geom/warp.mjs`: `WARP_STYLES`, `warpStyle` (alle 15 stilene i boksens -1..1-koordinater) og `warpMapping`
+  (boks, retning og forvrengning). `warp` i `doc/effects.mjs` sampler kurvene tett og bøyer punktene.
+- Live Pathfinder: effekten `pathfinder` (`container: true`, bare grupper). Rendereren kjører `runPathfinder` på
+  gruppens baner og former i gruppens rom og skjuler delene (`coveredIds`); `liveSteps` brukes av Cut og Expand
+  Appearance.
+- Opacity masks: en gruppe med `mask` (`clip`, `invert`) der øverste barn er masken. Rendereren lager en svart
+  kopi med luminans som alfa (også gradienter og bilder) og tegner den med `destination-in`; gruppen får
+  blandingsmodus `source-over` så Paper tegner den i eget lag. `exportArtwork({ rasterMasks })` gjør maskerte
+  grupper til bilder for SVG og vektorformatene.
+
+Verifisering: 271 Draw-enhetstester (`warp.test.mjs`), ny E2E `draw-warp-mask-workflows.mjs` (`--draw-warp-mask`).
+Hele Draw-E2E 34 for 42c1b33 (Blend) passerte helt: 41 av 41. E2E fant at kopien av maskekunsten arvet
+`nodeId`, så eksporten skjulte den; kopien får nå tomme `data`.
+
+
+## 2026-10-18: D4.4 Paintbrush og Blob Brush
+
+- `geom/brush.mjs`: innstillinger og validering, `nibWidth` (flat spiss med vinkel og rundhet) og
+  `calligraphicProfile` (breddeprofil langs draget, retningen glattet over noen punkter).
+- `index.mjs`: `paintbrush` (Pencil-tilpasning, strekvekt lik størrelsen, breddeprofil) og `blobBrush`
+  (`outlineStroke` med runde ender og hjørner, slått sammen med berørte former i samme farge via Paper `unite`,
+  ett angresteg). Verktøyene er aktivert, med markører, statuslinje og dialoger (Enter).
+
+Verifisering: 274 Draw-enhetstester (`brush.test.mjs`), ny E2E `draw-brush-workflows.mjs` (`--draw-brush`).
+
+Neste: D4.5 EPS/TIFF, Graphic Styles, Navigator, Rotate View og Asset Export.

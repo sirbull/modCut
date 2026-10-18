@@ -258,7 +258,11 @@ function buildMenu(mode = "cut") {
     template.find(item=>item.label==='Effect').submenu=[objectItem('Apply Last Effect','effect-last'),objectItem('Last Effect…','effect-options'),{type:'separator'},
       {label:'Distort & Transform',submenu:[objectItem('Pucker & Bloat…','effect-pucker-bloat'),objectItem('Roughen…','effect-roughen'),objectItem('Transform…','effect-transform'),
         objectItem('Twist…','effect-twist'),objectItem('Zig Zag…','effect-zig-zag')]},{label:'Path',submenu:[objectItem('Offset Path…','effect-offset-path')]},
-      {label:'Stylize',submenu:[objectItem('Drop Shadow…','effect-drop-shadow'),objectItem('Round Corners…','effect-round-corners')]}];
+      {label:'Stylize',submenu:[objectItem('Drop Shadow…','effect-drop-shadow'),objectItem('Round Corners…','effect-round-corners')]},
+      {label:'Pathfinder',submenu:[['unite','Add'],['intersect','Intersect'],['exclude','Exclude'],['minusFront','Subtract'],['minusBack','Minus Back'],['divide','Divide'],['trim','Trim'],['merge','Merge'],['crop','Crop'],['outline','Outline']]
+        .map(([id,label])=>objectItem(label,`live-${id}`))},
+      {label:'Warp',submenu:[['arc','Arc'],['arc-lower','Arc Lower'],['arc-upper','Arc Upper'],['arch','Arch'],['bulge','Bulge'],['shell-lower','Shell Lower'],['shell-upper','Shell Upper'],
+        ['flag','Flag'],['wave','Wave'],['fish','Fish'],['rise','Rise'],['fisheye','Fisheye'],['inflate','Inflate'],['squeeze','Squeeze'],['twist','Twist']].map(([id,label])=>objectItem(`${label}…`,`warp-${id}`))}];
     template.find(item=>item.label==='Type').submenu=[objectItem('Edit Text…','edit-text'),objectItem('Create Outlines','create-outlines')];
     // Select menu (D3.5): Same compares every painted object; Object picks kinds of objects.
     template.find(item=>item.label==='Select').submenu=[objectItem('All','select-all'),objectItem('All on Active Artboard','select-artboard'),objectItem('Deselect','deselect'),

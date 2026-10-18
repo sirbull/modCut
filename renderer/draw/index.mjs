@@ -26,6 +26,8 @@ import { transformedBox } from './tools/selection.mjs';
 import { SHAPE_TOOLS, shapeFromDrag } from './tools/shapes.mjs';
 import { insertNode, moveNode, removeNode, replaceLeaf, updateNode, updateDocument } from './doc/commands.mjs';
 import { BLEND_DEFAULTS, blendOptions } from './geom/blend.mjs';
+import { WARP_STYLES } from './geom/warp.mjs';
+import { BLOB_DEFAULTS, blobOptions, calligraphicProfile, paintbrushOptions } from './geom/brush.mjs';
 import { createNode } from './doc/schema.mjs';
 import { appearance } from './geometry.mjs';
 import { changeGradient, defaultGradient, isGradient, vectorGradient } from './doc/gradient.mjs';
@@ -36,14 +38,14 @@ import { DRAW_MODE_LABELS, insideTarget, nextDrawMode, placement } from './doc/d
 import { changePaint, changeStroke, paintHex } from './doc/paint.mjs';
 import { setWidthPoint, moveWidthPoint, removeWidthPoint, normalizeProfile } from './geom/width-profile.mjs';
 import { importArtwork, rasterAsset } from './import-artwork.mjs';
-import { shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog,layerOptionsDialog,swatchOptionsDialog,sendToCutDialog,averageDialog,offsetDialog,simplifyDialog,pencilDialog,expandDialog,cropImageDialog,effectDialog,magicWandDialog,eraserDialog,transformEachDialog,splitGridDialog,saveSelectionDialog,editSelectionDialog,widthPointDialog,blendOptionsDialog } from './ui/dialogs.mjs';
+import { shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog,layerOptionsDialog,swatchOptionsDialog,sendToCutDialog,averageDialog,offsetDialog,simplifyDialog,pencilDialog,expandDialog,cropImageDialog,effectDialog,magicWandDialog,eraserDialog,transformEachDialog,splitGridDialog,saveSelectionDialog,editSelectionDialog,widthPointDialog,blendOptionsDialog,paintbrushDialog,blobBrushDialog } from './ui/dialogs.mjs';
 import { ALL_ARTBOARDS, artboardCutSvg } from './io/cut-svg.mjs';
 import { EXPORT_FORMATS, rasterSize, svgDocument } from './io/export.mjs';
 import { createExportController } from './export-controller.mjs';
 import { layerOptionsPatch, templateLayerCommands, isOutputNode } from './doc/layers.mjs';
 import { compoundCommands, releaseCompoundCommands, clipCommands, releaseClipCommands } from './doc/compound.mjs';
 import { offsetPaths, flattenPath, outlineStroke, loadGeometry } from './geom/kernel-js.mjs';
-import { EFFECTS, effect, hasVectorEffects } from './doc/effects.mjs';
+import { EFFECTS, LIVE_LABELS, effect, hasVectorEffects, livePathfinder } from './doc/effects.mjs';
 import { cutSubpath } from './geom/path-commands.mjs';
 import { addAnchorPoints, removeAnchorPoints, reverseSubpaths, averagePoints, joinSubpaths, closeSubpath, cleanUpTargets, mapSubpath } from './geom/path-commands.mjs';
 import { toolCursor } from './tools/cursors.mjs';
@@ -54,10 +56,10 @@ import { textDialog } from './ui/dialogs.mjs';
 
 const workspaces=new WeakMap();
 export function getDrawWorkspace(root) {return workspaces.get(root) || null;}
-const implementedTools=new Set(['select','group-selection','magic-wand','lasso','shape-builder','knife','eraser','width','blend','free-transform','pencil','hand','zoom','artboard','gradient','eyedropper','measure','scissors','type','area-type','type-on-path',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
+const implementedTools=new Set(['select','group-selection','magic-wand','lasso','shape-builder','knife','eraser','width','blend','paintbrush','blob-brush','free-transform','pencil','hand','zoom','artboard','gradient','eyedropper','measure','scissors','type','area-type','type-on-path',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
 const commands=new Set(['undo','redo','delete','select-all','select-artboard','deselect','cancel','fit-artboard','fit-all','actual-size','zoom-in','zoom-out','outline',
   'cut','copy','paste','paste-front','paste-back','paste-place','paste-all-artboards',
-  'edit-text','create-outlines','join','average','offset-path','outline-stroke','expand','expand-appearance','transform-each','split-into-grid','crop-image','effect-last','effect-options',...Object.keys(EFFECTS).map(t=>`effect-${t}`),'simplify','reverse-path','add-anchors','remove-anchors','clean-up','compound-make','compound-release','clip-make','clip-release','blend-make','blend-release','blend-expand','blend-options','blend-reverse','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
+  'edit-text','create-outlines','join','average','offset-path','outline-stroke','expand','expand-appearance','transform-each','split-into-grid','crop-image','effect-last','effect-options',...Object.keys(EFFECTS).map(t=>`effect-${t}`),...Object.keys(WARP_STYLES).map(t=>`warp-${t}`),...Object.keys(LIVE_LABELS).map(t=>`live-${t}`),'simplify','reverse-path','add-anchors','remove-anchors','clean-up','compound-make','compound-release','clip-make','clip-release','blend-make','blend-release','blend-expand','blend-options','blend-reverse','mask-make','mask-release','mask-clip','mask-invert','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
   'paint-focus','paint-swap','paint-none','paint-solid','paint-gradient','default-paint','smart-guides','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','shear-dialog','toggle-panels','toggle-panels-except-tools','command-search','draw-mode','draw-normal','draw-behind','draw-inside','reselect','select-inverse','select-next-above','select-next-below','save-selection','edit-selection',
   ...Object.keys(SAME_MODES).map(m=>`select-same-${m}`),...Object.keys(OBJECT_KINDS).map(k=>`select-object-${k}`),
   ...PANEL_DEFINITIONS.map(p=>`panel.${p.id}`),...['left','right','up','down'].flatMap(d=>[`nudge-${d}`,`nudge-large-${d}`,`duplicate-${d}`])]);
@@ -113,6 +115,8 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       tool.id==='free-transform' ? 'Drag a corner of the selection: free distort (the other corners stay)' :
       tool.id==='shape-builder' ? 'Drag across regions of the selected shapes: merge · Alt+drag: delete regions' :
       tool.id==='blend' ? (state.ui.blendFirst?'Click a second object: blend the two · Click empty canvas: start over':'Click an object, then another, to blend them · Double-click the tool: Blend Options') :
+      tool.id==='paintbrush' ? 'Drag: paint a calligraphic stroke in the stroke colour · Enter: Paintbrush options' :
+      tool.id==='blob-brush' ? 'Drag: paint a filled shape that merges with touching shapes of the same colour · Enter: Blob Brush options' :
       tool.id==='width' ? 'Drag a stroke: width there · Drag a width point: resize, its centre slides it · Alt: one side · Double-click a point: edit' :
       tool.id==='knife' ? 'Drag across filled shapes to cut them (the selection, or every shape)' :
       tool.id==='eraser' ? 'Drag to erase from filled shapes (the selection, or every shape) · Enter: diameter' :
@@ -207,7 +211,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       // Clipping masks are cut into the geometry, so the laser follows what is visible.
       subpaths(id){const node=state.document.getNode(id);return renderer.clippedSubpaths(id,worldMatrix(id))??renderer.effectiveSubpaths(id)??(node.type==='shape'?renderer.expandedShape(id)?.subpaths:node.subpaths);},
       clip:(subpaths,world,rect,filled)=>renderer.clipToRect(subpaths,world,rect,filled),
-      blendSteps:id=>renderer.blendSteps(id),
+      blendSteps:id=>renderer.blendSteps(id),liveSteps:id=>renderer.liveSteps(id),
       resolvedText:id=>resolved.get(id),glyphBounds:(id,paths)=>renderer.glyphBounds(id,paths),
     },options));
   }
@@ -217,7 +221,8 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     if(!EXPORT_FORMATS[format])throw new Error('Choose SVG, PNG, JPEG or WebP.');
     const fill=background==='white'?'#FFFFFF':background==='artboard'?board.background??'#FFFFFF':format==='jpg'?'#FFFFFF':null;
     return withScope(()=>{
-      const art=renderer.exportArtwork();
+      // SVG has no luminance masks Paper can write, so opacity-masked groups go in as 300 ppi images.
+      const art=renderer.exportArtwork(format==='svg'?{rasterMasks:300}:{});
       try {
         if(format==='svg'){
           const textWeights=new Map();
@@ -392,6 +397,44 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     const node=createNode('path',{name:'',subpaths:[subpath],appearance:appearance(null,state.ui.stroke??'#071411',state.ui.strokeWidth??.5)});
     run(()=>{insertNew(node);select(options.keepSelected?[node.id]:[]);});
   }
+  /** Paintbrush (B): a smooth path stroked with the calligraphic brush (weight plus width profile). */
+  function paintbrush(points) {
+    if(state.document.readOnly||points.length<2)return;
+    const brush=paintbrushOptions(state.ui.paintbrush??{}),pixel=1/scope.view.zoom;
+    const subpath=withScope(()=>{const path=fitCurve(points,false,[.5,1,2.5,5,10][brush.fidelity-1]*pixel);
+      const result={closed:false,segments:path.segments.map(s=>({p:[s.point.x,s.point.y],in:[s.handleIn.x,s.handleIn.y],out:[s.handleOut.x,s.handleOut.y]}))};path.remove();return result;});
+    if(subpath.segments.length<2)return;
+    const look=appearance(brush.fillNew?state.ui.fill??null:null,state.ui.stroke??'#071411',brush.size);
+    Object.assign(look.strokes[0],{cap:'round',join:'round'});
+    const profile=calligraphicProfile(points,brush);if(profile)Object.assign(look,changeStroke(look,{widthProfile:profile},state.ui));
+    const node=createNode('path',{name:'',subpaths:[subpath],appearance:look});
+    run(()=>{insertNew(node);select(brush.keepSelected?[node.id]:[]);});
+  }
+  /**
+   * Blob Brush (Shift+B): the drag becomes a filled shape in the stroke colour, merged with the filled,
+   * unstroked paths of the same colour it touches (or only the selected ones), in one undo step.
+   */
+  async function blobBrush(points) {
+    if(state.document.readOnly||points.length<1)return;
+    const brush=blobOptions(state.ui.blobBrush??{}),hex=state.ui.stroke??'#071411',line=points.length>1?points:[points[0],[points[0][0]+.001,points[0][1]]];
+    const outline=await outlineStroke([{closed:false,segments:line.map(p=>({p,in:[0,0],out:[0,0]}))}],{width:brush.size,join:'round',cap:'round'});
+    if(destroyed||!outline.length)return;
+    run(()=>{
+      const doc=state.document,pool=brush.mergeWithSelection?selectedIds():doc.descendants(null).map(n=>n.id);
+      const same=id=>{const n=doc.getNode(id);return n?.type==='path'&&doc.isEditable(id)&&n.subpaths.every(s=>s.closed)&&!(n.appearance.strokes??[]).some(e=>!e.hidden)
+        &&paintHex((n.appearance.fills??[]).find(e=>!e.hidden))?.toUpperCase()===hex.toUpperCase();};
+      const merged=withScope(()=>{
+        const blob=new scope.CompoundPath({insert:false,children:outline.map(sub=>new scope.Path({insert:false,closed:true,segments:sub.segments.map(g=>new scope.Segment(new scope.Point(...g.p),new scope.Point(...g.in),new scope.Point(...g.out)))}))});
+        let result=blob;const absorbed=[];
+        for(const id of pool.filter(same)){const other=renderer.booleanOperand(id);
+          if(other.bounds.intersects(result.bounds)&&result.intersects(other)||other.contains(result.firstChild?.firstSegment.point??result.bounds.center)||result.contains(other.bounds.center)){const next=result.unite(other,{insert:false});if(result!==blob)result.remove();result=next;absorbed.push(id);}
+          other.remove();}
+        const subpaths=toSubpaths(result);result.remove();if(blob!==result)blob.remove();return {subpaths,absorbed};});
+      const node=createNode('path',{name:'',subpaths:merged.subpaths,fillRule:'nonzero',appearance:appearance(hex,null)});
+      state.history.transaction('Blob Brush',()=>{merged.absorbed.forEach(id=>state.history.execute(removeNode(id)));insertNew(node);});
+      select(brush.keepSelected?[node.id]:[]);
+    });
+  }
   /**
    * Shape Builder: the selected shapes divided into regions when the drag starts; the regions the drag
    * crosses merge into one (Alt deletes them) and the rest stay, as separate paths, in one undo step.
@@ -435,13 +478,13 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     select(state.selection.ids);
   }
   /** Live effects: added to every selected path and shape, edited in place; Apply Last Effect repeats the last one. */
-  async function addEffect(type,{ask=true}={}){
+  async function addEffect(type,{ask=true,preset={}}={}){
     if(state.document.readOnly)return;
     // Drop Shadow also works on text; the vector effects change paths and shapes.
-    const kinds=EFFECTS[type].raster?['path','shape','text']:['path','shape'],ids=selectedIds().filter(id=>kinds.includes(state.document.getNode(id)?.type)&&state.document.isEditable(id));
-    if(!ids.length)throw new Error(EFFECTS[type].raster?'Select paths, shapes or text to add a drop shadow to.':'Select paths or shapes to add an effect to.');
+    const kinds=EFFECTS[type].container?['group']:EFFECTS[type].raster?['path','shape','text']:['path','shape'],ids=selectedIds().filter(id=>kinds.includes(state.document.getNode(id)?.type)&&state.document.isEditable(id));
+    if(!ids.length)throw new Error(EFFECTS[type].container?'Group the objects first: Effect > Pathfinder works on a group.':EFFECTS[type].raster?'Select paths, shapes or text to add a drop shadow to.':'Select paths or shapes to add an effect to.');
     const last=state.ui.lastEffect?.type===type?state.ui.lastEffect:null;
-    const values=ask?await effectDialog(type,{...EFFECTS[type].defaults,...last}):last??EFFECTS[type].defaults;if(!values||destroyed)return;
+    const values=ask?await effectDialog(type,{...EFFECTS[type].defaults,...last,...preset}):{...(last??EFFECTS[type].defaults),...preset};if(!values||destroyed)return;
     const e=effect(type,values);state.ui.lastEffect=e;
     run(()=>state.history.transaction(EFFECTS[type].label,()=>{for(const id of ids){const node=state.document.getNode(id);
       state.history.execute(updateNode(id,{appearance:{...node.appearance,effects:[...(node.appearance.effects??[]),e]}},{label:EFFECTS[type].label}));}}));
@@ -974,6 +1017,14 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
         }});select(created);});
     };
     if(command==='outline-stroke')return()=>expandSelection('Outline Stroke',editable().filter(id=>visible(doc.getNode(id).appearance?.strokes).some(e=>e.width>0)),{fill:false,stroke:true},'Select paths or shapes with a stroke.');
+    // A live Pathfinder group expands to its result paths, each with its source's look, in the group's place.
+    const liveGroups=selectedIds().filter(id=>livePathfinder(doc.getNode(id))&&doc.isEditable(id));
+    if(command==='expand-appearance'&&liveGroups.length)return()=>{const made=[];
+      state.history.transaction('Expand Appearance',()=>{for(const id of liveGroups){const group=doc.getNode(id),{parentId,index}=doc.locate(id),results=withScope(()=>renderer.liveSteps(id));
+        const parts=results.map(r=>{const source=group.children.find(c=>c.id===r.sourceId)??group.children.at(-1);
+          return createNode('path',{name:'',subpaths:r.subpaths,fillRule:'nonzero',appearance:{...structuredClone(source.appearance),effects:[]},opacity:source.opacity,blendMode:source.blendMode});});
+        const node=parts.length===1?{...parts[0],transform:[...group.transform],name:group.name}:createNode('group',{name:group.name,transform:[...group.transform],opacity:group.opacity,blendMode:group.blendMode,children:parts});
+        state.history.execute(removeNode(id));state.history.execute(insertNode(parentId,node,index));made.push(node.id);}});select(made);};
     if(command==='expand-appearance')return()=>expandSelection('Expand Appearance',editable().filter(id=>hasVectorEffects(doc.getNode(id))||visible(doc.getNode(id).appearance?.fills).length+visible(doc.getNode(id).appearance?.strokes).length>1),{fill:true,stroke:true},
       'Select objects with several fills or strokes, or a fill and a stroke.');
     if(command==='expand')return async()=>{
@@ -1042,6 +1093,16 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
             if(!step.look.stroke||!(step.look.width>0))look.strokes=[];
             state.history.execute(insertNode(id,createNode('path',{name:'',subpaths:step.subpaths,fillRule:step.look.fillRule,appearance:look,opacity:step.look.opacity}),at+i));});}}});
       select(list);};
+    // Opacity masks (D4.3): a group with `mask` whose top child is the mask art.
+    const masked=()=>{const found=ids().map(id=>doc.getNode(id)?.mask?id:doc.ancestors(id).find(n=>n.mask)?.id).filter(Boolean);if(!found.length)throw new Error('Select an object with an opacity mask.');return [...new Set(found)];};
+    if(command==='mask-make')return()=>{
+      const members=stackingOrder(doc,ids());if(members.length<2)throw new Error('Select the artwork and, on top, the object to use as its mask.');
+      if(new Set(members.map(id=>doc.locate(id).parentId)).size>1)throw new Error('Mask objects in the same layer or group.');
+      const {commands,group}=groupCommands(doc,members);
+      state.history.transaction('Make Opacity Mask',()=>{commands.forEach(c=>state.history.execute(c));state.history.execute(updateNode(group.id,{name:'Opacity Mask',mask:{clip:true,invert:false}}));});select([group.id]);};
+    if(command==='mask-release')return()=>{const list=masked();apply('Release Opacity Mask',list.map(id=>updateNode(id,{mask:null})));select(list);};
+    if(command==='mask-clip'||command==='mask-invert')return()=>{const list=masked(),key=command==='mask-clip'?'clip':'invert',on=!doc.getNode(list[0]).mask[key];
+      apply(key==='clip'?'Clip Mask':'Invert Mask',list.map(id=>updateNode(id,{mask:{...doc.getNode(id).mask,[key]:on}})));};
     if(command==='clip-make')return()=>{const {commands,group}=clipCommands(doc,ids());apply('Make Clipping Mask',commands);select([group.id]);};
     if(command==='clip-release')return()=>{apply('Release Clipping Mask',releaseClipCommands(doc,ids()));};
     if(command==='lock')return()=>{apply('Lock',lockCommands(doc,ids()));select([]);};
@@ -1076,6 +1137,10 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     if(command.startsWith('panel.'))return openPanel(command.slice(6));
     if(command==='draw-mode'){const next=nextDrawMode(state.ui.drawMode??'normal');try{return setDrawMode(next);}catch{return setDrawMode('normal');}}
     if(['draw-normal','draw-behind','draw-inside'].includes(command))return setDrawMode(command.slice(5));
+    // Effect > Warp > Arc… and the other styles: the Warp dialog with that style chosen.
+    // Effect > Pathfinder > Add and the rest: no dialog, as in Illustrator.
+    if(command.startsWith('live-')&&LIVE_LABELS[command.slice(5)])return void addEffect('pathfinder',{ask:false,preset:{op:command.slice(5)}}).catch(error=>{if(!destroyed)onError(error.message);});
+    if(command.startsWith('warp-')&&WARP_STYLES[command.slice(5)])return void addEffect('warp',{preset:{style:command.slice(5)}}).catch(error=>{if(!destroyed)onError(error.message);});
     if(command.startsWith('effect-')&&EFFECTS[command.slice(7)])return void addEffect(command.slice(7)).catch(error=>{if(!destroyed)onError(error.message);});
     if(command==='effect-last'||command==='effect-options'){const last=state.ui.lastEffect;if(!last)throw new Error('No effect has been applied yet.');
       return void addEffect(last.type,{ask:command==='effect-options'}).catch(error=>{if(!destroyed)onError(error.message);});}
@@ -1133,6 +1198,8 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     if(command==='tool-dialog'&&state.ui.tool==='eraser')return void eraserDialog(state.ui.eraserSize??3).then(size=>{if(size&&!destroyed)state.ui.eraserSize=size;});
     if(command==='tool-dialog'&&state.ui.tool==='magic-wand')return void magicWandDialog(state.ui.magicWand??{}).then(values=>{if(values&&!destroyed)state.ui.magicWand=values;});
     if(command==='tool-dialog'&&state.ui.tool==='blend')return void blendOptionsCommand();
+    if(command==='tool-dialog'&&state.ui.tool==='paintbrush')return void paintbrushDialog(paintbrushOptions(state.ui.paintbrush??{})).then(values=>{if(values&&!destroyed)run(()=>{state.ui.paintbrush=paintbrushOptions(values);});});
+    if(command==='tool-dialog'&&state.ui.tool==='blob-brush')return void blobBrushDialog(blobOptions(state.ui.blobBrush??{})).then(values=>{if(values&&!destroyed)run(()=>{state.ui.blobBrush=blobOptions(values);});});
     if(command==='tool-dialog'&&state.ui.tool==='pencil')return void pencilDialog(state.ui.pencil??{}).then(values=>{if(values&&!destroyed)state.ui.pencil=values;});
     if(command==='tool-dialog'&&state.ui.tool==='type-on-path'){const id=selectedIds()[0];if(id)return void editText(undefined,null,null,{pathFrom:id});return;}
     if(command==='tool-dialog'&&['type','area-type'].includes(state.ui.tool))return void editText(undefined,null,state.ui.tool==='area-type'?{width:60,height:30}:null);
@@ -1158,7 +1225,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       select(subtract?current.filter(id=>!found.includes(id)):add?[...new Set([...current,...found])]:found);},
     lasso:(points,options)=>paths.lasso(points,options),
     freeDistortSession,freeDistortPreview,freeDistort,
-    shapeBuilderSession,shapeBuilderPreview,shapeBuilder,knife,eraser,eraserSize:()=>state.ui.eraserSize??3,widthSession,widthDrag,widthPreview,widthPointEdit,blendClick,blendOptions:()=>void blendOptionsCommand(),
+    shapeBuilderSession,shapeBuilderPreview,shapeBuilder,knife,eraser,eraserSize:()=>state.ui.eraserSize??3,widthSession,widthDrag,widthPreview,widthPointEdit,paintbrush,blobBrush:points=>blobBrush(points).catch(error=>{if(!destroyed)onError(error.message);}),brushSize:()=>(state.ui.blobBrush?.size??BLOB_DEFAULTS.size),blendClick,blendOptions:()=>void blendOptionsCommand(),
     widthHandles:point=>{const id=renderer.hit(point)??selectedIds()[0],target=id&&widthTarget(id);return target?withScope(()=>renderer.widthHandles(id,target.stroke)):[];},
     gradientVector(from,to,mergeKey){const kind=state.ui.paintFocus==='stroke'?'stroke':'fill',last=state.ui.lastGradient;
       gradient(kind,(current,box,node)=>{const a=renderer.pointToLocal(node.id,from),b=renderer.pointToLocal(node.id,to);
