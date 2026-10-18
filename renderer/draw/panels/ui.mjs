@@ -1062,6 +1062,12 @@ export function createPanels(shell, state, api) {
       row('fill','Fill',describe(node.appearance.fills[0]));
       const stroke = node.appearance.strokes[0]; row('stroke','Stroke',describe(stroke) + (stroke ? ` · ${Number(stroke.width ?? 0).toFixed(2)} mm` : ''));
     }
+    // Text: characters and words of the selected text objects, as Illustrator's Info panel shows them.
+    const texts = api.selectedIds().map(id => state.document.getNode(id)).filter(n => n?.type === 'text');
+    if (texts.length) {
+      const content = texts.map(n => (n.content?.runs ?? []).map(r => r.text).join('')).join('\n');
+      row('characters','Characters',String([...content.replace(/\n/g,'')].length)); row('words','Words',String(content.split(/\s+/).filter(Boolean).length));
+    }
     const m = state.ui.measurement;
     if (m) { row('distance','D',mm(m.distance)); row('angle','Angle',`${m.angle.toFixed(1)}°`); }
   }

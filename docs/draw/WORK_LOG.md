@@ -1871,4 +1871,5 @@ Verifisering: effekt-enhetstest, `--draw-effects` (rød glød utenfor, myk kant 
   og knappene New Snapshot og Delete State i History-panelet.
 
 Verifisering: `document-batch`-enhetstest, `--draw-history-info`.
+- Info: tegn og ord for merket tekst (ikke dekket av E2E; testmiljøet mangler vanlige fonter for tekst).
 

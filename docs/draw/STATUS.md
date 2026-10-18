@@ -388,7 +388,9 @@ Gjenstår i D2.8 og nær beslektet: Smooth og Path Eraser, Knife, Lasso, Magic W
 State fjerner gjeldende trinn og de etter det. Kode: `revertTo` i `doc/commands.mjs`, `discardRedo` i
 `doc/history.mjs`, `historySnapshot`/`historyRevert`/`historyDeleteState` i `index.mjs`.
 
-Gjenstår i D2.9: øyeblikksbilder som lagres med dokumentet, Info for tekst (tegn og ord), og
+Info viser antall tegn og ord når tekst er merket.
+
+Gjenstår i D2.9: øyeblikksbilder som lagres med dokumentet, og
 kommandosøk i hjelpemenyen.
 
 ### 2.17 Draw Normal, Behind og Inside (D2.2, 2026-10-17)
