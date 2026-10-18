@@ -1876,4 +1876,5 @@ Verifisering: `document-batch`-enhetstest, `--draw-history-info`.
 - Transform Each: Preview (en matrise per objekt i `previewTransform`). Verifisering: `--draw-region-tools`.
 - Free Transform: Shift gir perspektiv. Verifisering: `--draw-region-tools`.
 - Lasso med Alt+Ctrl/Cmd merker hele objekter. Verifisering: `--draw-select`.
+- Select > Object > Direction Handles. Verifisering: `--draw-select`.
 

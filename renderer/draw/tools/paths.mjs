@@ -213,8 +213,16 @@ export function createPathInteractions(canvas,state,api) {
     selectAnchors(subtract?existing.filter(a=>!inside.some(b=>same(a,b))):add?[...existing,...inside.filter(a=>!existing.some(b=>same(a,b)))]:inside);
     return inside.length;
   }
+  /** Select > Object > Direction Handles: every anchor with a handle in the selected paths and shapes, so all handles show. */
+  function directionHandles(ids){
+    const anchors=[];
+    for(const id of ids){const original=state.document.getNode(id);if(!['path','shape'].includes(original?.type)||!state.document.isEditable(id))continue;
+      renderer.editingNode(id).subpaths.forEach((path,subpath)=>path.segments.forEach((s,segment)=>{if(Math.hypot(...s.in)+Math.hypot(...s.out)>0)anchors.push(descriptor(id,subpath,segment));}));}
+    selectAnchors(anchors);return anchors.length;
+  }
   return {
     lasso,
+    directionHandles,
     finish,
     cornerInfo(){const anchors=cornerSelection();if(!anchors.length)return null;const values=renderer.cornerWidgets().map(c=>c.corner.radius);return {count:anchors.length,radius:values.every(r=>Math.abs(r-values[0])<1e-9)?values[0]:null};},
     setCornerRadius(radius){if(state.document.readOnly)return;const anchors=cornerSelection();if(!anchors.length)return;

@@ -522,7 +522,9 @@ strek, effekter, opasitet og blanding).
 
 Lasso med Alt+Ctrl/Cmd merker hele objekter (de som har et anker inne i løkken).
 
-Gjenstår i D3.5: Select > Object > Direction Handles.
+Select > Object > Direction Handles merker alle ankre med håndtak i de merkede banene og formene, så håndtakene vises.
+
+Gjenstår i D3.5: ingen kjente hull i grunnformen.
 
 ### 2.22 Shape Builder, Knife og Eraser (D3.4, 2026-10-17)
 

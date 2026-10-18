@@ -68,6 +68,11 @@ export async function runDrawSelectWorkflows(client) {
   for (const p of path.slice(1)) await mouse('mouseMoved', await at(...p), { buttons: 1, modifiers: mods });
   await mouse('mouseMoved', await at(47, 8), { buttons: 1, modifiers: mods }); await mouse('mouseReleased', await at(47, 8), { modifiers: mods });
   assert.deepEqual(await evaluate(`(async()=>(${active}.state.selection.ids))()`), [ids.blue], 'The whole object is selected');
+  // Select > Object > Direction Handles: all four anchors of a selected ellipse, so its handles show.
+  const ellipseAnchors = await evaluate(`(async()=>{const w=${active},{insertNode}=await import('./draw/doc/commands.mjs'),{shapeFromDrag}=await import('./draw/tools/shapes.mjs');
+    const b=w.state.document.data.artboards[0],n=shapeFromDrag('ellipse',[b.x+80,b.y+40],[b.x+100,b.y+55],{fill:'#00AA00'});w.state.history.execute(insertNode(w.state.document.data.layers[0].id,n));
+    w.setTool('direct-selection');w.select([n.id]);w.handle('select-object-direction-handles');return w.state.selection.anchors.length;})()`);
+  assert.equal(ellipseAnchors, 4);
   await evaluate(`(async()=>(${active}.setTool('select')))()`); await restore();
-  console.log('PASS Draw select: Inverse from the Select menu, Same Fill and Stroke Color, Reselect, Next Object Above/Below, Open Paths, Save and Edit Selection, Magic Wand with tolerance and Alt, Lasso anchor selection and whole objects with Alt+Ctrl');
+  console.log('PASS Draw select: Inverse from the Select menu, Same Fill and Stroke Color, Reselect, Next Object Above/Below, Open Paths, Save and Edit Selection, Magic Wand with tolerance and Alt, Lasso anchor selection and whole objects with Alt+Ctrl, Direction Handles');
 }

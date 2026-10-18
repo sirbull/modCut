@@ -54,6 +54,7 @@ export const NB = Object.freeze({
   "Revert to Snapshot": "Gå tilbake til øyeblikksbilde", "Cannot change history inside a transaction": "Kan ikke endre historikken inne i en transaksjon",
   "Characters": "Tegn", "Words": "Ord",
   "Graphic Style": "Grafisk stil", "The selected object does not have one of the document's graphic styles.": "Det merkede objektet har ikke en av dokumentets grafiske stiler.",
+  "Direction Handles": "Retningshåndtak", "The selected paths have no direction handles.": "De merkede banene har ingen retningshåndtak.",
   "Rasterize…": "Rasteriser…", "Rasterize": "Rasteriser", "Use Document Raster Effects Resolution": "Bruk dokumentets oppløsning for rastereffekter",
   "Screen (72 ppi)": "Skjerm (72 ppi)", "Medium (150 ppi)": "Middels (150 ppi)", "High (300 ppi)": "Høy (300 ppi)", "Anti-aliasing": "Kantutjevning",
   "Add around object (mm)": "Legg til rundt objektet (mm)", "Select paths, shapes or text to rasterize.": "Merk baner, former eller tekst du vil rasterisere.",
