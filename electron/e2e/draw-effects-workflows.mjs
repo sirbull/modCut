@@ -60,6 +60,24 @@ export async function runDrawEffectWorkflows(client) {
     const img=new Image();img.src=url;await img.decode();const c=document.createElement('canvas');c.width=img.width;c.height=img.height;const g=c.getContext('2d');g.drawImage(img,0,0);
     return [...g.getImageData(Math.round(102/25.4*72),Math.round(20/25.4*72),1,1).data]})()`);
   assert.ok(shadowPixel[0] > 200 && shadowPixel[1] < 120, `The red shadow shows below and right of the square in PNG: ${shadowPixel}`);
+  // Effect > Rasterize… at 72 ppi: the square is drawn as pixels (its anchors stay), and SVG gets an image for it.
+  const rasterized = await evaluate(`(async()=>{const w=${active},{createNode}=await import('./draw/doc/schema.mjs'),{insertNode}=await import('./draw/doc/commands.mjs'),{appearance}=await import('./draw/geometry.mjs');
+    const bd=w.state.document.data.artboards[0],n=createNode('path',{subpaths:[{closed:true,segments:[[40,50],[70,50],[70,80],[40,80]].map(p=>({p:[bd.x+p[0],bd.y+p[1]],in:[0,0],out:[0,0]}))}],appearance:appearance('#00AA00',null)});
+    w.state.history.execute(insertNode(w.state.document.data.layers[0].id,n));w.select([n.id]);return n.id;})()`);
+  before = await steps();
+  assert.equal(await evaluate("window.modcut.clickE2EMenuItem('Effect','Rasterize…')"), true);
+  await dialog({ ppi: 72, background: 'white' });
+  assert.equal(await steps(), before + 1, 'Rasterize is one undo step');
+  const raster = await evaluate(`(async()=>{const w=${active},item=w.renderer.items.get('${rasterized}'),r=item.parent.children.find(c=>c.data.rasterEffect&&c.data.nodeId==='${rasterized}');
+    return {raster:!!r,className:r?.className,itemVisible:item.visible,width:r?.width,anchors:w.state.document.getNode('${rasterized}').subpaths[0].segments.length}})()`);
+  assert.deepEqual([raster.raster, raster.className, raster.itemVisible, raster.anchors], [true, 'Raster', false, 4]);
+  assert.ok(Math.abs(raster.width - 30 / 25.4 * 72) < 3, `About 85 pixels across at 72 ppi: ${raster.width}`);
+  const rasterSvg = await evaluate(`(async()=>{const w=${active};return w.exportBoard(w.state.document.data.artboards[0].id,'svg')})()`);
+  assert.match(rasterSvg, /<image /, 'SVG export has the pixels as an image');
+  const rasterPixel = await evaluate(`(async()=>{const w=${active},bd=w.state.document.data.artboards[0],url=w.exportBoard(bd.id,'png',{ppi:72,background:'white'});
+    const img=new Image();img.src=url;await img.decode();const c=document.createElement('canvas');c.width=img.width;c.height=img.height;const g=c.getContext('2d');g.drawImage(img,0,0);
+    return [...g.getImageData(Math.round(55/25.4*72),Math.round(65/25.4*72),1,1).data]})()`);
+  assert.ok(rasterPixel[1] > 140 && rasterPixel[0] < 60, `Green in PNG: ${rasterPixel}`);
   await restore();
-  console.log('PASS Draw effects: Round Corners, Offset Path and Transform as live effects (menu and commands, one undo step each), hide and delete in Appearance, Send to Cut and Apply Last Effect use them, Expand Appearance bakes them; Zig Zag, and Drop Shadow on canvas and in PNG');
+  console.log('PASS Draw effects: Rasterize (pixels at the chosen ppi, anchors kept, image in SVG), Round Corners, Offset Path and Transform as live effects (menu and commands, one undo step each), hide and delete in Appearance, Send to Cut and Apply Last Effect use them, Expand Appearance bakes them; Zig Zag, and Drop Shadow on canvas and in PNG');
 }

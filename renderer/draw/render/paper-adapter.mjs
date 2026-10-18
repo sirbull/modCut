@@ -11,7 +11,7 @@ import { arrowShapes } from '../geom/arrows.mjs';
 import { normalizeProfile, variableStrokeRings } from '../geom/width-profile.mjs';
 import { blendStepCount, matchShapes, interpolateShapes, stepPositions, lerpColor, spineCurve, placeOnSpine, keyPosition } from '../geom/blend.mjs';
 import { PT_TO_MM, textValues } from '../doc/text.mjs';
-import { applyVectorEffects, hasVectorEffects, dropShadow, livePathfinder, scribbleOf } from '../doc/effects.mjs';
+import { applyVectorEffects, hasVectorEffects, dropShadow, livePathfinder, rasterizeOf, scribbleOf } from '../doc/effects.mjs';
 import { offsetPathsSync, geometryReady } from '../geom/kernel-js.mjs';
 import { toSubpaths, runPathfinder } from '../geom/pathfinder.mjs';
 import { textSubpaths } from '../doc/text-layout.mjs';
@@ -109,6 +109,25 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
     const raster = new scope.Raster({ insert: false, canvas }); raster.applyMatrix = false; raster.smoothing = 'high';
     raster.matrix = new scope.Matrix(...node.transform).translate(b.x - pad + e.x + width / ppmm / 2, b.y - pad + e.y + height / ppmm / 2).scale(1 / ppmm);
     raster.opacity = node.opacity; raster.data.baseOpacity = node.opacity; raster.data.shadow = true;
+    return raster;
+  }
+  /**
+   * Rasterize effect: the object as it is painted (fills, strokes, arrowheads) drawn into pixels at the chosen
+   * resolution, white behind it or transparent, placed where it is. The object itself is hidden, not changed.
+   */
+  function rasterFor(item, node, record) {
+    const e = rasterizeOf(node);
+    if (!e || !['path', 'shape', 'text'].includes(node.type)) return null;
+    // Opacity is applied to the pixels as a whole afterwards, as for the object itself.
+    const parts = [item, record.stack, record.arrows].filter(Boolean).map(part => { const copy = part.clone({ insert: false }); copy.visible = true; copy.opacity = 1; return copy; });
+    const art = new scope.Group({ insert: false, children: parts }), box = art.strokeBounds.expand(e.padding * 2);
+    if (!(box.width > 0 && box.height > 0)) { art.remove(); return null; }
+    if (e.background === 'white') art.insertChild(0, new scope.Path.Rectangle({ rectangle: box, fillColor: 'white', insert: false }));
+    else art.insertChild(0, new scope.Path.Rectangle({ rectangle: box, fillColor: new scope.Color(1, 1, 1, 0), insert: false }));
+    const ppi = e.ppi || (state.document.data.rasterEffectsPpi ?? 300), resolution = Math.min(ppi / 25.4 * 72, 8000 / Math.max(box.width, box.height) * 72);
+    const raster = art.rasterize({ resolution, insert: false }); art.remove();
+    raster.smoothing = e.antialias ? 'high' : 'off'; raster.data.nodeId = node.id; raster.data.rasterEffect = true;
+    raster.data.baseOpacity = node.opacity; raster.opacity = node.opacity;
     return raster;
   }
   /** The drawn item: the node's own geometry, then its live vector effects (paths and shapes). */
@@ -497,7 +516,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
       let record = records.get(node.id), item = items.get(node.id);
       const replaced = !record || record.node.type !== node.type || record.geometry !== geometry;
       if (replaced) {
-        item?.remove(); record?.frame?.remove(); record?.arrows?.remove(); record?.stack?.remove(); record?.maskStroke?.remove(); record?.shadow?.remove();
+        item?.remove(); record?.frame?.remove(); record?.arrows?.remove(); record?.stack?.remove(); record?.maskStroke?.remove(); record?.shadow?.remove(); record?.raster?.remove();
         item = make(node); item.applyMatrix = false; item.data.nodeId = node.id;
         items.set(node.id, item);
         record = { node, geometry, context }; records.set(node.id, record);
@@ -517,6 +536,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
         record.arrows?.remove(); record.arrows = arrowGroup(item, node);
         record.stack?.remove(); record.stack = paintStack(item, node);
         record.shadow?.remove(); record.shadow = shadowFor(item, node);
+        record.raster?.remove(); record.raster = rasterFor(item, node, record);
       }
       // Bounds must be measured before viewport visibility is applied.
       item.visible = node.visible;
@@ -524,6 +544,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
       place(parent, item, index++);
       if (record.frame) { record.frame.visible = false; place(parent, record.frame, index++); }
       if (record.arrows) place(parent, record.arrows, index++);
+      if (record.raster) place(parent, record.raster, index++);
       if (record.stack) place(parent, record.stack, index++);
       record.blendSteps?.forEach(g => g.remove()); record.maskView?.remove(); record.liveView?.remove(); record.envelopeView?.remove();
       if (node.children) reconcile(node.children, item, alive, context);
@@ -608,7 +629,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
     for (const [id, record] of boardItems) if (!data.artboards.some(b => b.id === id)) { record.item.remove(); record.label.remove(); record.labelRect.remove(); boardItems.delete(id); }
     reconcile(data.layers, artwork, alive);
     for (const [id, item] of items) if (!alive.has(id)) {
-      item.remove(); records.get(id).frame?.remove(); records.get(id).arrows?.remove(); records.get(id).stack?.remove(); records.get(id).shadow?.remove(); records.get(id).maskStroke?.remove(); items.delete(id); records.delete(id); thumbnails.delete(id);
+      item.remove(); records.get(id).frame?.remove(); records.get(id).arrows?.remove(); records.get(id).stack?.remove(); records.get(id).shadow?.remove(); records.get(id).raster?.remove(); records.get(id).maskStroke?.remove(); items.delete(id); records.delete(id); thumbnails.delete(id);
     }
     updateBounds(); updateView();
   }
@@ -666,12 +687,15 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
       const visible = node.visible && (!!node.children || !!b?.intersects(viewport));
       const asOutline = outlineFor(id);
       item.visible = visible && !(asOutline && node.type === 'image') && !editPreviews.has(id) && !transformPreviewIds.has(id) && !pathPreviewHidden.has(id) && !(coveredIds.has(id) && !asOutline);
+      // A rasterized object shows its pixels; Outline view shows its paths.
+      if (record.raster) { record.raster.visible = item.visible && !asOutline && !editPreviews.has(id); if (!asOutline) item.visible = false; }
       if (asOutline && !node.children && node.type !== 'image') item.strokeWidth = 1 / scope.view.zoom;
       if (record.frame) { record.frame.visible = visible && asOutline && node.type==='image'; record.frame.strokeWidth = 1 / scope.view.zoom; }
       if(node.type==='text'&&['area','onPath'].includes(node.kind)&&visible&&!transformPreviewIds.has(id)&&state.document.ancestors(id).every(n=>n.visible)&&
         (state.selection.ids.includes(id)||asOutline||node.layout?.overflow))textFrames.addChild(textGuide(node,record.worldMatrix));
       if (record.arrows) record.arrows.visible = item.visible && !asOutline;
       if (record.stack) record.stack.visible = item.visible && !asOutline;
+      if (record.raster) record.raster.opacity = node.opacity * (dimmed?.has(id) ? ISOLATION_DIM : 1);
       if (record.maskFill) record.maskFill.visible = !asOutline;
       if (record.maskStroke) record.maskStroke.visible = item.visible && !asOutline;
       if (record.shadow) { record.shadow.visible = item.visible && !asOutline; record.shadow.opacity = (record.shadow.data.baseOpacity ?? 1) * (dimmed?.has(id) ? ISOLATION_DIM : 1); }
@@ -798,7 +822,8 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
         const id = original.data?.nodeId;
         if (id) {
           const node = state.document.getNode(id), record = records.get(id);
-          copy.visible = original !== record?.frame && !coveredIds.has(id) && (!keep || keep.has(id));
+          // A rasterized object is exported as its pixels only.
+          copy.visible = original !== record?.frame && !coveredIds.has(id) && !(record?.raster && original !== record.raster) && (!keep || keep.has(id));
           if (original.data.baseOpacity !== undefined) copy.opacity = node?.type === 'image' && original === items.get(id) ? node.opacity : original.data.baseOpacity;
         }
         const children = [...(copy.children ?? [])];

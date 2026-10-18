@@ -1821,3 +1821,11 @@ endene, trinn langs banen, snu, ett angresteg).
 Verifisering: `envelope`-enhetstester (rektangel gir identitet, buet side følges, skjema), `--draw-warp-mask`
 (lerret, Cut, Release, Expand).
 
+
+## 2026-10-18: Rasterize-effekten (hull fra D4.3)
+
+- Effekten `rasterize` (ppi, bakgrunn, kantutjevning, ekstra kant) i Effect-menyen; rendereren lager en Raster av
+  objektet slik det males og skjuler objektet; eksport tar bare pikslene.
+
+Verifisering: effekt-enhetstest, `--draw-effects` (piksler ved valgt ppi, ankrene beholdt, bilde i SVG, farge i PNG).
+

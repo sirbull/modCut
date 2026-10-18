@@ -23,6 +23,8 @@ export const EFFECTS = Object.freeze({
   // Scribble: the fill is drawn as one scribbled line in the fill colour (the renderer paints it as a stroke).
   scribble: { label: 'Scribble', group: 'Stylize', defaults: { angle: 30, spacing: 1, strokeWidth: .3, overlap: 0, variation: .2, curviness: 20, seed: 1 } },
   'drop-shadow': { label: 'Drop Shadow', group: 'Stylize', raster: true, defaults: { x: 1.5, y: 1.5, blur: 1.5, color: '#000000', opacity: .75 } },
+  // Rasterize: the object is drawn as pixels (0 ppi: the document's raster effects resolution) and stays editable.
+  rasterize: { label: 'Rasterize', group: 'Rasterize', raster: true, defaults: { ppi: 0, background: 'transparent', padding: 0, antialias: true } },
 });
 const finite = (value, min, max) => Number.isFinite(value) && value >= min && value <= max;
 /** A validated effect: `{ type, ...settings, hidden? }`. */
@@ -39,6 +41,7 @@ export function effect(type, settings = {}) {
     : type === 'pathfinder' ? !!PATHFINDER_LABELS[e.op]
     : type === 'scribble' ? finite(e.angle, -360, 360) && finite(e.spacing, .05, 1000) && finite(e.strokeWidth, .01, 1000) && finite(e.overlap, -1000, 1000) && finite(e.variation, 0, 1000) && finite(e.curviness, 0, 100) && Number.isInteger(e.seed)
     : type === 'warp' ? !!WARP_STYLES[e.style] && finite(e.bend, -100, 100) && finite(e.horizontal, -100, 100) && finite(e.vertical, -100, 100) && ['horizontal', 'vertical'].includes(e.orientation)
+    : type === 'rasterize' ? (e.ppi === 0 || finite(e.ppi, 9, 2400)) && ['transparent', 'white'].includes(e.background) && finite(e.padding, 0, 1000) && typeof e.antialias === 'boolean'
     : type === 'drop-shadow' ? finite(e.x, -1000, 1000) && finite(e.y, -1000, 1000) && finite(e.blur, 0, 1000) && /^#[0-9A-Fa-f]{6}$/.test(e.color) && finite(e.opacity, 0, 1)
     : finite(e.scaleX, -100000, 100000) && finite(e.scaleY, -100000, 100000) && Math.abs(e.scaleX) > 1e-6 && Math.abs(e.scaleY) > 1e-6
       && finite(e.moveX, -100000, 100000) && finite(e.moveY, -100000, 100000) && finite(e.angle, -360, 360) && Number.isInteger(e.copies) && e.copies >= 0 && e.copies <= 1000;
@@ -56,6 +59,8 @@ export const hasVectorEffects = (node) => (node.appearance?.effects ?? []).some(
 export const livePathfinder = (node) => node?.type === 'group' ? (node.appearance?.effects ?? []).filter((e) => !e.hidden && e.type === 'pathfinder').at(-1)?.op ?? null : null;
 /** The Scribble effect that decides how an object is painted (its fill becomes a stroked line), or null. */
 export const scribbleOf = (node) => (node.appearance?.effects ?? []).filter((e) => !e.hidden && e.type === 'scribble').at(-1) ?? null;
+/** The Rasterize effect that turns an object into pixels when it is drawn, or null. */
+export const rasterizeOf = (node) => (node.appearance?.effects ?? []).filter((e) => !e.hidden && e.type === 'rasterize').at(-1) ?? null;
 /** The drop shadow drawn under an object: its last visible Drop Shadow effect, or null. */
 export const dropShadow = (node) => (node.appearance?.effects ?? []).filter((e) => !e.hidden && e.type === 'drop-shadow').at(-1) ?? null;
 

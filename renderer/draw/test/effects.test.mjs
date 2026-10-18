@@ -45,3 +45,12 @@ test('Zig Zag, Pucker & Bloat, Roughen and Twist distort the outline', () => {
   assert.ok(twisted[0].segments.length > 16);
   assert.equal(hasVectorEffects({ appearance: { effects: [effect('drop-shadow')] } }), false, 'Drop Shadow is a raster effect');
 });
+
+test('Rasterize: document resolution by default, a chosen ppi, background and padding; a raster effect', async () => {
+  const { rasterizeOf } = await import('../doc/effects.mjs');
+  assert.deepEqual(effect('rasterize'), { type: 'rasterize', ppi: 0, background: 'transparent', padding: 0, antialias: true });
+  assert.deepEqual(effect('rasterize', { ppi: 150, background: 'white', padding: 2, antialias: false }), { type: 'rasterize', ppi: 150, background: 'white', padding: 2, antialias: false });
+  assert.throws(() => effect('rasterize', { ppi: 5 }), /Invalid Rasterize/); assert.throws(() => effect('rasterize', { background: 'red' }), /Invalid Rasterize/);
+  const node = { appearance: { effects: [effect('rasterize', { ppi: 72 }), { ...effect('rasterize', { ppi: 300 }), hidden: true }] } };
+  assert.equal(rasterizeOf(node).ppi, 72, 'Hidden effects are skipped'); assert.equal(hasVectorEffects(node), false);
+});
