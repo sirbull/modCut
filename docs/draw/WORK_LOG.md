@@ -1841,3 +1841,12 @@ E2E: hele Draw-E2E 40 passerte alle 45 Draw-suitene; den siste prosjektsuiten fe
 skrevet innen 2,4 s under full last; kort kjøring passerer). Testen venter nå inntil 6 s mens redigeringen fortsetter,
 med samme krav. `--draw-blend`, `--draw-warp-mask`, `--draw-effects` og `--draw-brush` passerer for spine, envelope,
 Rasterize, Path Eraser og Smooth (Smooth når nå 12 skjermpiksler).
+
+
+## 2026-10-18: Envelope Make with Warp
+
+- `envelope.warp` (validert som Warp-effekten); konvolutten bruker `warpMapping` over innholdets ramme og har ingen
+  form øverst. Release, Expand og Send to Cut virker som før.
+
+Verifisering: `envelope`-enhetstest (skjema), `--draw-warp-mask` (Arch løfter midten av toppkanten).
+
