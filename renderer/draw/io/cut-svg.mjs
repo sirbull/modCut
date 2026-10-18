@@ -41,6 +41,7 @@ export function pathData(subpaths, m) {
 /**
  * @param geometry { worldMatrix(id), bounds(id) -> {x,y,width,height}, subpaths(id) -> local PathData for paths and shapes,
  *   blendSteps(id) -> a blend group's steps per key pair, liveSteps(id) -> a live Pathfinder group's results (optional),
+ *   envelopeSteps(id) -> an envelope group's bent parts (optional),
  *   clip(subpaths, world, rect, filled) -> world PathData cut at `rect` (optional, for clipToBoard) }
  * @param options `outlines`: Map of node id -> outlined stroke PathData in the node's space (Outline Stroke).
  * @returns {{ svg, count, warnings: string[], skipped: { images, outside, empty } }}
@@ -144,6 +145,19 @@ export function artboardCutSvg(doc, boardId, geometry, { only = null, clipToBoar
         const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]), box = { x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) };
         const look = kind === 'outline' ? { fills: [], strokes: [{ ...(source.appearance.fills?.[0] ?? {}), width: .1 }] } : source.appearance;
         emit({ ...source, id: original.id, type: 'path', fillRule: 'nonzero', appearance: look }, subpaths, box);
+      }
+    }
+    // An envelope is cut as its bent artwork; the envelope shape and the parts are not cut.
+    if (original.type === 'group' && original.envelope && geometry.envelopeSteps && picked(original.id) && isOutputNode(doc, original.id)) {
+      const world = geometry.worldMatrix(original.id), results = geometry.envelopeSteps(original.id);
+      if (results.length) {
+        maskArt.add(original.children.at(-1).id);
+        for (const { subpaths, sourceId } of results) {
+          const source = doc.getNode(sourceId); if (!source) continue; maskArt.add(sourceId);
+          const pts = subpaths.flatMap((sp) => sp.segments.map((g) => apply(world, g.p))); if (!pts.length) continue;
+          const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]), box = { x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) };
+          emit({ ...source, id: original.id, type: 'path', fillRule: source.fillRule ?? 'nonzero' }, subpaths, box);
+        }
       }
     }
     if (maskArt.has(original.id) || doc.ancestors(original.id).some((a) => maskArt.has(a.id))) continue;

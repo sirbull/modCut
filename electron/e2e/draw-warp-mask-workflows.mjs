@@ -71,6 +71,26 @@ export async function runDrawWarpMaskWorkflows(client) {
   await evaluate(`(async()=>{const w=${active};w.select(['${live}']);w.handle('expand-appearance')})()`); await wait(80);
   const expandedLive = await evaluate(`(async()=>{const w=${active},n=w.state.document.getNode(w.state.selection.ids[0]),{paintHex}=await import('./draw/doc/paint.mjs');return {type:n.type,fill:paintHex(n.appearance.fills[0]),anchors:n.subpaths?.[0]?.segments.length}})()`);
   assert.deepEqual(expandedLive, { type: 'path', fill: '#00aa00', anchors: 6 }, 'Expand Appearance leaves the L-shaped result');
+
+  // Envelope Distort > Make with Top Object: a red square bent into a triangle on top of it.
+  await evaluate(`(async()=>{const w=${active};w.handle('select-all');w.handle('delete')})()`);
+  const [square] = await add([[20, 50, 40, 30, '#FF0000']]);
+  const triangle = await evaluate(`(async()=>{const w=${active},{createNode}=await import('./draw/doc/schema.mjs'),{insertNode}=await import('./draw/doc/commands.mjs'),{appearance}=await import('./draw/geometry.mjs');
+    const b=w.state.document.data.artboards[0],n=createNode('path',{subpaths:[{closed:true,segments:[[20,80],[40,50],[60,80]].map(p=>({p:[b.x+p[0],b.y+p[1]],in:[0,0],out:[0,0]}))}],appearance:appearance('#00FF00',null)});
+    w.state.history.execute(insertNode(w.state.document.data.layers[0].id,n));w.select(['${square}',n.id]);return n.id;})()`);
+  assert.equal(await evaluate("window.modcut.clickE2EMenuItem('Object','Make with Top Object')"), true); await wait(80);
+  const envelope = await evaluate(`(async()=>{const w=${active},id=w.state.selection.ids[0],n=w.state.document.getNode(id);return {id,envelope:n.envelope,kids:n.children.map(c=>c.id),steps:w.renderer.envelopeSteps(id).length}})()`);
+  assert.deepEqual(envelope.envelope, {}); assert.deepEqual(envelope.kids, [square, triangle]); assert.equal(envelope.steps, 1);
+  px = await png([[23, 53], [40, 75], [57, 53]]);
+  assert.ok(px[0].every(v => v > 240) && px[2].every(v => v > 240), `The square's top corners are outside the triangle: ${JSON.stringify(px)}`);
+  assert.ok(px[1][0] > 200 && px[1][1] < 60, `Red inside, the green envelope is not drawn: ${px[1]}`);
+  assert.equal(await evaluate(`(async()=>{const w=${active},r=w.cutSvg(w.state.document.data.artboards[0].id);return r.count})()`), 1, 'Cut gets the bent square only');
+  await evaluate(`(async()=>{const w=${active};w.select(['${envelope.id}']);w.handle('envelope-release')})()`); await wait(50);
+  px = await png([[23, 53]]); assert.ok(px[0][0] > 200 && px[0][2] < 60, `Release shows the square again: ${px[0]}`);
+  await evaluate(`(async()=>{const w=${active};w.handle('undo');w.select(['${envelope.id}']);w.handle('envelope-expand')})()`); await wait(50);
+  const expandedEnvelope = await evaluate(`(async()=>{const w=${active},n=w.state.document.getNode('${envelope.id}'),{paintHex}=await import('./draw/doc/paint.mjs');return {envelope:n.envelope??null,kids:n.children.length,type:n.children[0].type,fill:paintHex(n.children[0].appearance.fills[0]),anchors:n.children[0].subpaths[0].segments.length}})()`);
+  assert.equal(expandedEnvelope.envelope, null); assert.equal(expandedEnvelope.kids, 1); assert.equal(expandedEnvelope.type, 'path'); assert.equal(expandedEnvelope.fill, '#ff0000');
+  assert.ok(expandedEnvelope.anchors > 8, 'Expand gives the bent outline as a path');
   await restore();
-  console.log('PASS Draw warp and masks: Effect > Pathfinder Subtract on a group (canvas, Cut, Expand Appearance), Effect > Warp with the style chosen, the bar bent with its anchors kept; opacity mask Make (one undo step), luminance and Clip, Invert, SVG as an image, Cut without the mask art, Release');
+  console.log('PASS Draw warp and masks: Envelope Distort with a top object (canvas, Cut, Release, Expand), Effect > Pathfinder Subtract on a group (canvas, Cut, Expand Appearance), Effect > Warp with the style chosen, the bar bent with its anchors kept; opacity mask Make (one undo step), luminance and Clip, Invert, SVG as an image, Cut without the mask art, Release');
 }

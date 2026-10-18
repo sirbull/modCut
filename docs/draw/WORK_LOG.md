@@ -1810,3 +1810,14 @@ Verifisering: 303 Draw-enhetstester (`document-batch`), `--draw-perf`.
 Verifisering: blend-enhetstest (punkter, retning, plassering, antall trinn), `--draw-blend` (ryggrad, nøkler ved
 endene, trinn langs banen, snu, ett angresteg).
 
+
+## 2026-10-18: Envelope Distort med toppobjekt (hull fra D4.3)
+
+- `geom/envelope.mjs`: omrisset deles i fire sider ved ankrene nærmest hjørnene; Coons-flate fra rammen til sidene;
+  baner tas gjennom som korte rette stykker.
+- Gruppe med `envelope` (skjema: bane eller form øverst, ikke samtidig klipp, blend eller maske); tegnes som levende
+  visning, Release, Expand og Send to Cut.
+
+Verifisering: `envelope`-enhetstester (rektangel gir identitet, buet side følges, skjema), `--draw-warp-mask`
+(lerret, Cut, Release, Expand).
+
