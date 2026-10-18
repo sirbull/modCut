@@ -26,6 +26,8 @@ underveis i deloppgavene, STATUS og WORK_LOG, med tydelig skille mellom gjort og
 
 ## Status og neste oppgave
 
+**Påbegynt, ikke ferdig: Cut Preview og gravering som vist** (se STATUS.md kapittel 1 og WORK_LOG.md 2026-10-18).
+
 Fase 0 og fase 1 er fullført. Export As, **D2.1a/b punkttekst med systemfonter, shaping og
 Create Outlines** og **D2.1c rektangulær områdetekst med linjebryting** er ferdige.
 **Tekst på path (STATUS.md 2.10) og Character/Paragraph (2.11) er ferdige.** D2.1 er ferdig i grunnform;

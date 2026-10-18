@@ -1354,6 +1354,13 @@ Vertical Type, Touch Type, Glyphs-panel, Scribble, Package, PDF/X-4, bleed og me
 AVIF/GIF-eksport, PLT-eksport, EPS-import, egendefinerte hurtigtaster, modCut MCP-server,
 lokalisering (norsk/engelsk, samme system som resten av appen).
 
+### Påbegynt: Cut Preview og gravering som vist
+
+- [ ] View > Cut Preview: fyll i gråtoner slik de graveres, strøk som svarte hårlinjer der laseren kutter, av/på-knapp ved Outline.
+- [x] Introvindu første gang Cut Preview slås på, med "Don't show this again" (vinduet er laget, ikke koblet til ennå).
+- [ ] Send to Cut "Engrave as seen": blend modes og transparens flates ut til et graveringsbilde, strøkene sendes fortsatt som kutt.
+- [ ] Tester og dokumentasjon.
+
 ### Planlagt senere: flere språk (ikke startet)
 
 Norsk grensesnitt er ikke et krav, men siden lokaliseringen finnes (se [STATUS.md](draw/STATUS.md) 2.39),

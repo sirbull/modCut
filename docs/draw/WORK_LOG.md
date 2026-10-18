@@ -1926,3 +1926,23 @@ fulle Draw-E2E ble derfor ikke kjørt. Separate Electron-kjøringer med `--draw-
 `--draw-export` passerer: import til Cut, add/replace/undo, kopi/lim inn mellom modusene og
 SVG/PDF/AI/DXF/raster-eksport. `git diff --check` og syntakskontroll av endrede inngangsfiler passerer.
 Ingen claim om full testsuksess eller ferdig Cut optimized-UI; neste deltrinn er visningsprojeksjonen.
+## 2026-10-18: Cut Preview og gravering som vist (påbegynt, ikke ferdig)
+
+Ønske fra brukeren:
+1. En av/på-bryter i View-menyen (og ved Outline-knappen) for å tegne "cut optimized": fyll i gråtoner slik de graveres, strøk som tynne svarte linjer der laseren kutter. Første gang den slås på vises et vindu som forklarer hva som endrer seg, med "Don't show this again" (huskes i localStorage).
+2. Blend modes og transparens skal kunne påvirke graveringen.
+
+Gjort så langt: `cutPreviewIntroDialog()` i `renderer/draw/ui/dialogs.mjs` (introvinduet med avkrysning). Ikke koblet til noe ennå.
+
+Gjenstår, i denne rekkefølgen:
+- `setCutPreview` i `render/paper-adapter.mjs`: gråtonefilter bare på artwork-laget (pakk `artwork.draw` med `ctx.filter='grayscale(1)'`, slik at markering og hjelpelinjer beholder farge), strøk som svarte hårlinjer (1/zoom, ingen stiplinger, oppdateres ved zoom i `updateView` som Outline), ingen pilspisser, profilerte strøk som hårlinjer. Outline vinner over Cut Preview.
+- Kommandoen `cut-preview` og knapp ved Outline i `index.mjs`, menyvalg View > Cut Preview i `electron/main.mjs`, i18n-oppføringer, introvinduet første gang.
+- Send to Cut: valget "Engrave as seen" som flater ut transparente eller blandede fylte områder (med fylte objekter de overlapper) til et graveringsbilde via exportBoard med `only`, sender strøkene fortsatt som kutt, gir en advarsel og lagres i cut-lenken for Update in Cut.
+- E2E-test for bryteren og introvinduet, enhetstest for utflatingen, oppdatering av STATUS.md og DRAW_WORKSPACE.md.
+
+## 2026-10-18: Synkronisering før Laser Preview
+
+Prosessgrunnlaget er committet, og ekstern commit 84daced med introvindu og videre plan
+er bevart. Brukerens nyeste valg gjelder for D5.1: Laser Preview, røde Cut-linjer, stiplet
+rød Score, gråtonegravering, uavklarte prosesser og husket visningsvalg. «Engrave as seen»
+er fortsatt en separat, planlagt output-endring; forhåndsvisningen må ikke love at den finnes.
