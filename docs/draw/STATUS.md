@@ -526,8 +526,13 @@ velger hele objekter med Alt+Mod.
 * Kode: `geom/region-ops.mjs` (`pickRegions`, `mergeRegions`, `knifeCut`, `erase`, `pieces`, `bandAround`),
   `shapeBuilder*`, `cutWith`, `knife` og `eraser` i `index.mjs`, gestene i `tools/interactions.mjs`.
 
-Gjenstår i D3.4: Path Eraser (visker deler av åpne baner), Shape Builder-valg (gap detection,
-fargeplukking), og Eraser med trykkfølsomhet.
+**Path Eraser og Smooth (2026-10-18):** Path Eraser visker ut den delen av merkede baner og former som man drar
+langs (former blir baner, kurvene beholdes eksakt, en lukket bane åpnes, en bane deles i to); Smooth tilpasser
+ankrene man drar nær på nytt med færre, rundere kurver. Ett angresteg per dragning. Kode: `geom/path-eraser.mjs`,
+`alongDrag`, `pathEraser` og `smoothPath` i `index.mjs`.
+
+Gjenstår i D3.4: Shape Builder-valg (gap detection, fargeplukking), Eraser med trykkfølsomhet, og
+verktøyalternativer for Smooth og Path Eraser (fast bredde i skjermpiksler nå).
 
 ### 2.23 Transform Each, Split Into Grid og Free Transform (D3.6, 2026-10-17)
 

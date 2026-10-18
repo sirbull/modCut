@@ -49,6 +49,8 @@ import { compoundCommands, releaseCompoundCommands, clipCommands, releaseClipCom
 import { offsetPaths, flattenPath, outlineStroke, loadGeometry } from './geom/kernel-js.mjs';
 import { EFFECTS, LIVE_LABELS, effect, hasVectorEffects, livePathfinder } from './doc/effects.mjs';
 import { cutSubpath } from './geom/path-commands.mjs';
+import { erasePath, smoothRange, sectionPoints } from './geom/path-eraser.mjs';
+import { bakeCorners } from './geom/corners.mjs';
 import { addAnchorPoints, removeAnchorPoints, reverseSubpaths, averagePoints, joinSubpaths, closeSubpath, cleanUpTargets, mapSubpath } from './geom/path-commands.mjs';
 import { toolCursor } from './tools/cursors.mjs';
 import { alignReference, alignOffsets, distributeOffsets, spacingOffsets } from './geom/align.mjs';
@@ -60,7 +62,7 @@ const workspaces=new WeakMap();
 export function getDrawWorkspace(root) {return workspaces.get(root) || null;}
 // Custom shortcuts live in the main process (it builds the menus); the canvas takes the same ones.
 const shortcutsReady=globalThis.window?.modcut?.getDrawShortcuts?.().then(map=>{try{setKeyOverrides(map??{});}catch{/* unreadable: defaults */}}).catch(()=>{});
-const implementedTools=new Set(['vertical-type','touch-type','rotate-view','select','group-selection','magic-wand','lasso','shape-builder','knife','eraser','width','blend','paintbrush','blob-brush','free-transform','pencil','hand','zoom','artboard','gradient','eyedropper','measure','scissors','type','area-type','type-on-path',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
+const implementedTools=new Set(['path-eraser','smooth','vertical-type','touch-type','rotate-view','select','group-selection','magic-wand','lasso','shape-builder','knife','eraser','width','blend','paintbrush','blob-brush','free-transform','pencil','hand','zoom','artboard','gradient','eyedropper','measure','scissors','type','area-type','type-on-path',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
 const commands=new Set(['undo','redo','delete','select-all','select-artboard','deselect','cancel','fit-artboard','fit-all','actual-size','zoom-in','zoom-out','outline',
   'cut','copy','paste','paste-front','paste-back','paste-place','paste-all-artboards',
   'edit-text','create-outlines','join','average','offset-path','outline-stroke','expand','expand-appearance','transform-each','split-into-grid','crop-image','effect-last','effect-options',...Object.keys(EFFECTS).map(t=>`effect-${t}`),...Object.keys(WARP_STYLES).map(t=>`warp-${t}`),...Object.keys(LIVE_LABELS).map(t=>`live-${t}`),'simplify','reverse-path','add-anchors','remove-anchors','clean-up','compound-make','compound-release','clip-make','clip-release','reset-rotate-view','package','keyboard-shortcuts','workspace-new','workspace-reset','workspace-manage','blend-make','blend-release','blend-expand','blend-options','blend-reverse','blend-replace-spine','blend-reverse-spine','envelope-make','envelope-release','envelope-expand','mask-make','mask-release','mask-clip','mask-invert','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
@@ -129,6 +131,8 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       tool.id==='rotate-view' ? `Drag: turn the view (${Math.round(scope.view.rotation)}°) · Shift: 15° steps · View > Reset Rotate View` :
       tool.id==='width' ? 'Drag a stroke: width there · Drag a width point: resize, its centre slides it · Alt: one side · Double-click a point: edit' :
       tool.id==='knife' ? 'Drag across filled shapes to cut them (the selection, or every shape)' :
+      tool.id==='path-eraser' ? 'Drag along a selected path to erase that part of it' :
+      tool.id==='smooth' ? 'Drag along a selected path to smooth it (fewer, rounder curves)' :
       tool.id==='eraser' ? 'Drag to erase from filled shapes (the selection, or every shape) · Enter: diameter' :
       tool.id==='magic-wand' ? 'Click: objects with a similar fill · Shift: add · Alt: remove · Enter: tolerance' :
       tool.id==='lasso' ? 'Drag around anchor points to select them · Shift: add · Alt: remove' :
@@ -442,6 +446,36 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     const node=createNode('path',{name:'',subpaths:[subpath],appearance:appearance(null,state.ui.stroke??'#071411',state.ui.strokeWidth??.5)});
     run(()=>{insertNew(node);select(options.keepSelected?[node.id]:[]);});
   }
+  /**
+   * Path Eraser and Smooth work on the selected paths and shapes (shapes become paths), along the drag; each drag
+   * is one undo step. `change(subpath, drag)` returns the new subpaths for one subpath, or null to keep it.
+   */
+  function alongDrag(label,points,change){
+    const doc=state.document;if(doc.readOnly||points.length<1)return false;
+    const targets=selectedIds().filter(id=>['path','shape'].includes(doc.getNode(id)?.type)&&doc.isEditable(id)),edits=[];
+    for(const id of targets){
+      const node=doc.getNode(id),base=node.type==='shape'?withScope(()=>renderer.expandedShape(id)):node;
+      const drag=withScope(()=>points.map(p=>{const q=renderer.pointToLocal(id,p);return [q.x,q.y];}));
+      let changed=false;const subpaths=base.subpaths.flatMap(sp=>{const out=change(bakeCorners(sp),drag);if(out===null)return [sp];changed=true;return out;});
+      if(changed)edits.push({id,node,base,subpaths});
+    }
+    if(!edits.length)return false;
+    state.history.transaction(label,()=>{for(const {id,node,base,subpaths} of edits){
+      if(!subpaths.length)state.history.execute(removeNode(id));
+      else if(node.type==='shape')state.history.execute(replaceLeaf(id,{...base,subpaths}));
+      else state.history.execute(updateNode(id,{subpaths},{label}));}});
+    select(edits.filter(e=>e.subpaths.length).map(e=>e.id));return true;
+  }
+  const pathEraser=points=>alongDrag('Path Eraser',points,(sp,drag)=>erasePath(sp,drag,(state.ui.pathEraserSize??4)/scope.view.zoom));
+  /** Smooth: the anchors the drag passes near are fitted again more loosely, so the path gets fewer, rounder curves. */
+  const smoothPath=points=>alongDrag('Smooth',points,(sp,drag)=>{
+    const range=smoothRange(sp,drag,8/scope.view.zoom);if(!range||range[1]-range[0]<2)return null;
+    const fitted=withScope(()=>{const path=fitCurve(sectionPoints(sp,range[0],range[1]),false,5/scope.view.zoom);
+      const out=path.segments.map(s=>({p:[s.point.x,s.point.y],in:[s.handleIn.x,s.handleIn.y],out:[s.handleOut.x,s.handleOut.y]}));path.remove();return out;});
+    if(fitted.length>=range[1]-range[0]+1)return null;
+    const s=sp.segments;fitted[0].in=s[range[0]].in;fitted.at(-1).out=s[range[1]].out;fitted[0].p=s[range[0]].p;fitted.at(-1).p=s[range[1]].p;
+    return [{closed:sp.closed,segments:[...s.slice(0,range[0]),...fitted,...s.slice(range[1]+1)]}];
+  });
   /** Paintbrush (B): a smooth path stroked with the calligraphic brush (weight plus width profile). */
   function paintbrush(points) {
     if(state.document.readOnly||points.length<2)return;
@@ -1399,7 +1433,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       select(subtract?current.filter(id=>!found.includes(id)):add?[...new Set([...current,...found])]:found);},
     lasso:(points,options)=>paths.lasso(points,options),
     freeDistortSession,freeDistortPreview,freeDistort,
-    shapeBuilderSession,shapeBuilderPreview,shapeBuilder,knife,eraser,eraserSize:()=>state.ui.eraserSize??3,touchGlyphAt,touchGlyph,touchType:(id,index,change)=>touchType(id,index,change).catch(error=>{if(!destroyed)onError(error.message);}),rotateView,widthSession,widthDrag,widthPreview,widthPointEdit,paintbrush,blobBrush:points=>blobBrush(points).catch(error=>{if(!destroyed)onError(error.message);}),brushSize:()=>(state.ui.blobBrush?.size??BLOB_DEFAULTS.size),blendClick,blendOptions:()=>void blendOptionsCommand(),
+    shapeBuilderSession,shapeBuilderPreview,shapeBuilder,knife,eraser,pathEraser,smoothPath,eraserSize:()=>state.ui.eraserSize??3,touchGlyphAt,touchGlyph,touchType:(id,index,change)=>touchType(id,index,change).catch(error=>{if(!destroyed)onError(error.message);}),rotateView,widthSession,widthDrag,widthPreview,widthPointEdit,paintbrush,blobBrush:points=>blobBrush(points).catch(error=>{if(!destroyed)onError(error.message);}),brushSize:()=>(state.ui.blobBrush?.size??BLOB_DEFAULTS.size),blendClick,blendOptions:()=>void blendOptionsCommand(),
     widthHandles:point=>{const id=renderer.hit(point)??selectedIds()[0],target=id&&widthTarget(id);return target?withScope(()=>renderer.widthHandles(id,target.stroke)):[];},
     gradientVector(from,to,mergeKey){const kind=state.ui.paintFocus==='stroke'?'stroke':'fill',last=state.ui.lastGradient;
       gradient(kind,(current,box,node)=>{const a=renderer.pointToLocal(node.id,from),b=renderer.pointToLocal(node.id,to);

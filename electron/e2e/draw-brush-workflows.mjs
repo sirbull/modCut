@@ -50,6 +50,24 @@ export async function runDrawBrushWorkflows(client) {
   assert.equal(list.length, before + 1, 'The crossing stroke merged into the first shape');
   assert.deepEqual(list.at(-1).box, [18, 73, 34, 24]);
   assert.equal(await applied(), steps + 1, 'Merging is one undo step');
+  // Path Eraser: dragging across a selected line erases that part, leaving two lines (one undo step).
+  await evaluate(`(async()=>{const w=${active};w.handle('select-all');w.handle('delete')})()`);
+  const zig = await evaluate(`(async()=>{const w=${active},{createNode}=await import('./draw/doc/schema.mjs'),{insertNode}=await import('./draw/doc/commands.mjs'),{appearance}=await import('./draw/geometry.mjs');
+    const b=w.state.document.data.artboards[0],L=w.state.document.data.layers[0].id,mk=pts=>createNode('path',{subpaths:[{closed:false,segments:pts.map(p=>({p:[b.x+p[0],b.y+p[1]],in:[0,0],out:[0,0]}))}],appearance:appearance(null,'#000000',.5)});
+    const line=mk([[10,20],[130,20]]),wave=mk(Array.from({length:13},(_,i)=>[10+i*10,60+(i%2?3:-3)]));w.state.history.execute(insertNode(L,line));w.state.history.execute(insertNode(L,wave));w.select([line.id]);return [line.id,wave.id];})()`);
+  await evaluate(`(async()=>{${active}.setTool('path-eraser')})()`);
+  let undoSteps = await applied();
+  await drag(line([70, 10], [70, 30], 6));
+  assert.equal(await applied(), undoSteps + 1, 'One undo step');
+  const erased = await evaluate(`(async()=>{const w=${active},n=w.state.document.getNode('${zig[0]}'),b=w.state.document.data.artboards[0];return n.subpaths.map(s=>[Math.round(s.segments[0].p[0]-b.x),Math.round(s.segments.at(-1).p[0]-b.x)])})()`);
+  assert.equal(erased.length, 2); assert.equal(erased[0][0], 10); assert.equal(erased[1][1], 130);
+  assert.ok(erased[0][1] < 70 && erased[1][0] > 70, `A gap round x 70: ${JSON.stringify(erased)}`);
+  // Smooth: dragging along the selected zigzag fits it again with fewer anchors.
+  await evaluate(`(async()=>{${active}.select(['${zig[1]}']);${active}.setTool('smooth')})()`);
+  undoSteps = await applied();
+  await drag(line([25, 60], [105, 60], 24));
+  const smoothed = await evaluate(`(async()=>${active}.state.document.getNode('${zig[1]}').subpaths[0].segments.length)()`);
+  assert.equal(await applied(), undoSteps + 1); assert.ok(smoothed < 13, `Fewer anchors after Smooth: ${smoothed}`);
   await restore();
-  console.log('PASS Draw brushes: Paintbrush (B) with a calligraphic width profile, Blob Brush (Shift+B) with options, fills in the stroke colour and merges touching shapes in one undo step');
+  console.log('PASS Draw brushes: Path Eraser (a gap in the selected line, one undo step), Smooth (fewer anchors), Paintbrush (B) with a calligraphic width profile, Blob Brush (Shift+B) with options, fills in the stroke colour and merges touching shapes in one undo step');
 }

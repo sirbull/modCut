@@ -143,14 +143,14 @@ export function createInteractions(canvas, state, api) {
         preview=new scope.Path({segments:gesture.points,strokeColor:'#071411',strokeWidth:1/scope.view.zoom});
       } else if (gesture.mode==='free-transform') {
         gesture.corners[gesture.corner]=[p.x,p.y];gesture.moved=true;api.freeDistortPreview(gesture.session,gesture.corners);
-      } else if (['shape-builder','knife','eraser'].includes(gesture.mode)) {
+      } else if (['shape-builder','knife','eraser','path-eraser','smooth'].includes(gesture.mode)) {
         const last=gesture.points.at(-1);if(Math.hypot(p.x-last[0],p.y-last[1])>=1/scope.view.zoom)gesture.points.push([p.x,p.y]);
         // Shape Builder shades the regions it will merge; Knife shows its line; Eraser its brush stroke.
         if(gesture.mode==='shape-builder'){preview=new scope.Group({children:api.shapeBuilderPreview(gesture.session,gesture.points).map(subpaths=>new scope.CompoundPath({
           children:subpaths.map(s=>new scope.Path({closed:true,segments:s.segments.map(g=>new scope.Segment(new scope.Point(...g.p),new scope.Point(...g.in),new scope.Point(...g.out)))})),
           fillColor:event.altKey?'rgba(220,40,40,.35)':'rgba(20,115,230,.25)',strokeColor:'#1473E6',strokeWidth:1/scope.view.zoom}))});}
         else preview=new scope.Path({segments:gesture.points,strokeColor:gesture.mode==='knife'?'#D32F2F':'rgba(120,120,120,.5)',strokeCap:'round',strokeJoin:'round',
-          strokeWidth:gesture.mode==='knife'?1/scope.view.zoom:api.eraserSize()});
+          strokeWidth:gesture.mode==='knife'?1/scope.view.zoom:gesture.mode==='path-eraser'?8/scope.view.zoom:gesture.mode==='smooth'?16/scope.view.zoom:api.eraserSize()});
       } else if (gesture.mode==='touch-type') {
         gesture.touched=touchChange(gesture.touch,gesture.start,p);preview=touchMarkers(gesture.touched.corners);
       } else if (gesture.mode==='width') {
@@ -214,7 +214,7 @@ export function createInteractions(canvas, state, api) {
       const session=api.shapeBuilderSession();if(!session){api.notify?.('Select at least two overlapping shapes for Shape Builder.');return;}
       gesture={...base,mode:'shape-builder',session,points:[[p.x,p.y]]};return;
     }
-    if(tool==='knife'||tool==='eraser'){gesture={...base,mode:tool,points:[[p.x,p.y]]};return;}
+    if(['knife','eraser','path-eraser','smooth'].includes(tool)){gesture={...base,mode:tool,points:[[p.x,p.y]]};return;}
     if(tool==='touch-type'){
       // On the chosen glyph's handles: scale or rotate it; anywhere else: pick the glyph there and move it.
       const t=state.ui.touchType,current=t&&api.touchGlyph(t.id,t.index),near=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1])<=7/scope.view.zoom;
@@ -312,6 +312,8 @@ export function createInteractions(canvas, state, api) {
         if(drag.moved)api.freeDistort(drag.session,drag.corners);else api.freeDistortPreview(null);
       }else if(drag.mode==='shape-builder') {
         api.shapeBuilder(drag.session,drag.points,{alt:event.altKey||drag.modifiers.alt});
+      }else if(drag.mode==='path-eraser'||drag.mode==='smooth') {
+        if(!api[drag.mode==='smooth'?'smoothPath':'pathEraser'](drag.points))api.notify?.(drag.mode==='smooth'?'Drag along a selected path to smooth it.':'Drag along a selected path to erase part of it.');
       }else if(drag.mode==='knife'||drag.mode==='eraser') {
         if(drag.points.length>1&&!api[drag.mode](drag.points))api.notify?.(drag.mode==='knife'?'The knife did not cross a filled shape.':'Nothing to erase there.');
       }else if(drag.mode==='touch-type') {

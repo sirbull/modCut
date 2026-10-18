@@ -1829,3 +1829,11 @@ Verifisering: `envelope`-enhetstester (rektangel gir identitet, buet side følge
 
 Verifisering: effekt-enhetstest, `--draw-effects` (piksler ved valgt ppi, ankrene beholdt, bilde i SVG, farge i PNG).
 
+
+## 2026-10-18: Path Eraser og Smooth (hull fra D2.8 og D3.4)
+
+- `geom/path-eraser.mjs`: `erasePath` (fjerner delene innenfor viskeren, kuttene funnet ved halvering langs kurven),
+  `smoothRange` og `sectionPoints`; verktøyene `path-eraser` og `smooth` i blyantgruppen.
+
+Verifisering: `path-eraser`-enhetstester, `--draw-brush` (gap i linjen, færre ankre etter Smooth).
+
