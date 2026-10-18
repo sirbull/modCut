@@ -16,6 +16,7 @@ import { offsetPathsSync, geometryReady } from '../geom/kernel-js.mjs';
 import { toSubpaths, runPathfinder } from '../geom/pathfinder.mjs';
 import { textSubpaths } from '../doc/text-layout.mjs';
 import { envelopeMapping, envelopeSubpaths } from '../geom/envelope.mjs';
+import { warpMapping } from '../geom/warp.mjs';
 
 export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThumbnail = null, withScope = fn => fn() } = {}) {
   const boards = new scope.Layer({ name: 'Artboards' });
@@ -470,15 +471,17 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
    * its top child (all in the group's space); the parts and the envelope itself stay as they are, hidden.
    */
   const ENVELOPED = ['path', 'shape', 'compoundPath'];
+  // Make with Warp: the envelope is a warp style over the artwork's box, with no shape of its own.
+  const envelopeTop = node => node.envelope?.warp ? null : node.children.at(-1);
   function envelopeResults(node) {
-    if (!node?.envelope || node.children.length < 2) return [];
-    const top = node.children.at(-1); if (!['path', 'shape'].includes(top.type)) return [];
+    if (!node?.envelope || !node.children.length) return [];
+    const top = envelopeTop(node); if (top && !['path', 'shape'].includes(top.type)) return [];
     const local = child => { const item = make(child); item.applyMatrix = true; item.transform(new scope.Matrix(...child.transform)); const out = toSubpaths(item); item.remove(); return out; };
-    const outline = local(top)[0], parts = node.children.slice(0, -1).filter(child => child.visible && ENVELOPED.includes(child.type)).map(child => ({ child, subpaths: local(child) })).filter(p => p.subpaths.length);
-    if (!outline || !parts.length) return [];
+    const outline = top ? local(top)[0] : null, parts = node.children.filter(child => child !== top && child.visible && ENVELOPED.includes(child.type)).map(child => ({ child, subpaths: local(child) })).filter(p => p.subpaths.length);
+    if ((top && !outline) || !parts.length) return [];
     const pts = parts.flatMap(p => p.subpaths.flatMap(s => s.segments.map(g => g.p))), xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
     const box = { x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) };
-    let map; try { map = envelopeMapping(box, outline); } catch { return []; }
+    let map; try { map = top ? envelopeMapping(box, outline) : warpMapping(box, node.envelope.warp); } catch { return []; }
     return parts.map(({ child, subpaths }) => ({ sourceId: child.id, subpaths: envelopeSubpaths(subpaths, map, box) }));
   }
   function placeEnvelope(node, record, item) {
@@ -496,7 +499,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
       record.envelopeView = view;
     }
     if (!record.envelopeView.children.length) return;
-    for (const child of node.children) if (child === node.children.at(-1) || ENVELOPED.includes(child.type)) coveredIds.add(child.id);
+    for (const child of node.children) if (child === envelopeTop(node) || ENVELOPED.includes(child.type)) coveredIds.add(child.id);
     item.addChild(record.envelopeView);
   }
   /** An envelope group's distorted parts in its own space, with the node each takes its look from. */

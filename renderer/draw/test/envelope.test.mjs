@@ -38,3 +38,12 @@ test('an envelope group is valid with a path or shape on top, and not together w
   assert.match(doc(createNode('group', { envelope: {}, children: [top, createNode('group', { children: [] })] }))[0].message, /path or shape on top/);
   assert.match(doc(createNode('group', { envelope: {}, clip: true, children: [art, top] }))[0].message, /cannot also be/);
 });
+
+test('a warp envelope needs no shape on top, and its warp settings are checked', async () => {
+  const { createDocument, createNode, validateDocument } = await import('../doc/schema.mjs');
+  const art = createNode('path', { subpaths: [rect(0, 0, 10, 10)] });
+  const doc = (group) => { const d = createDocument(); d.layers[0].children = [group]; return validateDocument(d); };
+  const warp = { style: 'arch', bend: 50, horizontal: 0, vertical: 0, orientation: 'horizontal' };
+  assert.deepEqual(doc(createNode('group', { envelope: { warp }, children: [art] })), []);
+  assert.match(doc(createNode('group', { envelope: { warp: { ...warp, style: 'spiral' } }, children: [art] }))[0].message, /Invalid Warp/);
+});

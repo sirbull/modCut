@@ -151,7 +151,7 @@ export function artboardCutSvg(doc, boardId, geometry, { only = null, clipToBoar
     if (original.type === 'group' && original.envelope && geometry.envelopeSteps && picked(original.id) && isOutputNode(doc, original.id)) {
       const world = geometry.worldMatrix(original.id), results = geometry.envelopeSteps(original.id);
       if (results.length) {
-        maskArt.add(original.children.at(-1).id);
+        if (!original.envelope.warp) maskArt.add(original.children.at(-1).id);
         for (const { subpaths, sourceId } of results) {
           const source = doc.getNode(sourceId); if (!source) continue; maskArt.add(sourceId);
           const pts = subpaths.flatMap((sp) => sp.segments.map((g) => apply(world, g.p))); if (!pts.length) continue;

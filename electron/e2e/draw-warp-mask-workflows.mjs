@@ -91,6 +91,14 @@ export async function runDrawWarpMaskWorkflows(client) {
   const expandedEnvelope = await evaluate(`(async()=>{const w=${active},n=w.state.document.getNode('${envelope.id}'),{paintHex}=await import('./draw/doc/paint.mjs');return {envelope:n.envelope??null,kids:n.children.length,type:n.children[0].type,fill:paintHex(n.children[0].appearance.fills[0]),anchors:n.children[0].subpaths[0].segments.length}})()`);
   assert.equal(expandedEnvelope.envelope, null); assert.equal(expandedEnvelope.kids, 1); assert.equal(expandedEnvelope.type, 'path'); assert.equal(expandedEnvelope.fill, '#ff0000');
   assert.ok(expandedEnvelope.anchors > 8, 'Expand gives the bent outline as a path');
+  // Envelope Distort > Make with Warp… : Arch at 50 % lifts the middle of the square's top edge, live.
+  const [plain] = await add([[80, 50, 40, 20, '#0000FF']]);
+  assert.equal(await evaluate("window.modcut.clickE2EMenuItem('Object','Make with Warp…')"), true);
+  await until("!!document.querySelector('.draw-effect-dialog form')", 'Warp Options');
+  await evaluate("(()=>{const f=document.querySelector('.draw-effect-dialog form');f.elements.style.value='arch';f.elements.bend.value='50';f.requestSubmit();})()"); await wait(80);
+  const warpEnvelope = await evaluate(`(async()=>{const w=${active},id=w.state.selection.ids[0],n=w.state.document.getNode(id),b=w.state.document.data.artboards[0],steps=w.renderer.envelopeSteps(id);
+    const ys=steps[0].subpaths[0].segments.filter(g=>Math.abs(g.p[0]-b.x-100)<1).map(g=>g.p[1]-b.y);return {warp:n.envelope.warp?.style,kids:n.children.map(c=>c.id),top:Math.min(...ys)}})()`);
+  assert.equal(warpEnvelope.warp, 'arch'); assert.deepEqual(warpEnvelope.kids, [plain]); assert.ok(warpEnvelope.top < 48, `The middle of the top edge rises: ${warpEnvelope.top}`);
   await restore();
-  console.log('PASS Draw warp and masks: Envelope Distort with a top object (canvas, Cut, Release, Expand), Effect > Pathfinder Subtract on a group (canvas, Cut, Expand Appearance), Effect > Warp with the style chosen, the bar bent with its anchors kept; opacity mask Make (one undo step), luminance and Clip, Invert, SVG as an image, Cut without the mask art, Release');
+  console.log('PASS Draw warp and masks: Envelope Distort with a top object (canvas, Cut, Release, Expand) and with Warp, Effect > Pathfinder Subtract on a group (canvas, Cut, Expand Appearance), Effect > Warp with the style chosen, the bar bent with its anchors kept; opacity mask Make (one undo step), luminance and Clip, Invert, SVG as an image, Cut without the mask art, Release');
 }

@@ -65,7 +65,7 @@ const shortcutsReady=globalThis.window?.modcut?.getDrawShortcuts?.().then(map=>{
 const implementedTools=new Set(['path-eraser','smooth','vertical-type','touch-type','rotate-view','select','group-selection','magic-wand','lasso','shape-builder','knife','eraser','width','blend','paintbrush','blob-brush','free-transform','pencil','hand','zoom','artboard','gradient','eyedropper','measure','scissors','type','area-type','type-on-path',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
 const commands=new Set(['undo','redo','delete','select-all','select-artboard','deselect','cancel','fit-artboard','fit-all','actual-size','zoom-in','zoom-out','outline',
   'cut','copy','paste','paste-front','paste-back','paste-place','paste-all-artboards',
-  'edit-text','create-outlines','join','average','offset-path','outline-stroke','expand','expand-appearance','transform-each','split-into-grid','crop-image','effect-last','effect-options',...Object.keys(EFFECTS).map(t=>`effect-${t}`),...Object.keys(WARP_STYLES).map(t=>`warp-${t}`),...Object.keys(LIVE_LABELS).map(t=>`live-${t}`),'simplify','reverse-path','add-anchors','remove-anchors','clean-up','compound-make','compound-release','clip-make','clip-release','reset-rotate-view','package','keyboard-shortcuts','workspace-new','workspace-reset','workspace-manage','blend-make','blend-release','blend-expand','blend-options','blend-reverse','blend-replace-spine','blend-reverse-spine','envelope-make','envelope-release','envelope-expand','mask-make','mask-release','mask-clip','mask-invert','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
+  'edit-text','create-outlines','join','average','offset-path','outline-stroke','expand','expand-appearance','transform-each','split-into-grid','crop-image','effect-last','effect-options',...Object.keys(EFFECTS).map(t=>`effect-${t}`),...Object.keys(WARP_STYLES).map(t=>`warp-${t}`),...Object.keys(LIVE_LABELS).map(t=>`live-${t}`),'simplify','reverse-path','add-anchors','remove-anchors','clean-up','compound-make','compound-release','clip-make','clip-release','reset-rotate-view','package','keyboard-shortcuts','workspace-new','workspace-reset','workspace-manage','blend-make','blend-release','blend-expand','blend-options','blend-reverse','blend-replace-spine','blend-reverse-spine','envelope-make','envelope-warp','envelope-release','envelope-expand','mask-make','mask-release','mask-clip','mask-invert','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
   'paint-focus','paint-swap','paint-none','paint-solid','paint-gradient','default-paint','smart-guides','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','shear-dialog','toggle-panels','toggle-panels-except-tools','command-search','draw-mode','draw-normal','draw-behind','draw-inside','reselect','select-inverse','select-next-above','select-next-below','save-selection','edit-selection',
   ...Object.keys(SAME_MODES).map(m=>`select-same-${m}`),...Object.keys(OBJECT_KINDS).map(k=>`select-object-${k}`),
   ...PANEL_DEFINITIONS.map(p=>`panel.${p.id}`),...['left','right','up','down'].flatMap(d=>[`nudge-${d}`,`nudge-large-${d}`,`duplicate-${d}`])]);
@@ -702,6 +702,18 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     state.history.transaction('Make Envelope',()=>{commands.forEach(c=>state.history.execute(c));state.history.execute(updateNode(group.id,{name:'Envelope',envelope:{}}));});
     select([group.id]);return group.id;
   }
+  /** Object > Envelope Distort > Make with Warp: the objects are grouped and bent by a warp style, editable later. */
+  async function makeWarpEnvelope(chosen){
+    const doc=state.document,members=stackingOrder(doc,chosen);
+    if(!members.length)throw new Error('Select objects to warp.');
+    if(new Set(members.map(id=>doc.locate(id).parentId)).size>1)throw new Error('Make envelopes from objects in the same layer or group.');
+    if(!members.some(id=>['path','shape','compoundPath'].includes(doc.getNode(id).type)))throw new Error('Envelopes bend paths, shapes and compound paths. Create outlines from text first.');
+    const values=await effectDialog('warp',{...EFFECTS.warp.defaults,...state.ui.envelopeWarp});if(!values||destroyed)return;
+    const {type,...warp}=effect('warp',values);void type;state.ui.envelopeWarp=warp;
+    run(()=>{const {commands,group}=groupCommands(doc,members);
+      state.history.transaction('Make Envelope',()=>{commands.forEach(c=>state.history.execute(c));state.history.execute(updateNode(group.id,{name:'Envelope',envelope:{warp}}));});
+      select([group.id]);});
+  }
   /** Object > Blend > Make: the objects (in stacking order) become the keys of one blend group. */
   function makeBlend(chosen){
     const doc=state.document,members=stackingOrder(doc,chosen);
@@ -1267,15 +1279,16 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       return [...node.children.map(child=>moveNode(child.id,id,0)),...(node.blend.spine?[updateNode(id,{blend:{...node.blend,spine:reverseSubpaths([node.blend.spine])[0]}})]:[])];}));select(list);};
     const envelopes=()=>{const found=ids().map(id=>doc.getNode(id)?.envelope?id:doc.ancestors(id).find(n=>n.envelope)?.id).filter(Boolean);if(!found.length)throw new Error('Select an envelope.');return [...new Set(found)];};
     if(command==='envelope-make')return()=>makeEnvelope(ids());
+    if(command==='envelope-warp')return()=>void makeWarpEnvelope(ids()).catch(error=>onError(error.message));
     // Release: the artwork and the envelope shape come back as a plain group.
     if(command==='envelope-release')return()=>{const list=envelopes();apply('Release Envelope',list.map(id=>updateNode(id,{envelope:null})));select(list);};
     // Expand: the bent artwork becomes paths in place of the parts, and the envelope shape goes.
     if(command==='envelope-expand')return()=>{const list=envelopes(),made=list.map(id=>({id,results:withScope(()=>renderer.envelopeSteps(id))}));
-      state.history.transaction('Expand Envelope',()=>{for(const {id,results} of made){const top=doc.getNode(id).children.at(-1).id;
+      state.history.transaction('Expand Envelope',()=>{for(const {id,results} of made){const top=doc.getNode(id).envelope.warp?null:doc.getNode(id).children.at(-1).id;
         for(const {sourceId,subpaths} of results){const source=doc.getNode(sourceId),{index}=doc.locate(sourceId);
           state.history.execute(removeNode(sourceId));
           state.history.execute(insertNode(id,createNode('path',{name:source.name,subpaths,fillRule:source.fillRule??'nonzero',appearance:source.appearance,opacity:source.opacity,blendMode:source.blendMode}),index));}
-        state.history.execute(removeNode(top));state.history.execute(updateNode(id,{envelope:null}));}});select(list);};
+        if(top)state.history.execute(removeNode(top));state.history.execute(updateNode(id,{envelope:null}));}});select(list);};
     if(command==='blend-replace-spine')return()=>replaceSpine(ids());
     if(command==='blend-reverse-spine')return()=>reverseSpine(blends());
     if(command==='blend-options')return()=>void blendOptionsCommand();

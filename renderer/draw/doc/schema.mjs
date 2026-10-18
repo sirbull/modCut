@@ -211,7 +211,8 @@ export function validateDocument(doc, { trusted = null } = {}) {
     if (value.type === 'group' && value.envelope !== undefined && value.envelope !== null) {
       if (!object(value.envelope)) fail(`${path}.envelope`, 'Expected envelope settings');
       if (value.clip || value.blend || value.mask) fail(`${path}.envelope`, 'An envelope cannot also be a clipping group, a blend or an opacity mask');
-      if (!['path', 'shape'].includes(value.children?.at(-1)?.type)) fail(`${path}.envelope`, 'An envelope needs a path or shape on top');
+      if (object(value.envelope) && value.envelope.warp) { try { effect('warp', value.envelope.warp); } catch (error) { fail(`${path}.envelope.warp`, error.message); } }
+      else if (!['path', 'shape'].includes(value.children?.at(-1)?.type)) fail(`${path}.envelope`, 'An envelope needs a path or shape on top');
     }
     if (value.type === 'group' && value.mask !== undefined && value.mask !== null) {
       if (!object(value.mask)) fail(`${path}.mask`, 'Expected opacity mask settings');

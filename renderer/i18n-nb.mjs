@@ -43,7 +43,7 @@ export const NB = Object.freeze({
   "Rasterize…": "Rasteriser…", "Rasterize": "Rasteriser", "Use Document Raster Effects Resolution": "Bruk dokumentets oppløsning for rastereffekter",
   "Screen (72 ppi)": "Skjerm (72 ppi)", "Medium (150 ppi)": "Middels (150 ppi)", "High (300 ppi)": "Høy (300 ppi)", "Anti-aliasing": "Kantutjevning",
   "Add around object (mm)": "Legg til rundt objektet (mm)", "Select paths, shapes or text to rasterize.": "Merk baner, former eller tekst du vil rasterisere.",
-  "Envelope Distort": "Konvoluttforvrenging", "Make with Top Object": "Lag med øverste objekt", "Envelope": "Konvolutt",
+  "Envelope Distort": "Konvoluttforvrenging", "Make with Warp…": "Lag med forvrenging…", "Select objects to warp.": "Merk objekter du vil forvrenge.", "Make with Top Object": "Lag med øverste objekt", "Envelope": "Konvolutt",
   "Make Envelope": "Lag konvolutt", "Release Envelope": "Frigi konvolutt", "Expand Envelope": "Utvid konvolutt", "Select an envelope.": "Merk en konvolutt.",
   "Select the artwork and, on top, the path or shape to use as the envelope.": "Merk grafikken og, øverst, banen eller formen som skal være konvolutten.",
   "Make envelopes from objects in the same layer or group.": "Lag konvolutter av objekter i samme lag eller gruppe.",
