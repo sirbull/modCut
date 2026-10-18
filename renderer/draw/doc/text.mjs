@@ -8,7 +8,7 @@ export const PT_TO_MM = 25.4 / 72;
 export const DEFAULT_CHARACTER = Object.freeze({ fontFamily: 'Arial', fontSize: 24, leading: 28.8, fontWeight: 'normal', fontStyle: 'normal' });
 export function textContent(node) { return node.content.runs.map(run => run.text).join(''); }
 /** Character settings a styled run may override (mixed styles in one text object). */
-export const RUN_KEYS = Object.freeze(['fontFamily', 'fontWeight', 'fontStyle', 'fontSize', 'tracking', 'baselineShift', 'horizontalScale', 'verticalScale']);
+export const RUN_KEYS = Object.freeze(['fontFamily', 'fontWeight', 'fontStyle', 'fontSize', 'tracking', 'baselineShift', 'horizontalScale', 'verticalScale', 'rotation', 'xShift']);
 /** One run's overrides, validated; the same rules as the object's own character settings. */
 export function runCharacter(c) {
   if (c === undefined || c === null) return null;
@@ -22,6 +22,9 @@ export function runCharacter(c) {
       : key === 'fontSize' ? Number.isFinite(value) && value >= .1 && value <= 10000
       : key === 'tracking' ? Number.isFinite(value) && value >= -1000 && value <= 10000
       : key === 'baselineShift' ? Number.isFinite(value) && Math.abs(value) <= 10000
+      // Touch Type: the character turned (degrees) and moved sideways (pt) on its own.
+      : key === 'rotation' ? Number.isFinite(value) && Math.abs(value) <= 360
+      : key === 'xShift' ? Number.isFinite(value) && Math.abs(value) <= 10000
       : Number.isFinite(value) && value >= 1 && value <= 10000;
     if (!ok) throw new Error(`Invalid ${key} in a text run.`);
     out[key] = key === 'fontFamily' ? value.trim() : value;
@@ -41,13 +44,40 @@ export function normalizeRuns(text, runs) {
   }
   return out.some(r => r.character) ? out : [{ text }];
 }
+/**
+ * Runs with `character` merged into the characters from `start` to `end` (UTF-16 offsets); a value of
+ * null removes that key. Untouched characters keep their runs.
+ */
+export function styleRange(runs, start, end, character) {
+  const text = runs.map((r) => r.text).join(''), out = [];
+  let at = 0;
+  for (const run of runs) {
+    const from = at, to = at + run.text.length; at = to;
+    const cuts = [from, Math.max(from, Math.min(to, start)), Math.max(from, Math.min(to, end)), to];
+    for (let k = 0; k < 3; k++) {
+      const piece = text.slice(cuts[k], cuts[k + 1]); if (!piece) continue;
+      if (k !== 1) { out.push({ text: piece, ...(run.character ? { character: structuredClone(run.character) } : {}) }); continue; }
+      const merged = { ...(run.character ?? {}) };
+      for (const [key, value] of Object.entries(character)) if (value === null) delete merged[key]; else merged[key] = value;
+      out.push({ text: piece, ...(Object.keys(merged).length ? { character: merged } : {}) });
+    }
+  }
+  return normalizeRuns(text, out);
+}
+/** The character settings in force at `index`: the object's, then its run's. */
+export function characterAt(node, index) {
+  let at = 0;
+  for (const run of node.content.runs) { if (index < at + run.text.length) return { ...DEFAULT_CHARACTER, ...node.character, ...(run.character ?? {}) }; at += run.text.length; }
+  return { ...DEFAULT_CHARACTER, ...node.character };
+}
 export function textValues(node) {
   return { text: textContent(node), runs: node.content.runs.map(r => ({ text: r.text, ...(r.character ? { character: structuredClone(r.character) } : {}) })), ...DEFAULT_CHARACTER, ...node.character, ...node.paragraph, alignment: node.paragraph.alignment ?? 'left',
     kind:node.kind??'point', ...(node.kind==='area'?{frameWidth:node.frame.width,frameHeight:node.frame.height}:{}),
     ...(node.kind==='onPath'?{pathSubpath:node.onPath.subpath,pathOffset:node.onPath.offset??0,pathFlip:!!node.onPath.flip}:{}) };
 }
 export function textProperties(values) {
-  const { text, fontFamily, fontSize, leading, fontWeight, fontStyle, alignment, fontPostscriptName, kind='point', frameWidth, frameHeight,fontSource='system',googleFont,fontAxes,pathSubpath,pathOffset=0,pathFlip=false,runs,tracking=0,allCaps=false,horizontalScale=100,verticalScale=100,baselineShift=0,kerning='metrics',leftIndent=0,rightIndent=0,firstLineIndent=0,spaceBefore=0,spaceAfter=0 } = values;
+  const { text, fontFamily, fontSize, leading, fontWeight, fontStyle, alignment, fontPostscriptName, kind='point', frameWidth, frameHeight,fontSource='system',googleFont,fontAxes,pathSubpath,pathOffset=0,pathFlip=false,runs,tracking=0,allCaps=false,horizontalScale=100,verticalScale=100,baselineShift=0,kerning='metrics',leftIndent=0,rightIndent=0,firstLineIndent=0,spaceBefore=0,spaceAfter=0,orientation='horizontal' } = values;
+  if(!['horizontal','vertical'].includes(orientation)||orientation==='vertical'&&kind!=='point')throw new Error('Only point text can be vertical.');
   if(!['system','google'].includes(fontSource))throw new Error('Choose a font source.');
   if(googleFont!==undefined&&(!validGoogleReference(googleFont)||fontSource!=='google'||googleFont.family!==fontFamily))throw new Error('Invalid saved Google font reference.');
   if(fontAxes!==undefined&&!validFontAxes(fontAxes))throw new Error('Invalid variable font axes.');
@@ -77,7 +107,8 @@ export function textProperties(values) {
       // Scale (percent), baseline shift (pt, up) and kerning are also left out at their defaults.
       ...(horizontalScale!==100?{horizontalScale}:{}),...(verticalScale!==100?{verticalScale}:{}),...(baselineShift?{baselineShift}:{}),...(kerning!=='metrics'?{kerning}:{}) },
     // Indents and paragraph spacing are in points; zero values are left out.
-    paragraph: { alignment, ...Object.fromEntries(Object.entries({leftIndent,rightIndent,firstLineIndent,spaceBefore,spaceAfter}).filter(([,n])=>n)) } };
+    // Vertical Type (D5): columns of upright characters, read top to bottom and right to left.
+    paragraph: { alignment, ...Object.fromEntries(Object.entries({leftIndent,rightIndent,firstLineIndent,spaceBefore,spaceAfter}).filter(([,n])=>n)), ...(orientation==='vertical'?{orientation}:{}) } };
 }
 /** Type on a Path from a path's first subpath, in the same coordinate space as the path. */
 export function pathText(subpath, values, paint = {}) {

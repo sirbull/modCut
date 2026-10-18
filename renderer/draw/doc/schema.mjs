@@ -250,6 +250,8 @@ export function validateDocument(doc, { trusted = null } = {}) {
               else if (key === 'tracking') number(value, `${q}.tracking`, -1000, 10000);
               else if (key === 'baselineShift') number(value, `${q}.baselineShift`, -10000, 10000);
               else if (['horizontalScale', 'verticalScale'].includes(key)) number(value, `${q}.${key}`, 1, 10000);
+              else if (key === 'rotation') number(value, `${q}.rotation`, -360, 360);
+              else if (key === 'xShift') number(value, `${q}.xShift`, -10000, 10000);
               else fail(`${q}.${key}`, 'Not a run setting');
             }
           }
@@ -258,6 +260,7 @@ export function validateDocument(doc, { trusted = null } = {}) {
       if (!object(value.paragraph)) fail(`${path}.paragraph`, 'Expected paragraph settings');
       else if (value.paragraph.alignment !== undefined) enumeration(value.paragraph.alignment, ['left', 'center', 'right', 'justify'], `${path}.paragraph.alignment`);
       for (const key of ['leftIndent', 'rightIndent', 'firstLineIndent', 'spaceBefore', 'spaceAfter']) if (value.paragraph?.[key] !== undefined) number(value.paragraph[key], `${path}.paragraph.${key}`, -10000, 10000);
+      if (value.paragraph?.orientation !== undefined) { enumeration(value.paragraph.orientation, ['horizontal', 'vertical'], `${path}.paragraph.orientation`); if (value.paragraph.orientation === 'vertical' && value.kind !== 'point') fail(`${path}.paragraph.orientation`, 'Only point text can be vertical'); }
       if (value.character !== undefined) {
         const c = value.character, p = `${path}.character`;
         if (!object(c)) fail(p, 'Expected character settings');
@@ -299,7 +302,7 @@ export function validateDocument(doc, { trusted = null } = {}) {
             if(!object(g)){fail(q,'Expected a glyph');return;}
             number(g.line,`${q}.line`,0);if(!Number.isInteger(g.line)||g.line>=l.lineWidths?.length)fail(`${q}.line`,'Expected a valid line index');
             if(value.kind==='area'&&g.line>=l.visibleLines)fail(`${q}.line`,'Overset glyphs must not be painted');
-            number(g.glyphId,`${q}.glyphId`,0);
+            number(g.glyphId,`${q}.glyphId`,0);if(g.index!==undefined)number(g.index,`${q}.index`,0);
             array(g.subpaths,`${q}.subpaths`).forEach((s,j)=>{
               const r=`${q}.subpaths.${j}`;
               if(!object(s)){fail(r,'Expected a glyph contour');return;}

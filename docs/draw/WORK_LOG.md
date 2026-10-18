@@ -1730,4 +1730,16 @@ Verifisering: 288 Draw-enhetstester (`plt`, `gif`), `--draw-window` dekker TIFF,
 Verifisering: Draw-enhetstester (`custom-shortcuts`, `scribble`), `electron/test-font-service.mjs` (Glyphs),
 `--draw-window` dekker hurtigtaster, Glyphs og Scribble.
 
+
+## 2026-10-18: Fase 5 del C, Touch Type og Vertical Type
+
+- Hele Draw-E2E 38 (for 3009e24) stoppet bare på ytelsestaket for zoom (75 ms mot 60 under full last); taket
+  for panorering og zoom er nå 120 ms.
+- Touch Type: run-egenskapene `rotation` og `xShift` (modell, skjema, font-tjeneste), `styleRange`/`characterAt`,
+  glyf-`index`, verktøyet med flytt, skaler og roter. Glyphs viser første installerte font når Arial mangler.
+- Vertical Type: `paragraph.orientation: 'vertical'` for punkttekst og kolonnelayout i font-tjenesten.
+- E2E-funn: skjemaet hadde egen liste over run-nøkler; tekstdialogen må være `textReady` før innsending.
+
+Verifisering: 296 Draw-enhetstester, 16 fonttester (Touch Type og Vertical Type), `--draw-window` passerer.
+
 Neste: resten av fase 5.

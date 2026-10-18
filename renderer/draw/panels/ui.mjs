@@ -1093,7 +1093,11 @@ export function createPanels(shell, state, api) {
   const glyphCache = new Map();
   function glyphsPanel(host) {
     const node = state.document.getNode(api.selectedIds()[0]), textNode = node?.type === 'text' ? node : null;
-    const values = textNode ? textValues(textNode) : { ...DEFAULT_CHARACTER, text: '' }, key = JSON.stringify([values.fontFamily, values.fontWeight, values.fontStyle, values.fontPostscriptName ?? null, values.fontSource ?? null]);
+    // Without a text object the default font is shown, or the first installed one when it is missing.
+    const families = textNode ? null : api.fontFamilies?.() ?? [];
+    if (families && !families.length) { text(host,'Reading the fonts…'); return; }
+    const family = families && !families.includes(DEFAULT_CHARACTER.fontFamily) ? families[0] : DEFAULT_CHARACTER.fontFamily;
+    const values = textNode ? textValues(textNode) : { ...DEFAULT_CHARACTER, fontFamily: family, text: '' }, key = JSON.stringify([values.fontFamily, values.fontWeight, values.fontStyle, values.fontPostscriptName ?? null, values.fontSource ?? null]);
     const entry = glyphCache.get(key);
     if (!entry) {
       glyphCache.set(key, { loading: true });

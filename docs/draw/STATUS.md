@@ -790,6 +790,21 @@ Glyphs-panel, Scribble, PDF/X-4, EPS-import, egne hurtigtaster, MCP-server og lo
 
 Gjenstår i fase 5: AVIF-eksport, Vertical Type, Touch Type, PDF/X-4, EPS-import, MCP-server og lokalisering.
 
+### 2.36 Fase 5, del C: Touch Type og Vertical Type (2026-10-18)
+
+* **Touch Type (Shift+T):** klikk et tegn i en tekst; dra for å flytte det (sideveis og opp/ned), firkanten
+  øverst til høyre skalerer, sirkelen over roterer. Bare det tegnet endres, teksten forblir redigerbar. Ett
+  angresteg per dragning. Lagres som tegnstil på teksten (`rotation`, `xShift`, `baselineShift`, skalering).
+* **Vertical Type:** klikk for loddrett punkttekst; hver linje er en kolonne med stående tegn, ett em mellom tegnene,
+  kolonnene fra høyre mot venstre med linjeavstanden. Venstre/midt/høyre justering er topp/midt/bunn.
+* Glyfene i tekstlayouten har nå `index` (hvor i teksten de står).
+* Kode: `rotation`/`xShift` i `doc/text.mjs` (`styleRange`, `characterAt`) og skjemaet, tegnrotasjon og loddrett
+  layout i `electron/font-service.mjs`, `touchGlyphAt`, `touchGlyph` og `touchType` i `index.mjs`, Touch Type-grenen
+  i `tools/interactions.mjs`, `paragraph.orientation`.
+
+Gjenstår i fase 5: AVIF-eksport, PDF/X-4, EPS-import, MCP-server og lokalisering. Loddrett tekst støttes ikke som
+områdetekst eller tekst på bane.
+
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
 | Oppgave | Status |
@@ -824,7 +839,7 @@ Gjenstår i fase 5: AVIF-eksport, Vertical Type, Touch Type, PDF/X-4, EPS-import
 | D4.4 Paintbrush og Blob Brush | Ferdig i grunnform (2.31); art-, scatter- og pattern-pensler gjenstår |
 | D4.5 EPS/TIFF, Graphic Styles, Navigator, Rotate View, Asset Export | Ferdig i grunnform (2.32) |
 | D4.6 Ytelsespass | Gjort (2.33); innsetting av tusenvis i én transaksjon gjenstår |
-| Fase 5 | Del A (2.34) PLT, GIF, Package og del B (2.35) hurtigtaster, Glyphs, Scribble; resten gjenstår |
+| Fase 5 | Del A (2.34) PLT, GIF, Package del B (2.35) hurtigtaster, Glyphs, Scribble og del C (2.36) Touch Type, Vertical Type; resten gjenstår |
 
 ## 4. Rekkefølge videre
 
@@ -843,7 +858,7 @@ SVG-, PNG- og JPEG-eksport er gjort (2.5).
    gjort. Fra D2.1 er skalering, baseline shift, kerning, avsnitt og blandede stiler gjort (2.11).
 6. Fase 3: D3.1 Expand og Expand Appearance (2.20) og D3.5 Select-meny, Magic Wand og Lasso (2.21) er gjort.
    D3.4 Shape Builder, Knife og Eraser (2.22) og D3.6 Free Transform, Transform Each og Split Into Grid
-   (2.23) er også gjort, og D3.2 effekter (2.24), D3.8 (2.25), D3.3 Image Trace (2.26) og D3.7 AI-eksport (2.27). Fase 3 er ferdig i grunnform. Fase 4: D4.1 Width (2.28), D4.2 Blend (2.29) D4.3 Warp, Live Pathfinder og opacity masks (2.30) D4.4 Paintbrush og Blob Brush (2.31) og D4.5 TIFF, Graphic Styles, Navigator, Rotate View, Asset Export og arbeidsområder (2.32) og D4.6 ytelsespass (2.33) er gjort. Fase 4 er ferdig i grunnform. Fase 5 del A (2.34) og del B (2.35) er gjort. **Neste: resten av fase 5 (Touch Type, Vertical Type, lokalisering m.m.).**
+   (2.23) er også gjort, og D3.2 effekter (2.24), D3.8 (2.25), D3.3 Image Trace (2.26) og D3.7 AI-eksport (2.27). Fase 3 er ferdig i grunnform. Fase 4: D4.1 Width (2.28), D4.2 Blend (2.29) D4.3 Warp, Live Pathfinder og opacity masks (2.30) D4.4 Paintbrush og Blob Brush (2.31) og D4.5 TIFF, Graphic Styles, Navigator, Rotate View, Asset Export og arbeidsområder (2.32) og D4.6 ytelsespass (2.33) er gjort. Fase 4 er ferdig i grunnform. Fase 5 del A (2.34), del B (2.35) og del C (2.36) er gjort. **Neste: resten av fase 5 (lokalisering, EPS-import, PDF/X-4, MCP-server).**
 
 
 ## 5. Kjente begrensninger og risiko

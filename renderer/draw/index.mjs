@@ -52,7 +52,7 @@ import { cutSubpath } from './geom/path-commands.mjs';
 import { addAnchorPoints, removeAnchorPoints, reverseSubpaths, averagePoints, joinSubpaths, closeSubpath, cleanUpTargets, mapSubpath } from './geom/path-commands.mjs';
 import { toolCursor } from './tools/cursors.mjs';
 import { alignReference, alignOffsets, distributeOffsets, spacingOffsets } from './geom/align.mjs';
-import { pointText, pathText, textValues, textProperties, textToOutlines, DEFAULT_CHARACTER } from './doc/text.mjs';
+import { pointText, pathText, textValues, textProperties, textToOutlines, DEFAULT_CHARACTER, PT_TO_MM, characterAt, styleRange, textContent } from './doc/text.mjs';
 import { hasTextLayout } from './doc/text-layout.mjs';
 import { textDialog } from './ui/dialogs.mjs';
 
@@ -60,7 +60,7 @@ const workspaces=new WeakMap();
 export function getDrawWorkspace(root) {return workspaces.get(root) || null;}
 // Custom shortcuts live in the main process (it builds the menus); the canvas takes the same ones.
 const shortcutsReady=globalThis.window?.modcut?.getDrawShortcuts?.().then(map=>{try{setKeyOverrides(map??{});}catch{/* unreadable: defaults */}}).catch(()=>{});
-const implementedTools=new Set(['rotate-view','select','group-selection','magic-wand','lasso','shape-builder','knife','eraser','width','blend','paintbrush','blob-brush','free-transform','pencil','hand','zoom','artboard','gradient','eyedropper','measure','scissors','type','area-type','type-on-path',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
+const implementedTools=new Set(['vertical-type','touch-type','rotate-view','select','group-selection','magic-wand','lasso','shape-builder','knife','eraser','width','blend','paintbrush','blob-brush','free-transform','pencil','hand','zoom','artboard','gradient','eyedropper','measure','scissors','type','area-type','type-on-path',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
 const commands=new Set(['undo','redo','delete','select-all','select-artboard','deselect','cancel','fit-artboard','fit-all','actual-size','zoom-in','zoom-out','outline',
   'cut','copy','paste','paste-front','paste-back','paste-place','paste-all-artboards',
   'edit-text','create-outlines','join','average','offset-path','outline-stroke','expand','expand-appearance','transform-each','split-into-grid','crop-image','effect-last','effect-options',...Object.keys(EFFECTS).map(t=>`effect-${t}`),...Object.keys(WARP_STYLES).map(t=>`warp-${t}`),...Object.keys(LIVE_LABELS).map(t=>`live-${t}`),'simplify','reverse-path','add-anchors','remove-anchors','clean-up','compound-make','compound-release','clip-make','clip-release','reset-rotate-view','package','keyboard-shortcuts','workspace-new','workspace-reset','workspace-manage','blend-make','blend-release','blend-expand','blend-options','blend-reverse','mask-make','mask-release','mask-clip','mask-invert','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
@@ -124,6 +124,8 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       tool.id==='blend' ? (state.ui.blendFirst?'Click a second object: blend the two · Click empty canvas: start over':'Click an object, then another, to blend them · Double-click the tool: Blend Options') :
       tool.id==='paintbrush' ? 'Drag: paint a calligraphic stroke in the stroke colour · Enter: Paintbrush options' :
       tool.id==='blob-brush' ? 'Drag: paint a filled shape that merges with touching shapes of the same colour · Enter: Blob Brush options' :
+      tool.id==='vertical-type' ? 'Click: vertical point text (columns from right to left) · Click existing text: edit' :
+      tool.id==='touch-type' ? 'Click a character · Drag: move it · Top-right square: scale · Top circle: rotate' :
       tool.id==='rotate-view' ? `Drag: turn the view (${Math.round(scope.view.rotation)}°) · Shift: 15° steps · View > Reset Rotate View` :
       tool.id==='width' ? 'Drag a stroke: width there · Drag a width point: resize, its centre slides it · Alt: one side · Double-click a point: edit' :
       tool.id==='knife' ? 'Drag across filled shapes to cut them (the selection, or every shape)' :
@@ -748,6 +750,45 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
         const last=patches.at(-1)[1];state.ui.character=last.character;state.ui.textAlignment=last.paragraph.alignment;state.ui.fontMetadata=last.layout.font;});
     }finally{textBusy=false;if(!destroyed){status();panels?.render();}}
   }
+  /**
+   * Touch Type (D5): the glyph under a point (world mm) as its character index and its box, in world
+   * coordinates (corners in order top-left, top-right, bottom-right, bottom-left).
+   */
+  function touchGlyphAt(point,preferred=null){
+    const id=preferred??renderer.hit(new scope.Point(point[0],point[1])),node=state.document.getNode(id);
+    if(node?.type!=='text'||!hasTextLayout(node)||node.kind==='onPath'||!state.document.isEditable(id))return null;
+    const local=renderer.pointToLocal(id,point),boxes=node.layout.glyphs.filter(g=>g.index!==undefined&&g.subpaths.length).map(g=>{
+      const pts=g.subpaths.flatMap(s=>s.segments.map(x=>x.p)),xs=pts.map(p=>p[0]),ys=pts.map(p=>p[1]);
+      return {index:g.index,x:Math.min(...xs),y:Math.min(...ys),w:Math.max(...xs)-Math.min(...xs),h:Math.max(...ys)-Math.min(...ys)};});
+    if(!boxes.length)return null;
+    const dist=b=>Math.hypot(Math.max(b.x-local.x,0,local.x-b.x-b.w),Math.max(b.y-local.y,0,local.y-b.y-b.h));
+    const box=boxes.reduce((a,b)=>dist(b)<dist(a)?b:a);
+    const world=(x,y)=>{const q=renderer.pointToWorld(id,[x,y]);return [q.x,q.y];};
+    return {id,index:box.index,corners:[world(box.x,box.y),world(box.x+box.w,box.y),world(box.x+box.w,box.y+box.h),world(box.x,box.y+box.h)]};
+  }
+  /** The same glyph again after a layout change (by index), for the handles. */
+  function touchGlyph(id,index){const node=state.document.getNode(id);if(node?.type!=='text'||!hasTextLayout(node))return null;
+    const g=node.layout.glyphs.find(x=>x.index===index);if(!g)return null;const p=g.subpaths[0]?.segments[0]?.p;if(!p)return null;
+    const at=renderer.pointToWorld(id,p);return touchGlyphAt([at.x,at.y],id)?.index===index?touchGlyphAt([at.x,at.y],id):null;}
+  /** Applies a Touch Type change ({dx, dy} in the text's own mm, scale, turn in degrees) to one character, as one undo step. */
+  async function touchType(id,index,{dx=0,dy=0,scale=1,turn=0}){
+    if(destroyed||state.document.readOnly)return;if(textBusy)throw new Error('Text is still being updated. Try again in a moment.');
+    const node=state.document.getNode(id);if(node?.type!=='text')return;
+    const c=characterAt(node,index),changes={};
+    if(dx)changes.xShift=Math.round(((c.xShift??0)+dx/PT_TO_MM)*1000)/1000;
+    if(dy)changes.baselineShift=Math.round(((c.baselineShift??0)-dy/PT_TO_MM)*1000)/1000;
+    if(scale!==1){changes.horizontalScale=Math.max(1,Math.min(10000,Math.round((c.horizontalScale??100)*scale*100)/100));changes.verticalScale=Math.max(1,Math.min(10000,Math.round((c.verticalScale??100)*scale*100)/100));}
+    if(turn){const r=((c.rotation??0)+turn+540)%360-180;changes.rotation=Math.round(r*100)/100;}
+    if(!Object.keys(changes).length)return;
+    textBusy=true;const before=state.document.data;
+    try{
+      const values=textValues(node),length=String.fromCodePoint(textContent(node).codePointAt(index)??0).length;
+      values.runs=styleRange(values.runs,index,index+length,changes);
+      const patch=await resolveText(node,textProperties(values));
+      if(destroyed)return;if(state.document.data!==before)throw new Error('The artwork changed while updating text. Try again.');
+      run(()=>state.history.execute(updateNode(id,patch,{label:'Touch Type'})));
+    }finally{textBusy=false;}
+  }
   async function createTextOutlines() {
     if(destroyed||textBusy||state.document.readOnly||document.querySelector('.modal-overlay'))return;
     const previousSelection=selectedIds();
@@ -768,7 +809,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     if(!subpath||subpath.segments.length<2)throw new Error('Type on a Path needs a path with at least two points.');
     return structuredClone(subpath);
   }
-  async function editText(point = scope.view.center, id = null, frame = null, {pathFrom = null} = {}) {
+  async function editText(point = scope.view.center, id = null, frame = null, {pathFrom = null, orientation = 'horizontal'} = {}) {
     if(destroyed||textBusy||state.document.readOnly||document.querySelector('.modal-overlay'))return;
     const original=id?state.document.getNode(id):null;
     if(id&&(original?.type!=='text'||!state.document.isEditable(id)))return;
@@ -776,7 +817,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     try{if(pathFrom)subpath=textPathFrom(pathFrom);}catch(error){onError(error.message);return;}
     const parent=id?state.document.locate(id).parentId:pathFrom?state.document.locate(pathFrom).parentId:insertionParent();
     let defaults=original?textValues(original):{text:'Text',...DEFAULT_CHARACTER,...state.ui.character,alignment:state.ui.textAlignment??'left',
-      kind:pathFrom?'onPath':frame?'area':'point',...(frame?{frameWidth:frame.width,frameHeight:frame.height}:{}),...(pathFrom?{pathSubpath:subpath,pathOffset:0,pathFlip:false}:{})};
+      kind:pathFrom?'onPath':frame?'area':'point',...(orientation==='vertical'&&!frame&&!pathFrom?{orientation}:{}),...(frame?{frameWidth:frame.width,frameHeight:frame.height}:{}),...(pathFrom?{pathSubpath:subpath,pathOffset:0,pathFlip:false}:{})};
     const before=state.document.data;
     textBusy=true;statusLine.textContent='Loading installed fonts…';
     try {
@@ -1266,6 +1307,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     if(command==='tool-dialog'&&state.ui.tool==='blob-brush')return void blobBrushDialog(blobOptions(state.ui.blobBrush??{})).then(values=>{if(values&&!destroyed)run(()=>{state.ui.blobBrush=blobOptions(values);});});
     if(command==='tool-dialog'&&state.ui.tool==='pencil')return void pencilDialog(state.ui.pencil??{}).then(values=>{if(values&&!destroyed)state.ui.pencil=values;});
     if(command==='tool-dialog'&&state.ui.tool==='type-on-path'){const id=selectedIds()[0];if(id)return void editText(undefined,null,null,{pathFrom:id});return;}
+    if(command==='tool-dialog'&&state.ui.tool==='vertical-type')return void editText(undefined,null,null,{orientation:'vertical'});
     if(command==='tool-dialog'&&['type','area-type'].includes(state.ui.tool))return void editText(undefined,null,state.ui.tool==='area-type'?{width:60,height:30}:null);
     if(command==='tool-dialog'&&TRANSFORM_TOOLS.includes(state.ui.tool))return void transformToolDialog(state.ui.tool);
     const match=command.match(/^(nudge-large|nudge|duplicate)-(left|right|up|down)$/);
@@ -1289,7 +1331,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       select(subtract?current.filter(id=>!found.includes(id)):add?[...new Set([...current,...found])]:found);},
     lasso:(points,options)=>paths.lasso(points,options),
     freeDistortSession,freeDistortPreview,freeDistort,
-    shapeBuilderSession,shapeBuilderPreview,shapeBuilder,knife,eraser,eraserSize:()=>state.ui.eraserSize??3,rotateView,widthSession,widthDrag,widthPreview,widthPointEdit,paintbrush,blobBrush:points=>blobBrush(points).catch(error=>{if(!destroyed)onError(error.message);}),brushSize:()=>(state.ui.blobBrush?.size??BLOB_DEFAULTS.size),blendClick,blendOptions:()=>void blendOptionsCommand(),
+    shapeBuilderSession,shapeBuilderPreview,shapeBuilder,knife,eraser,eraserSize:()=>state.ui.eraserSize??3,touchGlyphAt,touchGlyph,touchType:(id,index,change)=>touchType(id,index,change).catch(error=>{if(!destroyed)onError(error.message);}),rotateView,widthSession,widthDrag,widthPreview,widthPointEdit,paintbrush,blobBrush:points=>blobBrush(points).catch(error=>{if(!destroyed)onError(error.message);}),brushSize:()=>(state.ui.blobBrush?.size??BLOB_DEFAULTS.size),blendClick,blendOptions:()=>void blendOptionsCommand(),
     widthHandles:point=>{const id=renderer.hit(point)??selectedIds()[0],target=id&&widthTarget(id);return target?withScope(()=>renderer.widthHandles(id,target.stroke)):[];},
     gradientVector(from,to,mergeKey){const kind=state.ui.paintFocus==='stroke'?'stroke':'fill',last=state.ui.lastGradient;
       gradient(kind,(current,box,node)=>{const a=renderer.pointToLocal(node.id,from),b=renderer.pointToLocal(node.id,to);

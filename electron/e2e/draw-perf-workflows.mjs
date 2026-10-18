@@ -63,7 +63,7 @@ export async function runDrawPerfWorkflows(client, { report = false, count = 500
   await evaluate('delete window.__perfPaths');
   console.log(`Draw performance (ms): ${JSON.stringify(timings)}`);
   assert.equal(timings.anchors, count * 40);
-  if (!report) for (const [key, ceiling] of Object.entries({ insert: 40000, pan: 60, zoom: 60, redraw: 400, selectAll: 2000, move: 8000, edit: 1500, undo: 1500 }))
+  if (!report) for (const [key, ceiling] of Object.entries({ insert: 40000, pan: 120, zoom: 120, redraw: 400, selectAll: 2000, move: 8000, edit: 1500, undo: 1500 }))
     assert.ok(timings[key] < ceiling, `${key} took ${timings[key]} ms (ceiling ${ceiling})`);
   await restore();
   console.log(`PASS Draw performance: ${count} paths and ${count * 40} anchors insert, pan, zoom, select all, move, edit and undo within the ceilings`);

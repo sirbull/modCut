@@ -53,6 +53,27 @@ export function createInteractions(canvas, state, api) {
     }
     return group;
   }
+  // Touch Type: the glyph's box with a scale square (top right) and a rotate circle above it.
+  function touchHandles(corners){const [tl,tr,br,bl]=corners,up=[tl[0]-bl[0],tl[1]-bl[1]],len=Math.hypot(...up)||1,top=[(tl[0]+tr[0])/2,(tl[1]+tr[1])/2];
+    return {rotate:[top[0]+up[0]/len*14/scope.view.zoom,top[1]+up[1]/len*14/scope.view.zoom],scale:tr,centre:[(tl[0]+br[0])/2,(tl[1]+br[1])/2]};}
+  function touchMarkers(corners){
+    if(!corners)return null;const w=1/scope.view.zoom,h=touchHandles(corners),group=new scope.Group();
+    group.addChild(new scope.Path({segments:corners,closed:true,strokeColor:'#1473E6',strokeWidth:w}));
+    group.addChild(new scope.Path.Line({from:[(corners[0][0]+corners[1][0])/2,(corners[0][1]+corners[1][1])/2],to:h.rotate,strokeColor:'#1473E6',strokeWidth:w}));
+    group.addChild(new scope.Path.Circle({center:h.rotate,radius:4*w,fillColor:'#FFFFFF',strokeColor:'#1473E6',strokeWidth:w}));
+    group.addChild(new scope.Path.Rectangle({point:[h.scale[0]-3.5*w,h.scale[1]-3.5*w],size:[7*w,7*w],fillColor:'#FFFFFF',strokeColor:'#1473E6',strokeWidth:w}));
+    return group;
+  }
+  /** The glyph box after a Touch Type drag so far, and the change it makes. */
+  function touchChange(touch,start,end){
+    const c=touchHandles(touch.corners).centre;
+    if(touch.kind==='scale'){const f=Math.max(.01,Math.hypot(end.x-c[0],end.y-c[1])/(Math.hypot(start.x-c[0],start.y-c[1])||1));
+      return {corners:touch.corners.map(p=>[c[0]+(p[0]-c[0])*f,c[1]+(p[1]-c[1])*f]),change:{scale:f}};}
+    if(touch.kind==='rotate'){const a=Math.atan2(end.y-c[1],end.x-c[0])-Math.atan2(start.y-c[1],start.x-c[0]),cs=Math.cos(a),sn=Math.sin(a);
+      return {corners:touch.corners.map(p=>[c[0]+(p[0]-c[0])*cs-(p[1]-c[1])*sn,c[1]+(p[0]-c[0])*sn+(p[1]-c[1])*cs]),change:{turn:-a*180/Math.PI}};}
+    const a=renderer.pointToLocal(touch.id,[start.x,start.y]),b=renderer.pointToLocal(touch.id,[end.x,end.y]);
+    return {corners:touch.corners.map(p=>[p[0]+end.x-start.x,p[1]+end.y-start.y]),change:{dx:b.x-a.x,dy:b.y-a.y}};
+  }
   // Width points: a hollow diamond on the path and a dot at each side end.
   function widthMarkers(handles) {
     if(!handles.length)return null;
@@ -73,6 +94,7 @@ export function createInteractions(canvas, state, api) {
         : tool==='select' && renderer.hit(p) ? CURSORS[event.altKey ? 'select-copy' : 'select-anchor']
         : tool==='zoom' && event.altKey ? CURSORS['zoom-out'] : api.cursor();
       if(tool==='width')withScope(()=>{clearPreview();preview=widthMarkers(api.widthHandles([p.x,p.y]));scope.view.update();});
+      if(tool==='touch-type')withScope(()=>{clearPreview();const t=state.ui.touchType;preview=touchMarkers(t&&api.touchGlyph(t.id,t.index)?.corners);scope.view.update();});
       return;
       return;
     }
@@ -129,6 +151,8 @@ export function createInteractions(canvas, state, api) {
           fillColor:event.altKey?'rgba(220,40,40,.35)':'rgba(20,115,230,.25)',strokeColor:'#1473E6',strokeWidth:1/scope.view.zoom}))});}
         else preview=new scope.Path({segments:gesture.points,strokeColor:gesture.mode==='knife'?'#D32F2F':'rgba(120,120,120,.5)',strokeCap:'round',strokeJoin:'round',
           strokeWidth:gesture.mode==='knife'?1/scope.view.zoom:api.eraserSize()});
+      } else if (gesture.mode==='touch-type') {
+        gesture.touched=touchChange(gesture.touch,gesture.start,p);preview=touchMarkers(gesture.touched.corners);
       } else if (gesture.mode==='width') {
         gesture.moved=true;gesture.alt=event.altKey;
         preview=new scope.CompoundPath({children:api.widthPreview(gesture.session,[p.x,p.y],{alt:event.altKey}).map(ring=>new scope.Path({segments:ring,closed:true})),
@@ -191,6 +215,14 @@ export function createInteractions(canvas, state, api) {
       gesture={...base,mode:'shape-builder',session,points:[[p.x,p.y]]};return;
     }
     if(tool==='knife'||tool==='eraser'){gesture={...base,mode:tool,points:[[p.x,p.y]]};return;}
+    if(tool==='touch-type'){
+      // On the chosen glyph's handles: scale or rotate it; anywhere else: pick the glyph there and move it.
+      const t=state.ui.touchType,current=t&&api.touchGlyph(t.id,t.index),near=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1])<=7/scope.view.zoom;
+      let glyph=null,kind='move';
+      if(current){const h=touchHandles(current.corners);if(near([p.x,p.y],h.rotate)){glyph=current;kind='rotate';}else if(near([p.x,p.y],h.scale)){glyph=current;kind='scale';}}
+      if(!glyph){glyph=api.touchGlyphAt([p.x,p.y]);if(!glyph){state.ui.touchType=null;api.notify?.('Click a character of a text object.');return;}state.ui.touchType={id:glyph.id,index:glyph.index};}
+      gesture={...base,mode:'touch-type',touch:{...glyph,kind}};return;
+    }
     if(tool==='width'){
       const session=api.widthSession([p.x,p.y]);if(!session){api.notify?.('Drag on a stroked path to change its width there.');return;}
       gesture={...base,mode:'width',session};return;
@@ -228,6 +260,7 @@ export function createInteractions(canvas, state, api) {
       else api.notify?.('Click a path or shape to type along it.');
       return;
     }
+    if(tool==='vertical-type'){const hit=renderer.hit(p);if(state.document.getNode(hit)?.type==='text')void api.editText(p,hit);else void api.editText(p,null,null,{orientation:'vertical'});return;}
     if(['type','area-type'].includes(tool)) {
       const hit=renderer.hit(p);
       if(state.document.getNode(hit)?.type==='text')void api.editText(p,hit);
@@ -281,6 +314,8 @@ export function createInteractions(canvas, state, api) {
         api.shapeBuilder(drag.session,drag.points,{alt:event.altKey||drag.modifiers.alt});
       }else if(drag.mode==='knife'||drag.mode==='eraser') {
         if(drag.points.length>1&&!api[drag.mode](drag.points))api.notify?.(drag.mode==='knife'?'The knife did not cross a filled shape.':'Nothing to erase there.');
+      }else if(drag.mode==='touch-type') {
+        if(moved&&drag.touched)api.touchType(drag.touch.id,drag.touch.index,drag.touched.change);
       }else if(drag.mode==='width') {
         if(drag.moved)api.widthDrag(drag.session,[drag.end.x,drag.end.y],{alt:drag.alt??drag.modifiers.alt});
       }else if(drag.mode==='lasso') {

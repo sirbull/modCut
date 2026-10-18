@@ -87,7 +87,8 @@ export function createFontService({directories=systemFontDirectories(),google}={
     // glyphs (pt); kerning 'none' turns the font's kern feature off. Positions below are in mm.
     const makeStyle=(c,{font,face})=>{
       const scale=c.fontSize*PT_TO_MM/font.unitsPerEm,hs=(c.horizontalScale??100)/100,vs=(c.verticalScale??100)/100,track=(c.tracking??0)/1000*font.unitsPerEm;
-      return {font,face,scale,hs,vs,rise:(c.baselineShift??0)*PT_TO_MM,fontSize:c.fontSize,advance:p=>(p.xAdvance*hs+track)*scale,
+      // Touch Type: a turn (degrees) round the glyph's middle and a sideways move (pt) that leaves the next glyphs.
+      return {font,face,scale,hs,vs,rise:(c.baselineShift??0)*PT_TO_MM,turn:(c.rotation??0)*Math.PI/180,shift:(c.xShift??0)*PT_TO_MM,fontSize:c.fontSize,advance:p=>(p.xAdvance*hs+track)*scale,
         shapeText:text=>font.layout(v.allCaps?text.toLocaleUpperCase():text,v.kerning==='none'?{kern:false}:undefined)};
     };
     const baseStyle=makeStyle(v,base),styles=[];let at=0;
@@ -97,7 +98,7 @@ export function createFontService({directories=systemFontDirectories(),google}={
       styles.push({start:at,end:at+run.text.length,style:c?makeStyle({...v,...c},resolved):baseStyle});at+=run.text.length;
     }
     // The text between `start` and `end`, split where the style changes; tabs are four spaces.
-    const pieces=(start,end)=>styles.filter(r=>r.end>start&&r.start<end).map(r=>({style:r.style,text:v.text.slice(Math.max(start,r.start),Math.min(end,r.end))}))
+    const pieces=(start,end)=>styles.filter(r=>r.end>start&&r.start<end).map(r=>({style:r.style,start:Math.max(start,r.start),text:v.text.slice(Math.max(start,r.start),Math.min(end,r.end))}))
       .filter(p=>p.text).map(p=>({...p,run:p.style.shapeText(p.text.replace(/\t/g,'    '))}));
     const widthOf=list=>list.reduce((sum,p)=>sum+p.run.positions.reduce((w,pos)=>w+p.style.advance(pos),0),0);
     const glyphs=[],lineWidths=[],area=v.kind==='area';
@@ -122,6 +123,28 @@ export function createFontService({directories=systemFontDirectories(),google}={
       }
       return {version:1,signature:textSignature(patch),font:fontInfo,glyphs,lineWidths:[total],overflow};
     }
+    if(v.kind==='point'&&v.orientation==='vertical') {
+      // Vertical Type: each line is a column of upright characters, one em (plus tracking) apart, centred on
+      // the column; columns go from right to left, `leading` apart. Alignment: left is top, right is bottom.
+      const columns=v.text.split('\n');let start=0;
+      for(const [column,text] of columns.entries()) {
+        const parts=pieces(start,start+text.length);
+        let length=0;for(const p of parts)length+=p.run.glyphs.length*p.style.fontSize*PT_TO_MM*p.style.vs+p.run.glyphs.length*(v.tracking??0)/1000*p.style.fontSize*PT_TO_MM;
+        lineWidths.push(length);
+        let y=v.alignment==='center'?-length/2:v.alignment==='right'?-length:0;const cx=-column*v.leading*PT_TO_MM;
+        for(const {style,run,start:at} of parts){let index=at;for(let i=0;i<run.glyphs.length;i++){
+          const glyph=run.glyphs[i],pos=run.positions[i],commands=outlines(glyph,style),em=style.fontSize*PT_TO_MM*style.vs;
+          const left=cx-pos.xAdvance*style.hs*style.scale/2+style.shift,baseline=y+style.font.ascent*style.vs*style.scale-style.rise,mid=[cx+style.shift,y+em/2];
+          const c=Math.cos(style.turn),n=Math.sin(style.turn);
+          glyphs.push({line:column,glyphId:glyph.id,index,subpaths:glyphSubpaths(commands,(gx,gy)=>{const px=left+(pos.xOffset+gx)*style.hs*style.scale,py=baseline-(pos.yOffset+gy*style.vs)*style.scale;
+            return style.turn?[mid[0]+(px-mid[0])*c+(py-mid[1])*n,mid[1]-(px-mid[0])*n+(py-mid[1])*c]:[px,py];})});
+          y+=em+(v.tracking??0)/1000*style.fontSize*PT_TO_MM;
+          index+=String.fromCodePoint(...(glyph.codePoints.length?glyph.codePoints:[0])).length;
+        }}
+        start+=text.length+1;
+      }
+      return {version:1,signature:textSignature(patch),font:fontInfo,glyphs,lineWidths};
+    }
     // Paragraph indents (pt) narrow the lines; space before and after (pt) separates paragraphs.
     const pt=n=>(n??0)*PT_TO_MM,left=pt(v.leftIndent),right=pt(v.rightIndent),firstIndent=pt(v.firstLineIndent),gap=pt(v.spaceBefore)+pt(v.spaceAfter);
     const lines=area?wrapLines(v.text,first=>v.frameWidth-left-right-(first?firstIndent:0),(text,start)=>widthOf(pieces(start,start+text.length)))
@@ -143,14 +166,19 @@ export function createFontService({directories=systemFontDirectories(),google}={
       const spread=spaces?Math.max(0,room-lineAdvance)/spaces:0,align=v.alignment==='justify'?'left':v.alignment;
       const offset=indent+(align==='center'?-lineAdvance/2:align==='right'?-lineAdvance:0)+(area?(align==='center'?room/2:align==='right'?room:0):0);
       let x=0;
-      for(const {style,run} of parts)for(let i=0;i<run.glyphs.length;i++) {
+      for(const {style,run,start} of parts){let index=start;for(let i=0;i<run.glyphs.length;i++) {
         const glyph=run.glyphs[i],pos=run.positions[i],commands=outlines(glyph,style);
         if(line<visibleLines) {
-          const subpaths=glyphSubpaths(commands,(gx,gy)=>[offset+x+(pos.xOffset+gx)*style.hs*style.scale,ascent+tops[line]-(pos.yOffset+gy*style.vs)*style.scale-style.rise]);
-          glyphs.push({line,glyphId:glyph.id,subpaths});
+          const baseline=ascent+tops[line]-style.rise,left=offset+x+style.shift,cx=left+pos.xAdvance*style.hs*style.scale/2,cy=baseline-(style.font.ascent+style.font.descent)/2*style.vs*style.scale;
+          const c=Math.cos(style.turn),n=Math.sin(style.turn);
+          const subpaths=glyphSubpaths(commands,(gx,gy)=>{const px=left+(pos.xOffset+gx)*style.hs*style.scale,py=baseline-(pos.yOffset+gy*style.vs)*style.scale;
+            return style.turn?[cx+(px-cx)*c+(py-cy)*n,cy-(px-cx)*n+(py-cy)*c]:[px,py];});
+          // `index`: where the glyph's characters start in the text (UTF-16), for Touch Type.
+          glyphs.push({line,glyphId:glyph.id,index,subpaths});
         }
         x+=style.advance(pos)+(spaces&&glyph.codePoints.includes(32)?spread:0);
-      }
+        index+=String.fromCodePoint(...(glyph.codePoints.length?glyph.codePoints:[0])).length;
+      }}
       await yieldEventLoop();
     }
     return {version:1,signature:textSignature(patch),font:fontInfo,glyphs,lineWidths,

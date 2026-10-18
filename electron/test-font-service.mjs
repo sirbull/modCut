@@ -169,3 +169,26 @@ test('Glyphs: a font lists its printable characters in code point order',{skip:!
   for(const ch of 'AZaz09ÆØÅæøå')assert.ok(characters.includes(ch.codePointAt(0)),ch);
   assert.ok(characters.every((c,i)=>c>=0x20&&(i===0||c>characters[i-1])),'Sorted, without control characters');
 });
+test('Touch Type: one character turned and moved sideways, the rest in place; glyphs know their text index',{skip:!latin},async()=>{
+  const {styleRange}=await import('../renderer/draw/doc/text.mjs');
+  const plain=await service.shape({...values(latin,'HIH'),runs:[{text:'HIH'}]});
+  const touched=await service.shape({...values(latin,'HIH'),runs:styleRange([{text:'HIH'}],1,2,{rotation:90,xShift:10})});
+  assert.deepEqual(plain.glyphs.map(g=>g.index),[0,1,2]);
+  const box=g=>{const p=g.subpaths.flatMap(s=>s.segments.map(x=>x.p)),xs=p.map(q=>q[0]),ys=p.map(q=>q[1]);return {x:Math.min(...xs),w:Math.max(...xs)-Math.min(...xs),h:Math.max(...ys)-Math.min(...ys)};};
+  const [a,b,c]=plain.glyphs.map(box),[a2,b2,c2]=touched.glyphs.map(box);
+  assert.ok(Math.abs(a2.x-a.x)<1e-6&&Math.abs(c2.x-c.x)<1e-6,'The others stay where they were');
+  assert.ok(Math.abs(b2.w-b.h)<1e-6&&Math.abs(b2.h-b.w)<1e-6,'A quarter turn swaps width and height');
+  assert.ok(b2.x+b2.w/2-(b.x+b.w/2)>3,'Moved right by 10 pt (3.5 mm)');
+});
+test('Vertical Type: upright characters in columns from right to left',{skip:!latin},async()=>{
+  const {textProperties,textValues}=await import('../renderer/draw/doc/text.mjs');
+  const props=textProperties({...values(latin,'AB\nC'),orientation:'vertical'});
+  assert.equal(props.paragraph.orientation,'vertical');
+  const layout=await service.shape(textValues({...props,kind:'point'}));
+  const centre=g=>{const p=g.subpaths.flatMap(s=>s.segments.map(x=>x.p)),xs=p.map(q=>q[0]),ys=p.map(q=>q[1]);return [(Math.min(...xs)+Math.max(...xs))/2,(Math.min(...ys)+Math.max(...ys))/2];};
+  const [a,b,c]=layout.glyphs.map(centre),em=24*25.4/72;
+  assert.ok(Math.abs(a[0]-b[0])<em*.2&&b[1]-a[1]>em*.8,'B is under A in the first column');
+  assert.ok(a[0]-c[0]>em,'The second column is to the left');
+  assert.deepEqual(layout.glyphs.map(g=>[g.line,g.index]),[[0,0],[0,1],[1,3]]);
+  assert.throws(()=>textProperties({...values(latin,'x'),kind:'area',frameWidth:10,frameHeight:10,orientation:'vertical'}),/vertical/);
+});

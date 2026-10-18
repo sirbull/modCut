@@ -89,7 +89,7 @@ export function textDialog(defaults, onPreview = () => {}, {fonts=[],resolve=pat
   // Character settings edited in the Character panel ride along unchanged.
   const read = () => ({kind:defaults.kind??'point',tracking:defaults.tracking??0,allCaps:!!defaults.allCaps,
     horizontalScale:defaults.horizontalScale??100,verticalScale:defaults.verticalScale??100,baselineShift:defaults.baselineShift??0,kerning:defaults.kerning??'metrics',
-    leftIndent:defaults.leftIndent??0,rightIndent:defaults.rightIndent??0,firstLineIndent:defaults.firstLineIndent??0,spaceBefore:defaults.spaceBefore??0,spaceAfter:defaults.spaceAfter??0,...(defaults.kind==='onPath'?{pathSubpath:defaults.pathSubpath}:{}),...Object.fromEntries(fields.map(f => {const el=form.elements[f.key];return [f.key,f.type==='checkbox'?el.checked:f.type==='number'?el.valueAsNumber:f.key==='fontWeight'&&!['normal','bold'].includes(el.value)?Number(el.value):el.value];})),
+    leftIndent:defaults.leftIndent??0,rightIndent:defaults.rightIndent??0,firstLineIndent:defaults.firstLineIndent??0,spaceBefore:defaults.spaceBefore??0,spaceAfter:defaults.spaceAfter??0,...(defaults.orientation==='vertical'?{orientation:'vertical'}:{}),...(defaults.kind==='onPath'?{pathSubpath:defaults.pathSubpath}:{}),...Object.fromEntries(fields.map(f => {const el=form.elements[f.key];return [f.key,f.type==='checkbox'?el.checked:f.type==='number'?el.valueAsNumber:f.key==='fontWeight'&&!['normal','bold'].includes(el.value)?Number(el.value):el.value];})),
     axisValues:[...form.querySelectorAll('[data-font-axis]')].map(el=>el.value),runs:buildRuns()});
   const submit=form.querySelector('[type=submit]');let revision=0,alive=true,resolved=null,accepted=null,lastInput=null;
   const preview = async () => {

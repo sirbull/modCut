@@ -132,6 +132,47 @@ export async function runDrawWindowWorkflows(client) {
   assert.equal(await evaluate("document.querySelector('.draw-text-dialog textarea[name=text]').value"), 'HaÅ');
   await evaluate("document.querySelector('.draw-text-dialog [data-x=cancel]')?.click()"); await wait(50);
   await evaluate(`(async()=>{${active}.handle('tool.select')})()`);
+  // Touch Type (Shift+T): new text "HIH"; click the I, turn it a quarter with the top handle, then drag it to the right.
+  await evaluate(`(async()=>{const w=${active};w.select([]);w.handle('tool.type');w.handle('tool-dialog')})()`);
+  await until("document.querySelector('.draw-text-dialog form')?.dataset.textReady==='true'", 'text editor for Touch Type');
+  // An installed regular face (Arial is not on every test machine).
+  const family = await evaluate("(async()=>{const fonts=await window.modcut.listSystemFonts();return (fonts.find(f=>/DejaVu Sans|Liberation Sans|Arial/.test(f.family)&&f.fontWeight==='normal'&&f.fontStyle==='normal')??fonts.find(f=>f.fontWeight==='normal'&&f.fontStyle==='normal'))?.family})()");
+  await evaluate(`(()=>{const f=document.querySelector('.draw-text-dialog form');f.elements.fontFamily.value=${JSON.stringify(family)};f.elements.fontFamily.dispatchEvent(new Event('input',{bubbles:true}));f.elements.fontFamily.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  await until("document.querySelector('.draw-text-dialog form')?.dataset.textReady==='true'", 'font chosen');
+  await evaluate("(()=>{const f=document.querySelector('.draw-text-dialog form');f.elements.text.value='HIH';f.elements.text.dispatchEvent(new Event('input',{bubbles:true}));})()");
+  await wait(100); await until("document.querySelector('.draw-text-dialog form')?.dataset.textReady==='true'", 'preview ready');
+  await evaluate("document.querySelector('.draw-text-dialog form').requestSubmit()");
+  await until(`(async()=>{const w=${active},n=w.state.document.getNode(w.state.selection.ids[0]);return n?.type==='text'&&!!n.layout})()`, 'text created');
+  const textId = await evaluate(`(async()=>(${active}.state.selection.ids[0]))()`);
+  const glyphScreen = () => evaluate(`(async()=>{const w=${active},n=w.state.document.getNode('${textId}'),g=n.layout.glyphs.find(x=>x.index===1),pts=g.subpaths.flatMap(s=>s.segments.map(x=>x.p)),xs=pts.map(p=>p[0]),ys=pts.map(p=>p[1]);
+    const r=w.scope.view.element.getBoundingClientRect(),view=q=>{const v=w.scope.view.projectToView(w.renderer.pointToWorld('${textId}',q));return {x:r.x+v.x,y:r.y+v.y}};
+    return {centre:view([(Math.min(...xs)+Math.max(...xs))/2,(Math.min(...ys)+Math.max(...ys))/2]),top:view([(Math.min(...xs)+Math.max(...xs))/2,Math.min(...ys)])}})()`);
+  await keyDown('T', 'KeyT', true); assert.equal(await evaluate(`(async()=>(${active}.state.ui.tool))()`), 'touch-type');
+  let glyph = await glyphScreen();
+  await mouse('mouseMoved', glyph.centre); await mouse('mousePressed', glyph.centre, { buttons: 1 }); await mouse('mouseReleased', glyph.centre);
+  assert.deepEqual(await evaluate(`(async()=>(${active}.state.ui.touchType))()`), { id: textId, index: 1 });
+  // The rotate handle sits 14 screen pixels above the top of the box; dragging it a quarter turn clockwise on screen is -90°.
+  const handle = { x: glyph.top.x, y: glyph.top.y - 14 }, side = { x: glyph.centre.x + (glyph.centre.y - handle.y), y: glyph.centre.y };
+  await mouse('mouseMoved', handle); await mouse('mousePressed', handle, { buttons: 1 }); await mouse('mouseMoved', side, { buttons: 1 }); await mouse('mouseReleased', side);
+  await until(`(async()=>(${active}.state.document.getNode('${textId}').content.runs.some(r=>r.character?.rotation)))()`, 'turned');
+  const turned = await evaluate(`(async()=>(${active}.state.document.getNode('${textId}').content.runs.map(r=>[r.text,Math.round(r.character?.rotation??0)])))()`);
+  assert.deepEqual(turned, [['H', 0], ['I', -90], ['H', 0]], 'Only the I turned');
+  glyph = await glyphScreen();
+  await mouse('mouseMoved', glyph.centre); await mouse('mousePressed', glyph.centre, { buttons: 1 }); await mouse('mouseMoved', { x: glyph.centre.x + 30, y: glyph.centre.y }, { buttons: 1 }); await mouse('mouseReleased', { x: glyph.centre.x + 30, y: glyph.centre.y });
+  await until(`(async()=>(${active}.state.document.getNode('${textId}').content.runs[1].character?.xShift>0))()`, 'moved');
+  await keyDown('Escape', 'Escape'); await keyDown('v', 'KeyV');
+
+  // Vertical Type: "AB" as a column, B under A.
+  await evaluate(`(async()=>{const w=${active};w.select([]);w.handle('tool.vertical-type');w.handle('tool-dialog')})()`);
+  await until("document.querySelector('.draw-text-dialog form')?.dataset.textReady==='true'", 'vertical text editor');
+  await evaluate(`(()=>{const f=document.querySelector('.draw-text-dialog form');f.elements.fontFamily.value=${JSON.stringify(family)};f.elements.fontFamily.dispatchEvent(new Event('input',{bubbles:true}));f.elements.fontFamily.dispatchEvent(new Event('change',{bubbles:true}));f.elements.text.value='AB';f.elements.text.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+  await wait(100); await until("document.querySelector('.draw-text-dialog form')?.dataset.textReady==='true'", 'vertical preview');
+  await evaluate("document.querySelector('.draw-text-dialog form').requestSubmit()");
+  await until(`(async()=>{const w=${active},n=w.state.document.getNode(w.state.selection.ids[0]);return n?.type==='text'&&n.paragraph.orientation==='vertical'&&!!n.layout})()`, 'vertical text');
+  const column = await evaluate(`(async()=>{const w=${active},n=w.state.document.getNode(w.state.selection.ids[0]),c=g=>{const p=g.subpaths.flatMap(s=>s.segments.map(x=>x.p)),xs=p.map(q=>q[0]),ys=p.map(q=>q[1]);return [(Math.min(...xs)+Math.max(...xs))/2,(Math.min(...ys)+Math.max(...ys))/2]};const [a,b]=n.layout.glyphs.map(c);return {dx:Math.abs(a[0]-b[0]),dy:b[1]-a[1]}})()`);
+  assert.ok(column.dx < 2 && column.dy > 4, `B under A: ${JSON.stringify(column)}`);
+  await evaluate(`(async()=>{${active}.handle('tool.select')})()`);
+
   // Effect > Stylize > Scribble: the second square (red since its graphic style) becomes a red scribbled line, on canvas and in Cut.
   await evaluate(`(async()=>{${active}.select(['${blue}'])})()`);
   assert.equal(await evaluate("window.modcut.clickE2EMenuItem('Effect','Scribble…')"), true);
@@ -142,5 +183,5 @@ export async function runDrawWindowWorkflows(client) {
     return {fill:item.fillColor?.toCSS(true)??null,stroke:item.strokeColor?.toCSS(true)??null,open:parts.every(p=>!p.closed),cut:/fill="none"/.test(cut)}})()`);
   assert.deepEqual(scribbled, { fill: null, stroke: "#ff0000", open: true, cut: true });
   await restore();
-  console.log('PASS Draw window: Scribble effect, TIFF, GIF and PLT export, Package, Graphic Styles (new from selection, apply in one step), Navigator (click to move, zoom), Rotate View with 15° snapping and reset, Asset Export at 2x, workspaces saved, reset and switched, custom keyboard shortcuts, Glyphs into the text editor');
+  console.log('PASS Draw window: Touch Type (pick, turn, move one character), Vertical Type, Scribble effect, TIFF, GIF and PLT export, Package, Graphic Styles (new from selection, apply in one step), Navigator (click to move, zoom), Rotate View with 15° snapping and reset, Asset Export at 2x, workspaces saved, reset and switched, custom keyboard shortcuts, Glyphs into the text editor');
 }
