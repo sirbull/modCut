@@ -685,9 +685,10 @@ to Back snur ryggraden sammen med stablingen, Release gir den tilbake som en uma
 langs ryggraden. Kode: `spineCurve`, `placeOnSpine` og `keyPosition` i `geom/blend.mjs`, `replaceSpine`,
 `placeKeys` og `reverseSpine` i `index.mjs`.
 
-Gjenstår i D4.2: redigere ryggraden direkte med Direct Selection (nå: Release, rediger, lag på nytt), tekst og
-grupper som nøkler (baner, former og tekst blir med; tekst når fontens glyfer er lest, og blendes som konturer),
-og Object > Expand på blends.
+Tekst kan være nøkkel når fontens glyfer er lest; den blendes som konturer.
+
+Gjenstår i D4.2: redigere ryggraden direkte med Direct Selection (nå: Release, rediger, lag på nytt), grupper som
+nøkler, og Object > Expand på blends.
 
 ### 2.30 Warp, Live Pathfinder og opacity masks (D4.3, 2026-10-18)
 
