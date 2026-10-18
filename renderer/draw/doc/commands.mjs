@@ -2,21 +2,23 @@ import { CONTAINERS } from './schema.mjs';
 import { findNode } from './document.mjs';
 
 const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const isObject = (value) => value !== null && typeof value === 'object';
+/** Patches between two snapshots; shared (identical) objects are skipped, so only edited paths are walked. */
 function differences(before, after, path = [], result = []) {
-  if (equal(before, after)) return result;
-  if (before && after && typeof before === 'object' && typeof after === 'object'
-      && Array.isArray(before) === Array.isArray(after)
+  if (before === after) return result;
+  if (isObject(before) && isObject(after) && Array.isArray(before) === Array.isArray(after)
       && (!Array.isArray(before) || before.length === after.length)) {
     for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) differences(before[key], after[key], [...path, key], result);
-  } else result.push({ path, before, after });
+  } else if (isObject(before) || isObject(after) || before !== after) result.push({ path, before, after });
   return result;
 }
+// Patch values are parts of frozen snapshots, so they are shared rather than copied.
 function applyPatches(data, patches, direction) {
   for (const patch of patches) {
     const parent = patch.path.slice(0, -1).reduce((value, key) => value[key], data);
     const key = patch.path.at(-1), value = patch[direction];
     if (value === undefined) delete parent[key];
-    else parent[key] = structuredClone(value);
+    else parent[key] = value;
   }
 }
 
@@ -93,6 +95,34 @@ export function updateNode(id, properties, { label = 'Edit', mergeKey = null } =
     Object.assign(entry.node, structuredClone(copy));
   }, { nodeIds: [id], mergeKey });
 }
+/**
+ * Many updates as one edit (D4.6): `[[id, properties], ...]`, each checked as `updateNode` checks it. One edit
+ * walks the document once, where one command per object would walk it once per object.
+ */
+export function updateNodes(entries, { label = 'Edit', mergeKey = null } = {}) {
+  const copies = entries.map(([id, properties]) => {
+    if (['id', 'type', 'children'].some((key) => Object.hasOwn(properties, key))) throw new Error('Identity and children must use structural commands');
+    return [id, structuredClone(properties)];
+  });
+  return new EditCommand(label, (data) => {
+    for (const [id, copy] of copies) {
+      const entry = requireNode(data, id);
+      if (Object.keys(copy).some((key) => !['locked', 'visible'].includes(key))) editable(data, id);
+      Object.assign(entry.node, structuredClone(copy));
+    }
+  }, { nodeIds: copies.map(([id]) => id), mergeKey });
+}
+/** Several inserts as one edit: `[[parentId, node, index], ...]`, applied in order. */
+export function insertNodes(entries) {
+  const copies = entries.map(([parentId, node, index]) => [parentId, structuredClone(node), index]);
+  return new EditCommand('Insert', (data) => {
+    for (const [parentId, copy, index] of copies) {
+      if (parentId !== null) editable(data, parentId);
+      const list = children(data, parentId);
+      list.splice(indexAt(index, list.length), 0, structuredClone(copy));
+    }
+  }, { nodeIds: copies.flatMap(([parentId, node]) => [node.id, parentId]).filter(Boolean) });
+}
 export function moveNode(id, parentId, index) {
   return new EditCommand('Move', (data) => {
     editable(data, id);
@@ -147,7 +177,7 @@ export function reorderArtboard(id, index) {
   }, {nodeIds:[id]});
 }
 export function updateDocument(properties, { label = 'Document Setup' } = {}) {
-  const allowed = ['name', 'units', 'rasterEffectsPpi', 'colorMode', 'settings', 'swatches', 'swatchGroups', 'graphicStyles', 'assets', 'guides', 'cutLinks'];
+  const allowed = ['name', 'units', 'rasterEffectsPpi', 'colorMode', 'settings', 'swatches', 'swatchGroups', 'graphicStyles', 'assets', 'guides', 'cutLinks', 'exportAssets'];
   if (Object.keys(properties).some((key) => !allowed.includes(key))) throw new Error('Unsupported document property');
   const copy = structuredClone(properties);
   return new EditCommand(label, (data) => Object.assign(data, structuredClone(copy)));

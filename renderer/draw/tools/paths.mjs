@@ -15,7 +15,7 @@ export function createPathInteractions(canvas,state,api) {
   let gesture=null,session=null,previews=[];
   const point=e=>{const b=canvas.getBoundingClientRect();return scope.view.viewToProject(new scope.Point(e.clientX-b.left,e.clientY-b.top));};
   function clear(){for(const item of previews)item.remove();previews=[];renderer.setEditPreview();}
-  function cancelDrag(){gesture=null;withScope(()=>{clear();scope.view.update();});}
+  function cancelDrag(){gesture=null;withScope(()=>{clear();scope.view.requestUpdate();});}
   function finish(){cancelDrag();session=null;}
   function selectAnchors(anchors){state.selection.setAnchors(anchors);api.selectionChanged();}
   const spaceId=node=>state.document.getNode(node.id)?renderer.editSpaceId(node.id):api.layerId();

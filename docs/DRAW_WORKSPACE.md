@@ -1447,8 +1447,8 @@ Oversikt over hva som er gjort og gjenstår, inkludert delvis ferdige oppgaver: 
 * [x] D4.2 Blend (spine og tekst som nøkkel gjenstår, se [STATUS.md](draw/STATUS.md))
 * [x] D4.3 Warp, Live Pathfinder og opacity masks (Rasterize-effekt og Envelope gjenstår, se [STATUS.md](draw/STATUS.md))
 * [x] D4.4 Paintbrush og Blob Brush (art-, scatter- og pattern-pensler gjenstår, se [STATUS.md](draw/STATUS.md))
-* [ ] D4.5 EPS/TIFF, Graphic Styles, Navigator, Rotate View og Asset Export
-* [ ] D4.6 Ytelsespass
+* [x] D4.5 EPS/TIFF, Graphic Styles, Navigator, Rotate View og Asset Export (se [STATUS.md](draw/STATUS.md) 2.32)
+* [x] D4.6 Ytelsespass (se [STATUS.md](draw/STATUS.md) 2.33)
 * [ ] Fase 5
 
 ### Implementasjonsnotater D0.1

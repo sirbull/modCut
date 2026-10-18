@@ -555,3 +555,13 @@ body[data-workspace="draw"] #sendToCut { display: inline-flex; }
 /* Appearance: live effects and Add Effect. */
 .draw-effect-row .draw-appearance-name { flex: 1; text-align: left; }
 .draw-add-effect { max-width: 150px; font-size: 12px; }
+/* Graphic Styles: a grid of style tiles. */
+.draw-style-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(32px, 1fr)); gap: 6px; padding-bottom: 10px; }
+.draw-style-tile { aspect-ratio: 1; border: 1px solid var(--border, #c9d1cf); border-radius: 4px; cursor: pointer; padding: 0; }
+.draw-style-tile[aria-pressed="true"] { outline: 2px solid var(--accent, #006B5C); outline-offset: 1px; }
+/* Navigator: the overview with the visible area boxed in red, as in Illustrator. */
+.draw-navigator { position: relative; overflow: hidden; cursor: crosshair; margin-bottom: 10px; user-select: none; touch-action: none; }
+.draw-navigator img { display: block; width: 100%; height: auto; border: 1px solid var(--border, #c9d1cf); }
+.draw-navigator__view { position: absolute; border: 1.5px solid #D32F2F; pointer-events: none; box-sizing: border-box; }
+.draw-asset-name { flex: 1; min-width: 0; }
+.draw-layer-more { margin: 6px 4px; }

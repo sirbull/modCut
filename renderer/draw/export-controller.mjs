@@ -10,6 +10,7 @@ import { pdfDocument, JPEG_QUALITY, PDF_PRESETS } from './io/pdf.mjs';
 import { epsDocument } from './io/eps.mjs';
 import { AI_OPTIONS, aiMetadata, hasTransparency } from './io/ai.mjs';
 import { dxfDocument } from './io/dxf.mjs';
+import { tiffDocument } from './io/tiff.mjs';
 import { exportTarget, artboardFilePath, scalePpi, screensFilePath } from './io/export-plan.mjs';
 import { exportFileName } from './io/export.mjs';
 import { exportOptionsDialog, pdfOptionsDialog } from './ui/export-dialogs.mjs';
@@ -94,6 +95,17 @@ export function createExportController({ state, scope, renderer, withScope, expo
       return { files: [{ path, data: base64(bytes), encoding: 'base64' }], warnings: [...warnings] };
     }
     const files = [];
+    // TIFF: the PNG rendering's pixels, written as a TIFF with the chosen resolution.
+    if (format === 'tif') {
+      for (const board of boards) {
+        const index = state.document.data.artboards.indexOf(board), file = boards.length > 1 ? artboardFilePath(path, board, index) : path, ppi = options.ppi ?? 150;
+        const img = await loadImage(exportBoard(board.id, 'png', { ppi, background: options.background ?? 'white' })), canvas = document.createElement('canvas');
+        canvas.width = img.width; canvas.height = img.height; const ctx = canvas.getContext('2d', { willReadFrequently: true }); ctx.drawImage(img, 0, 0);
+        const pixels = ctx.getImageData(0, 0, img.width, img.height), bytes = tiffDocument({ width: img.width, height: img.height, data: pixels.data }, { ppi, alpha: (options.background ?? 'white') === 'transparent', compression: options.compression ?? 'packbits' });
+        files.push({ path: file, data: base64(bytes), encoding: 'base64' });
+      }
+      return { files, warnings: [...warnings] };
+    }
     boards.forEach((board) => {
       const index = state.document.data.artboards.indexOf(board), file = boards.length > 1 ? artboardFilePath(path, board, index) : path;
       if (format === 'svg' || format === 'svgz') {
@@ -152,5 +164,28 @@ export function createExportController({ state, scope, renderer, withScope, expo
     for (const warning of warnings) bridge.notify?.(warning, 'info');
     return written;
   }
-  return { exportAs, exportScreens, build, model, available };
+  /**
+   * Asset Export: each object in the Asset Export panel as its own file (its painted bounds are the page),
+   * at one scale and format, into a chosen folder. Retina scales get an "@2x" style suffix.
+   */
+  async function exportAssets({ format = 'png', scale = '1x' } = {}) {
+    if (!available()) throw new Error('Export is not available here.');
+    const assets = (state.document.data.exportAssets ?? []).filter((a) => state.document.getNode(a.nodeId));
+    if (!assets.length) throw new Error('Add objects to the Asset Export panel first.');
+    const target = exportTarget(format); if (!target || !['png', 'jpg', 'webp', 'svg'].includes(format)) throw new Error('Choose PNG, JPEG, WebP or SVG.');
+    const folder = await bridge.chooseFolder({}); if (!folder) return null;
+    const ppi = scalePpi(scale), files = [], used = new Set();
+    for (const asset of assets) {
+      const area = withScope(() => renderer.painted(asset.nodeId)); if (!(area?.width > 0 && area?.height > 0)) continue;
+      const base = String(asset.name || 'Asset').replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ').trim() || 'Asset', suffix = target.vector || scale === '1x' ? '' : `@${scale}`;
+      let name = `${base}${suffix}.${target.ext}`; for (let n = 2; used.has(name); n++) name = `${base}-${n}${suffix}.${target.ext}`; used.add(name);
+      const out = exportBoard(null, format, { area: { x: area.x, y: area.y, width: area.width, height: area.height, name: asset.name }, only: new Set([asset.nodeId]), ppi,
+        background: format === 'jpg' ? 'white' : 'transparent', quality: .9 });
+      files.push(format === 'svg' ? { path: `${folder}/${name}`, data: out, encoding: 'utf8' } : { path: `${folder}/${name}`, data: out.slice(out.indexOf(',') + 1), encoding: 'base64' });
+    }
+    const written = await bridge.write({ files, open: null });
+    bridge.notify?.(`Exported ${written.length} asset${written.length === 1 ? '' : 's'} to ${fileName(folder)}.`, 'ok');
+    return written;
+  }
+  return { exportAs, exportScreens, exportAssets, build, model, available };
 }

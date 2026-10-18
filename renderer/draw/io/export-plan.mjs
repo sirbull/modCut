@@ -11,11 +11,12 @@ export const EXPORT_TARGETS = Object.freeze([
   { id: 'png', label: 'PNG', ext: 'png', vector: false },
   { id: 'jpg', label: 'JPEG', ext: 'jpg', vector: false },
   { id: 'webp', label: 'WebP', ext: 'webp', vector: false },
+  { id: 'tif', label: 'TIFF', ext: 'tif', vector: false },
 ]);
 export const exportTarget = (id) => EXPORT_TARGETS.find((t) => t.id === id) ?? null;
 export const targetForPath = (path) => {
   const ext = String(path).split('.').pop().toLowerCase();
-  return EXPORT_TARGETS.find((t) => t.ext === ext || (t.id === 'jpg' && ext === 'jpeg')) ?? null;
+  return EXPORT_TARGETS.find((t) => t.ext === ext || (t.id === 'jpg' && ext === 'jpeg') || (t.id === 'tif' && ext === 'tiff')) ?? null;
 };
 
 /**

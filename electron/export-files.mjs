@@ -7,7 +7,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { basename, dirname, extname, resolve, sep } from 'node:path';
 
 export const EXPORT_FILE_TYPES = Object.freeze({
-  pdf: 'PDF', ai: 'Adobe Illustrator (PDF compatible)', svg: 'SVG', svgz: 'SVG Compressed', eps: 'EPS', dxf: 'DXF (AutoCAD R12)', png: 'PNG', jpg: 'JPEG', webp: 'WebP',
+  pdf: 'PDF', ai: 'Adobe Illustrator (PDF compatible)', svg: 'SVG', svgz: 'SVG Compressed', eps: 'EPS', dxf: 'DXF (AutoCAD R12)', png: 'PNG', jpg: 'JPEG', webp: 'WebP', tif: 'TIFF',
 });
 const TEXT_TYPES = new Set(['svg', 'eps', 'dxf']);
 
@@ -30,11 +30,11 @@ export function registerExportFiles({ ipcMain, dialog, shell, getWindow, isE2E =
     if (isE2E) { filePath = resolve('/e2e', e2eChoice ?? String(name)); e2eChoice = null; }
     else {
       const result = await dialog.showSaveDialog(getWindow(), { title: 'Export As', defaultPath: name,
-        filters: ordered.map((id) => ({ name: EXPORT_FILE_TYPES[id], extensions: id === 'jpg' ? ['jpg', 'jpeg'] : [id] })) });
+        filters: ordered.map((id) => ({ name: EXPORT_FILE_TYPES[id], extensions: id === 'jpg' ? ['jpg', 'jpeg'] : id === 'tif' ? ['tif', 'tiff'] : [id] })) });
       if (result.canceled || !result.filePath) return null;
       filePath = result.filePath;
     }
-    let ext = extname(filePath).slice(1).toLowerCase(); if (ext === 'jpeg') ext = 'jpg';
+    let ext = extname(filePath).slice(1).toLowerCase(); if (ext === 'jpeg') ext = 'jpg'; if (ext === 'tiff') ext = 'tif';
     if (!EXPORT_FILE_TYPES[ext]) { filePath += `.${format}`; ext = format; }
     files.set(basename(filePath, extname(filePath)), dirname(resolve(filePath)));
     return { path: filePath, format: ext };

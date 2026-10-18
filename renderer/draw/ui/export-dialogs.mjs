@@ -79,11 +79,12 @@ export function exportOptionsDialog({ format, boards, defaults = {} }) {
   const target = exportTarget(format), ui = frame({ title: `${target.label} Options`, className: 'draw-export-options', submitLabel: 'Export' });
   const readRange = rangeControls(ui.body, boards, defaults);
   const fields = {};
-  if (format === 'png' || format === 'jpg' || format === 'webp') {
+  if (format === 'png' || format === 'jpg' || format === 'webp' || format === 'tif') {
     fields.ppi = select(ui.body, 'Resolution', [...EXPORT_RESOLUTIONS.map((r) => [String(r), `${r} ppi${r === 72 ? ' (Screen)' : r === 150 ? ' (Medium)' : r === 300 ? ' (High)' : ''}`])], defaults.ppi ?? 150, 'ppi');
     // JPEG has no transparency; PNG and WebP keep it.
     fields.background = select(ui.body, 'Background', [...(format !== 'jpg' ? [['transparent', 'Transparent']] : []), ['white', 'White'], ['artboard', 'Artboard color']],
       format === 'jpg' && (defaults.background ?? 'white') === 'transparent' ? 'white' : defaults.background ?? (format !== 'jpg' ? 'transparent' : 'white'), 'background');
+    if (format === 'tif') fields.compression = select(ui.body, 'Compression', [['packbits', 'PackBits (lossless)'], ['none', 'None']], defaults.compression ?? 'packbits', 'compression');
     if (format === 'jpg' || format === 'webp') fields.quality = number(ui.body, 'Quality (0–10)', defaults.quality ?? 8, 'quality', { min: 0, max: 10, step: 1 });
   }
   if (format === 'svg' || format === 'svgz') fields.precision = select(ui.body, 'Decimal places', [1, 2, 3, 4, 5, 6, 7].map((n) => [String(n), String(n)]), defaults.precision ?? 4, 'precision');
@@ -99,6 +100,7 @@ export function exportOptionsDialog({ format, boards, defaults = {} }) {
     if (fields.ppi) values.ppi = Number(fields.ppi.value);
     if (fields.background) values.background = fields.background.value;
     if (fields.quality) { const q = Number(fields.quality.value); if (!(q >= 0 && q <= 10)) throw new Error('Use a JPEG quality from 0 to 10.'); values.quality = q; }
+    if (fields.compression) values.compression = fields.compression.value;
     if (fields.precision) values.precision = Number(fields.precision.value);
     if (fields.tolerance) values.tolerance = Number(fields.tolerance.value);
     return values;

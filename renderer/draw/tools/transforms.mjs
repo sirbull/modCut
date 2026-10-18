@@ -1,4 +1,4 @@
-import {insertNode,updateNode} from '../doc/commands.mjs';
+import {insertNodes,updateNodes} from '../doc/commands.mjs';
 import {createId} from '../doc/schema.mjs';
 import {transformProperties} from '../geometry.mjs';
 import {isIdentity,scaledStrokeProperties} from '../geom/transforms.mjs';
@@ -15,24 +15,31 @@ export function createTransformController(state,api) {
   function apply(matrix,label='Transform',{copy=false,ids:targets=ids(),mergeKey=null,scaleStrokes=null,scaleCorners=true,remember=true}={}) {
     if(state.document.readOnly||!targets.length||!copy&&isIdentity(matrix))return false;
     if(matrix.length!==6||!matrix.every(Number.isFinite))throw new RangeError('Invalid transform');
-    targets=[...new Set(targets)].filter(id=>state.document.isEditable(id)).filter(id=>!state.document.ancestors(id).some(n=>targets.includes(n.id)));
+    const chosen=new Set(targets);
+    targets=[...chosen].filter(id=>state.document.isEditable(id)).filter(id=>!state.document.ancestors(id).some(n=>chosen.has(n.id)));
     if(!targets.length)return false;
     const result=[],pivot=state.ui.transformOrigin&&[...state.ui.transformOrigin];
     const strokeProperties=node=>scaleStrokes===null?{}:scaledStrokeProperties(node,api.worldMatrix(node.id),matrix,scaleStrokes);
+    // All objects change in one edit (one walk of the document), not one edit each.
+    const updates=[],inserts=[],originals=[];
     state.history.transaction(copy?`Copy ${label}`:label,()=>{
       for(const id of targets){
         const node=state.document.getNode(id),properties=transformProperties(node,api.localMatrix(id,matrix),{scaleCorners});
         if(copy){
           const clone=structuredClone({...node,...properties}),prepare=(n,source)=>{Object.assign(n,strokeProperties(source));n.id=createId();n.children?.forEach((c,i)=>prepare(c,source.children[i]));};prepare(clone,node);
-          const location=state.document.locate(id);state.history.execute(insertNode(location.parentId,clone,location.index+1));result.push(clone.id);
+          // Each copy goes right above its original; copies already placed below it in the same list shift it up.
+          const location=state.document.locate(id),below=originals.filter(([parent,at])=>parent===location.parentId&&at<location.index).length;
+          inserts.push([location.parentId,clone,location.index+1+below]);originals.push([location.parentId,location.index]);result.push(clone.id);
         }else {
-          state.history.execute(updateNode(id,{...properties,...strokeProperties(node)},{label,mergeKey}));
+          updates.push([id,{...properties,...strokeProperties(node)}]);
           if(scaleStrokes!==null&&node.children)for(const child of state.document.descendants(id)){
-            const props=strokeProperties(child);if(Object.keys(props).length)state.history.execute(updateNode(child.id,props,{label}));
+            const props=strokeProperties(child);if(Object.keys(props).length)updates.push([child.id,props]);
           }
           result.push(id);
         }
       }
+      if(updates.length)state.history.execute(updateNodes(updates,{label,mergeKey}));
+      if(inserts.length)state.history.execute(insertNodes(inserts));
     });
     internalSelection=true;try{api.select(result);state.ui.transformOrigin=pivot;selectionChanged();}finally{internalSelection=false;}
     api.update();if(remember)last={matrix:[...matrix],label,copy,scaleStrokes,scaleCorners};return true;

@@ -231,6 +231,22 @@
   <path d="M16 12l0 .01" />
   <path d="M12 16l0 .01" />
 </symbol>
+<symbol id="icon-brush" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-brush"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M3 21v-4a4 4 0 1 1 4 4h-4" />
+  <path d="M21 3a16 16 0 0 0 -12.8 10.2" />
+  <path d="M21 3a16 16 0 0 1 -10.2 12.8" />
+  <path d="M10.6 9a9 9 0 0 1 4.4 4.4" />
+</symbol>
 <symbol id="icon-chevron-down" width="24"
   height="24"
   viewBox="0 0 24 24"
@@ -736,6 +752,23 @@
   <path d="M11 16a1 1 0 1 0 2 0a1 1 0 0 0 -2 0" />
   <path d="M8 11v-4a4 4 0 1 1 8 0v4" />
 </symbol>
+<symbol id="icon-map-2" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-map-2"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M12 18.5l-3 -1.5l-6 3v-13l6 -3l6 3l6 -3v7.5" />
+  <path d="M9 4v13" />
+  <path d="M15 7v5.5" />
+  <path d="M21.121 20.121a3 3 0 1 0 -4.242 0c.418 .419 1.125 1.045 2.121 1.879c1.051 -.89 1.759 -1.516 2.121 -1.879" />
+  <path d="M19 18v.01" />
+</symbol>
 <symbol id="icon-mask" width="24"
   height="24"
   viewBox="0 0 24 24"
@@ -780,6 +813,27 @@
   <path d="M4 6l16 0" />
   <path d="M4 12l16 0" />
   <path d="M4 18l16 0" />
+</symbol>
+<symbol id="icon-packages" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-packages"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M7 16.5l-5 -3l5 -3l5 3v5.5l-5 3l0 -5.5" />
+  <path d="M2 13.5v5.5l5 3" />
+  <path d="M7 16.545l5 -3.03" />
+  <path d="M17 16.5l-5 -3l5 -3l5 3v5.5l-5 3l0 -5.5" />
+  <path d="M12 19l5 3" />
+  <path d="M17 16.5l5 -3" />
+  <path d="M12 13.5v-5.5l-5 -3l5 -3l5 3v5.5" />
+  <path d="M7 5.03v5.455" />
+  <path d="M12 8l5 -3" />
 </symbol>
 <symbol id="icon-palette" width="24"
   height="24"

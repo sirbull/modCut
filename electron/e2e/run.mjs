@@ -42,6 +42,8 @@ import { runDrawWidthWorkflows } from './draw-width-workflows.mjs';
 import { runDrawBlendWorkflows } from './draw-blend-workflows.mjs';
 import { runDrawWarpMaskWorkflows } from './draw-warp-mask-workflows.mjs';
 import { runDrawBrushWorkflows } from './draw-brush-workflows.mjs';
+import { runDrawWindowWorkflows } from './draw-window-workflows.mjs';
+import { runDrawPerfWorkflows } from './draw-perf-workflows.mjs';
 import { runDrawTextOutlineWorkflows } from './draw-text-outline-workflows.mjs';
 import { runDrawFeedbackWorkflows } from './draw-feedback-workflows.mjs';
 import { runWorkflows, verifyRecoveredSession } from "./workflows.mjs";
@@ -107,6 +109,12 @@ try {
   } else if (process.argv.includes('--draw-links')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawLinkWorkflows(first);first.socket.close();
+  } else if (process.argv.includes('--draw-perf')) {
+    for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
+    await runDrawPerfWorkflows(first,{report:process.argv.includes('--report'),count:Number(process.argv.find(a=>a.startsWith('--paths='))?.slice(8)??5000)});first.socket.close();
+  } else if (process.argv.includes('--draw-window')) {
+    for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
+    await runDrawWindowWorkflows(first);first.socket.close();
   } else if (process.argv.includes('--draw-brush')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawBrushWorkflows(first);first.socket.close();
@@ -249,6 +257,8 @@ try {
     await runDrawBlendWorkflows(first);
     await runDrawWarpMaskWorkflows(first);
     await runDrawBrushWorkflows(first);
+    await runDrawWindowWorkflows(first);
+    await runDrawPerfWorkflows(first);
     await runDrawTextOutlineWorkflows(first);
     const expected = await runProjectWorkflows(first, profile);
     first.socket.close();

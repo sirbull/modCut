@@ -15,6 +15,8 @@ export function createInteractions(canvas, state, api) {
     const [r,g,b,a]=canvas.getContext('2d').getImageData(x,y,1,1).data;
     return a?'#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('').toUpperCase():null;
   }
+  // A screen movement in project units, turned back through Rotate View.
+  const screenDelta=(dx,dy)=>new scope.Point(dx,dy).rotate(-scope.view.rotation).divide(scope.view.zoom);
   function clearPreview() {preview?.remove();preview=null;renderer.clearTransformPreview();state.ui.transformPreviewBox=null;}
   function cancel() {const previous=gesture;gesture=null;if(previous?.mode==='free-transform')api.freeDistortPreview(null);withScope(()=>{clearPreview();if(TRANSFORM_TOOLS.includes(previous?.tool))api.transforms.setOrigin(previous.originBefore);renderer.updateView();});api.status();}
   // Clicks select the outermost group around a hit, or, in isolation mode, the outermost group inside the isolated one.
@@ -78,8 +80,15 @@ export function createInteractions(canvas, state, api) {
     gesture.end=p;gesture.modifiers={shift:event.shiftKey,alt:event.altKey};
     gesture.event=event;
     if (gesture.tool==='hand') {
-      scope.view.center=gesture.center.subtract(new scope.Point(event.clientX-gesture.screen[0],event.clientY-gesture.screen[1]).divide(scope.view.zoom));
+      scope.view.center=gesture.center.subtract(screenDelta(event.clientX-gesture.screen[0],event.clientY-gesture.screen[1]));
       withScope(()=>renderer.updateView());api.status(p);return;
+    }
+    if (gesture.tool==='rotate-view') {
+      // The angle the pointer turned around the canvas centre; Shift snaps to 15°.
+      const box=canvas.getBoundingClientRect(),cx=box.left+box.width/2,cy=box.top+box.height/2;
+      let angle=gesture.rotation+(Math.atan2(event.clientY-cy,event.clientX-cx)-Math.atan2(gesture.screen[1]-cy,gesture.screen[0]-cx))*180/Math.PI;
+      if(event.shiftKey)angle=Math.round(angle/15)*15;
+      api.rotateView(angle);return;
     }
     if (gesture.tool==='zoom') {
       const zoom=gesture.zoom*Math.exp((event.clientX-gesture.screen[0])*.01);
@@ -160,6 +169,7 @@ export function createInteractions(canvas, state, api) {
     if (event.button!==0) return;
     api.closeMenus();canvas.focus();canvas.setPointerCapture(event.pointerId);const p=point(event),tool=api.tool();
     const base={tool,start:p,end:p,center:scope.view.center.clone(),zoom:scope.view.zoom,screen:[event.clientX,event.clientY],modifiers:{shift:event.shiftKey,alt:event.altKey}};
+    if (tool==='rotate-view') {gesture={...base,rotation:scope.view.rotation};return;}
     if (tool==='hand' || tool==='zoom') {gesture=base;if(tool==='hand')canvas.style.cursor=CURSORS['hand-active'];return;}
     if (state.document.readOnly) {
       if (tool==='select') {const id=renderer.hit(p),t=id&&targetId(id);api.select(t ? [t] : []);} return;
@@ -255,7 +265,7 @@ export function createInteractions(canvas, state, api) {
     if (!gesture) return;
     const end=point(event);if (end.getDistance(gesture.end)>.000001)update(event);
     const drag=gesture,moved=Math.hypot(event.clientX-drag.screen[0],event.clientY-drag.screen[1])>3;cancel();
-    if (drag.tool==='hand'){canvas.style.cursor=api.cursor();return;}
+    if (drag.tool==='hand'||drag.tool==='rotate-view'){canvas.style.cursor=api.cursor();return;}
     if (drag.tool==='zoom') {if(!drag.scrubbed)api.zoomAt(drag.start,event.altKey || api.zoomOut() ? .8 : 1.25);return;}
     run(()=>{
       if (state.document.readOnly)return;
@@ -314,7 +324,7 @@ export function createInteractions(canvas, state, api) {
   canvas.addEventListener('wheel',event=>{
     event.preventDefault();
     if(event.ctrlKey || event.metaKey) api.zoomAt(point(event),Math.exp(-event.deltaY*.001*(api.preferences().invertZoom ? -1 : 1)));
-    else {scope.view.center=scope.view.center.add(new scope.Point(event.deltaX,event.deltaY).divide(scope.view.zoom));withScope(()=>renderer.updateView());api.status();}
+    else {scope.view.center=scope.view.center.add(screenDelta(event.deltaX,event.deltaY));withScope(()=>renderer.updateView());api.status();}
   },{...events,passive:false});
   window.addEventListener('blur',cancel,events);
   return {cancel,busy:()=>!!gesture,

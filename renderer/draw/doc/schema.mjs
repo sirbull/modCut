@@ -44,7 +44,8 @@ export function createDocument(properties = {}) {
       smartGuides: true, keyboardIncrement: 1, cornerRadius: 0 }, ...properties });
 }
 
-export function validateDocument(doc) {
+/** `trusted`: a WeakSet of node objects already validated (frozen snapshots); their contents are skipped. */
+export function validateDocument(doc, { trusted = null } = {}) {
   const errors = [];
   const fail = (path, message) => errors.push({ path, message });
   const object = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -52,6 +53,7 @@ export function validateDocument(doc) {
   function json(value, path, ancestors = new Set()) {
     if (typeof value === 'number' && !Number.isFinite(value)) fail(path, 'Expected a finite number');
     else if (value && typeof value === 'object') {
+      if (trusted?.has(value)) return;
       if (ancestors.has(value)) { fail(path, 'Cyclic data'); return; }
       if (!Array.isArray(value) && Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null) fail(path, 'Expected plain JSON');
       ancestors.add(value);
@@ -142,6 +144,14 @@ export function validateDocument(doc) {
   }
   function node(value, path, parentType) {
     if (!object(value)) { fail(path, 'Expected a node'); return; }
+    if (trusted?.has(value)) {
+      // Already valid on its own: only its ids take part in the document-wide checks.
+      const register = (n, p) => { id(n.id, `${p}.id`); nodesById.set(n.id, n); (n.children ?? []).forEach((c, i) => register(c, `${p}.children.${i}`)); };
+      register(value, path);
+      if (parentType === 'document' && value.type !== 'layer') fail(path, 'Top-level nodes must be layers');
+      if (parentType === 'compoundPath' && value.type !== 'path') fail(path, 'Compound paths can only contain paths');
+      return;
+    }
     id(value.id, `${path}.id`); enumeration(value.type, NODE_TYPES, `${path}.type`);
     nodesById.set(value.id, value);
     if (parentType === 'document' && value.type !== 'layer') fail(path, 'Top-level nodes must be layers');
@@ -328,6 +338,17 @@ export function validateDocument(doc) {
   });
   array(doc.layers, '$.layers').forEach((layer, i) => node(layer, `$.layers.${i}`, 'document'));
   for (const key of ['swatches', 'swatchGroups', 'graphicStyles', 'guides', 'cutLinks']) array(doc[key], `$.${key}`);
+  // Asset Export entries (optional, D4.5): objects exported as their own files.
+  if (doc.exportAssets !== undefined) array(doc.exportAssets, '$.exportAssets').forEach((asset, i) => {
+    if (!object(asset)) { fail(`$.exportAssets.${i}`, 'Expected an export asset'); return; }
+    // The node id refers to a node, so it is a nonempty string, not a new unique id.
+    id(asset.id, `$.exportAssets.${i}.id`); if (typeof asset.nodeId !== 'string' || !asset.nodeId) fail(`$.exportAssets.${i}.nodeId`, 'Expected a node id'); string(asset.name, `$.exportAssets.${i}.name`);
+  });
+  (Array.isArray(doc.graphicStyles) ? doc.graphicStyles : []).forEach((style, i) => {
+    const p = `$.graphicStyles.${i}`;
+    if (!object(style)) { fail(p, 'Expected a graphic style'); return; }
+    id(style.id, `${p}.id`); string(style.name, `${p}.name`); appearance(style.appearance, `${p}.appearance`); number(style.opacity, `${p}.opacity`, 0, 1);
+  });
   if (!object(doc.settings)) fail('$.settings', 'Expected settings');
   else {
     number(doc.settings.keyboardIncrement, '$.settings.keyboardIncrement', Number.MIN_VALUE);
@@ -349,8 +370,8 @@ export function validateDocument(doc) {
   return errors;
 }
 
-export function assertDocument(doc) {
-  const errors = validateDocument(doc);
+export function assertDocument(doc, options) {
+  const errors = validateDocument(doc, options);
   if (errors.length) throw new TypeError(errors.map(({ path, message }) => `${path}: ${message}`).join('\n'));
   return doc;
 }

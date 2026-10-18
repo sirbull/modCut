@@ -65,7 +65,7 @@ const TOOL_CURSORS = {
   eyedropper: 'eyedropper', measure: 'measure', pencil: 'pencil', shear: 'transform', scissors: 'scissors', 'group-selection': 'group-select',
   gradient: 'gradient', width: 'width', blend: 'blend', paintbrush: 'paintbrush', 'blob-brush': 'blob-brush',
   select: 'select', 'direct-selection': 'direct', 'group-selection': 'direct', pen: 'pen-new', 'add-anchor': 'anchor-add', 'delete-anchor': 'anchor-remove',
-  'anchor-point': 'anchor-convert', hand: 'hand', zoom: 'zoom-in', artboard: 'artboard', rotate: 'transform', reflect: 'transform', scale: 'transform',
+  'anchor-point': 'anchor-convert', hand: 'hand', 'rotate-view': 'rotate', zoom: 'zoom-in', artboard: 'artboard', rotate: 'transform', reflect: 'transform', scale: 'transform',
   rectangle: 'shape', 'rounded-rectangle': 'shape', ellipse: 'shape', polygon: 'shape', star: 'shape', line: 'shape',
 };
 /** Base cursor for a tool; unknown tools still get a visible crosshair. */

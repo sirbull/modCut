@@ -1671,4 +1671,36 @@ Hele Draw-E2E 34 for 42c1b33 (Blend) passerte helt: 41 av 41. E2E fant at kopien
 
 Verifisering: 274 Draw-enhetstester (`brush.test.mjs`), ny E2E `draw-brush-workflows.mjs` (`--draw-brush`).
 
-Neste: D4.5 EPS/TIFF, Graphic Styles, Navigator, Rotate View og Asset Export.
+
+## 2026-10-18: D4.5 TIFF, Graphic Styles, Navigator, Rotate View, Asset Export og arbeidsområder
+
+- `io/tiff.mjs`: baseline TIFF (little-endian, RGB/RGBA, PackBits, oppløsning); testet mot UTIF.
+- `doc/graphic-styles.mjs` og panelet `graphic-styles` (Tabler `brush`); skjemaet validerer `graphicStyles`.
+- Navigator: `navigatorImage` (alle artboards og grafikken, mellomlagret per dokumenttilstand), `navigatorView`,
+  `navigateTo`; panelet oppdaterer rammen fra `updateInfo` uten å tegne bildet på nytt.
+- Rotate View: `rotateView` setter `scope.view.rotation`; `screenDelta` i `tools/interactions.mjs` dreier
+  panorering tilbake.
+- Asset Export: `exportAssets` i dokumentet, `exportBoard({ area, only })` og `exportArtwork({ only })` for å
+  tegne ett objekt alene; panelet `asset-export` (Tabler `packages`).
+- `ui/workspaces.mjs` og Window-menyen i Draw (Workspace og paneler).
+
+Verifisering: 279 Draw-enhetstester (`tiff`, `graphic-styles`, `workspaces`), ny E2E `draw-window-workflows.mjs`
+(`--draw-window`).
+
+
+## 2026-10-18: D4.6 ytelsespass
+
+- Ny E2E `draw-perf-workflows.mjs` (`--draw-perf`, `--report`, `--paths=N`, `--profile=edit|move|selectAll`,
+  `--parts`, `--collapse`): tidsmåling per steg og CPU-profil med egen og inkludert tid per funksjon.
+- Funn i rekkefølge: hele dokumentet ble klonet, validert og sammenlignet med `JSON.stringify` per kommando
+  (5 000 innsettinger ble ikke ferdig på 15 min); Layers bygde alle rader og miniatyrer; `selectedIds` var kubisk;
+  hver `updateView` tegnet synkront; indeksen ble bygd på nytt per kommando.
+- Tiltak: `doc/draft.mjs` (copy-on-write med Proxy), inkrementell validering (`trusted`) og indeks,
+  identitetsbasert `differences`, `updateNodes`/`insertNodes` i transformasjoner, nøkkel-, grense- og
+  miniatyrcache per nodeobjekt, `requestUpdate`, radgrense i Layers, ResizeObserver i `layoutDock`.
+- Rettet underveis: `exportAssets.nodeId` ble validert som en ny unik id; Rotate View tilbake til 0 kan gi −0.
+
+Verifisering: 284 Draw-enhetstester (`draft.test.mjs` med indekssjekk gjennom angre/gjør om), `--draw-window` og
+`--draw-perf` passerer.
+
+Neste: fase 5.

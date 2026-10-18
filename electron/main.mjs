@@ -243,6 +243,7 @@ function buildMenu(mode = "cut") {
     ];
     viewMenu.submenu = [viewMenu.submenu[0], { type: "separator" },
       { label: "Outline / Preview", accelerator: acceleratorFor("outline", { isMac }), click: () => send("outline") },
+      { label: "Reset Rotate View", click: () => send("reset-rotate-view") },
       { label: "Control Bar", click: () => send("toggle-control-bar") },
       { role: "togglefullscreen", label: "Full screen" },
       { role: "toggleDevTools", label: "Developer Tools" }];
@@ -263,6 +264,12 @@ function buildMenu(mode = "cut") {
         .map(([id,label])=>objectItem(label,`live-${id}`))},
       {label:'Warp',submenu:[['arc','Arc'],['arc-lower','Arc Lower'],['arc-upper','Arc Upper'],['arch','Arch'],['bulge','Bulge'],['shell-lower','Shell Lower'],['shell-upper','Shell Upper'],
         ['flag','Flag'],['wave','Wave'],['fish','Fish'],['rise','Rise'],['fisheye','Fisheye'],['inflate','Inflate'],['squeeze','Squeeze'],['twist','Twist']].map(([id,label])=>objectItem(`${label}…`,`warp-${id}`))}];
+    // Window menu (D4.5): workspaces and the panels, as in Illustrator; the window roles stay.
+    const windowMenu=template.find(item=>item.label==='Window');
+    if(windowMenu){delete windowMenu.role;windowMenu.submenu=[{label:'Workspace',submenu:[objectItem('Essentials','workspace-reset'),{type:'separator'},objectItem('New Workspace…','workspace-new'),objectItem('Manage Workspaces…','workspace-manage')]},{type:'separator'},
+      ...[['Appearance','appearance'],['Artboards','artboards'],['Asset Export','asset-export'],['Color','color'],['Document Info','document-info'],['Graphic Styles','graphic-styles'],['History','history'],['Image Trace','image-trace'],
+        ['Info','info'],['Links','links'],['Navigator','navigator'],['Stroke','stroke'],['Swatches','swatches'],['Transparency','transparency']].map(([label,id])=>({label,click:()=>send(`panel.${id}`)})),
+      {type:'separator'},{role:'minimize'},...(isMac?[{role:'zoom'}]:[])];}
     template.find(item=>item.label==='Type').submenu=[objectItem('Edit Text…','edit-text'),objectItem('Create Outlines','create-outlines')];
     // Select menu (D3.5): Same compares every painted object; Object picks kinds of objects.
     template.find(item=>item.label==='Select').submenu=[objectItem('All','select-all'),objectItem('All on Active Artboard','select-artboard'),objectItem('Deselect','deselect'),

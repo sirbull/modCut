@@ -631,3 +631,13 @@ export function blobBrushDialog(d) {
     {key:'mergeWithSelection',label:'Merge only with selection',type:'checkbox',value:d.mergeWithSelection}]})
     .then(v=>v&&{size:Number(v.size),fidelity:Number(v.fidelity),keepSelected:!!v.keepSelected,mergeWithSelection:!!v.mergeWithSelection});
 }
+/** Window > Workspace > New Workspace. */
+export function workspaceNameDialog(name='') {
+  return openDrawModal({title:'New Workspace',submitLabel:'OK',className:'draw-workspace-dialog',fields:[{key:'name',label:'Name',type:'text',value:name,required:true}]}).then(v=>v&&String(v.name));
+}
+/** Window > Workspace > Manage Workspaces: switch to one, or delete it. */
+export function workspacesDialog(names,current) {
+  return openDrawModal({title:'Manage Workspaces',submitLabel:'OK',className:'draw-workspaces-dialog',fields:[
+    {key:'name',label:'Workspace',type:'select',value:current&&names.includes(current)?current:names[0],options:names.map(n=>({value:n,label:n}))},
+    {key:'action',label:'Action',type:'select',value:'apply',options:[{value:'apply',label:'Switch to it'},{value:'delete',label:'Delete it'}]}]}).then(v=>v&&{name:v.name,action:v.action});
+}

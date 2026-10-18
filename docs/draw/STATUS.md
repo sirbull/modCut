@@ -703,6 +703,59 @@ Gjenstår i D4.3: Rasterize-effekten, Envelope Distort (Make with Warp/Mesh), re
 
 Gjenstår i D4.4: art-, scatter- og pattern-pensler, Brushes-panelet og trykkfølsomhet.
 
+### 2.32 TIFF, Graphic Styles, Navigator, Rotate View, Asset Export og arbeidsområder (D4.5, 2026-10-18)
+
+* **TIFF-eksport** (Export As > TIFF): oppløsning, bakgrunn (gjennomsiktig gir alfakanal) og komprimering
+  (PackBits eller ingen); ett artboard per fil. EPS-eksport fantes fra D2.6.
+* **Graphic Styles** (fane ved Appearance): [Default] og egne stiler; **New Graphic Style** lager en fra det
+  valgte objektet (fyll, strek, effekter, opasitet, blanding), klikk gir stilen til utvalget i ett angresteg,
+  **Delete** sletter den valgte. Lagres i dokumentet (`graphicStyles`).
+* **Navigator** (egen panelgruppe og Window-menyen): hele dokumentet i liten skala med den synlige delen i rødt;
+  klikk eller dra for å flytte visningen, og zoom i prosent. Følger panorering og zoom.
+* **Rotate View (Shift+H):** dra for å dreie visningen (Shift: 15°), View > Reset Rotate View. Panorering med
+  Hand og hjul følger rotasjonen. Tegningen endres ikke.
+* **Asset Export** (egen panelgruppe): Add Selection legger til objektene som egne eiendeler (navn kan endres),
+  og Export… skriver hver som egen fil (PNG, JPEG, WebP eller SVG) i valgt skala til en mappe, beskåret til
+  objektets kanter. Lagres i dokumentet (`exportAssets`).
+* **Window-menyen** i Draw: Workspace (Essentials, New Workspace…, Manage Workspaces…) og panelene.
+  Arbeidsområder lagrer panelgruppe, faner, dock-deling, sammenslåtte paneler og Control Bar på denne maskinen.
+* Kode: `io/tiff.mjs`, `doc/graphic-styles.mjs`, `ui/workspaces.mjs`, `navigatorImage`, `rotateView`,
+  `exportAssets` og `exportBoard({ area, only })` i `index.mjs` og `export-controller.mjs`, panelene i `panels/ui.mjs`.
+
+Gjenstår i D4.5: Graphic Styles-biblioteker, Asset Export med flere formater per eiendel samtidig og PDF,
+rotert visning for Artboard-verktøyets etiketter (de roteres med visningen).
+
+### 2.33 Ytelsespass (D4.6, 2026-10-18)
+
+Målt med `--draw-perf` (5 000 baner, 200 000 ankerpunkter, Electron i dette miljøet, millisekunder inkludert to
+bilder for tegning):
+
+| Steg | Før | Etter |
+| --- | --- | --- |
+| Sette inn alle i ett angresteg | over 15 minutter (ble ikke ferdig) | ca 11 000 |
+| Panorere / zoome ett steg | ikke målbart (låst) | 30 / 31 (bildefrekvens) |
+| Select All | | ca 300 |
+| Flytte alt (Nudge) | | ca 2 600 |
+| Flytte ett objekt | | ca 450 (selve handlingen ca 160) |
+| Angre | | ca 500 |
+
+Tiltak:
+
+* **Copy-on-write-dokument** (`doc/draft.mjs`): en redigering kopierer bare stien til det som endres; resten
+  deles med forrige tilstand. Tidligere ble hele dokumentet klonet to ganger per kommando.
+* **Inkrementell validering og indeks:** noder som allerede er validert (frosne øyeblikksbilder) hoppes over;
+  indeksen oppdateres bare for endrede barnelister; oppslag i redigeringer bruker indeksens sti.
+* **`differences`** går bare endrede stier (identitet først), og patcher deler frosne verdier i stedet for å klone.
+* **`updateNodes` og `insertNodes`**: transformasjoner av mange objekter blir én redigering.
+* **Renderer:** nøkler og fingeravtrykk caches per nodeobjekt, grenser caches per objekt, én tegning per bilde
+  (`requestUpdate`), miniatyrer caches per nodeobjekt og store lag tegnes etter en pause.
+* **Panel:** Layers viser de første 200 radene med «Show more», `layoutDock` tvinger ikke layout, og
+  `selectedIds` var kubisk.
+
+Gjenstår i D4.6: å sette inn tusenvis av objekter i én transaksjon er fortsatt kvadratisk (én kommando per objekt);
+import og lim inn bør bruke `insertNodes`. Gjenopprettingskopien (JSON av hele dokumentet) tar ca 150 ms etter
+en pause.
+
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
 | Oppgave | Status |
@@ -735,7 +788,9 @@ Gjenstår i D4.4: art-, scatter- og pattern-pensler, Brushes-panelet og trykkfø
 | D4.2 Blend | Ferdig i grunnform (2.29); spine gjenstår |
 | D4.3 Warp, Live Pathfinder, opacity masks | Ferdig i grunnform (2.30); Rasterize og Envelope gjenstår |
 | D4.4 Paintbrush og Blob Brush | Ferdig i grunnform (2.31); art-, scatter- og pattern-pensler gjenstår |
-| Resten av fase 4 og fase 5 | Gjenstår |
+| D4.5 EPS/TIFF, Graphic Styles, Navigator, Rotate View, Asset Export | Ferdig i grunnform (2.32) |
+| D4.6 Ytelsespass | Gjort (2.33); innsetting av tusenvis i én transaksjon gjenstår |
+| Fase 5 | Gjenstår |
 
 ## 4. Rekkefølge videre
 
@@ -754,7 +809,7 @@ SVG-, PNG- og JPEG-eksport er gjort (2.5).
    gjort. Fra D2.1 er skalering, baseline shift, kerning, avsnitt og blandede stiler gjort (2.11).
 6. Fase 3: D3.1 Expand og Expand Appearance (2.20) og D3.5 Select-meny, Magic Wand og Lasso (2.21) er gjort.
    D3.4 Shape Builder, Knife og Eraser (2.22) og D3.6 Free Transform, Transform Each og Split Into Grid
-   (2.23) er også gjort, og D3.2 effekter (2.24), D3.8 (2.25), D3.3 Image Trace (2.26) og D3.7 AI-eksport (2.27). Fase 3 er ferdig i grunnform. Fase 4: D4.1 Width (2.28), D4.2 Blend (2.29) D4.3 Warp, Live Pathfinder og opacity masks (2.30) og D4.4 Paintbrush og Blob Brush (2.31) er gjort. **Neste: D4.5 EPS/TIFF, Graphic Styles, Navigator, Rotate View og Asset Export.**
+   (2.23) er også gjort, og D3.2 effekter (2.24), D3.8 (2.25), D3.3 Image Trace (2.26) og D3.7 AI-eksport (2.27). Fase 3 er ferdig i grunnform. Fase 4: D4.1 Width (2.28), D4.2 Blend (2.29) D4.3 Warp, Live Pathfinder og opacity masks (2.30) D4.4 Paintbrush og Blob Brush (2.31) og D4.5 TIFF, Graphic Styles, Navigator, Rotate View, Asset Export og arbeidsområder (2.32) og D4.6 ytelsespass (2.33) er gjort. Fase 4 er ferdig i grunnform. **Neste: fase 5.**
 
 
 ## 5. Kjente begrensninger og risiko

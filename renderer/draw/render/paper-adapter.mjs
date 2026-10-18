@@ -16,7 +16,7 @@ import { offsetPathsSync, geometryReady } from '../geom/kernel-js.mjs';
 import { toSubpaths, runPathfinder } from '../geom/pathfinder.mjs';
 import { textSubpaths } from '../doc/text-layout.mjs';
 
-export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withScope = fn => fn() } = {}) {
+export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThumbnail = null, withScope = fn => fn() } = {}) {
   const boards = new scope.Layer({ name: 'Artboards' });
   const artwork = new scope.Layer({ name: 'Draw artwork' });
   const overlay = new scope.Layer({ name: 'Selection' });
@@ -184,14 +184,22 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     }
     return new scope.Group({ insert: false });
   }
+  // Keys per node object (D4.6): edits share unchanged nodes between snapshots, so a node's keys are
+  // worked out once, not on every render. Effect readiness and the image asset are checked each time.
+  const nodeKeys = new WeakMap();
+  function keysOf(node) {
+    let keys = nodeKeys.get(node);
+    if (!keys) { const own = { ...node }; delete own.children; keys = { own: JSON.stringify(own), geometry: null }; nodeKeys.set(node, keys); }
+    return keys;
+  }
   function geometryKey(node) {
-    if (node.type === 'text') return JSON.stringify([node.kind,node.frame,node.onPath,node.content, node.character, node.paragraph,node.layout]);
-    // Live effects change the geometry; Offset Path waits for the polygon library, so its readiness counts too.
-    const effects = hasVectorEffects(node) ? [node.appearance.effects.filter(e => !e.hidden), geometryReady()] : null;
-    if (node.type === 'path') return JSON.stringify([node.subpaths, node.fillRule, effects]);
-    if (node.type === 'shape') return JSON.stringify([node.shape, node.params, effects]);
-    if (node.type === 'image') return JSON.stringify([node.assetId, state.document.data.assets[node.assetId], node.crop ?? null]);
-    return node.type;
+    const keys = keysOf(node);
+    if (node.type === 'image') { const asset = state.document.data.assets[node.assetId]; if (keys.asset !== asset) { keys.asset = asset; keys.geometry = JSON.stringify([node.assetId, asset?.width, asset?.height, asset?.data?.length, node.crop ?? null]); } return keys.geometry + (asset ? '' : '?'); }
+    keys.geometry ??= node.type === 'text' ? JSON.stringify([node.kind,node.frame,node.onPath,node.content, node.character, node.paragraph,node.layout])
+      // Live effects change the geometry; Offset Path waits for the polygon library, so its readiness counts too.
+      : node.type === 'path' ? JSON.stringify([node.subpaths, node.fillRule, hasVectorEffects(node) ? node.appearance.effects.filter(e => !e.hidden) : null])
+      : node.type === 'shape' ? JSON.stringify([node.shape, node.params, hasVectorEffects(node) ? node.appearance.effects.filter(e => !e.hidden) : null]) : node.type;
+    return ['path', 'shape'].includes(node.type) && hasVectorEffects(node) ? keys.geometry + geometryReady() : keys.geometry;
   }
   // Appearance entries can be hidden from the Appearance panel; hidden ones never draw.
   const shown = list => (list || []).filter(entry => !entry.hidden);
@@ -436,8 +444,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     let index = 0;
     for (const node of nodes) {
       alive.add(node.id);
-      const geometry = geometryKey(node), own = { ...node }; delete own.children;
-      const context = layerContext(parentContext, node), fingerprint = JSON.stringify([own, context]);
+      const geometry = geometryKey(node), context = layerContext(parentContext, node), fingerprint = `[${keysOf(node).own},${JSON.stringify(context)}]`;
       let record = records.get(node.id), item = items.get(node.id);
       const replaced = !record || record.node.type !== node.type || record.geometry !== geometry;
       if (replaced) {
@@ -509,16 +516,24 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
         // Compose from the model: Paper may cache an old global matrix after reparenting.
         const matrix = new scope.Matrix(...node.transform).prepend(parentMatrix);
         records.get(node.id).worldMatrix = matrix;
+        // A leaf whose matrix, geometry and look are unchanged keeps its bounds from the last render (D4.6).
+        const record = records.get(node.id), boundsKey = node.children ? null : `${matrix.values}|${record.geometry}|${record.fingerprint}|${outlineFor(node.id)}`;
+        if (boundsKey && record.bounds?.key === boundsKey) {
+          worldBounds.set(node.id, record.bounds.world.clone()); paintedBounds.set(node.id, record.bounds.painted.clone());
+          if (node.visible) combined = union(combined, record.bounds.world);
+          continue;
+        }
         // A clipping group is as large as its clipping path.
-        const b = node.children ? (node.clip && node.children.length ? (visit(node.children, matrix), worldBounds.get(node.children.at(-1).id)?.clone() ?? null) : visit(node.children, matrix)) : records.get(node.id).frame
-          ? records.get(node.id).frame.getBounds(matrix) : item.getBounds(matrix);
+        const b = node.children ? (node.clip && node.children.length ? (visit(node.children, matrix), worldBounds.get(node.children.at(-1).id)?.clone() ?? null) : visit(node.children, matrix)) : record.frame
+          ? record.frame.getBounds(matrix) : item.getBounds(matrix);
         if (b) {
           worldBounds.set(node.id, b.clone());
           // Stroke bounds preserve thick strokes intersecting the viewport edge.
           if (outlineFor(node.id) && !node.children && node.type !== 'image') style(item, node, false);
-          paintedBounds.set(node.id, node.children || records.get(node.id).frame ? b.clone() : item.getStrokeBounds(matrix));
+          paintedBounds.set(node.id, node.children || record.frame ? b.clone() : item.getStrokeBounds(matrix));
           if (outlineFor(node.id) && !node.children && node.type !== 'image') style(item, node);
           if (node.visible) combined = union(combined, b);
+          if (boundsKey) record.bounds = { key: boundsKey, world: b.clone(), painted: paintedBounds.get(node.id).clone() };
         }
       }
       return combined;
@@ -625,7 +640,8 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
       const {matrix,scaleStrokes}=transformPreviewOptions,properties=scaleStrokes===null?{}:scaledStrokeProperties(record.node,record.worldMatrix.values,matrix,scaleStrokes);
       if(properties.appearance||record.node.strokeScaling===false)style(item,{...record.node,...properties});
     });
-    selection.update(); anchors.update(); scope.view.update();
+    // One draw per frame, however many updates an action makes (D4.6).
+    selection.update(); anchors.update(); scope.view.requestUpdate();
   }
   /** A detached group with the printable artwork in preview mode: no templates, hidden objects, dimming or culling. */
   const filled = item => !!item.fillColor && item.fillColor.alpha !== 0;
@@ -687,7 +703,9 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     result.remove(); return out;
   }
   /** `rasterMasks`: ppi at which opacity-masked groups become images, for formats without luminance masks. */
-  function exportArtwork({ resolveClips = false, rasterMasks = null } = {}) {
+  function exportArtwork({ resolveClips = false, rasterMasks = null, only = null } = {}) {
+    // `only`: node ids to keep (with their ancestors and descendants), for exporting single objects.
+    const keep = only ? new Set([...only].flatMap(id => [id, ...state.document.ancestors(id).map(n => n.id), ...state.document.descendants(id).map(n => n.id)])) : null;
     const wasOutline = outline; if (wasOutline) setOutline(false);
     try {
       const isTextFrame=item=>{const record=records.get(item.data?.nodeId);return record?.node.type==='text'&&record.frame===item;};
@@ -695,7 +713,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
         const id = original.data?.nodeId;
         if (id) {
           const node = state.document.getNode(id), record = records.get(id);
-          copy.visible = original !== record?.frame && !coveredIds.has(id);
+          copy.visible = original !== record?.frame && !coveredIds.has(id) && (!keep || keep.has(id));
           if (original.data.baseOpacity !== undefined) copy.opacity = node?.type === 'image' && original === items.get(id) ? node.opacity : original.data.baseOpacity;
         }
         const children = [...(copy.children ?? [])];
@@ -792,11 +810,20 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
     }
     throw new Error(`Pathfinder works on paths, shapes and groups, not ${node.type === 'image' ? 'images' : node.type}.`);
   }
-  function thumbnail(id, size = 56) {
+  const lateThumbnails = new Map();
+  function thumbnail(id, size = 56, options = {}) {
     const item = items.get(id), record = records.get(id); if (!item || !record) return null;
-    const subtree = [id, ...state.document.descendants(id).map(n => n.id)];
-    const key = subtree.map(n => { const r = records.get(n); return r ? r.fingerprint + r.geometry : ''; }).join('|') + size;
-    const cached = thumbnails.get(id); if (cached?.key === key) return cached.url;
+    // Snapshots share unchanged nodes and copy every node above a change, so the node object itself is the
+    // key for its whole subtree (plus the size, and the image assets and effect library that drawing uses).
+    const key = `${size}|${geometryReady()}`, assets = state.document.data.assets, cached = thumbnails.get(id);
+    const node = state.document.getNode(id);
+    if (cached?.node === node && cached.key === key && cached.assets === assets) return cached.url;
+    // A big group or layer keeps its last thumbnail while edits come in, and is redrawn once they pause.
+    if (cached && !options.now && node?.children && state.document.descendants(id).length > 300) {
+      clearTimeout(lateThumbnails.get(id));
+      lateThumbnails.set(id, setTimeout(() => { lateThumbnails.delete(id); if (!records.has(id)) return; const url = withScope(() => thumbnail(id, size, { now: true })); if (url) onThumbnail?.(id, url); }, 1500));
+      return cached.url;
+    }
     let url = null;
     // A stacked object draws through its paint stack; its own item only holds geometry.
     const clone = (record.stack ?? item).clone({ insert: false, deep: true });
@@ -827,7 +854,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
         raster.remove();
       }
     } catch { url = null; } finally { clone.remove(); }
-    thumbnails.set(id, { key, url }); return url;
+    thumbnails.set(id, { key, url, node, assets }); return url;
   }
   /**
    * Width tool: where `point` (world) lies against node `id`'s outline: the subpath, its position `t` (0 to 1
@@ -859,7 +886,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, withS
   }
   /** The width-profiled stroke `entry` of node `id` as filled outline subpaths in the node's own space (Outline Stroke). */
   const profiledStroke = (id, entry) => { const item = items.get(id); return item ? variableStrokeSubpaths(item, entry) : null; };
-  return { render, select: updateView, updateView, bounds, profiledStroke, blendSteps, liveSteps, strokeLocation, widthHandles, selectionBounds, hit, items, setOutline, thumbnail, exportArtwork, clippedSubpaths, clipToRect, effectiveSubpaths, booleanOperand, selectionHandle:point=>selection.hit(point),
+  return { render, select: updateView, updateView, bounds, painted: id => paintedBounds.get(id)?.clone() ?? bounds(id), profiledStroke, blendSteps, liveSteps, strokeLocation, widthHandles, selectionBounds, hit, items, setOutline, thumbnail, exportArtwork, clippedSubpaths, clipToRect, effectiveSubpaths, booleanOperand, selectionHandle:point=>selection.hit(point),
     glyphBounds(id,subpaths) {const item=new scope.CompoundPath({insert:false,children:subpaths.map(path)});try{return item.getBounds(records.get(id).worldMatrix).clone();}finally{item.remove();}},
     previewText(node, parentId = null) {
       textPreview?.remove(); textPreview = null;textPreviewFrame?.remove();textPreviewFrame=null;

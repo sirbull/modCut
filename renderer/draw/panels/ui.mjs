@@ -7,6 +7,7 @@ import { EFFECTS, effectLabel } from '../doc/effects.mjs';
 import { documentInfo } from '../doc/document-info.mjs';
 import { TRACE_PRESETS } from '../geom/trace.mjs';
 import { WIDTH_PROFILES, flipAcross, flipAlong, profileName } from '../geom/width-profile.mjs';
+import { addStyleCommand, applyStyleCommands, graphicStyles, removeStyleCommand, styleFrom } from '../doc/graphic-styles.mjs';
 import { addSwatch, documentSwatches, editSwatch, groupSwatches, linkedPaints, rememberColor, removeSwatch } from '../doc/swatches.mjs';
 import { ROOT_CONTEXT, collectCommands, deleteLayerCommands, deleteRowCommands, duplicateCommands, filterLayerTree, flattenCommands, layerContext, mergeLayersCommands, moveCommand, moveToLayerCommands, newLayer, othersUpdates, releaseCommands, soloUpdates } from '../doc/layers.mjs';
 import { shortcutLabel } from '../keymap.mjs';
@@ -25,6 +26,7 @@ export function icon(href) {
   return svg;
 }
 const SPLIT_KEY = 'modcut_draw_dock_split';
+const LAYER_ROW_LIMIT = 200;
 function storedSplit() { try { return Number.parseFloat(localStorage.getItem(SPLIT_KEY)); } catch { return NaN; } }
 function storeSplit(value) { try { localStorage.setItem(SPLIT_KEY, String(value)); } catch {} }
 
@@ -79,8 +81,11 @@ export function createPanels(shell, state, api) {
     const group = groupForPanel(id); if (!group) return false;
     state.ui.flyout = group.id; if (panelAvailable(id)) state.ui.groupTabs[group.id] = id; render(); return true;
   }
+  // The dock's height comes from a ResizeObserver, so laying out the dock never forces a synchronous layout.
+  let dockHeight = 0;
+  if (typeof ResizeObserver === 'function') new ResizeObserver(entries => { const next = entries[0]?.contentRect.height ?? 0; if (Math.abs(next - dockHeight) > .5) { dockHeight = next; layoutDock(); } }).observe(panels);
   function layoutDock() {
-    const height = panels.clientHeight, split = clampDockSplit(state.ui.dockSplit ?? storedSplit(),height);
+    const height = dockHeight || panels.clientHeight, split = clampDockSplit(state.ui.dockSplit ?? storedSplit(),height);
     const collapsed = id => !!state.ui.dockCollapsed[id];
     for (const id of DOCK_PANELS) {
       dock[id].section.classList.toggle('is-collapsed',collapsed(id)); dock[id].header.setAttribute('aria-expanded',String(!collapsed(id)));
@@ -239,10 +244,18 @@ export function createPanels(shell, state, api) {
     function buildList() {
       const tree = document.createElement('div'); tree.className = 'draw-layer-list'; tree.setAttribute('role','tree'); tree.setAttribute('aria-label','Layers');
       const shown = filterLayerTree(doc,state.ui.layerQuery,state.ui.layerFilter ?? 'all'), searching = !!shown;
-      let thumbs = 0;
+      let thumbs = 0, rendered = 0, more = 0;
+      // Large documents (D4.6): rows beyond the limit are counted, not built; "Show more" raises the limit.
+      const limit = state.ui.layerRowLimit ?? LAYER_ROW_LIMIT;
       function row(node, depth, context) {
         if (shown && !shown.has(node.id)) return;
         const own = layerContext(context,node), isLayer = node.type === 'layer';
+        if (rendered >= limit) {
+          more++;
+          if (node.children?.length && node.type !== 'compoundPath' && (searching || !collapsed.has(node.id))) node.children.forEach(child => row(child,depth+1,own));
+          return;
+        }
+        rendered++;
         const item = document.createElement('div'); item.className = 'draw-layer-row'; item.style.setProperty('--depth',depth);
         item.style.setProperty('--layer-color',own.color || '#006B5C');
         item.dataset.drawNode = node.id; item.setAttribute('role','treeitem'); item.setAttribute('aria-level',String(depth+1));
@@ -339,6 +352,10 @@ export function createPanels(shell, state, api) {
         if (hasChildren && (searching || !collapsed.has(node.id))) [...node.children].reverse().forEach(child => row(child,depth+1,own));
       }
       [...doc.data.layers].reverse().forEach(node => row(node,0,ROOT_CONTEXT));
+      if (more) {
+        const show = button(`Show ${Math.min(more,LAYER_ROW_LIMIT*5)} more of ${more}`,() => { state.ui.layerRowLimit = limit + LAYER_ROW_LIMIT*5; render(); });
+        show.className = 'btn btn--sm draw-layer-more'; show.dataset.drawLayerMore = String(more); tree.append(show);
+      }
       if (!tree.children.length) { const empty = document.createElement('p'); empty.className = 'draw-panel__hint'; empty.textContent = 'No matches'; tree.append(empty); }
       return tree;
     }
@@ -1069,6 +1086,69 @@ export function createPanels(shell, state, api) {
     const s = state.ui.traceStats; if (s) { const p = document.createElement('p'); p.className = 'draw-panel__hint'; p.dataset.drawTraceStats = ''; p.textContent = `Paths: ${s.paths} · Anchors: ${s.anchors} · Colors: ${s.colors}`; host.append(p); }
     text(host,id ? 'Trace makes filled paths per colour above the image and hides the image; undo brings it back.' : 'Select a placed image to trace it.');
   }
+  /** Asset Export: objects to export as their own files, one scale and format for all, into a folder. */
+  function assetExportPanel(host) {
+    const assets = (state.document.data.exportAssets ?? []).filter(a => state.document.getNode(a.nodeId)), readOnly = state.document.readOnly, o = state.ui.assetExport ??= { format: 'png', scale: '1x' };
+    if (!assets.length) text(host,'Select objects and add them; each one is exported as its own file, cut to its edges.');
+    const list = document.createElement('div'); list.className = 'draw-appearance-list draw-assets'; list.setAttribute('role','list');
+    for (const asset of assets) {
+      const row = document.createElement('div'); row.className = 'draw-appearance-row'; row.setAttribute('role','listitem'); row.dataset.drawAsset = asset.id;
+      const name = document.createElement('input'); name.type = 'text'; name.className = 'input draw-asset-name'; name.value = asset.name; name.disabled = readOnly; name.setAttribute('aria-label','Asset name');
+      name.addEventListener('change',() => api.run(() => api.renameAsset(asset.id,name.value)));
+      const show = iconButton('Select','focus-2',() => api.select([asset.nodeId]),'draw-layer-action');
+      const remove = iconButton('Remove from Asset Export','trash',() => api.run(() => api.removeAsset(asset.id)),'draw-layer-action'); remove.disabled = readOnly; remove.dataset.drawAssetRemove = asset.id;
+      row.append(name,show,remove); list.append(row);
+    }
+    host.append(list);
+    const add = button('Add Selection',() => api.run(() => api.addAssets())); add.className = 'btn btn--sm'; add.dataset.drawAssetAdd = ''; add.disabled = readOnly || !api.selectedIds().length; host.append(add);
+    const fields = document.createElement('div'); fields.className = 'draw-fields'; host.append(fields);
+    const select = (label, key, options) => { const row = document.createElement('label'); row.className = 'draw-field'; const n = document.createElement('span'); n.textContent = label;
+      const input = document.createElement('select'); input.className = 'select'; input.dataset.drawField = `asset-${key}`; for (const [v,l] of options) input.append(new Option(l,v)); input.value = o[key];
+      input.addEventListener('change',() => { o[key] = input.value; }); row.append(n,input); fields.append(row); };
+    select('Scale','scale',[['0.5x','0.5x'],['1x','1x'],['2x','2x'],['3x','3x'],['72 ppi','72 ppi'],['150 ppi','150 ppi'],['300 ppi','300 ppi']]);
+    select('Format','format',[['png','PNG'],['jpg','JPEG'],['webp','WebP'],['svg','SVG']]);
+    const go = button('Export…',() => api.exportAssets({ ...o })); go.className = 'btn btn--primary btn--sm'; go.dataset.drawAssetExport = ''; go.disabled = !assets.length; host.append(go);
+  }
+  /** Navigator: the whole document small, with the visible area boxed; click or drag to move there; zoom below. */
+  function navigatorPanel(host) {
+    const { url, area } = api.navigatorImage(220), wrap = document.createElement('div'); wrap.className = 'draw-navigator'; wrap.dataset.drawNavigator = '';
+    const img = document.createElement('img'); img.src = url; img.alt = 'Document overview'; img.draggable = false;
+    const box = document.createElement('div'); box.className = 'draw-navigator__view'; wrap.append(img,box); host.append(wrap);
+    const place = () => { const v = api.navigatorView(), sx = 100 / area.width, sy = 100 / area.height;
+      Object.assign(box.style,{ left: `${(v.x - area.x) * sx}%`, top: `${(v.y - area.y) * sy}%`, width: `${v.width * sx}%`, height: `${v.height * sy}%` }); return v; };
+    const go = event => { const r = img.getBoundingClientRect(); api.navigateTo([area.x + (event.clientX - r.left) / r.width * area.width, area.y + (event.clientY - r.top) / r.height * area.height]); };
+    wrap.addEventListener('pointerdown',event => { wrap.setPointerCapture(event.pointerId); go(event); const move = e => go(e), up = () => { wrap.removeEventListener('pointermove',move); wrap.removeEventListener('pointerup',up); };
+      wrap.addEventListener('pointermove',move); wrap.addEventListener('pointerup',up); });
+    const v = place();
+    field(host,'Zoom (%)',Math.round(v.zoom),value => api.navigateTo(null,value),{ min: .01, max: 10000, key: 'navigator-zoom', scrubbable: false });
+    navigatorPlace = place;
+  }
+  let navigatorPlace = null;
+  /** Graphic Styles: click a style to give it to the selection; New makes one from the selected object. */
+  function graphicStylesPanel(host) {
+    const ids = api.selectedIds(), readOnly = state.document.readOnly, styles = graphicStyles(state.document);
+    const grid = document.createElement('div'); grid.className = 'draw-style-grid'; grid.setAttribute('role','list'); host.append(grid);
+    for (const style of styles) {
+      const tile = document.createElement('button'); tile.type = 'button'; tile.className = 'draw-style-tile'; tile.dataset.drawStyle = style.id;
+      tile.title = style.name; tile.setAttribute('aria-label',style.name); tile.setAttribute('role','listitem'); tile.setAttribute('aria-pressed',String(state.ui.graphicStyle === style.id));
+      const fill = style.appearance.fills.find(e => !e.hidden), stroke = style.appearance.strokes.find(e => !e.hidden);
+      tile.style.background = fill?.paint?.type === 'solid' ? paintHex(fill) : fill?.paint && isGradient(fill.paint) ? gradientCss(fill.paint) : 'transparent';
+      if (stroke) tile.style.boxShadow = `inset 0 0 0 ${Math.min(6,Math.max(1,stroke.width*3))}px ${paintHex(stroke) ?? '#000'}`;
+      tile.style.opacity = String(Math.max(.2,style.opacity ?? 1));
+      tile.addEventListener('click',() => api.run(() => { state.ui.graphicStyle = style.id;
+        if (api.selectedIds().length && !readOnly) state.history.transaction('Apply Graphic Style',() => applyStyleCommands(state.document,api.selectedIds(),style).forEach(c => state.history.execute(c)));
+        else render(); }));
+      grid.append(tile);
+    }
+    const row = document.createElement('div'); row.className = 'draw-flip-row';
+    const add = button('New Graphic Style',() => api.run(() => { const node = state.document.getNode(api.selectedIds()[0]);
+      const style = styleFrom(node,`Graphic Style ${graphicStyles(state.document).length}`); state.history.execute(addStyleCommand(state.document,style)); state.ui.graphicStyle = style.id; }));
+    add.className = 'btn btn--sm'; add.dataset.drawStyleNew = ''; add.disabled = readOnly || !ids.length;
+    const remove = button('Delete',() => api.run(() => { state.history.execute(removeStyleCommand(state.document,state.ui.graphicStyle)); state.ui.graphicStyle = null; }));
+    remove.className = 'btn btn--sm'; remove.dataset.drawStyleDelete = ''; remove.disabled = readOnly || !state.ui.graphicStyle || state.ui.graphicStyle === 'default' || !styles.some(s => s.id === state.ui.graphicStyle);
+    row.append(add,remove); host.append(row);
+    text(host,ids.length ? 'Click a style to give the selected objects its fills, strokes, effects and opacity.' : 'Select objects to apply a style, or to make a new one from their look.');
+  }
   /** Links: every placed image, embedded in the document. Click to select; Replace keeps its place. */
   function linksPanel(host) {
     const images = state.document.descendants(null).filter(n => n.type === 'image');
@@ -1085,10 +1165,12 @@ export function createPanels(shell, state, api) {
   }
   /** Updates the Info panel in place as the pointer moves, without rebuilding the other panels. */
   function updateInfo() {
+    // The Navigator follows panning and zooming without rebuilding its image.
+    if (!flyout.hidden && flyoutBody.dataset.drawPanelBody === 'navigator' && navigatorPlace) { const v = navigatorPlace(), zoom = flyoutBody.querySelector('[data-draw-field=navigator-zoom]'); if (zoom && document.activeElement !== zoom) zoom.value = String(Math.round(v.zoom)); return; }
     if (flyout.hidden || flyoutBody.dataset.drawPanelBody !== 'info') return;
     flyoutBody.replaceChildren(); infoPanel(flyoutBody);
   }
-  const PANEL_CONTENT = { gradient: gradientPanel, character: host => characterPanel(host), paragraph: host => paragraphPanel(host), swatches: swatchesPanel, color: colorPanel, stroke: strokePanel, transparency: transparencyPanel, pathfinder: pathfinderPanel, appearance: appearancePanel, transform: host => transform(host), align: alignPanel, artboards: artboardPanel, history: historyPanel, info: infoPanel, 'document-info': documentInfoPanel, links: linksPanel, 'image-trace': imageTracePanel };
+  const PANEL_CONTENT = { gradient: gradientPanel, character: host => characterPanel(host), paragraph: host => paragraphPanel(host), swatches: swatchesPanel, color: colorPanel, stroke: strokePanel, transparency: transparencyPanel, pathfinder: pathfinderPanel, appearance: appearancePanel, transform: host => transform(host), align: alignPanel, artboards: artboardPanel, history: historyPanel, info: infoPanel, 'document-info': documentInfoPanel, links: linksPanel, 'image-trace': imageTracePanel, 'graphic-styles': graphicStylesPanel, navigator: navigatorPanel, 'asset-export': assetExportPanel };
   function renderFlyout() {
     const group = PANEL_GROUPS.find(g => g.id === state.ui.flyout);
     flyout.hidden = !group; if (!group) { flyoutTabs.replaceChildren(); flyoutBody.replaceChildren(); return; }

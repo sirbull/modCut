@@ -76,6 +76,11 @@
       "path": "icons/outline/border-outer.svg",
       "sha256": "713fadfdd1fa071de0e98d7815969c34b61c3a3c463744fd676c708d4765eb74"
     },
+    "brush": {
+      "name": "brush",
+      "path": "icons/outline/brush.svg",
+      "sha256": "456657551c85f1375531559c723b889fe84663e362abe7020996b02763fda26e"
+    },
     "chevron-down": {
       "name": "chevron-down",
       "path": "icons/outline/chevron-down.svg",
@@ -246,6 +251,11 @@
       "path": "icons/outline/lock-open.svg",
       "sha256": "681702f968770541c584a4002f800de73b74c625d91442f13b17cb053816d917"
     },
+    "map-2": {
+      "name": "map-2",
+      "path": "icons/outline/map-2.svg",
+      "sha256": "de2fe430df0a3a948b0a790b9ba6e2eca0f1e475813879bace09a4307fee720e"
+    },
     "mask": {
       "name": "mask",
       "path": "icons/outline/mask.svg",
@@ -260,6 +270,11 @@
       "name": "menu-2",
       "path": "icons/outline/menu-2.svg",
       "sha256": "a7630e8fc37c090e8d665c8739ea838566db4bcf79c7710a554ace3bf4733e04"
+    },
+    "packages": {
+      "name": "packages",
+      "path": "icons/outline/packages.svg",
+      "sha256": "f21015b15412656c655c24a1eb240e2e8e0b6fac71ecf9dff3d76c594c13ecc2"
     },
     "palette": {
       "name": "palette",
