@@ -119,6 +119,7 @@ export const NB = Object.freeze({
   "Click: copy appearance to the selection · Alt: apply the selection's appearance · Shift: colour under the pointer": "Klikk: kopier utseendet til utvalget · Alt: bruk utvalgets utseende · Shift: fargen under pekeren",
   "Drag: distance and angle · Shift: 45° steps": "Dra: avstand og vinkel · Shift: trinn på 45°",
   "Drag a corner of the selection: free distort (the other corners stay)": "Dra et hjørne av utvalget: fri forvrengning (de andre hjørnene blir stående)",
+  "Drag a corner of the selection: free distort (the other corners stay) · Shift: perspective": "Dra et hjørne av utvalget: fri forvrengning (de andre hjørnene blir stående) · Shift: perspektiv",
   "Drag across regions of the selected shapes: merge · Alt+drag: delete regions": "Dra over områder i de valgte formene: slå sammen · Alt+dra: slett områder",
   "Click a second object: blend the two · Click empty canvas: start over": "Klikk et objekt til: lag overgang mellom dem · Klikk tomt lerret: begynn på nytt",
   "Click an object, then another, to blend them · Double-click the tool: Blend Options": "Klikk et objekt og så et annet for å lage overgang · Dobbeltklikk verktøyet: Overgangsalternativer",

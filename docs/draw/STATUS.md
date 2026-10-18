@@ -561,7 +561,10 @@ verktøyalternativer for Smooth og Path Eraser (fast bredde i skjermpiksler nå)
 Transform Each-dialogen har Preview: hvert objekt vises transformert mens dialogen er åpen (Random bruker samme
 tilfeldige tall i forhåndsvisningen og resultatet).
 
-Gjenstår i D3.6: perspektiv (Shift i Free Transform).
+Free Transform: Shift mens man drar et hjørne gir perspektiv (nabohjørnet langs kanten man drar langs flytter seg
+speilvendt, så kanten blir smalere eller bredere om midten).
+
+Gjenstår i D3.6: ingen kjente hull i grunnformen.
 
 ### 2.24 Levende effekter, del A (D3.2, 2026-10-17)
 

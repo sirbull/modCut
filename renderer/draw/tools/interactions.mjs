@@ -142,7 +142,16 @@ export function createInteractions(canvas, state, api) {
         const last=gesture.points.at(-1);if(Math.hypot(p.x-last[0],p.y-last[1])>=.5/scope.view.zoom)gesture.points.push([p.x,p.y]);
         preview=new scope.Path({segments:gesture.points,strokeColor:'#071411',strokeWidth:1/scope.view.zoom});
       } else if (gesture.mode==='free-transform') {
-        gesture.corners[gesture.corner]=[p.x,p.y];gesture.moved=true;api.freeDistortPreview(gesture.session,gesture.corners);
+        // Shift: perspective, as in Illustrator. The neighbouring corner along the edge the drag runs along moves the
+        // mirror way, so that edge widens or narrows about its middle (corners are top left, top right, bottom right, bottom left).
+        const start=gesture.session.corners,k=gesture.corner,dx=p.x-start[k][0],dy=p.y-start[k][1];
+        gesture.corners=start.map(c=>[...c]);gesture.corners[k]=[p.x,p.y];
+        if(event.shiftKey){
+          const horizontal=Math.abs(dx)>=Math.abs(dy),partner=horizontal?[1,0,3,2][k]:[3,2,1,0][k];
+          gesture.corners[k]=horizontal?[p.x,start[k][1]]:[start[k][0],p.y];
+          gesture.corners[partner]=horizontal?[start[partner][0]-dx,start[partner][1]]:[start[partner][0],start[partner][1]-dy];
+        }
+        gesture.moved=true;api.freeDistortPreview(gesture.session,gesture.corners);
       } else if (['shape-builder','knife','eraser','path-eraser','smooth'].includes(gesture.mode)) {
         const last=gesture.points.at(-1);if(Math.hypot(p.x-last[0],p.y-last[1])>=1/scope.view.zoom)gesture.points.push([p.x,p.y]);
         // Shape Builder shades the regions it will merge; Knife shows its line; Eraser its brush stroke.

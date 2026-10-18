@@ -1874,4 +1874,5 @@ Verifisering: `document-batch`-enhetstest, `--draw-history-info`.
 - Info: tegn og ord for merket tekst (ikke dekket av E2E; testmiljøet mangler vanlige fonter for tekst).
 - Select > Same > Graphic Style (`graphic-style` i `doc/select-rules.mjs`). Verifisering: select-rules-enhetstest.
 - Transform Each: Preview (en matrise per objekt i `previewTransform`). Verifisering: `--draw-region-tools`.
+- Free Transform: Shift gir perspektiv. Verifisering: `--draw-region-tools`.
 

@@ -121,7 +121,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       tool.id==='gradient' ? 'Drag across the selection: gradient direction and length · Shift: 45° steps · Click: apply gradient' :
       tool.id==='eyedropper' ? 'Click: copy appearance to the selection · Alt: apply the selection\'s appearance · Shift: colour under the pointer' :
       tool.id==='measure' ? (state.ui.measurement?measurementText(state.ui.measurement):'Drag: distance and angle · Shift: 45° steps') :
-      tool.id==='free-transform' ? 'Drag a corner of the selection: free distort (the other corners stay)' :
+      tool.id==='free-transform' ? 'Drag a corner of the selection: free distort (the other corners stay) · Shift: perspective' :
       tool.id==='shape-builder' ? 'Drag across regions of the selected shapes: merge · Alt+drag: delete regions' :
       tool.id==='blend' ? (state.ui.blendFirst?'Click a second object: blend the two · Click empty canvas: start over':'Click an object, then another, to blend them · Double-click the tool: Blend Options') :
       tool.id==='paintbrush' ? 'Drag: paint a calligraphic stroke in the stroke colour · Enter: Paintbrush options' :
