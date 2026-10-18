@@ -78,6 +78,22 @@ export async function runDrawEffectWorkflows(client) {
     const img=new Image();img.src=url;await img.decode();const c=document.createElement('canvas');c.width=img.width;c.height=img.height;const g=c.getContext('2d');g.drawImage(img,0,0);
     return [...g.getImageData(Math.round(55/25.4*72),Math.round(65/25.4*72),1,1).data]})()`);
   assert.ok(rasterPixel[1] > 140 && rasterPixel[0] < 60, `Green in PNG: ${rasterPixel}`);
+  // Effect > Stylize > Outer Glow… on a black square: red light spreads outside it; Gaussian Blur softens the inside edge.
+  const glowing = await evaluate(`(async()=>{const w=${active},{createNode}=await import('./draw/doc/schema.mjs'),{insertNode}=await import('./draw/doc/commands.mjs'),{appearance}=await import('./draw/geometry.mjs');
+    const bd=w.state.document.data.artboards[0],n=createNode('path',{subpaths:[{closed:true,segments:[[90,50],[120,50],[120,80],[90,80]].map(p=>({p:[bd.x+p[0],bd.y+p[1]],in:[0,0],out:[0,0]}))}],appearance:appearance('#000000',null)});
+    w.state.history.execute(insertNode(w.state.document.data.layers[0].id,n));w.select([n.id]);return n.id;})()`);
+  assert.equal(await evaluate("window.modcut.clickE2EMenuItem('Effect','Outer Glow…')"), true);
+  await dialog({ color: '#ff0000', opacity: 100, blur: 2 });
+  const glowPixels = () => evaluate(`(async()=>{const w=${active},bd=w.state.document.data.artboards[0],url=w.exportBoard(bd.id,'png',{ppi:144,background:'white'});
+    const img=new Image();img.src=url;await img.decode();const c=document.createElement('canvas');c.width=img.width;c.height=img.height;const g=c.getContext('2d');g.drawImage(img,0,0);
+    return [[121,65],[105,65],[90.3,65]].map(([x,y])=>[...g.getImageData(Math.round(x/25.4*144),Math.round(y/25.4*144),1,1).data])})()`);
+  let glow = await glowPixels();
+  assert.ok(glow[0][0] > 200 && glow[0][1] < 200, `Red glow just outside the square: ${glow[0]}`);
+  assert.ok(glow[1][0] < 40, `Black inside: ${glow[1]}`);
+  await evaluate(`(async()=>{${active}.handle('effect-gaussian-blur')})()`); await dialog({ radius: 2 });
+  glow = await glowPixels();
+  assert.ok(glow[2][0] > 40 || glow[2][1] > 40, `The inside edge is soft after Gaussian Blur: ${glow[2]}`);
+  assert.equal(await evaluate(`(async()=>${active}.state.document.getNode('${glowing}').appearance.effects.map(e=>e.type).join())()`), 'outer-glow,gaussian-blur');
   await restore();
-  console.log('PASS Draw effects: Rasterize (pixels at the chosen ppi, anchors kept, image in SVG), Round Corners, Offset Path and Transform as live effects (menu and commands, one undo step each), hide and delete in Appearance, Send to Cut and Apply Last Effect use them, Expand Appearance bakes them; Zig Zag, and Drop Shadow on canvas and in PNG');
+  console.log('PASS Draw effects: Rasterize (pixels at the chosen ppi, anchors kept, image in SVG), Outer Glow and Gaussian Blur, Round Corners, Offset Path and Transform as live effects (menu and commands, one undo step each), hide and delete in Appearance, Send to Cut and Apply Last Effect use them, Expand Appearance bakes them; Zig Zag, and Drop Shadow on canvas and in PNG');
 }

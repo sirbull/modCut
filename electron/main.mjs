@@ -271,8 +271,8 @@ function buildMenu(mode = "cut") {
     template.find(item=>item.label==='Effect').submenu=[objectItem('Apply Last Effect','effect-last'),objectItem('Last Effect…','effect-options'),{type:'separator'},
       {label:'Distort & Transform',submenu:[objectItem('Pucker & Bloat…','effect-pucker-bloat'),objectItem('Roughen…','effect-roughen'),objectItem('Transform…','effect-transform'),
         objectItem('Twist…','effect-twist'),objectItem('Zig Zag…','effect-zig-zag')]},{label:'Path',submenu:[objectItem('Offset Path…','effect-offset-path')]},
-      objectItem('Rasterize…','effect-rasterize'),
-      {label:'Stylize',submenu:[objectItem('Drop Shadow…','effect-drop-shadow'),objectItem('Round Corners…','effect-round-corners'),objectItem('Scribble…','effect-scribble')]},
+      objectItem('Rasterize…','effect-rasterize'),{label:'Blur',submenu:[objectItem('Gaussian Blur…','effect-gaussian-blur')]},
+      {label:'Stylize',submenu:[objectItem('Drop Shadow…','effect-drop-shadow'),objectItem('Feather…','effect-feather'),objectItem('Inner Glow…','effect-inner-glow'),objectItem('Outer Glow…','effect-outer-glow'),objectItem('Round Corners…','effect-round-corners'),objectItem('Scribble…','effect-scribble')]},
       {label:'Pathfinder',submenu:[['unite','Add'],['intersect','Intersect'],['exclude','Exclude'],['minusFront','Subtract'],['minusBack','Minus Back'],['divide','Divide'],['trim','Trim'],['merge','Merge'],['crop','Crop'],['outline','Outline']]
         .map(([id,label])=>objectItem(label,`live-${id}`))},
       {label:'Warp',submenu:[['arc','Arc'],['arc-lower','Arc Lower'],['arc-upper','Arc Upper'],['arch','Arch'],['bulge','Bulge'],['shell-lower','Shell Lower'],['shell-upper','Shell Upper'],

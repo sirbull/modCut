@@ -1850,3 +1850,11 @@ Rasterize, Path Eraser og Smooth (Smooth når nå 12 skjermpiksler).
 
 Verifisering: `envelope`-enhetstest (skjema), `--draw-warp-mask` (Arch løfter midten av toppkanten).
 
+
+## 2026-10-18: Gaussian Blur, Feather, Inner Glow og Outer Glow (hull fra D3.2)
+
+- Effektene `gaussian-blur`, `feather`, `outer-glow` og `inner-glow` (pikseleffekter), dialoger og menyvalg.
+- `rasterFor` lager pikslene med plass til spredning og bruker effektene i rekkefølge med lerretsfiltre.
+
+Verifisering: effekt-enhetstest, `--draw-effects` (rød glød utenfor, myk kant etter Gaussian Blur).
+

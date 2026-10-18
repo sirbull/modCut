@@ -490,6 +490,8 @@ export function effectDialog(type, values = {}) {
     : type === 'warp' ? [{key:'style',label:'Style',type:'select',value:values.style,options:Object.entries(WARP_STYLES).map(([value,label])=>({value,label}))},
       {key:'orientation',label:'Orientation',type:'select',value:values.orientation,options:[{value:'horizontal',label:'Horizontal'},{value:'vertical',label:'Vertical'}]},
       n('bend','Bend (%)',-100,100),n('horizontal','Distortion horizontal (%)',-100,100),n('vertical','Distortion vertical (%)',-100,100)]
+    : type === 'gaussian-blur' || type === 'feather' ? [n('radius','Radius (mm)',0,250)]
+    : type === 'outer-glow' || type === 'inner-glow' ? [{key:'color',label:'Color',type:'color',value:String(values.color??'#ffffff').toLowerCase()},{...n('opacity','Opacity (%)',0,100),value:Math.round((values.opacity??.75)*100)},n('blur','Blur (mm)',0,250)]
     : type === 'rasterize' ? [{key:'ppi',label:'Resolution',type:'select',value:String(values.ppi??0),options:[{value:'0',label:'Use Document Raster Effects Resolution'},{value:'72',label:'Screen (72 ppi)'},{value:'150',label:'Medium (150 ppi)'},{value:'300',label:'High (300 ppi)'},{value:'600',label:'600 ppi'}]},
       {key:'background',label:'Background',type:'select',value:values.background,options:[{value:'white',label:'White'},{value:'transparent',label:'Transparent'}]},
       {key:'antialias',label:'Anti-aliasing',type:'checkbox',value:values.antialias!==false},n('padding','Add around object (mm)',0,1000)]
@@ -497,10 +499,10 @@ export function effectDialog(type, values = {}) {
       {key:'color',label:'Color',type:'color',value:String(values.color??'#000000').toLowerCase()},{...n('opacity','Opacity (%)',0,100),value:Math.round((values.opacity??.75)*100)}]
     : [n('scaleX','Scale horizontal (%)',-100000,100000),n('scaleY','Scale vertical (%)',-100000,100000),n('moveX','Move horizontal (mm)',-100000,100000),
       n('moveY','Move vertical (mm)',-100000,100000),n('angle','Rotate (°)',-360,360),n('copies','Copies',0,1000,1)];
-  const title = {'offset-path':'Offset Path','round-corners':'Round Corners',transform:'Transform Effect','zig-zag':'Zig Zag','pucker-bloat':'Pucker & Bloat',roughen:'Roughen',twist:'Twist','drop-shadow':'Drop Shadow',rasterize:'Rasterize',warp:'Warp Options',pathfinder:'Pathfinder',scribble:'Scribble Options'}[type];
+  const title = {'offset-path':'Offset Path','round-corners':'Round Corners',transform:'Transform Effect','zig-zag':'Zig Zag','pucker-bloat':'Pucker & Bloat',roughen:'Roughen',twist:'Twist','drop-shadow':'Drop Shadow',rasterize:'Rasterize','gaussian-blur':'Gaussian Blur',feather:'Feather','outer-glow':'Outer Glow','inner-glow':'Inner Glow',warp:'Warp Options',pathfinder:'Pathfinder',scribble:'Scribble Options'}[type];
   const whole = new Set(['copies','ridges','seed']);
   return openDrawModal({title,submitLabel:'OK',className:'draw-effect-dialog',fields}).then(v=>v&&Object.fromEntries(Object.entries(v).map(([k,x])=>[k,
-    k==='join'||k==='style'||k==='orientation'||k==='op'||k==='background'?x:k==='color'?String(x).toUpperCase():k==='smooth'||k==='antialias'?!!x:k==='opacity'&&type==='drop-shadow'?Number(x)/100:whole.has(k)?Math.round(Number(x)):Number(x)])));
+    k==='join'||k==='style'||k==='orientation'||k==='op'||k==='background'?x:k==='color'?String(x).toUpperCase():k==='smooth'||k==='antialias'?!!x:k==='opacity'&&['drop-shadow','outer-glow','inner-glow'].includes(type)?Number(x)/100:whole.has(k)?Math.round(Number(x)):Number(x)])));
 }
 /** Transform Each: scale, move, rotate and reflect each object around its own reference point. */
 export function transformEachDialog(defaults={}) {

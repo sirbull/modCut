@@ -54,3 +54,12 @@ test('Rasterize: document resolution by default, a chosen ppi, background and pa
   const node = { appearance: { effects: [effect('rasterize', { ppi: 72 }), { ...effect('rasterize', { ppi: 300 }), hidden: true }] } };
   assert.equal(rasterizeOf(node).ppi, 72, 'Hidden effects are skipped'); assert.equal(hasVectorEffects(node), false);
 });
+
+test('blur, feather and glows are pixel effects with their own checked settings, kept in order', async () => {
+  const { pixelEffects } = await import('../doc/effects.mjs');
+  assert.deepEqual(effect('gaussian-blur', { radius: 2 }), { type: 'gaussian-blur', radius: 2 });
+  assert.deepEqual(effect('outer-glow'), { type: 'outer-glow', color: '#FFFF00', opacity: .75, blur: 2 });
+  assert.throws(() => effect('inner-glow', { color: 'gold' }), /Invalid Inner Glow/); assert.throws(() => effect('feather', { radius: -1 }), /Invalid Feather/);
+  const node = { appearance: { effects: [effect('round-corners'), effect('outer-glow'), effect('gaussian-blur'), { ...effect('feather'), hidden: true }] } };
+  assert.deepEqual(pixelEffects(node).map((e) => e.type), ['outer-glow', 'gaussian-blur']);
+});

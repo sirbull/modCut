@@ -25,6 +25,11 @@ export const EFFECTS = Object.freeze({
   'drop-shadow': { label: 'Drop Shadow', group: 'Stylize', raster: true, defaults: { x: 1.5, y: 1.5, blur: 1.5, color: '#000000', opacity: .75 } },
   // Rasterize: the object is drawn as pixels (0 ppi: the document's raster effects resolution) and stays editable.
   rasterize: { label: 'Rasterize', group: 'Rasterize', raster: true, defaults: { ppi: 0, background: 'transparent', padding: 0, antialias: true } },
+  // Pixel effects: the object is drawn as pixels with these applied, in this order (Effect > Blur and Stylize).
+  'gaussian-blur': { label: 'Gaussian Blur', group: 'Blur', raster: true, pixels: true, defaults: { radius: 1 } },
+  feather: { label: 'Feather', group: 'Stylize', raster: true, pixels: true, defaults: { radius: 1 } },
+  'outer-glow': { label: 'Outer Glow', group: 'Stylize', raster: true, pixels: true, defaults: { color: '#FFFF00', opacity: .75, blur: 2 } },
+  'inner-glow': { label: 'Inner Glow', group: 'Stylize', raster: true, pixels: true, defaults: { color: '#FFFFFF', opacity: .75, blur: 2 } },
 });
 const finite = (value, min, max) => Number.isFinite(value) && value >= min && value <= max;
 /** A validated effect: `{ type, ...settings, hidden? }`. */
@@ -41,6 +46,8 @@ export function effect(type, settings = {}) {
     : type === 'pathfinder' ? !!PATHFINDER_LABELS[e.op]
     : type === 'scribble' ? finite(e.angle, -360, 360) && finite(e.spacing, .05, 1000) && finite(e.strokeWidth, .01, 1000) && finite(e.overlap, -1000, 1000) && finite(e.variation, 0, 1000) && finite(e.curviness, 0, 100) && Number.isInteger(e.seed)
     : type === 'warp' ? !!WARP_STYLES[e.style] && finite(e.bend, -100, 100) && finite(e.horizontal, -100, 100) && finite(e.vertical, -100, 100) && ['horizontal', 'vertical'].includes(e.orientation)
+    : type === 'gaussian-blur' || type === 'feather' ? finite(e.radius, 0, 250)
+    : type === 'outer-glow' || type === 'inner-glow' ? /^#[0-9A-Fa-f]{6}$/.test(e.color) && finite(e.opacity, 0, 1) && finite(e.blur, 0, 250)
     : type === 'rasterize' ? (e.ppi === 0 || finite(e.ppi, 9, 2400)) && ['transparent', 'white'].includes(e.background) && finite(e.padding, 0, 1000) && typeof e.antialias === 'boolean'
     : type === 'drop-shadow' ? finite(e.x, -1000, 1000) && finite(e.y, -1000, 1000) && finite(e.blur, 0, 1000) && /^#[0-9A-Fa-f]{6}$/.test(e.color) && finite(e.opacity, 0, 1)
     : finite(e.scaleX, -100000, 100000) && finite(e.scaleY, -100000, 100000) && Math.abs(e.scaleX) > 1e-6 && Math.abs(e.scaleY) > 1e-6
@@ -59,6 +66,8 @@ export const hasVectorEffects = (node) => (node.appearance?.effects ?? []).some(
 export const livePathfinder = (node) => node?.type === 'group' ? (node.appearance?.effects ?? []).filter((e) => !e.hidden && e.type === 'pathfinder').at(-1)?.op ?? null : null;
 /** The Scribble effect that decides how an object is painted (its fill becomes a stroked line), or null. */
 export const scribbleOf = (node) => (node.appearance?.effects ?? []).filter((e) => !e.hidden && e.type === 'scribble').at(-1) ?? null;
+/** The visible effects that turn an object into pixels (Rasterize, blurs and glows), in order. */
+export const pixelEffects = (node) => (node.appearance?.effects ?? []).filter((e) => !e.hidden && (e.type === 'rasterize' || EFFECTS[e.type]?.pixels));
 /** The Rasterize effect that turns an object into pixels when it is drawn, or null. */
 export const rasterizeOf = (node) => (node.appearance?.effects ?? []).filter((e) => !e.hidden && e.type === 'rasterize').at(-1) ?? null;
 /** The drop shadow drawn under an object: its last visible Drop Shadow effect, or null. */

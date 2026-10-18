@@ -11,7 +11,7 @@ import { arrowShapes } from '../geom/arrows.mjs';
 import { normalizeProfile, variableStrokeRings } from '../geom/width-profile.mjs';
 import { blendStepCount, matchShapes, interpolateShapes, stepPositions, lerpColor, spineCurve, placeOnSpine, keyPosition } from '../geom/blend.mjs';
 import { PT_TO_MM, textValues } from '../doc/text.mjs';
-import { applyVectorEffects, hasVectorEffects, dropShadow, livePathfinder, rasterizeOf, scribbleOf } from '../doc/effects.mjs';
+import { applyVectorEffects, hasVectorEffects, dropShadow, livePathfinder, pixelEffects, scribbleOf } from '../doc/effects.mjs';
 import { offsetPathsSync, geometryReady } from '../geom/kernel-js.mjs';
 import { toSubpaths, runPathfinder } from '../geom/pathfinder.mjs';
 import { textSubpaths } from '../doc/text-layout.mjs';
@@ -117,19 +117,50 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
    * resolution, white behind it or transparent, placed where it is. The object itself is hidden, not changed.
    */
   function rasterFor(item, node, record) {
-    const e = rasterizeOf(node);
-    if (!e || !['path', 'shape', 'text'].includes(node.type)) return null;
+    const effects = pixelEffects(node);
+    if (!effects.length || !['path', 'shape', 'text'].includes(node.type)) return null;
+    const e = effects.filter(x => x.type === 'rasterize').at(-1) ?? { ppi: 0, background: 'transparent', padding: 0, antialias: true };
+    // Room for blurs and glows to spread, plus any padding Rasterize asks for.
+    const spread = effects.reduce((sum, x) => sum + (x.type === 'outer-glow' ? x.blur * 2 : x.type === 'gaussian-blur' ? x.radius * 2 : 0), 0);
     // Opacity is applied to the pixels as a whole afterwards, as for the object itself.
     const parts = [item, record.stack, record.arrows].filter(Boolean).map(part => { const copy = part.clone({ insert: false }); copy.visible = true; copy.opacity = 1; return copy; });
-    const art = new scope.Group({ insert: false, children: parts }), box = art.strokeBounds.expand(e.padding * 2);
+    const art = new scope.Group({ insert: false, children: parts }), box = art.strokeBounds.expand(e.padding * 2 + spread * 2);
     if (!(box.width > 0 && box.height > 0)) { art.remove(); return null; }
-    if (e.background === 'white') art.insertChild(0, new scope.Path.Rectangle({ rectangle: box, fillColor: 'white', insert: false }));
-    else art.insertChild(0, new scope.Path.Rectangle({ rectangle: box, fillColor: new scope.Color(1, 1, 1, 0), insert: false }));
-    const ppi = e.ppi || (state.document.data.rasterEffectsPpi ?? 300), resolution = Math.min(ppi / 25.4 * 72, 8000 / Math.max(box.width, box.height) * 72);
-    const raster = art.rasterize({ resolution, insert: false }); art.remove();
+    art.insertChild(0, new scope.Path.Rectangle({ rectangle: box, fillColor: new scope.Color(1, 1, 1, 0), insert: false }));
+    const ppi = e.ppi || (state.document.data.rasterEffectsPpi ?? 300), resolution = Math.min(ppi / 25.4 * 72, 4000 / Math.max(box.width, box.height) * 72);
+    const first = art.rasterize({ resolution, insert: false }); art.remove();
+    const canvas = first.canvas, ppmm = canvas.width / box.width;
+    for (const x of effects) applyPixelEffect(canvas, x, ppmm);
+    if (e.background === 'white') { const g = canvas.getContext('2d'); g.globalCompositeOperation = 'destination-over'; g.fillStyle = '#FFFFFF'; g.fillRect(0, 0, canvas.width, canvas.height); }
+    const raster = new scope.Raster({ insert: false, canvas }); raster.bounds = first.bounds; first.remove();
     raster.smoothing = e.antialias ? 'high' : 'off'; raster.data.nodeId = node.id; raster.data.rasterEffect = true;
     raster.data.baseOpacity = node.opacity; raster.opacity = node.opacity;
     return raster;
+  }
+  /** A canvas of the same size: the source's alpha, blurred by `sigma` pixels (in the alpha channel). */
+  function blurredAlpha(canvas, sigma) {
+    const out = document.createElement('canvas'); out.width = canvas.width; out.height = canvas.height;
+    const g = out.getContext('2d'); g.filter = sigma > 0 ? `blur(${sigma}px)` : 'none'; g.drawImage(canvas, 0, 0); return out;
+  }
+  /** Gaussian Blur, Feather, Outer and Inner Glow on the object's pixels (radius and blur in mm). */
+  function applyPixelEffect(canvas, e, ppmm) {
+    const g = canvas.getContext('2d', { willReadFrequently: true }), w = canvas.width, h = canvas.height;
+    if (e.type === 'gaussian-blur') { const blurred = blurredAlpha(canvas, e.radius * ppmm / 2); g.clearRect(0, 0, w, h); g.drawImage(blurred, 0, 0); return; }
+    if (e.type === 'feather') {
+      // The edge fades inwards: alpha falls from full, a radius inside the edge, to none at the edge.
+      const mask = blurredAlpha(canvas, e.radius * ppmm / 2).getContext('2d').getImageData(0, 0, w, h).data, data = g.getImageData(0, 0, w, h);
+      for (let i = 3; i < data.data.length; i += 4) data.data[i] = Math.round(data.data[i] * Math.max(0, Math.min(1, mask[i] / 255 * 2 - 1)));
+      g.putImageData(data, 0, 0); return;
+    }
+    if (e.type === 'outer-glow' || e.type === 'inner-glow') {
+      const glow = document.createElement('canvas'); glow.width = w; glow.height = h;
+      const gg = glow.getContext('2d'); gg.drawImage(canvas, 0, 0); gg.globalCompositeOperation = 'source-in'; gg.fillStyle = e.color; gg.fillRect(0, 0, w, h);
+      if (e.type === 'outer-glow') { const soft = blurredAlpha(glow, e.blur * ppmm / 2); g.save(); g.globalAlpha = e.opacity; g.globalCompositeOperation = 'destination-over'; g.drawImage(soft, 0, 0); g.restore(); return; }
+      // Inner glow: the colour where the object's blurred alpha falls below full, kept inside the object.
+      const mask = blurredAlpha(canvas, e.blur * ppmm / 2).getContext('2d').getImageData(0, 0, w, h).data, data = gg.getImageData(0, 0, w, h), own = g.getImageData(0, 0, w, h).data;
+      for (let i = 3; i < data.data.length; i += 4) data.data[i] = Math.round(own[i] * (1 - mask[i] / 255) * e.opacity);
+      gg.putImageData(data, 0, 0); g.save(); g.globalCompositeOperation = 'source-atop'; g.drawImage(glow, 0, 0); g.restore();
+    }
   }
   /** The drawn item: the node's own geometry, then its live vector effects (paths and shapes). */
   function make(node) {
