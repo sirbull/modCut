@@ -12,9 +12,11 @@ import { AI_OPTIONS, aiMetadata, hasTransparency } from './io/ai.mjs';
 import { dxfDocument } from './io/dxf.mjs';
 import { tiffDocument } from './io/tiff.mjs';
 import { pltDocument } from './io/plt.mjs';
+import { gifDocument } from './io/gif.mjs';
 import { exportTarget, artboardFilePath, scalePpi, screensFilePath } from './io/export-plan.mjs';
 import { exportFileName } from './io/export.mjs';
 import { exportOptionsDialog, pdfOptionsDialog } from './ui/export-dialogs.mjs';
+import { documentInfo } from './doc/document-info.mjs';
 import { exportScreensDialog } from './ui/screens-dialog.mjs';
 
 export const DRAW_ATTACHMENT = 'modcut-draw.json';
@@ -96,13 +98,14 @@ export function createExportController({ state, scope, renderer, withScope, expo
       return { files: [{ path, data: base64(bytes), encoding: 'base64' }], warnings: [...warnings] };
     }
     const files = [];
-    // TIFF: the PNG rendering's pixels, written as a TIFF with the chosen resolution.
-    if (format === 'tif') {
+    // TIFF and GIF: the PNG rendering's pixels, written by our own encoders.
+    if (format === 'tif' || format === 'gif') {
       for (const board of boards) {
         const index = state.document.data.artboards.indexOf(board), file = boards.length > 1 ? artboardFilePath(path, board, index) : path, ppi = options.ppi ?? 150;
         const img = await loadImage(exportBoard(board.id, 'png', { ppi, background: options.background ?? 'white' })), canvas = document.createElement('canvas');
         canvas.width = img.width; canvas.height = img.height; const ctx = canvas.getContext('2d', { willReadFrequently: true }); ctx.drawImage(img, 0, 0);
-        const pixels = ctx.getImageData(0, 0, img.width, img.height), bytes = tiffDocument({ width: img.width, height: img.height, data: pixels.data }, { ppi, alpha: (options.background ?? 'white') === 'transparent', compression: options.compression ?? 'packbits' });
+        const pixels = ctx.getImageData(0, 0, img.width, img.height), image = { width: img.width, height: img.height, data: pixels.data };
+        const bytes = format === 'gif' ? gifDocument(image) : tiffDocument(image, { ppi, alpha: (options.background ?? 'white') === 'transparent', compression: options.compression ?? 'packbits' });
         files.push({ path: file, data: base64(bytes), encoding: 'base64' });
       }
       return { files, warnings: [...warnings] };
@@ -188,5 +191,30 @@ export function createExportController({ state, scope, renderer, withScope, expo
     bridge.notify?.(`Exported ${written.length} asset${written.length === 1 ? '' : 's'} to ${fileName(folder)}.`, 'ok');
     return written;
   }
-  return { exportAs, exportScreens, exportAssets, build, model, available };
+  /**
+   * File > Package: a "<name> Folder" in a chosen folder with the document (as File > Save writes it), every
+   * placed image as its own file in Links, and Fonts.txt and Report.txt listing what the document uses.
+   */
+  async function packageDocument() {
+    if (!available() || typeof bridge.documentPayload !== 'function') throw new Error('Package is not available here.');
+    const payload = bridge.documentPayload(), folder = await bridge.chooseFolder({}); if (!folder) return null;
+    const doc = state.document, safe = (t) => String(t ?? '').replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ').trim();
+    const name = safe(doc.data.name) || 'Untitled', base = `${folder}/${name} Folder`, files = [{ path: `${base}/${name}.modcut`, data: JSON.stringify(payload), encoding: 'utf8' }];
+    const EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif', 'image/svg+xml': 'svg', 'image/tiff': 'tif' }, used = new Set(), links = [];
+    for (const node of doc.descendants(null).filter((n) => n.type === 'image')) {
+      const asset = doc.data.assets?.[node.assetId]; if (!asset?.data || links.some((l) => l.assetId === node.assetId)) continue;
+      let file = `${safe(node.name) || 'Image'}.${EXT[asset.mimeType] ?? 'png'}`; for (let n = 2; used.has(file); n++) file = `${safe(node.name) || 'Image'} ${n}.${EXT[asset.mimeType] ?? 'png'}`; used.add(file);
+      files.push({ path: `${base}/Links/${file}`, data: asset.data, encoding: 'base64' }); links.push({ assetId: node.assetId, file, pixels: `${asset.width} × ${asset.height}` });
+    }
+    const info = documentInfo(doc);
+    const fonts = info.fonts.map((f) => `${f.family} ${f.weight === 'normal' ? 'Regular' : f.weight === 'bold' ? 'Bold' : f.weight}${f.style === 'italic' ? ' Italic' : ''} (${f.source === 'google' ? 'Google Fonts, fonts.google.com' : 'installed on this computer'}), used by ${f.count} text${f.count === 1 ? '' : 's'}`);
+    files.push({ path: `${base}/Fonts.txt`, data: `Fonts used in ${name}\n\n${fonts.length ? fonts.join('\n') : 'No text objects.'}\n\nInstalled fonts must be installed on the computer that opens the document; text already turned into outlines needs no font.\n`, encoding: 'utf8' });
+    const report = [`${name}: package report`, '', `Artboards: ${info.artboards}`, `Layers: ${info.layers}`, ...info.objects.map((o) => `${o.label}: ${o.count}`), `Anchor points: ${info.anchors}`,
+      `Open paths: ${info.openPaths}`, '', 'Links (embedded in the document; copies in Links):', ...(links.length ? links.map((l) => `  ${l.file} (${l.pixels} px)`) : ['  none']), '', `Fonts: ${info.fonts.length} (see Fonts.txt)`];
+    files.push({ path: `${base}/Report.txt`, data: report.join('\n') + '\n', encoding: 'utf8' });
+    const written = await bridge.write({ files, open: base });
+    bridge.notify?.(`Packaged ${name} with ${links.length} link${links.length === 1 ? '' : 's'}.`, 'ok');
+    return written;
+  }
+  return { exportAs, exportScreens, exportAssets, packageDocument, build, model, available };
 }

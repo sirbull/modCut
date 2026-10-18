@@ -7,9 +7,9 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { basename, dirname, extname, resolve, sep } from 'node:path';
 
 export const EXPORT_FILE_TYPES = Object.freeze({
-  pdf: 'PDF', ai: 'Adobe Illustrator (PDF compatible)', svg: 'SVG', svgz: 'SVG Compressed', eps: 'EPS', dxf: 'DXF (AutoCAD R12)', plt: 'PLT (HP-GL)', png: 'PNG', jpg: 'JPEG', webp: 'WebP', tif: 'TIFF',
+  pdf: 'PDF', ai: 'Adobe Illustrator (PDF compatible)', svg: 'SVG', svgz: 'SVG Compressed', eps: 'EPS', dxf: 'DXF (AutoCAD R12)', plt: 'PLT (HP-GL)', png: 'PNG', jpg: 'JPEG', webp: 'WebP', tif: 'TIFF', gif: 'GIF',
 });
-const TEXT_TYPES = new Set(['svg', 'eps', 'dxf', 'plt']);
+const TEXT_TYPES = new Set(['svg', 'eps', 'dxf', 'plt', 'txt', 'modcut']);
 
 export function registerExportFiles({ ipcMain, dialog, shell, getWindow, isE2E = false, e2eExports = [] }) {
   const files = new Map(), folders = new Set(); // chosen file stem → directory; chosen folders

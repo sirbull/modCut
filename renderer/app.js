@@ -400,6 +400,8 @@ const drawExportBridge = {
   chooseFolder: (options) => window.modcut.chooseExportFolder(options),
   write: (options) => window.modcut.writeExportFiles(options),
   notify: (message, kind) => toast(message, kind),
+  // File > Package: the whole document as it would be saved (Draw and Cut).
+  documentPayload: () => documentPayload(),
 };
 $("sendToCut").addEventListener("click", () => activeTab()?.draw?.sendToCut());
 

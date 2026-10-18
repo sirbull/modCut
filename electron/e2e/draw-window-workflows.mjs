@@ -24,6 +24,31 @@ export async function runDrawWindowWorkflows(client) {
   const [tif] = await exports();
   assert.equal(tif.name, 'Window proof.tif'); assert.deepEqual([...Buffer.from(tif.data, 'base64').subarray(0, 4)], [0x49, 0x49, 42, 0]);
 
+  // GIF the same way; Chromium decodes it at the artboard size (120 x 80 mm at 72 ppi).
+  await evaluate("window.modcut.setE2EExportPath('Window proof.gif')");
+  assert.equal(await evaluate("window.modcut.clickE2EMenuItem('File','Export As…')"), true);
+  await until("!!document.querySelector('.draw-export-options form')", 'GIF options');
+  await evaluate("(()=>{const f=document.querySelector('.draw-export-options form');f.elements.ppi.value='72';f.elements.background.value='white';f.requestSubmit();})()");
+  const [gif] = await exports();
+  const decoded = await evaluate(`(async()=>{const img=new Image();img.src='data:image/gif;base64,${gif.data}';await img.decode();const c=document.createElement('canvas');c.width=img.width;c.height=img.height;const g=c.getContext('2d');g.drawImage(img,0,0);
+    return {size:[img.width,img.height],red:[...g.getImageData(Math.round(20/25.4*72),Math.round(20/25.4*72),1,1).data].slice(0,3)}})()`);
+  assert.deepEqual(decoded.size, [340, 227]); assert.ok(decoded.red[0] > 200 && decoded.red[1] < 50, `The red square in the GIF: ${decoded.red}`);
+
+  // PLT (HP-GL): pen per colour, 40 units per mm.
+  await evaluate("window.modcut.setE2EExportPath('Window proof.plt')");
+  assert.equal(await evaluate("window.modcut.clickE2EMenuItem('File','Export As…')"), true);
+  await until("!!document.querySelector('.draw-export-options form')", 'PLT options');
+  await evaluate("document.querySelector('.draw-export-options form').requestSubmit()");
+  const [plt] = await exports();
+  assert.equal(plt.name, 'Window proof.plt'); assert.match(plt.text, /^IN;\nPA;\nSP1;\nPU400,2800;/); assert.match(plt.text, /SP2;/);
+  // File > Package: the document, its links and the reports in "<name> Folder".
+  assert.equal(await evaluate("window.modcut.clickE2EMenuItem('File','Package…')"), true);
+  const packaged = await exports();
+  assert.deepEqual(packaged.map(f => f.path.split('/').slice(-2).join('/')).sort(), ['Window proof Folder/Fonts.txt', 'Window proof Folder/Report.txt', 'Window proof Folder/Window proof.modcut']);
+  const project = JSON.parse(packaged.find(f => f.name.endsWith('.modcut')).text);
+  assert.equal(project.app, 'modCut'); assert.equal(project.draw.layers[0].children.length, 2);
+  assert.match(packaged.find(f => f.name === 'Report.txt').text, /Paths: 2/);
+
   // Graphic Styles: a style from the red square, given to the blue one in one undo step.
   await evaluate(`(async()=>{const w=${active};w.select(['${red}']);w.handle('panel.graphic-styles')})()`); await wait(50);
   await evaluate(`document.querySelector('${root} [data-draw-style-new]').click()`); await wait(50);
@@ -79,5 +104,5 @@ export async function runDrawWindowWorkflows(client) {
   assert.equal(await evaluate(`(async()=>(${active}.state.ui.flyout))()`), 'navigator');
   await evaluate("localStorage.removeItem('modcut.draw.workspaces')");
   await restore();
-  console.log('PASS Draw window: TIFF export, Graphic Styles (new from selection, apply in one step), Navigator (click to move, zoom), Rotate View with 15° snapping and reset, Asset Export at 2x, workspaces saved, reset and switched');
+  console.log('PASS Draw window: TIFF, GIF and PLT export, Package, Graphic Styles (new from selection, apply in one step), Navigator (click to move, zoom), Rotate View with 15° snapping and reset, Asset Export at 2x, workspaces saved, reset and switched');
 }

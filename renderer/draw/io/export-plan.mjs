@@ -13,6 +13,7 @@ export const EXPORT_TARGETS = Object.freeze([
   { id: 'jpg', label: 'JPEG', ext: 'jpg', vector: false },
   { id: 'webp', label: 'WebP', ext: 'webp', vector: false },
   { id: 'tif', label: 'TIFF', ext: 'tif', vector: false },
+  { id: 'gif', label: 'GIF', ext: 'gif', vector: false },
 ]);
 export const exportTarget = (id) => EXPORT_TARGETS.find((t) => t.id === id) ?? null;
 export const targetForPath = (path) => {

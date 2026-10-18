@@ -1707,4 +1707,15 @@ Verifisering: 279 Draw-enhetstester (`tiff`, `graphic-styles`, `workspaces`), ny
 Verifisering: 284 Draw-enhetstester (`draft.test.mjs` med indekssjekk gjennom angre/gjør om), `--draw-window` og
 `--draw-perf` passerer.
 
-Neste: fase 5.
+
+## 2026-10-18: Tegning per bilde rettet, og fase 5 del A
+
+- Full E2E 37 stoppet i `draw-transform-workflows.mjs`, som leser lerretet rett etter `updateView`. Rask tegning
+  (vanlige dokumenter) skjer derfor synkront som før; bare når en full tegning tar over 12 ms samles tegningen per
+  bilde og panorering bruker forrige bilde.
+- `io/plt.mjs` (HP-GL, testet mot `hpglimport.js`), `io/gif.mjs` (median cut og LZW, testet med egen dekoder og
+  Chromium), File > Package (`packageDocument`).
+
+Verifisering: 288 Draw-enhetstester (`plt`, `gif`), `--draw-window` dekker TIFF, GIF, PLT og Package.
+
+Neste: resten av fase 5.

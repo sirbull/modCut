@@ -219,6 +219,7 @@ function buildMenu(mode = "cut") {
         { label: "Export for Screens…", accelerator: acceleratorFor("export-screens", { isMac }), click: () => send("export-screens") },
         { label: "Export As…", accelerator: acceleratorFor("export-as", { isMac }), click: () => send("export-as") },
       ] },
+      { label: "Package…", click: () => send("package") },
       { label: "Send Artboard to Cut…", click: () => send("send-to-cut") });
     const sharedCommands = { "New": "new", "Import…": "import", "Add…": "add", "Close Tab": "close-tab",
       "Save document…": "save-document", "Save document as…": "save-document-as" };

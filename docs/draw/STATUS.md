@@ -760,6 +760,20 @@ brukes derfor forrige bilde. Å sette inn tusenvis av objekter i én transaksjon
 import og lim inn bør bruke `insertNodes`. Gjenopprettingskopien (JSON av hele dokumentet) tar ca 150 ms etter
 en pause.
 
+### 2.34 Fase 5, del A: PLT- og GIF-eksport og Package (2026-10-18)
+
+* **PLT (HP-GL)** i Export As: 40 enheter per mm, origo nede til venstre, én penn per strek- eller fyllfarge
+  (opptil 8), kurver som korte linjer med valgt nøyaktighet. For plottere og skjæreplottere; appens egen
+  HP-GL-import leser filen tilbake.
+* **GIF** i Export As: én ramme med inntil 256 farger (median cut) og av/på-gjennomsiktighet.
+* **File > Package…:** mappen «<navn> Folder» med dokumentet (som File > Save skriver det, også Cut-delen),
+  hvert plassert bilde i Links, Fonts.txt (fonter og kilde) og Report.txt (innhold fra Document Info).
+* Kode: `io/plt.mjs`, `io/gif.mjs`, `packageDocument` i `export-controller.mjs`, `documentPayload` i appens
+  eksportbro.
+
+Gjenstår i fase 5: AVIF-eksport (Chromium kan ikke kode AVIF fra lerret), Vertical Type, Touch Type,
+Glyphs-panel, Scribble, PDF/X-4, EPS-import, egne hurtigtaster, MCP-server og lokalisering.
+
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
 | Oppgave | Status |
@@ -794,7 +808,7 @@ en pause.
 | D4.4 Paintbrush og Blob Brush | Ferdig i grunnform (2.31); art-, scatter- og pattern-pensler gjenstår |
 | D4.5 EPS/TIFF, Graphic Styles, Navigator, Rotate View, Asset Export | Ferdig i grunnform (2.32) |
 | D4.6 Ytelsespass | Gjort (2.33); innsetting av tusenvis i én transaksjon gjenstår |
-| Fase 5 | Gjenstår |
+| Fase 5 | Del A (2.34): PLT, GIF, Package; resten gjenstår |
 
 ## 4. Rekkefølge videre
 
@@ -813,7 +827,7 @@ SVG-, PNG- og JPEG-eksport er gjort (2.5).
    gjort. Fra D2.1 er skalering, baseline shift, kerning, avsnitt og blandede stiler gjort (2.11).
 6. Fase 3: D3.1 Expand og Expand Appearance (2.20) og D3.5 Select-meny, Magic Wand og Lasso (2.21) er gjort.
    D3.4 Shape Builder, Knife og Eraser (2.22) og D3.6 Free Transform, Transform Each og Split Into Grid
-   (2.23) er også gjort, og D3.2 effekter (2.24), D3.8 (2.25), D3.3 Image Trace (2.26) og D3.7 AI-eksport (2.27). Fase 3 er ferdig i grunnform. Fase 4: D4.1 Width (2.28), D4.2 Blend (2.29) D4.3 Warp, Live Pathfinder og opacity masks (2.30) D4.4 Paintbrush og Blob Brush (2.31) og D4.5 TIFF, Graphic Styles, Navigator, Rotate View, Asset Export og arbeidsområder (2.32) og D4.6 ytelsespass (2.33) er gjort. Fase 4 er ferdig i grunnform. **Neste: fase 5.**
+   (2.23) er også gjort, og D3.2 effekter (2.24), D3.8 (2.25), D3.3 Image Trace (2.26) og D3.7 AI-eksport (2.27). Fase 3 er ferdig i grunnform. Fase 4: D4.1 Width (2.28), D4.2 Blend (2.29) D4.3 Warp, Live Pathfinder og opacity masks (2.30) D4.4 Paintbrush og Blob Brush (2.31) og D4.5 TIFF, Graphic Styles, Navigator, Rotate View, Asset Export og arbeidsområder (2.32) og D4.6 ytelsespass (2.33) er gjort. Fase 4 er ferdig i grunnform. Fase 5 del A (2.34) er gjort. **Neste: resten av fase 5 (Glyphs, Touch Type, egne hurtigtaster m.m.).**
 
 
 ## 5. Kjente begrensninger og risiko

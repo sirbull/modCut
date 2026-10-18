@@ -79,11 +79,12 @@ export function exportOptionsDialog({ format, boards, defaults = {} }) {
   const target = exportTarget(format), ui = frame({ title: `${target.label} Options`, className: 'draw-export-options', submitLabel: 'Export' });
   const readRange = rangeControls(ui.body, boards, defaults);
   const fields = {};
-  if (format === 'png' || format === 'jpg' || format === 'webp' || format === 'tif') {
+  if (format === 'png' || format === 'jpg' || format === 'webp' || format === 'tif' || format === 'gif') {
     fields.ppi = select(ui.body, 'Resolution', [...EXPORT_RESOLUTIONS.map((r) => [String(r), `${r} ppi${r === 72 ? ' (Screen)' : r === 150 ? ' (Medium)' : r === 300 ? ' (High)' : ''}`])], defaults.ppi ?? 150, 'ppi');
     // JPEG has no transparency; PNG and WebP keep it.
     fields.background = select(ui.body, 'Background', [...(format !== 'jpg' ? [['transparent', 'Transparent']] : []), ['white', 'White'], ['artboard', 'Artboard color']],
       format === 'jpg' && (defaults.background ?? 'white') === 'transparent' ? 'white' : defaults.background ?? (format !== 'jpg' ? 'transparent' : 'white'), 'background');
+    if (format === 'gif') make('p', 'draw-export-note', ui.body, 'GIF has up to 256 colours and on/off transparency; soft edges get a hard edge.');
     if (format === 'tif') fields.compression = select(ui.body, 'Compression', [['packbits', 'PackBits (lossless)'], ['none', 'None']], defaults.compression ?? 'packbits', 'compression');
     if (format === 'jpg' || format === 'webp') fields.quality = number(ui.body, 'Quality (0–10)', defaults.quality ?? 8, 'quality', { min: 0, max: 10, step: 1 });
   }

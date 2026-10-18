@@ -652,8 +652,9 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
   let drawQueued = false, onlyView = true, lastFrame = null, settleTimer = null;
   const SLOW_DRAW_MS = 12;
   function requestDraw(viewOnly = false) {
-    // Without frames (unit tests) the view is drawn at once, as before.
-    if (typeof requestAnimationFrame !== 'function') { scope.view.update(); return; }
+    // A view that draws quickly (or has no frames, in unit tests) is drawn at once, as before; only slow
+    // documents wait for the next frame.
+    if (typeof requestAnimationFrame !== 'function' || (!lastFrame && !drawQueued)) { fullDraw(); return; }
     onlyView &&= viewOnly;
     if (drawQueued) return; drawQueued = true;
     requestAnimationFrame(() => {
@@ -663,6 +664,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
     });
   }
   function fullDraw() {
+    clearTimeout(settleTimer); settleTimer = null;
     const view = scope.view, started = performance.now();
     view.update();
     if (performance.now() - started < SLOW_DRAW_MS) { lastFrame = null; return; }
