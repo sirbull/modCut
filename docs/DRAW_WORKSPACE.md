@@ -1298,6 +1298,19 @@ Vertical Type, Touch Type, Glyphs-panel, Scribble, Package, PDF/X-4, bleed og me
 AVIF/GIF-eksport, PLT-eksport, EPS-import, egendefinerte hurtigtaster, modCut MCP-server,
 lokalisering (norsk/engelsk, samme system som resten av appen).
 
+### Planlagt senere: flere språk (ikke startet)
+
+Norsk grensesnitt er ikke et krav, men siden lokaliseringen finnes (se [STATUS.md](draw/STATUS.md) 2.39),
+skal den holdes ved like og utvides med **tysk, fransk og spansk**. Ikke start før eieren sier fra. Arbeidet:
+
+* En katalog per språk (`renderer/i18n-de.mjs`, `i18n-fr.mjs`, `i18n-es.mjs`) med samme nøkler som den norske,
+  registrert i `CATALOGS` og `LANGUAGES` i `renderer/i18n.mjs`, og i `resolveLanguage` (de, fr, es).
+* Menyunntak som «Cut» (Edit > Cut mot laseroperasjonen) i `MENU_WORDS` i `electron/main.mjs` for hvert språk.
+* En test som sjekker at hver katalog har de samme nøklene som den norske og samme plassholdere.
+* Faguttrykk fra Illustrators egne utgaver på disse språkene der det finnes, og gjennomlesing av noen som kan språket.
+* E2E: `--draw-language` utvides med ett nytt språk om gangen.
+* Tekster som blir lengre (tysk særlig) må sjekkes i paneler, verktøylinje og dialoger.
+
 ---
 
 ## 19. Testing og kvalitetskrav

@@ -864,6 +864,8 @@ områdetekst eller tekst på bane.
   plassholderne stemmer og at oversettelsene ikke bruker tankestrek.
 * Kode: `renderer/i18n.mjs`, `renderer/i18n-nb.mjs`, språkvalget i `preferences.mjs` og `app.js`, IPC `setLanguage`
   og `localizeMenuTemplate` i `electron/main.mjs`.
+* Norsk er ikke et krav, men holdes ved like. **Tysk, fransk og spansk er planlagt, ikke startet**; se
+  DRAW_WORKSPACE.md kapittel 18, «Planlagt senere: flere språk».
 
 Gjenstår i fase 5: AVIF-eksport (Chromium kan ikke kode AVIF fra lerret).
 
