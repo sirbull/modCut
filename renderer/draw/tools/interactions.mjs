@@ -81,7 +81,7 @@ export function createInteractions(canvas, state, api) {
     gesture.event=event;
     if (gesture.tool==='hand') {
       scope.view.center=gesture.center.subtract(screenDelta(event.clientX-gesture.screen[0],event.clientY-gesture.screen[1]));
-      withScope(()=>renderer.updateView());api.status(p);return;
+      withScope(()=>renderer.updateView({viewOnly:true}));api.status(p);return;
     }
     if (gesture.tool==='rotate-view') {
       // The angle the pointer turned around the canvas centre; Shift snaps to 15°.
@@ -324,7 +324,7 @@ export function createInteractions(canvas, state, api) {
   canvas.addEventListener('wheel',event=>{
     event.preventDefault();
     if(event.ctrlKey || event.metaKey) api.zoomAt(point(event),Math.exp(-event.deltaY*.001*(api.preferences().invertZoom ? -1 : 1)));
-    else {scope.view.center=scope.view.center.add(screenDelta(event.deltaX,event.deltaY));withScope(()=>renderer.updateView());api.status();}
+    else {scope.view.center=scope.view.center.add(screenDelta(event.deltaX,event.deltaY));withScope(()=>renderer.updateView({viewOnly:true}));api.status();}
   },{...events,passive:false});
   window.addEventListener('blur',cancel,events);
   return {cancel,busy:()=>!!gesture,

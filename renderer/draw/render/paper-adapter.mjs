@@ -607,7 +607,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
     }
     return group;
   }
-  function updateView() {
+  function updateView({ viewOnly = false } = {}) {
     const viewport = scope.view.bounds.expand(16 / scope.view.zoom), dimmed = isolationDimmed();
     textFrames.removeChildren();
     for (const [id, record] of records) {
@@ -640,8 +640,42 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
       const {matrix,scaleStrokes}=transformPreviewOptions,properties=scaleStrokes===null?{}:scaledStrokeProperties(record.node,record.worldMatrix.values,matrix,scaleStrokes);
       if(properties.appearance||record.node.strokeScaling===false)style(item,{...record.node,...properties});
     });
-    // One draw per frame, however many updates an action makes (D4.6).
-    selection.update(); anchors.update(); scope.view.requestUpdate();
+    // One draw per frame, however many updates an action makes (D4.6). Paper's own requestUpdate only
+    // draws with autoUpdate on, which this view does not use.
+    selection.update(); anchors.update(); requestDraw(viewOnly);
+  }
+  /**
+   * Drawing (D4.6). Updates are drawn once per frame. When a full draw is slow (a big document) its frame is
+   * kept; while only the view moves (pan, zoom, rotate) that frame is moved and scaled at once, and the
+   * artwork is drawn sharp again when the view has been still for a moment.
+   */
+  let drawQueued = false, onlyView = true, lastFrame = null, settleTimer = null;
+  const SLOW_DRAW_MS = 12;
+  function requestDraw(viewOnly = false) {
+    // Without frames (unit tests) the view is drawn at once, as before.
+    if (typeof requestAnimationFrame !== 'function') { scope.view.update(); return; }
+    onlyView &&= viewOnly;
+    if (drawQueued) return; drawQueued = true;
+    requestAnimationFrame(() => {
+      drawQueued = false; const quick = onlyView && !!lastFrame; onlyView = true;
+      if (quick) { blitFrame(); clearTimeout(settleTimer); settleTimer = setTimeout(() => { settleTimer = null; scope.view._needsUpdate = true; fullDraw(); }, 150); }
+      else fullDraw();
+    });
+  }
+  function fullDraw() {
+    const view = scope.view, started = performance.now();
+    view.update();
+    if (performance.now() - started < SLOW_DRAW_MS) { lastFrame = null; return; }
+    const element = view.element, copy = lastFrame?.canvas ?? document.createElement('canvas');
+    if (copy.width !== element.width || copy.height !== element.height) { copy.width = element.width; copy.height = element.height; }
+    const ctx = copy.getContext('2d'); ctx.clearRect(0, 0, copy.width, copy.height); ctx.drawImage(element, 0, 0);
+    lastFrame = { canvas: copy, matrix: view.matrix.clone() };
+  }
+  function blitFrame() {
+    const view = scope.view, element = view.element, ctx = element.getContext('2d'), ratio = view.pixelRatio ?? 1;
+    const m = view.matrix.clone().append(lastFrame.matrix.inverted());
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, element.width, element.height);
+    ctx.setTransform(m.a, m.b, m.c, m.d, m.tx * ratio, m.ty * ratio); ctx.drawImage(lastFrame.canvas, 0, 0); ctx.restore();
   }
   /** A detached group with the printable artwork in preview mode: no templates, hidden objects, dimming or culling. */
   const filled = item => !!item.fillColor && item.fillColor.alpha !== 0;
@@ -886,7 +920,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
   }
   /** The width-profiled stroke `entry` of node `id` as filled outline subpaths in the node's own space (Outline Stroke). */
   const profiledStroke = (id, entry) => { const item = items.get(id); return item ? variableStrokeSubpaths(item, entry) : null; };
-  return { render, select: updateView, updateView, bounds, painted: id => paintedBounds.get(id)?.clone() ?? bounds(id), profiledStroke, blendSteps, liveSteps, strokeLocation, widthHandles, selectionBounds, hit, items, setOutline, thumbnail, exportArtwork, clippedSubpaths, clipToRect, effectiveSubpaths, booleanOperand, selectionHandle:point=>selection.hit(point),
+  return { render, select: updateView, updateView, requestDraw, bounds, painted: id => paintedBounds.get(id)?.clone() ?? bounds(id), profiledStroke, blendSteps, liveSteps, strokeLocation, widthHandles, selectionBounds, hit, items, setOutline, thumbnail, exportArtwork, clippedSubpaths, clipToRect, effectiveSubpaths, booleanOperand, selectionHandle:point=>selection.hit(point),
     glyphBounds(id,subpaths) {const item=new scope.CompoundPath({insert:false,children:subpaths.map(path)});try{return item.getBounds(records.get(id).worldMatrix).clone();}finally{item.remove();}},
     previewText(node, parentId = null) {
       textPreview?.remove(); textPreview = null;textPreviewFrame?.remove();textPreviewFrame=null;

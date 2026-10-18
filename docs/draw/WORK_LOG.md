@@ -1699,6 +1699,10 @@ Verifisering: 279 Draw-enhetstester (`tiff`, `graphic-styles`, `workspaces`), ny
   identitetsbasert `differences`, `updateNodes`/`insertNodes` i transformasjoner, nøkkel-, grense- og
   miniatyrcache per nodeobjekt, `requestUpdate`, radgrense i Layers, ResizeObserver i `layoutDock`.
 - Rettet underveis: `exportAssets.nodeId` ble validert som en ny unik id; Rotate View tilbake til 0 kan gi −0.
+- Feil i første versjon (87fb97f): Paper sin `requestUpdate` tegner bare med `autoUpdate`, så lerretet ble ikke
+  tegnet etter endringer (full E2E 36 stoppet i temaskifte-testen, og de første panoreringstallene var for gode).
+  Nå: egen `requestDraw` (én tegning per bilde, synkront uten `requestAnimationFrame` i enhetstester) og
+  `blitFrame` for panorering og zoom i store dokumenter.
 
 Verifisering: 284 Draw-enhetstester (`draft.test.mjs` med indekssjekk gjennom angre/gjør om), `--draw-window` og
 `--draw-perf` passerer.

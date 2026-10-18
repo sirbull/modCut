@@ -8,6 +8,7 @@ export const EXPORT_TARGETS = Object.freeze([
   { id: 'svgz', label: 'SVG Compressed', ext: 'svgz', vector: true },
   { id: 'eps', label: 'EPS', ext: 'eps', vector: true },
   { id: 'dxf', label: 'DXF (AutoCAD R12)', ext: 'dxf', vector: true },
+  { id: 'plt', label: 'PLT (HP-GL plotter and cutter)', ext: 'plt', vector: true },
   { id: 'png', label: 'PNG', ext: 'png', vector: false },
   { id: 'jpg', label: 'JPEG', ext: 'jpg', vector: false },
   { id: 'webp', label: 'WebP', ext: 'webp', vector: false },

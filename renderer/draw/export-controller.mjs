@@ -11,6 +11,7 @@ import { epsDocument } from './io/eps.mjs';
 import { AI_OPTIONS, aiMetadata, hasTransparency } from './io/ai.mjs';
 import { dxfDocument } from './io/dxf.mjs';
 import { tiffDocument } from './io/tiff.mjs';
+import { pltDocument } from './io/plt.mjs';
 import { exportTarget, artboardFilePath, scalePpi, screensFilePath } from './io/export-plan.mjs';
 import { exportFileName } from './io/export.mjs';
 import { exportOptionsDialog, pdfOptionsDialog } from './ui/export-dialogs.mjs';
@@ -113,8 +114,8 @@ export function createExportController({ state, scope, renderer, withScope, expo
         if (format === 'svg') files.push({ path: file, data: svg, encoding: 'utf8' });
         else if (globalThis.pako) files.push({ path: file, data: base64(globalThis.pako.gzip(new TextEncoder().encode(svg))), encoding: 'base64' });
         else throw new Error('SVG compression is not available.');
-      } else if (format === 'eps' || format === 'dxf') {
-        const m = model(board), result = format === 'eps' ? epsDocument(m) : dxfDocument(m, { tolerance: options.tolerance ?? 0.01 });
+      } else if (format === 'eps' || format === 'dxf' || format === 'plt') {
+        const m = model(board), result = format === 'eps' ? epsDocument(m) : format === 'plt' ? pltDocument(m, { tolerance: options.tolerance ?? 0.025 }) : dxfDocument(m, { tolerance: options.tolerance ?? 0.01 });
         result.warnings.forEach((w) => warnings.add(w));
         files.push({ path: file, data: result.text, encoding: 'utf8' });
       } else {

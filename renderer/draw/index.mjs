@@ -163,7 +163,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   }
   function zoomAt(point,factor) {
     withScope(()=>{const anchor=scope.view.projectToView(point);scope.view.zoom=Math.max(.00001,Math.min(100*(96/25.4),scope.view.zoom*factor));
-      scope.view.center=scope.view.center.add(point.subtract(scope.view.viewToProject(anchor)));renderer.updateView();});status();
+      scope.view.center=scope.view.center.add(point.subtract(scope.view.viewToProject(anchor)));renderer.updateView({viewOnly:true});});status();
   }
   function fit(id=activeArtboard(state).id) {withScope(()=>renderer.fit(id));status();}
   function refresh() {
@@ -268,10 +268,10 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     navigatorCache={data,maxPx,result:{url:canvas.toDataURL('image/png'),area}};return navigatorCache.result;
   }
   /** Rotate View: the view turns around its centre (degrees, -180..180); the artwork is unchanged. */
-  function rotateView(angle){withScope(()=>{const a=((angle+180)%360+360)%360-180;scope.view.rotation=Math.abs(a)<1e-9?0:a;renderer.updateView();});status();}
+  function rotateView(angle){withScope(()=>{const a=((angle+180)%360+360)%360-180;scope.view.rotation=Math.abs(a)<1e-9?0:a;renderer.updateView({viewOnly:true});});status();}
   const navigatorView=()=>{const b=scope.view.bounds;return {x:b.x,y:b.y,width:b.width,height:b.height,zoom:scope.view.zoom/(96/25.4)*100};};
   function navigateTo(point,percent=null){
-    withScope(()=>{if(percent!==null)scope.view.zoom=Math.max(.00001,Math.min(100*(96/25.4),percent/100*(96/25.4)));if(point)scope.view.center=new scope.Point(point[0],point[1]);renderer.updateView();});status();
+    withScope(()=>{if(percent!==null)scope.view.zoom=Math.max(.00001,Math.min(100*(96/25.4),percent/100*(96/25.4)));if(point)scope.view.center=new scope.Point(point[0],point[1]);renderer.updateView({viewOnly:true});});status();
   }
   // onExport is the app's file bridge (save dialog, folder, write); see export-controller.mjs.
   const exporter=createExportController({state,scope,renderer,withScope,exportBoard,bridge:onExport});

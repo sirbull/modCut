@@ -27,8 +27,10 @@ export async function runDrawPerfWorkflows(client, { report = false, count = 500
   timings.insert = await step('insert', `const {insertNode}=await import('./draw/doc/commands.mjs'),layer=w.state.document.data.layers[0];w.state.history.transaction('Insert',()=>window.__perfPaths.forEach(n=>w.state.history.execute(insertNode(layer.id,n))))`);
   if (timings.insert === Infinity) { for (let i = 0; i < 120 && !(await evaluate(`(async()=>${active}.state.document.data.layers[0].children.length===${count})()`).catch(() => false)); i++) await new Promise((r) => setTimeout(r, 1000)); }
   await step('fit', `w.handle('fit-artboard')`);
-  const pans = []; for (let i = 0; i < 9; i++) pans.push(await step('pan', `w.scope.view.center=w.scope.view.center.add([5,0]);w.renderer.updateView()`)); timings.pan = median(pans);
-  const zooms = []; for (let i = 0; i < 6; i++) zooms.push(await step('zoom', `w.scope.view.zoom*=${i % 2 ? 1 / 1.1 : 1.1};w.renderer.updateView()`)); timings.zoom = median(zooms);
+  const pans = []; for (let i = 0; i < 9; i++) pans.push(await step('pan', `w.scope.view.center=w.scope.view.center.add([5,0]);w.renderer.updateView({viewOnly:true})`)); timings.pan = median(pans);
+  const zooms = []; for (let i = 0; i < 6; i++) zooms.push(await step('zoom', `w.scope.view.zoom*=${i % 2 ? 1 / 1.1 : 1.1};w.renderer.updateView({viewOnly:true})`)); timings.zoom = median(zooms);
+  // A full, sharp redraw of everything (what the view settles to after panning).
+  const redraws = []; for (let i = 0; i < 5; i++) redraws.push(await step('redraw', `w.scope.view._needsUpdate=true;w.scope.view.update()`)); timings.redraw = median(redraws);
   timings.selectAll = await step('selectAll', `w.handle('select-all')`);
   timings.move = await step('move', `w.handle('nudge-right')`);
   timings.deselect = await step('deselect', `w.handle('deselect')`);
@@ -61,7 +63,7 @@ export async function runDrawPerfWorkflows(client, { report = false, count = 500
   await evaluate('delete window.__perfPaths');
   console.log(`Draw performance (ms): ${JSON.stringify(timings)}`);
   assert.equal(timings.anchors, count * 40);
-  if (!report) for (const [key, ceiling] of Object.entries({ insert: 40000, pan: 120, zoom: 150, selectAll: 2000, move: 8000, edit: 1500, undo: 1500 }))
+  if (!report) for (const [key, ceiling] of Object.entries({ insert: 40000, pan: 60, zoom: 60, redraw: 400, selectAll: 2000, move: 8000, edit: 1500, undo: 1500 }))
     assert.ok(timings[key] < ceiling, `${key} took ${timings[key]} ms (ceiling ${ceiling})`);
   await restore();
   console.log(`PASS Draw performance: ${count} paths and ${count * 40} anchors insert, pan, zoom, select all, move, edit and undo within the ceilings`);

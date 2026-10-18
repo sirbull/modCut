@@ -733,7 +733,8 @@ bilder for tegning):
 | Steg | Før | Etter |
 | --- | --- | --- |
 | Sette inn alle i ett angresteg | over 15 minutter (ble ikke ferdig) | ca 11 000 |
-| Panorere / zoome ett steg | ikke målbart (låst) | 30 / 31 (bildefrekvens) |
+| Panorere / zoome ett steg | ikke målbart (låst) | 30 / 30 (forrige bilde flyttes, så tegnes alt skarpt) |
+| Full, skarp tegning | | ca 76 (ca 45 uten de to bildene) |
 | Select All | | ca 300 |
 | Flytte alt (Nudge) | | ca 2 600 |
 | Flytte ett objekt | | ca 450 (selve handlingen ca 160) |
@@ -747,12 +748,15 @@ Tiltak:
   indeksen oppdateres bare for endrede barnelister; oppslag i redigeringer bruker indeksens sti.
 * **`differences`** går bare endrede stier (identitet først), og patcher deler frosne verdier i stedet for å klone.
 * **`updateNodes` og `insertNodes`**: transformasjoner av mange objekter blir én redigering.
-* **Renderer:** nøkler og fingeravtrykk caches per nodeobjekt, grenser caches per objekt, én tegning per bilde
-  (`requestUpdate`), miniatyrer caches per nodeobjekt og store lag tegnes etter en pause.
+* **Renderer:** nøkler og fingeravtrykk caches per nodeobjekt, grenser caches per objekt, én tegning per bilde,
+  og når en full tegning er treg flyttes og skaleres forrige bilde under panorering og zoom (Hand, hjul,
+  Navigator, Rotate View) til visningen står stille i 150 ms. Miniatyrer caches per nodeobjekt og store lag
+  tegnes etter en pause.
 * **Panel:** Layers viser de første 200 radene med «Show more», `layoutDock` tvinger ikke layout, og
   `selectedIds` var kubisk.
 
-Gjenstår i D4.6: å sette inn tusenvis av objekter i én transaksjon er fortsatt kvadratisk (én kommando per objekt);
+Gjenstår i D4.6: full tegning av 200 000 ankre er ca 45 ms (ca 22 bilder/s) og ikke 50 bilder/s; under panorering
+brukes derfor forrige bilde. Å sette inn tusenvis av objekter i én transaksjon er fortsatt kvadratisk (én kommando per objekt);
 import og lim inn bør bruke `insertNodes`. Gjenopprettingskopien (JSON av hele dokumentet) tar ca 150 ms etter
 en pause.
 
