@@ -156,5 +156,12 @@ export function createFontService({directories=systemFontDirectories(),google}={
     return {version:1,signature:textSignature(patch),font:fontInfo,glyphs,lineWidths,
       ...(area?{visibleLines,overflow:visibleLines<lines.length}:{})};
   }
-  return {list,shape};
+  /** Glyphs panel (D5): the printable characters a font has, in code point order (up to `limit`). */
+  async function characters(values,{limit=6000}={}) {
+    const {font,face}=await resolveFont(values??{});
+    const printable=c=>c>=0x20&&!(c>=0x7F&&c<=0x9F)&&!(c>=0xD800&&c<=0xDFFF)&&c!==0xFFFE&&c!==0xFFFF&&c!==0xAD;
+    const set=[...new Set(font.characterSet??[])].filter(printable).sort((a,b)=>a-b);
+    return {family:face?.family??font.familyName,style:face?.style??font.subfamilyName,count:set.length,characters:set.slice(0,limit)};
+  }
+  return {list,shape,characters};
 }

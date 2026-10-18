@@ -774,6 +774,22 @@ en pause.
 Gjenstår i fase 5: AVIF-eksport (Chromium kan ikke kode AVIF fra lerret), Vertical Type, Touch Type,
 Glyphs-panel, Scribble, PDF/X-4, EPS-import, egne hurtigtaster, MCP-server og lokalisering.
 
+### 2.35 Fase 5, del B: egne hurtigtaster, Glyphs og Scribble (2026-10-18)
+
+* **Edit > Keyboard Shortcuts…:** alle verktøy og kommandoer med hurtigtast, søk, klikk og trykk de nye tastene
+  (Backspace/Delete fjerner, Escape avbryter), Reset All. Konflikter avvises med navn på begge. Lagres i
+  brukerdatamappen (`draw-shortcuts.json`) av hovedprosessen, som bygger menyene med dem; lerret og verktøytips
+  bruker de samme.
+* **Glyphs** (fane ved Character og Paragraph): alle tegn i fonten til valgt tekst (eller standardfonten), sist
+  brukte først. Klikk setter tegnet inn ved markøren i tekstredigereren; med en tekst valgt åpnes redigereren først.
+* **Effect > Stylize > Scribble…:** fyllet tegnes som én skriblet linje i fyllfargen (vinkel, avstand,
+  strekbredde, overlapp, variasjon, kurvethet, frø). Hull respekteres. Send to Cut sender linjen som strek.
+* Kode: overstyringer i `keymap.mjs` (`setKeyOverrides`, `validateOverrides`, `keyFromEvent`),
+  `ui/shortcuts-dialog.mjs`, `characters` i `electron/font-service.mjs` og `glyphsPanel`, `geom/scribble.mjs` og
+  `scribbleOf` i `doc/effects.mjs`.
+
+Gjenstår i fase 5: AVIF-eksport, Vertical Type, Touch Type, PDF/X-4, EPS-import, MCP-server og lokalisering.
+
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
 | Oppgave | Status |
@@ -808,7 +824,7 @@ Glyphs-panel, Scribble, PDF/X-4, EPS-import, egne hurtigtaster, MCP-server og lo
 | D4.4 Paintbrush og Blob Brush | Ferdig i grunnform (2.31); art-, scatter- og pattern-pensler gjenstår |
 | D4.5 EPS/TIFF, Graphic Styles, Navigator, Rotate View, Asset Export | Ferdig i grunnform (2.32) |
 | D4.6 Ytelsespass | Gjort (2.33); innsetting av tusenvis i én transaksjon gjenstår |
-| Fase 5 | Del A (2.34): PLT, GIF, Package; resten gjenstår |
+| Fase 5 | Del A (2.34) PLT, GIF, Package og del B (2.35) hurtigtaster, Glyphs, Scribble; resten gjenstår |
 
 ## 4. Rekkefølge videre
 
@@ -827,7 +843,7 @@ SVG-, PNG- og JPEG-eksport er gjort (2.5).
    gjort. Fra D2.1 er skalering, baseline shift, kerning, avsnitt og blandede stiler gjort (2.11).
 6. Fase 3: D3.1 Expand og Expand Appearance (2.20) og D3.5 Select-meny, Magic Wand og Lasso (2.21) er gjort.
    D3.4 Shape Builder, Knife og Eraser (2.22) og D3.6 Free Transform, Transform Each og Split Into Grid
-   (2.23) er også gjort, og D3.2 effekter (2.24), D3.8 (2.25), D3.3 Image Trace (2.26) og D3.7 AI-eksport (2.27). Fase 3 er ferdig i grunnform. Fase 4: D4.1 Width (2.28), D4.2 Blend (2.29) D4.3 Warp, Live Pathfinder og opacity masks (2.30) D4.4 Paintbrush og Blob Brush (2.31) og D4.5 TIFF, Graphic Styles, Navigator, Rotate View, Asset Export og arbeidsområder (2.32) og D4.6 ytelsespass (2.33) er gjort. Fase 4 er ferdig i grunnform. Fase 5 del A (2.34) er gjort. **Neste: resten av fase 5 (Glyphs, Touch Type, egne hurtigtaster m.m.).**
+   (2.23) er også gjort, og D3.2 effekter (2.24), D3.8 (2.25), D3.3 Image Trace (2.26) og D3.7 AI-eksport (2.27). Fase 3 er ferdig i grunnform. Fase 4: D4.1 Width (2.28), D4.2 Blend (2.29) D4.3 Warp, Live Pathfinder og opacity masks (2.30) D4.4 Paintbrush og Blob Brush (2.31) og D4.5 TIFF, Graphic Styles, Navigator, Rotate View, Asset Export og arbeidsområder (2.32) og D4.6 ytelsespass (2.33) er gjort. Fase 4 er ferdig i grunnform. Fase 5 del A (2.34) og del B (2.35) er gjort. **Neste: resten av fase 5 (Touch Type, Vertical Type, lokalisering m.m.).**
 
 
 ## 5. Kjente begrensninger og risiko

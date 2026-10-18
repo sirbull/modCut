@@ -1,7 +1,7 @@
 import { DOCK_PANELS, PANEL_DEFINITIONS, PANEL_GROUPS, clampDockSplit, groupForPanel, panelAvailable, panelName, panelSpriteHref } from './registry.mjs';
 import { insertNode, updateDocument, updateNode } from '../doc/commands.mjs';
 import { createId } from '../doc/schema.mjs';
-import { textValues } from '../doc/text.mjs';
+import { DEFAULT_CHARACTER, textValues } from '../doc/text.mjs';
 import { addStop, colorHex, defaultGradient, gradientCss, isGradient, removeStop, reverseGradient, setGradientAngle, setGradientType, updateStop } from '../doc/gradient.mjs';
 import { EFFECTS, effectLabel } from '../doc/effects.mjs';
 import { documentInfo } from '../doc/document-info.mjs';
@@ -1086,6 +1086,33 @@ export function createPanels(shell, state, api) {
     const s = state.ui.traceStats; if (s) { const p = document.createElement('p'); p.className = 'draw-panel__hint'; p.dataset.drawTraceStats = ''; p.textContent = `Paths: ${s.paths} · Anchors: ${s.anchors} · Colors: ${s.colors}`; host.append(p); }
     text(host,id ? 'Trace makes filled paths per colour above the image and hides the image; undo brings it back.' : 'Select a placed image to trace it.');
   }
+  /**
+   * Glyphs (D5): every character of the selected text's font (or the default font). A click puts it in the
+   * text being edited, at the cursor; with a text object selected and no editor open, the editor opens first.
+   */
+  const glyphCache = new Map();
+  function glyphsPanel(host) {
+    const node = state.document.getNode(api.selectedIds()[0]), textNode = node?.type === 'text' ? node : null;
+    const values = textNode ? textValues(textNode) : { ...DEFAULT_CHARACTER, text: '' }, key = JSON.stringify([values.fontFamily, values.fontWeight, values.fontStyle, values.fontPostscriptName ?? null, values.fontSource ?? null]);
+    const entry = glyphCache.get(key);
+    if (!entry) {
+      glyphCache.set(key, { loading: true });
+      Promise.resolve(window.modcut?.fontCharacters?.(values)).then(result => { glyphCache.set(key, result ?? { error: 'Glyphs are not available here.' }); render(); },
+        error => { glyphCache.set(key, { error: error.message || 'The font could not be read.' }); render(); });
+    }
+    if (!entry || entry.loading) { text(host,'Reading the font…'); return; }
+    if (entry.error) { text(host,entry.error); return; }
+    const title = document.createElement('p'); title.className = 'draw-panel__hint'; title.dataset.drawGlyphsFont = '';
+    title.textContent = `${entry.family}${entry.style ? ` ${entry.style}` : ''} · ${entry.count} characters${entry.count > entry.characters.length ? ` (first ${entry.characters.length})` : ''}`; host.append(title);
+    const grid = document.createElement('div'); grid.className = 'draw-glyphs'; grid.setAttribute('role','grid'); grid.style.fontFamily = `"${entry.family}"`; host.append(grid);
+    const recent = state.ui.recentGlyphs ?? [];
+    for (const code of [...recent, ...entry.characters.filter(c => !recent.includes(c))]) {
+      const ch = String.fromCodePoint(code), b = document.createElement('button'); b.type = 'button'; b.className = 'draw-glyph'; b.textContent = ch; b.dataset.drawGlyph = String(code);
+      b.title = `U+${code.toString(16).toUpperCase().padStart(4,'0')}`; b.setAttribute('aria-label',`${ch} ${b.title}`);
+      b.addEventListener('click',() => api.run(() => { state.ui.recentGlyphs = [code, ...recent.filter(c => c !== code)].slice(0,16); api.insertGlyph(ch); }));
+      grid.append(b);
+    }
+  }
   /** Asset Export: objects to export as their own files, one scale and format for all, into a folder. */
   function assetExportPanel(host) {
     const assets = (state.document.data.exportAssets ?? []).filter(a => state.document.getNode(a.nodeId)), readOnly = state.document.readOnly, o = state.ui.assetExport ??= { format: 'png', scale: '1x' };
@@ -1170,7 +1197,7 @@ export function createPanels(shell, state, api) {
     if (flyout.hidden || flyoutBody.dataset.drawPanelBody !== 'info') return;
     flyoutBody.replaceChildren(); infoPanel(flyoutBody);
   }
-  const PANEL_CONTENT = { gradient: gradientPanel, character: host => characterPanel(host), paragraph: host => paragraphPanel(host), swatches: swatchesPanel, color: colorPanel, stroke: strokePanel, transparency: transparencyPanel, pathfinder: pathfinderPanel, appearance: appearancePanel, transform: host => transform(host), align: alignPanel, artboards: artboardPanel, history: historyPanel, info: infoPanel, 'document-info': documentInfoPanel, links: linksPanel, 'image-trace': imageTracePanel, 'graphic-styles': graphicStylesPanel, navigator: navigatorPanel, 'asset-export': assetExportPanel };
+  const PANEL_CONTENT = { gradient: gradientPanel, character: host => characterPanel(host), paragraph: host => paragraphPanel(host), swatches: swatchesPanel, color: colorPanel, stroke: strokePanel, transparency: transparencyPanel, pathfinder: pathfinderPanel, appearance: appearancePanel, transform: host => transform(host), align: alignPanel, artboards: artboardPanel, history: historyPanel, info: infoPanel, 'document-info': documentInfoPanel, links: linksPanel, 'image-trace': imageTracePanel, 'graphic-styles': graphicStylesPanel, navigator: navigatorPanel, 'asset-export': assetExportPanel, glyphs: glyphsPanel };
   function renderFlyout() {
     const group = PANEL_GROUPS.find(g => g.id === state.ui.flyout);
     flyout.hidden = !group; if (!group) { flyoutTabs.replaceChildren(); flyoutBody.replaceChildren(); return; }

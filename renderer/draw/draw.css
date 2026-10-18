@@ -565,3 +565,15 @@ body[data-workspace="draw"] #sendToCut { display: inline-flex; }
 .draw-navigator__view { position: absolute; border: 1.5px solid #D32F2F; pointer-events: none; box-sizing: border-box; }
 .draw-asset-name { flex: 1; min-width: 0; }
 .draw-layer-more { margin: 6px 4px; }
+/* Keyboard Shortcuts dialog. */
+.draw-shortcuts-dialog .modal { width: min(560px, 92vw); }
+.draw-shortcuts__search { width: 100%; margin-bottom: 8px; }
+.draw-shortcuts__list { max-height: 50vh; overflow: auto; display: grid; gap: 2px; }
+.draw-shortcuts__row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 4px; }
+.draw-shortcuts__row[hidden] { display: none; }
+.draw-shortcuts__keys { min-width: 130px; justify-content: flex-end; font-variant-numeric: tabular-nums; }
+.draw-shortcuts__keys.is-changed { font-weight: 600; }
+/* Glyphs panel: a grid of the font's characters. */
+.draw-glyphs { display: grid; grid-template-columns: repeat(auto-fill, minmax(30px, 1fr)); gap: 2px; max-height: 320px; overflow: auto; }
+.draw-glyph { aspect-ratio: 1; font-size: 18px; line-height: 1; border: 1px solid var(--border, #c9d1cf); border-radius: 3px; background: var(--surface, #fff); color: var(--text, #071411); cursor: pointer; padding: 0; }
+.draw-glyph:hover { border-color: var(--accent, #006B5C); }

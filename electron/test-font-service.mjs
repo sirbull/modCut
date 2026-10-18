@@ -163,3 +163,9 @@ const ligature=faces.find(f=>['Calibri','DejaVu Serif'].includes(f.family)&&f.fo
 test('default OpenType shaping retains the fi ligature as one editable glyph',{skip:!ligature},async()=>{
   const layout=await service.shape(values(ligature,'fi'));assert.equal(layout.glyphs.length,1);assert.ok(layout.glyphs[0].subpaths.length);
 });
+test('Glyphs: a font lists its printable characters in code point order',{skip:!latin},async()=>{
+  const {family,characters,count}=await service.characters(values(latin));
+  assert.equal(family,latin.family); assert.ok(count>=95);
+  for(const ch of 'AZaz09ÆØÅæøå')assert.ok(characters.includes(ch.codePointAt(0)),ch);
+  assert.ok(characters.every((c,i)=>c>=0x20&&(i===0||c>characters[i-1])),'Sorted, without control characters');
+});

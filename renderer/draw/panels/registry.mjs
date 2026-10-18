@@ -3,7 +3,7 @@ const UNAVAILABLE = {};
 export const PANEL_DEFINITIONS = Object.freeze([
   ['properties', 'Properties', 'adjustments'], ['layers', 'Layers', 'layers-intersect'],
   ['artboards', 'Artboards', 'artboard'], ['swatches', 'Swatches', 'color-swatch'], ['color', 'Color', 'palette'],
-  ['character', 'Character', 'typography'], ['paragraph', 'Paragraph', 'align-left'],
+  ['character', 'Character', 'typography'], ['paragraph', 'Paragraph', 'align-left'], ['glyphs', 'Glyphs', 'letter-case-upper'],
   ['stroke', 'Stroke', 'line-dashed'], ['gradient', 'Gradient', 'contrast-2'], ['transparency', 'Transparency', 'blend-mode'], ['appearance', 'Appearance', 'stack-2'], ['align', 'Align', 'align-center'], ['transform', 'Transform', 'arrows-move'], ['pathfinder', 'Pathfinder', 'layers-subtract'],
   ['info', 'Info', 'info-circle'], ['history', 'History', 'history'], ['document-info', 'Document Info', 'file-info'], ['links', 'Links', 'link'],
   ['image-trace', 'Image Trace', 'photo-scan'], ['graphic-styles', 'Graphic Styles', 'brush'], ['navigator', 'Navigator', 'map-2'], ['asset-export', 'Asset Export', 'packages'],
@@ -24,7 +24,7 @@ export const PANEL_GROUPS = Object.freeze([
   ['stroke', 'line-dashed', ['stroke', 'gradient', 'transparency']],
   ['appearance', 'stack-2', ['appearance', 'graphic-styles']],
   ['transform', 'arrows-move', ['transform', 'align', 'pathfinder']],
-  ['type', 'typography', ['character', 'paragraph']],
+  ['type', 'typography', ['character', 'paragraph', 'glyphs']],
   ['artboards', 'artboard', ['artboards']],
   ['image-trace', 'photo-scan', ['image-trace']],
   ['navigator', 'map-2', ['navigator']],

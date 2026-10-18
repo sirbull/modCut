@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join, extname, basename } from "node:path";
 import { gunzip } from "node:zlib";
 import { promisify } from "node:util";
-import { acceleratorFor } from "../renderer/draw/keymap.mjs";
+import { acceleratorFor, keyOverrides, setKeyOverrides } from "../renderer/draw/keymap.mjs";
 import { createSidecar } from "./sidecar-bridge.mjs";
 import { createWindowCommandRouter } from "./window-lifecycle.mjs";
 import { createRecoveryStore } from "./recovery-store.mjs";
@@ -90,6 +90,8 @@ function requestQuit() {
 
 const send = createWindowCommandRouter({ getWindow: () => win, createWindow });
 
+let menuMode = "cut";
+const shortcutsPath = () => join(app.getPath("userData"), "draw-shortcuts.json");
 function buildMenu(mode = "cut") {
   const template = [
     ...(isMac
@@ -240,6 +242,7 @@ function buildMenu(mode = "cut") {
       { type:"separator" }, editItem("Cut","cut"), editItem("Copy","copy"), editItem("Paste","paste"),
       editItem("Paste in Front","paste-front"), editItem("Paste in Back","paste-back"), editItem("Paste in Place","paste-place"),
       editItem("Paste on All Artboards","paste-all-artboards"),
+      { type: "separator" }, { label: "Keyboard Shortcuts…", click: () => send("keyboard-shortcuts") },
       ...(isMac ? [] : [{ type: "separator" }, { label: "Preferences…", accelerator: acceleratorFor("preferences", { isMac }), click: () => send("preferences") }]),
     ];
     viewMenu.submenu = [viewMenu.submenu[0], { type: "separator" },
@@ -260,7 +263,7 @@ function buildMenu(mode = "cut") {
     template.find(item=>item.label==='Effect').submenu=[objectItem('Apply Last Effect','effect-last'),objectItem('Last Effect…','effect-options'),{type:'separator'},
       {label:'Distort & Transform',submenu:[objectItem('Pucker & Bloat…','effect-pucker-bloat'),objectItem('Roughen…','effect-roughen'),objectItem('Transform…','effect-transform'),
         objectItem('Twist…','effect-twist'),objectItem('Zig Zag…','effect-zig-zag')]},{label:'Path',submenu:[objectItem('Offset Path…','effect-offset-path')]},
-      {label:'Stylize',submenu:[objectItem('Drop Shadow…','effect-drop-shadow'),objectItem('Round Corners…','effect-round-corners')]},
+      {label:'Stylize',submenu:[objectItem('Drop Shadow…','effect-drop-shadow'),objectItem('Round Corners…','effect-round-corners'),objectItem('Scribble…','effect-scribble')]},
       {label:'Pathfinder',submenu:[['unite','Add'],['intersect','Intersect'],['exclude','Exclude'],['minusFront','Subtract'],['minusBack','Minus Back'],['divide','Divide'],['trim','Trim'],['merge','Merge'],['crop','Crop'],['outline','Outline']]
         .map(([id,label])=>objectItem(label,`live-${id}`))},
       {label:'Warp',submenu:[['arc','Arc'],['arc-lower','Arc Lower'],['arc-upper','Arc Upper'],['arch','Arch'],['bulge','Bulge'],['shell-lower','Shell Lower'],['shell-upper','Shell Upper'],
@@ -295,10 +298,11 @@ function buildMenu(mode = "cut") {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   googleFonts=createGoogleFonts({directory:join(app.getPath('userData'),'google-fonts')});
   fonts=createFontService({google:googleFonts});
   recoveryStore = createRecoveryStore(app.getPath("userData"));
+  if (!isE2E) try { setKeyOverrides(JSON.parse(await readFile(shortcutsPath(), "utf8"))); } catch { /* none saved yet, or unreadable: the defaults stay */ }
   const appIcon = nativeImage.createFromPath(appIconPath);
   appIcon.setTemplateImage?.(false);
   if (isMac && !appIcon.isEmpty()) app.dock.setIcon(appIcon);
@@ -325,6 +329,7 @@ app.whenReady().then(() => {
   ipcMain.handle('listGoogleFonts', (event,options) => {if(event.sender!==win?.webContents)throw new Error('Unavailable font session.');return googleFonts.list({refresh:options?.refresh===true});});
   ipcMain.handle('googleFontFamily', (event,name) => {if(event.sender!==win?.webContents)throw new Error('Unavailable font session.');return googleFonts.details(name);});
   ipcMain.handle('shapeText', (event, values) => {if(event.sender!==win?.webContents)throw new Error('Unavailable font session.');return fonts.shape(values);});
+  ipcMain.handle('fontCharacters', (event, values) => {if(event.sender!==win?.webContents)throw new Error('Unavailable font session.');return fonts.characters(values);});
   ipcMain.handle("setTheme", (event, preference) => {
     if (!BrowserWindow.fromWebContents(event.sender) || !["system", "light", "dark"].includes(preference)) return false;
     nativeTheme.themeSource = preference;
@@ -335,8 +340,17 @@ app.whenReady().then(() => {
   });
   ipcMain.handle("setWorkspace", (event, mode) => {
     if (event.sender !== win?.webContents || !["cut", "draw"].includes(mode)) return false;
-    buildMenu(mode);
+    menuMode = mode; buildMenu(mode);
     return true;
+  });
+  // Custom Draw shortcuts (D5): kept in the user data folder; the menus are rebuilt with them.
+  ipcMain.handle("getDrawShortcuts", () => keyOverrides());
+  ipcMain.handle("setDrawShortcuts", async (event, map) => {
+    if (event.sender !== win?.webContents) return null;
+    const saved = setKeyOverrides(map);
+    if (!isE2E) await writeFile(shortcutsPath(), JSON.stringify(saved, null, 2));
+    buildMenu(menuMode);
+    return saved;
   });
   ipcMain.handle("readRecovery", () => recoveryStore.read());
   ipcMain.handle("writeRecovery", (_event, json) => recoveryStore.write(json));

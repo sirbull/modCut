@@ -11,7 +11,7 @@ import { arrowShapes } from '../geom/arrows.mjs';
 import { normalizeProfile, variableStrokeRings } from '../geom/width-profile.mjs';
 import { blendStepCount, matchShapes, interpolateShapes, stepPositions, lerpColor } from '../geom/blend.mjs';
 import { PT_TO_MM, textValues } from '../doc/text.mjs';
-import { applyVectorEffects, hasVectorEffects, dropShadow, livePathfinder } from '../doc/effects.mjs';
+import { applyVectorEffects, hasVectorEffects, dropShadow, livePathfinder, scribbleOf } from '../doc/effects.mjs';
 import { offsetPathsSync, geometryReady } from '../geom/kernel-js.mjs';
 import { toSubpaths, runPathfinder } from '../geom/pathfinder.mjs';
 import { textSubpaths } from '../doc/text-layout.mjs';
@@ -260,6 +260,9 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
     item.dashArray = asOutline ? [] : (stroke?.dash?.array ?? []).map(n=>n*strokeZoom);
     item.dashOffset = asOutline ? 0 : (stroke?.dash?.offset ?? 0)*strokeZoom;
     if (node.type === 'path') item.fillRule = node.fillRule;
+    // Scribble: the scribbled line is drawn in the fill colour, as a stroke.
+    const scribbled = !asOutline && !bare && ['path', 'shape'].includes(node.type) && scribbleOf(node);
+    if (scribbled && fill) Object.assign(item, { fillColor: null, strokeColor: color(fill.paint, fill.opacity ?? 1), strokeWidth: scribbled.strokeWidth * strokeZoom, strokeCap: 'round', strokeJoin: 'round', dashArray: [] });
   }
   // Paint stack: one geometry clone per visible fill, then per visible stroke, drawn in that order
   // (later entries on top). It shares the node's transform and id, so hit-testing finds the node.

@@ -9,7 +9,7 @@ import { paintHex } from '../doc/paint.mjs';
 import { gradientHex } from '../doc/gradient.mjs';
 import { multiply } from '../doc/arrange.mjs';
 import { hasTextLayout } from '../doc/text-layout.mjs';
-import { livePathfinder } from '../doc/effects.mjs';
+import { livePathfinder, scribbleOf } from '../doc/effects.mjs';
 
 export const ALL_ARTBOARDS = 'all';
 const fmt = (n) => { const v = Math.abs(n) < 5e-5 ? 0 : n; return String(Number(v.toFixed(4))); };
@@ -97,8 +97,10 @@ export function artboardCutSvg(doc, boardId, geometry, { only = null, clipToBoar
     if (outside && !cut) partly++; if (cut) clipped++;
     const fills = shown(node.appearance?.fills), strokes = shown(node.appearance?.strokes);
     if (fills.length > 1 || strokes.length > 1) stacked++;
-    // A gradient is one laser layer: its first stop's colour.
-    const fill = paintHex(fills[0]) ?? gradientHex(fills[0]?.paint), stroke = paintHex(strokes[0]) ?? gradientHex(strokes[0]?.paint);
+    // A gradient is one laser layer: its first stop's colour. A Scribble fill is cut as its line, in the fill colour.
+    const scribbled = scribbleOf(node), fillHex = paintHex(fills[0]) ?? gradientHex(fills[0]?.paint);
+    if (scribbled && fillHex) { push(node, subpaths, { stroke: fillHex, width: scribbled.strokeWidth }, at, cut); return; }
+    const fill = fillHex, stroke = paintHex(strokes[0]) ?? gradientHex(strokes[0]?.paint);
     if (!fill && !stroke) { skipped.empty++; return; }
     if (fill && subpaths.some((p) => !p.closed)) openFilled++;
     // Outline Stroke: the stroke is sent as the filled area it paints, above the fill.

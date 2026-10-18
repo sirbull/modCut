@@ -1718,4 +1718,16 @@ Verifisering: 284 Draw-enhetstester (`draft.test.mjs` med indekssjekk gjennom an
 
 Verifisering: 288 Draw-enhetstester (`plt`, `gif`), `--draw-window` dekker TIFF, GIF, PLT og Package.
 
+
+## 2026-10-18: Fase 5 del B
+
+- Egne hurtigtaster: aktiv keymap med overstyringer i `keymap.mjs` (meny, lerret og verktøytips leser den),
+  IPC `getDrawShortcuts`/`setDrawShortcuts`, lagring i brukerdata, dialogen `ui/shortcuts-dialog.mjs`.
+- Glyphs: `fonts.characters` (fontkit `characterSet`, bare skrivbare tegn), IPC `fontCharacters`, panelet `glyphs`.
+- Scribble: `geom/scribble.mjs` (skannlinjer i valgt vinkel, sammenføyd fram og tilbake, seedet variasjon,
+  avrundede vendinger) og effekten `scribble`; rendereren og Cut maler linjen med fyllfargen som strek.
+
+Verifisering: Draw-enhetstester (`custom-shortcuts`, `scribble`), `electron/test-font-service.mjs` (Glyphs),
+`--draw-window` dekker hurtigtaster, Glyphs og Scribble.
+
 Neste: resten av fase 5.

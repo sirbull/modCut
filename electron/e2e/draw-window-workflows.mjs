@@ -103,6 +103,44 @@ export async function runDrawWindowWorkflows(client) {
   await evaluate("(()=>{const f=document.querySelector('.draw-workspaces-dialog form');f.elements.name.value='Overview';f.requestSubmit();})()"); await wait(80);
   assert.equal(await evaluate(`(async()=>(${active}.state.ui.flyout))()`), 'navigator');
   await evaluate("localStorage.removeItem('modcut.draw.workspaces')");
+
+  // Edit > Keyboard Shortcuts: record Shift+P for the Pen; P then does nothing, Shift+P picks the Pen; Reset All undoes it.
+  const keyDown = (key, code, shift = false) => evaluate(`window.dispatchEvent(new KeyboardEvent('keydown',{key:'${key}',code:'${code}',shiftKey:${shift},bubbles:true,cancelable:true}))`);
+  await evaluate(`(async()=>{${active}.handle('tool.select')})()`);
+  assert.equal(await evaluate("window.modcut.clickE2EMenuItem('Edit','Keyboard Shortcuts…')"), true);
+  await until("!!document.querySelector('.draw-shortcuts-dialog form')", 'Keyboard Shortcuts');
+  await evaluate("(()=>{const b=document.querySelector('[data-draw-shortcut-keys=\"tool.pen\"]');b.click();b.dispatchEvent(new KeyboardEvent('keydown',{key:'P',code:'KeyP',shiftKey:true,bubbles:true,cancelable:true}));})()");
+  assert.equal(await evaluate("document.querySelector('[data-draw-shortcut-keys=\"tool.pen\"]').textContent"), 'Shift+P');
+  await evaluate("document.querySelector('.draw-shortcuts-dialog form').requestSubmit()"); await wait(150);
+  await keyDown('p', 'KeyP'); assert.equal(await evaluate(`(async()=>(${active}.state.ui.tool))()`), 'select', 'P is free now');
+  await keyDown('P', 'KeyP', true); assert.equal(await evaluate(`(async()=>(${active}.state.ui.tool))()`), 'pen', 'Shift+P picks the Pen');
+  assert.deepEqual(await evaluate('window.modcut.getDrawShortcuts()'), { 'tool.pen': ['Shift+P'] }, 'The menus use the same shortcuts');
+  assert.equal(await evaluate("window.modcut.clickE2EMenuItem('Edit','Keyboard Shortcuts…')"), true);
+  await until("!!document.querySelector('.draw-shortcuts-dialog form')", 'Keyboard Shortcuts again');
+  await evaluate("document.querySelector('[data-draw-shortcuts-reset]').click();document.querySelector('.draw-shortcuts-dialog form').requestSubmit()"); await wait(150);
+  assert.deepEqual(await evaluate('window.modcut.getDrawShortcuts()'), {});
+  await keyDown('v', 'KeyV'); await keyDown('p', 'KeyP'); assert.equal(await evaluate(`(async()=>(${active}.state.ui.tool))()`), 'pen', 'P picks the Pen again');
+  await keyDown('Escape', 'Escape'); await keyDown('v', 'KeyV');
+
+  // Glyphs (Type group): the default font's characters; a click types the character into the open text editor.
+  await evaluate(`(async()=>{const w=${active};w.select([]);w.handle('panel.glyphs')})()`);
+  await until(`document.querySelectorAll('${root} [data-draw-glyph]').length>95`, 'glyph grid');
+  await evaluate(`(async()=>{const w=${active};w.handle('tool.type');w.handle('tool-dialog')})()`);
+  await until("document.querySelector('.draw-text-dialog form')?.dataset.textReady==='true'", 'text editor');
+  await evaluate("(()=>{const a=document.querySelector('.draw-text-dialog textarea[name=text]');a.value='Ha';a.setSelectionRange(2,2);})()");
+  await evaluate(`document.querySelector('${root} [data-draw-glyph="${'Å'.codePointAt(0)}"]').click()`);
+  assert.equal(await evaluate("document.querySelector('.draw-text-dialog textarea[name=text]').value"), 'HaÅ');
+  await evaluate("document.querySelector('.draw-text-dialog [data-x=cancel]')?.click()"); await wait(50);
+  await evaluate(`(async()=>{${active}.handle('tool.select')})()`);
+  // Effect > Stylize > Scribble: the second square (red since its graphic style) becomes a red scribbled line, on canvas and in Cut.
+  await evaluate(`(async()=>{${active}.select(['${blue}'])})()`);
+  assert.equal(await evaluate("window.modcut.clickE2EMenuItem('Effect','Scribble…')"), true);
+  await until("!!document.querySelector('.draw-effect-dialog form')", 'Scribble Options');
+  await evaluate("(()=>{const f=document.querySelector('.draw-effect-dialog form');f.elements.spacing.value='3';f.requestSubmit();})()"); await wait(80);
+  const scribbled = await evaluate(`(async()=>{const w=${active},item=w.renderer.items.get('${blue}'),parts=item.children??[item];
+    const cut=w.cutSvg(w.state.document.data.artboards[0].id).svg.match(/<path [^>]*stroke="#ff0000"[^>]*>/i)?.[0]??'';
+    return {fill:item.fillColor?.toCSS(true)??null,stroke:item.strokeColor?.toCSS(true)??null,open:parts.every(p=>!p.closed),cut:/fill="none"/.test(cut)}})()`);
+  assert.deepEqual(scribbled, { fill: null, stroke: "#ff0000", open: true, cut: true });
   await restore();
-  console.log('PASS Draw window: TIFF, GIF and PLT export, Package, Graphic Styles (new from selection, apply in one step), Navigator (click to move, zoom), Rotate View with 15° snapping and reset, Asset Export at 2x, workspaces saved, reset and switched');
+  console.log('PASS Draw window: Scribble effect, TIFF, GIF and PLT export, Package, Graphic Styles (new from selection, apply in one step), Navigator (click to move, zoom), Rotate View with 15° snapping and reset, Asset Export at 2x, workspaces saved, reset and switched, custom keyboard shortcuts, Glyphs into the text editor');
 }

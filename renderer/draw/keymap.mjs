@@ -53,6 +53,41 @@ const entries = [
   binding('temporary.zoom-out', ['Mod+Alt+Space'], 'draw', { temporary: true }),
 ];
 export const KEYMAP = Object.freeze(entries.map((entry) => Object.freeze({ ...entry, keys: Object.freeze(entry.keys) })));
+
+/**
+ * Custom shortcuts (D5): `{ id: ['Mod+K', ...] }` replaces those entries' keys (an empty list removes the
+ * shortcut). The menus, tooltips and the canvas all read the active keymap.
+ */
+let overrides = {}, active = KEYMAP;
+export const keyOverrides = () => structuredClone(overrides);
+export const activeKeymap = () => active;
+export function applyOverrides(map, keymap = KEYMAP) {
+  return Object.freeze(keymap.map((entry) => Object.hasOwn(map, entry.id) ? Object.freeze({ ...entry, keys: Object.freeze([...map[entry.id]]) }) : entry));
+}
+/** Checks ids and keys and refuses conflicts; returns the cleaned map. */
+export function validateOverrides(map) {
+  if (!map || typeof map !== 'object' || Array.isArray(map)) throw new Error('Shortcuts must be a map of command ids to keys.');
+  const clean = {};
+  for (const [id, keys] of Object.entries(map)) {
+    const entry = KEYMAP.find((e) => e.id === id && !e.temporary);
+    if (!entry) throw new Error(`Unknown command: ${id}`);
+    if (!Array.isArray(keys) || keys.length > 4) throw new Error(`Give ${id} up to four shortcuts.`);
+    for (const key of keys) parse(String(key));
+    // Keys the same as the defaults are not stored.
+    if (JSON.stringify(keys) !== JSON.stringify(entry.keys)) clean[id] = keys.map(String);
+  }
+  const conflicts = findConflicts(applyOverrides(clean));
+  if (conflicts.length) throw new Error(`Shortcut used twice: ${conflicts.map((c) => `${formatShortcut(c.key)} (${c.ids.join(', ')})`).join('; ')}`);
+  return clean;
+}
+export function setKeyOverrides(map = {}) { overrides = validateOverrides(map); active = applyOverrides(overrides); return keyOverrides(); }
+/** The shortcut a key press makes, as "Mod+Shift+K", or null for a lone modifier. */
+export function keyFromEvent(event, { isMac = false } = {}) {
+  if (['Shift', 'Control', 'Alt', 'Meta', 'AltGraph', 'CapsLock'].includes(event.key)) return null;
+  const token = tokenFor(event); if (!token) return null;
+  const mod = isMac ? !!event.metaKey : !!event.ctrlKey;
+  return [mod ? 'Mod' : null, event.shiftKey ? 'Shift' : null, event.altKey ? 'Alt' : null, token].filter(Boolean).join('+');
+}
 const physical = new Set(['Space', 'Equal', 'Minus', 'Backslash', 'IntlBackslash', 'Backquote', 'Comma', 'Period', 'Slash', 'BracketLeft', 'BracketRight', 'Semicolon', 'Quote']);
 const symbols = { ' ': 'Space', '+': 'Equal', '=': 'Equal', '-': 'Minus', '_': 'Minus', '\\': 'Backslash', '`': 'Backquote', '~': 'Backquote', ',': 'Comma', '.': 'Period', '/': 'Slash', '[': 'BracketLeft', ']': 'BracketRight', ';': 'Semicolon', "'": 'Quote' };
 function parse(key) {
@@ -71,7 +106,7 @@ function tokenFor(event) {
 function applies(entry, workspace, textEditing = false) {
   return entry.when === 'global' || entry.when === workspace || (entry.when === 'draw.text-editing' && workspace === 'draw' && textEditing);
 }
-export function findConflicts(keymap = KEYMAP) {
+export function findConflicts(keymap = active) {
   const conflicts = [], seen = new Map();
   for (const entry of keymap) for (const key of entry.keys) {
     const p = parse(key), normalized = `${p.mod}:${p.shift}:${p.alt}:${p.token}`;
@@ -82,7 +117,7 @@ export function findConflicts(keymap = KEYMAP) {
   }
   return conflicts;
 }
-export function matchShortcut(event, { workspace = 'draw', isMac = false, textEditing = false, editable = false, keymap = KEYMAP } = {}) {
+export function matchShortcut(event, { workspace = 'draw', isMac = false, textEditing = false, editable = false, keymap = active } = {}) {
   if (event.isComposing || event.key === 'Process' || event.getModifierState?.('AltGraph')) return null;
   const token = tokenFor(event), mod = isMac ? !!event.metaKey : !!event.ctrlKey;
   if (isMac ? event.ctrlKey : event.metaKey) return null;
@@ -105,21 +140,21 @@ export function formatShortcut(key, { isMac = false } = {}) {
   return parts.join('+');
 }
 export function acceleratorFor(id, { workspace = 'draw', isMac = false } = {}) {
-  const entry = KEYMAP.find((entry) => entry.id === id && !entry.temporary && applies(entry, workspace));
-  if (!entry) return undefined;
+  const entry = active.find((entry) => entry.id === id && !entry.temporary && applies(entry, workspace));
+  if (!entry?.keys.length) return undefined;
   const p = parse(entry.keys[0]);
   const native = { Equal: 'Plus', Minus: '-', Comma: ',', Period: '.', Slash: '/', Backslash: '\\', Semicolon: ';', Quote: "'", BracketLeft: '[', BracketRight: ']', ArrowLeft: 'Left', ArrowRight: 'Right', ArrowUp: 'Up', ArrowDown: 'Down' };
   return [p.mod ? (isMac ? 'Cmd' : 'Ctrl') : null, p.shift ? 'Shift' : null, p.alt ? 'Alt' : null, native[p.token] || p.token.replace(/^Digit/, '')].filter(Boolean).join('+');
 }
 export function shortcutLabel(id, { workspace = 'draw', isMac = false } = {}) {
-  const entry = KEYMAP.find((entry) => entry.id === id && applies(entry, workspace));
+  const entry = active.find((entry) => entry.id === id && applies(entry, workspace));
   return entry ? entry.keys.map((key) => formatShortcut(key, { isMac })).join(' / ') : '';
 }
 export function toolTooltip(id, options) {
   const tool = toolRegistry.get(id);
   if (!tool) throw new Error(`Unknown Draw tool: ${id}`);
-  const entry = KEYMAP.find((entry) => entry.id === tool.bindingId);
-  return `${tool.name} Tool${entry ? ` (${formatShortcut(entry.keys[0], options)})` : ''}`;
+  const entry = active.find((entry) => entry.id === tool.bindingId);
+  return `${tool.name} Tool${entry?.keys.length ? ` (${formatShortcut(entry.keys[0], options)})` : ''}`;
 }
 
 /** Temporary overrides are transient callbacks, never permanent tool selections or Commands. */

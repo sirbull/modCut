@@ -14,7 +14,7 @@ import { fillHex, pathfinderCommands, stackingOrder } from './doc/pathfinder-com
 import { cancelActiveScrub } from './ui/number-field.mjs';
 import { PANEL_DEFINITIONS } from './panels/registry.mjs';
 import { TOOL_DEFINITIONS, toolRegistry } from './tools/registry.mjs';
-import { shortcutLabel } from './keymap.mjs';
+import { setKeyOverrides, shortcutLabel } from './keymap.mjs';
 import { commandEntries, openCommandSearch } from './ui/command-search.mjs';
 import { createToolbar } from './tools/toolbar.mjs';
 import { createInteractions } from './tools/interactions.mjs';
@@ -39,6 +39,7 @@ import { changePaint, changeStroke, paintHex } from './doc/paint.mjs';
 import { setWidthPoint, moveWidthPoint, removeWidthPoint, normalizeProfile } from './geom/width-profile.mjs';
 import { importArtwork, rasterAsset } from './import-artwork.mjs';
 import { shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog,layerOptionsDialog,swatchOptionsDialog,sendToCutDialog,averageDialog,offsetDialog,simplifyDialog,pencilDialog,expandDialog,cropImageDialog,effectDialog,magicWandDialog,eraserDialog,transformEachDialog,splitGridDialog,saveSelectionDialog,editSelectionDialog,widthPointDialog,blendOptionsDialog,paintbrushDialog,blobBrushDialog,workspaceNameDialog,workspacesDialog } from './ui/dialogs.mjs';
+import { shortcutsDialog } from './ui/shortcuts-dialog.mjs';
 import { ESSENTIALS, applyWorkspace, captureWorkspace, deleteWorkspace, loadWorkspaces, saveWorkspace } from './ui/workspaces.mjs';
 import { ALL_ARTBOARDS, artboardCutSvg } from './io/cut-svg.mjs';
 import { EXPORT_FORMATS, rasterSize, svgDocument } from './io/export.mjs';
@@ -57,10 +58,12 @@ import { textDialog } from './ui/dialogs.mjs';
 
 const workspaces=new WeakMap();
 export function getDrawWorkspace(root) {return workspaces.get(root) || null;}
+// Custom shortcuts live in the main process (it builds the menus); the canvas takes the same ones.
+const shortcutsReady=globalThis.window?.modcut?.getDrawShortcuts?.().then(map=>{try{setKeyOverrides(map??{});}catch{/* unreadable: defaults */}}).catch(()=>{});
 const implementedTools=new Set(['rotate-view','select','group-selection','magic-wand','lasso','shape-builder','knife','eraser','width','blend','paintbrush','blob-brush','free-transform','pencil','hand','zoom','artboard','gradient','eyedropper','measure','scissors','type','area-type','type-on-path',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
 const commands=new Set(['undo','redo','delete','select-all','select-artboard','deselect','cancel','fit-artboard','fit-all','actual-size','zoom-in','zoom-out','outline',
   'cut','copy','paste','paste-front','paste-back','paste-place','paste-all-artboards',
-  'edit-text','create-outlines','join','average','offset-path','outline-stroke','expand','expand-appearance','transform-each','split-into-grid','crop-image','effect-last','effect-options',...Object.keys(EFFECTS).map(t=>`effect-${t}`),...Object.keys(WARP_STYLES).map(t=>`warp-${t}`),...Object.keys(LIVE_LABELS).map(t=>`live-${t}`),'simplify','reverse-path','add-anchors','remove-anchors','clean-up','compound-make','compound-release','clip-make','clip-release','reset-rotate-view','package','workspace-new','workspace-reset','workspace-manage','blend-make','blend-release','blend-expand','blend-options','blend-reverse','mask-make','mask-release','mask-clip','mask-invert','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
+  'edit-text','create-outlines','join','average','offset-path','outline-stroke','expand','expand-appearance','transform-each','split-into-grid','crop-image','effect-last','effect-options',...Object.keys(EFFECTS).map(t=>`effect-${t}`),...Object.keys(WARP_STYLES).map(t=>`warp-${t}`),...Object.keys(LIVE_LABELS).map(t=>`live-${t}`),'simplify','reverse-path','add-anchors','remove-anchors','clean-up','compound-make','compound-release','clip-make','clip-release','reset-rotate-view','package','keyboard-shortcuts','workspace-new','workspace-reset','workspace-manage','blend-make','blend-release','blend-expand','blend-options','blend-reverse','mask-make','mask-release','mask-clip','mask-invert','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
   'paint-focus','paint-swap','paint-none','paint-solid','paint-gradient','default-paint','smart-guides','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','shear-dialog','toggle-panels','toggle-panels-except-tools','command-search','draw-mode','draw-normal','draw-behind','draw-inside','reselect','select-inverse','select-next-above','select-next-below','save-selection','edit-selection',
   ...Object.keys(SAME_MODES).map(m=>`select-same-${m}`),...Object.keys(OBJECT_KINDS).map(k=>`select-object-${k}`),
   ...PANEL_DEFINITIONS.map(p=>`panel.${p.id}`),...['left','right','up','down'].flatMap(d=>[`nudge-${d}`,`nudge-large-${d}`,`duplicate-${d}`])]);
@@ -821,6 +824,15 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   function openPanel(id) {toolbar?.close();panels.open(id);}
   artboards=createArtboardController(state,{refresh,fit,bounds:id=>renderer.bounds(id),localMatrix:(id,m)=>renderer.localMatrix(id,m)});
   panels=createPanels(shell,state,{run,select,selectedIds,paintIds,paint,bounds:()=>renderer.selectionBounds(),fit,artboards,navigatorImage,navigatorView,navigateTo,
+    // Glyphs panel: into the open text editor at the cursor; else open the editor for the selected text first.
+    insertGlyph(ch){
+      const put=()=>{const area=document.querySelector('.draw-text-dialog textarea[name=text]');if(!area)return false;
+        const start=area.selectionStart??area.value.length,end=area.selectionEnd??start;area.setRangeText(ch,start,end,'end');area.dispatchEvent(new Event('input',{bubbles:true}));area.focus();return true;};
+      if(put())return;
+      const id=selectedIds().find(i=>state.document.getNode(i)?.type==='text');
+      if(!id)throw new Error('Select a text object, or start typing with the Type tool, to insert a glyph.');
+      void editText(undefined,id);setTimeout(()=>{const area=document.querySelector('.draw-text-dialog textarea[name=text]');if(area){area.setSelectionRange(area.value.length,area.value.length);put();}},50);
+    },
     addAssets,removeAsset,renameAsset,exportAssets:options=>exportAssets(options).catch(error=>{if(!destroyed)onError(error.message);}),
     cornerInfo:()=>paths?.cornerInfo()??null,setCornerRadius:radius=>paths.setCornerRadius(radius),
     strokeProps(props,{mergeKey=null}={}){const ids=paintIds();if(!ids.length||state.document.readOnly)return;
@@ -1239,6 +1251,8 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     if(command==='tool-dialog'&&state.ui.tool==='eraser')return void eraserDialog(state.ui.eraserSize??3).then(size=>{if(size&&!destroyed)state.ui.eraserSize=size;});
     if(command==='tool-dialog'&&state.ui.tool==='magic-wand')return void magicWandDialog(state.ui.magicWand??{}).then(values=>{if(values&&!destroyed)state.ui.magicWand=values;});
     if(command==='reset-rotate-view')return rotateView(0);
+    if(command==='keyboard-shortcuts')return void shortcutsDialog({isMac:navigator.platform.startsWith('Mac')}).then(async map=>{if(!map||destroyed)return;
+      const saved=await window.modcut?.setDrawShortcuts?.(map)??map;run(()=>{setKeyOverrides(saved);toolbar?.update();panels?.render();status();onNotice('Keyboard shortcuts saved.');});}).catch(error=>{if(!destroyed)onError(error.message);});
     if(command==='package')return void (async()=>{if(destroyed||document.querySelector('.modal-overlay'))return;interactions?.cancel();paths?.finish();await exporter.packageDocument();})().catch(error=>{if(!destroyed)onError(error.message);});
     // Window > Workspace: the panel layout saved under a name (this computer only).
     const useWorkspace=ws=>{applyWorkspace(state.ui,ws);try{globalThis.localStorage?.setItem(CONTROL_BAR_KEY,state.ui.controlBar?'shown':'hidden');}catch{}panels.render();resize();onNotice(`Workspace: ${ws.name}`);};
