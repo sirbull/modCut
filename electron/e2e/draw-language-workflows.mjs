@@ -22,7 +22,7 @@ export async function runDrawLanguageWorkflows(client) {
   assert.equal(await evaluate("document.documentElement.lang"), 'nb');
   await until("[...document.querySelectorAll('.preferences-modal .field > span')].some(s=>s.textContent==='Språk')", 'The open Preferences window is translated too');
   await evaluate("document.querySelector('.preferences-modal [data-x=cancel]').click()");
-  assert.match(await evaluate(panelTabs), /Lag/, 'Panel names in Norwegian');
+  assert.match(await evaluate(panelTabs), /Fargeprøver\|.*Strek · Fargeovergang · Gjennomsiktighet/, 'Panel names in Norwegian');
   assert.equal(await evaluate("document.querySelector('#workspaceToggle span').textContent"), 'Cut', 'The workspace name stays');
   assert.equal(await evaluate("document.querySelector('.doc-tab.is-active .doc-tab__title').textContent"), 'Language proof', 'The document name stays');
   // Text the app sets later is translated as it appears.
@@ -32,7 +32,7 @@ export async function runDrawLanguageWorkflows(client) {
   await choose('en');
   await until("(async()=>(await window.modcut.getE2EWorkspaceMenu()).top.includes('Edit'))()", 'English menus again');
   await evaluate("document.querySelector('.preferences-modal [data-x=cancel]').click()");
-  assert.doesNotMatch(await evaluate(panelTabs), /\bLag\b/, 'Panel names back in English');
+  assert.match(await evaluate(panelTabs), /^Swatches\|.*Stroke · Gradient · Transparency/, 'Panel names back in English');
   assert.equal(await evaluate("document.querySelector('#file').textContent"), 'Untitled');
   await choose('system'); await evaluate("document.querySelector('.preferences-modal [data-x=cancel]').click()");
   await restore();

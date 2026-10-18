@@ -39,20 +39,6 @@ function updatePreferences(values) {
   preferences = normalizePreferences(values, preferences);
   localStorage.setItem(PREFERENCES_KEY, JSON.stringify(preferences));
   bed.setViewPreferences(preferences);
-
-// MCP: an AI agent's tool calls (Preferences > Automation) run against the active Draw tab.
-window.modcut.onMcpCall?.(async ({ id, name, args }) => {
-  try {
-    const tab = activeTab(), workspace = document.body.dataset.workspace === "draw" ? tab?.draw ?? null : null;
-    const result = await runMcpTool(workspace, name, args, {
-      newDocument: async ({ name: title, width, height }) => {
-        newDocument("draw", newDrawDocument({ name: title || "Untitled", preset: "custom", width, height }));
-        return activeTab()?.draw ?? null;
-      },
-    });
-    window.modcut.mcpResult(id, { result });
-  } catch (error) { window.modcut.mcpResult(id, { error: error?.message || String(error) }); }
-});
   applyLanguage();
   window.dispatchEvent(new Event("modcut-preferences-change"));
 }
@@ -2201,6 +2187,8 @@ async function openSettings() {
           description: "Runs a local MCP server so an agent such as Claude Code can read and change the active Draw document. Only programs on this computer with the token below can connect. Every change is an undo step.",
           onChange: async (value) => {
             const status = await window.modcut.setMcpServer(value);
+            const field = document.querySelector('.preferences-modal [name="mcpCommand"]');
+            if (field) field.value = mcpCommand(status);
             if (status.error) toast(`MCP server: ${status.error}`, "err");
             else toast(value ? `MCP server running at ${status.url}` : "MCP server stopped.", "ok");
           } },
@@ -2720,3 +2708,17 @@ refreshPropsVisibility();
   }
 })();
 setInterval(pollMachineStatus, 500);
+
+// MCP: an AI agent's tool calls (Preferences > Automation) run against the active Draw tab.
+window.modcut.onMcpCall?.(async ({ id, name, args }) => {
+  try {
+    const tab = activeTab(), workspace = document.body.dataset.workspace === "draw" ? tab?.draw ?? null : null;
+    const result = await runMcpTool(workspace, name, args, {
+      newDocument: async ({ name: title, width, height }) => {
+        newDocument("draw", newDrawDocument({ name: title || "Untitled", preset: "custom", width, height }));
+        return activeTab()?.draw ?? null;
+      },
+    });
+    window.modcut.mcpResult(id, { result });
+  } catch (error) { window.modcut.mcpResult(id, { error: error?.message || String(error) }); }
+});

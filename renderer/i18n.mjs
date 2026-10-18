@@ -56,6 +56,8 @@ export function translator(language) {
         if (hit) { out = names.reduce((s, name, i) => s.replaceAll(`{${name}}`, t(hit[i + 1])), target); break; }
       }
     }
+    // Lists such as panel groups and tool hints: "Stroke · Gradient · Transparency".
+    if (out === undefined && text.includes(" · ")) { const parts = text.split(" · "), done = parts.map((part) => t(part)); if (done.some((part, i) => part !== parts[i])) out = done.join(" · "); }
     if (out === undefined) return text;
     return values ? out.replace(/\{([a-z]+)\}/gi, (all, name) => (name in values ? String(values[name]) : all)) : out;
   };
@@ -94,7 +96,7 @@ function localizeAttributes(element, t) {
     if (!element.hasAttribute(name)) continue;
     const current = element.getAttribute(name), english = saved?.[name]?.translated === current ? saved[name].english : current;
     const translated = t(english);
-    if (translated === english) { if (saved?.[name]) delete saved[name]; continue; }
+    if (translated === english) { if (saved?.[name]) { delete saved[name]; if (current !== english) element.setAttribute(name, english); } continue; }
     if (!saved) originalAttributes.set(element, saved = {});
     saved[name] = { english, translated };
     if (current !== translated) element.setAttribute(name, translated);
@@ -103,6 +105,7 @@ function localizeAttributes(element, t) {
   if (element.tagName === "INPUT" && ["button", "submit", "reset"].includes(element.type) && element.value) {
     const key = "value", current = element.value, english = saved?.[key]?.translated === current ? saved[key].english : current, translated = t(english);
     if (translated !== english) { if (!saved) originalAttributes.set(element, saved = {}); saved[key] = { english, translated }; element.value = translated; }
+    else if (saved?.[key]) { delete saved[key]; if (current !== english) element.value = english; }
   }
 }
 /** Translates a subtree once. */

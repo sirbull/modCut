@@ -1779,4 +1779,9 @@ Neste: lokalisering.
 
 Verifisering: `renderer/test-i18n.mjs`, `--draw-language` (bytte til norsk og tilbake i appen).
 
+E2E: hele Draw-E2E 39 (for 864261f) passerte, 45 av 45. `--draw-export` (PDF/X-4, EPS ut og inn), `--draw-mcp`
+og `--draw-language` passerer for de nye delene. Funn underveis: MCP-handleren var lagt inn i `updatePreferences`
+i stedet for på toppnivå, tilkoblingskommandoen i Preferences viste porten fra før serveren startet, lister med
+« · » (panelgrupper) ble ikke oversatt, og attributter ble ikke satt tilbake til engelsk. Alt er rettet.
+
 Fase 5 er ferdig i grunnform. Neste: hullene i STATUS.md.

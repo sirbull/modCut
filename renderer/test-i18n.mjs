@@ -19,6 +19,7 @@ test("exact text, kept spacing, values in messages, and English for anything unk
   assert.equal(t("Could not import Logo.svg: Not a modCut document."), "Kunne ikke importere Logo.svg: Ikke et modCut-dokument.", "Values are translated when they are interface text");
   assert.equal(t("Artboard 12"), "Tegnebrett 12"); assert.equal(t("Machine added: Epilog Zing"), "Maskin lagt til: Epilog Zing");
   assert.equal(t("Layer {n}", { n: 4 }), "Lag 4", "Values can be given directly");
+  assert.equal(t("Stroke · Gradient · Transparency"), "Strek · Fargeovergang · Gjennomsiktighet"); assert.equal(t("Info · Unknown"), "Info · Unknown");
   assert.equal(translator("en")("Undo"), "Undo"); assert.equal(t(""), ""); assert.equal(t(null), null);
 });
 
