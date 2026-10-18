@@ -250,7 +250,9 @@ Exported preferences include these options and grid spacing.
 Use **View → Laser Preview** or the **Laser Preview** button beside Outline while drawing.
 Solid red lines show Cut, dashed red lines distinguish Score, black shapes show vector
 engraving, and supported images show in grayscale. Score dashes are a visual key; they do
-not create gaps in the machine path. Normal colour view is the default; your last choice is remembered.
+not create gaps in the machine path. Vector engraving shows solid strokes without arrowheads,
+as transferred by Send to Cut; normal Draw view keeps your original dashes and arrows.
+Normal colour view is the default; your last choice is remembered.
 
 **Laser processes** configures this tab's actual Cut/Score/Engrave/Ignore choices. Amber dotted
 outlines or faded images indicate an unresolved process or appearance. Effects, advanced

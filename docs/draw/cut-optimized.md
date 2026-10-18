@@ -39,6 +39,9 @@ skjermfast linjebredde og mønster. Markører/ankre/håndtak ligger utenfor proj
 
 Vektorgravering bruker svart alfa-silhuett fordi Cut gjør det samme, ikke gråtonen fra RGB-fargen.
 Enkle SVG-streker vises med de standard caps/joins som den kanoniske Send to Cut-importen bruker.
+Stiplede enkeltstreker og pilspisser ved vektorgravering er støttet: de vises som den
+heltrukne streken uten pilspisser som faktisk sendes til Cut. Original stipling/pilspisser
+beholdes i normal Draw-visning og eksport. Forklaringsdialogen gjør forskjellen tydelig.
 Grayscale-bilder vises i gråtoner; bildeoppløsning og fysisk laserresultat er ikke simulert eksakt.
 Skjult, Ignore og ikke-utskrivbart blir ikke vist som output; templates er dempet referanse.
 
@@ -55,7 +58,7 @@ tekst og oversettes ikke. Å åpne/lukke oversikten endrer ingen prosessvalg ell
 ## Eksplisitte begrensninger
 
 - Dotted/ravfarget kontur eller dempet bilde betyr uavklart prosess eller utseende. Avanserte
-  kompositter (blend/envelope/masks), uekspanderte effekter, avanserte graveringsstreker og
+  kompositter (blend/envelope/masks), uekspanderte effekter, graveringsstreker med breddeprofiler/flere malingslag og
   rasterdithering krever ekspandering eller kontroll i Cut. Å velge en operasjon gjør ikke en
   uverifisert effekt til en støttet simulering.
 - «Engrave as seen» (flate ut transparens og blending til output-raster) er ikke implementert.
@@ -74,7 +77,7 @@ også etter recovery i full Draw-E2E. Skjermbilde er visuelt kontrollert.
 Neste er stabilisering og utvidelse av de støttede tilfellene, med output-sammenligninger for
 hvert nytt tilfelle. Oppdater denne kontrakten, hovedplanen, STATUS og WORK_LOG fortløpende.
 
-Siste kontroll: 340 Draw-enhetstester, i18n og kontrast er grønne. Målrettet Laser Preview-E2E
+Forrige kontroll før strekeutvidelsen: 340 Draw-enhetstester, i18n og kontrast er grønne. Målrettet Laser Preview-E2E
 passerer med den nye objektlisten, riktige råd, trygg tekstvisning av navn, uendret dokument/SVG
 og normal appomstart. Full Draw passerte alle funksjonsgrupper, autosave og krasjgjenoppretting,
 men feilet deretter i siste Laser Preview-del med lukket DevTools-forbindelse. Hele kjøringen
@@ -84,3 +87,23 @@ Avslutningsfeilen er diagnostisert og rettet i testkjøreren: en gammel stop-tim
 avslutte den relanserte appen. Nytt fokusert løp `node electron/e2e/run.mjs --draw-recovery`
 gjenskapte feilen før rettingen og passerer hele IO/autosave/crash/recovery/preview-overgangen
 etter rettingen. Ingen full omkjøring eller full grønn `npm test` er hevdet.
+
+## Verifisert utvidelse: stipling og pilspisser ved vektorgravering
+
+`node electron/e2e/run.mjs --draw-laser-strokes` oppretter faktiske stiplede streker med
+pilspisser, velger Engrave, måler canvas og sender via appens virkelige Send to Cut. Cut-importens
+rasteriserte alfaflate (samme grunnlag som vektorgraveringen bruker) sammenlignes med preview
+ved 67 306 punkter: 0 avvik, inkludert 5 140 svarte punkter. Anti-aliasing og en én-piksel
+rand langs rastergrensen utelates fra sammenligningen. Vanlig strek, uniform skalering,
+ulik X/Y-skalering med shear og fast verdens-mm-strekbredde er med; importerte bredder
+er 2, 3, 2 og 2,1166 mm. Preview bruker Cuts geometriske middel for transformert strekbredde
+som skjermfast bredde, slik at en affin forelder ikke deformerer strekflaten.
+
+Preview bevarer modell/historikk. Selve Send to Cut legger som forventet til én Cut-lenke og
+ett historikksteg; artwork og Cut-SVG er identiske. Originale dash/cap/farger beholdes.
+Breddeprofiler, flere fyll/streker, effekter og avanserte kompositter forblir uavklart. Dette
+er en kontroll av overført silhuett, ingen simulering av eksakt DPI, scanlinjer eller materiale.
+343 Draw-enhetstester, i18n og kontrast passerer.
+
+`--draw-recovery` passerer også etter denne utvidelsen, inkludert de eksisterende Laser
+Preview-kontrollene og den nye Cut-sammenligningen. Full Draw/npm test er ikke gjentatt.

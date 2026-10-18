@@ -20,9 +20,27 @@ test('Cut and Score use distinct red centre lines at every zoom and restore orig
 test('engraving follows the painted vector silhouette, with no colour-layer darkness assumption',()=>{
   const item=path();
   withLaserAppearance(item,{resolve:()=>resolved('Engrave'),zoom:2},()=>{
-    assert.equal(item.fillColor,'#000000');assert.equal(item.strokeColor,'#000000');assert.equal(item.strokeWidth,2);assert.deepEqual(item.dashArray,[4,2]);
+    assert.equal(item.fillColor,'#000000');assert.equal(item.strokeColor,'#000000');assert.equal(item.strokeWidth,4);assert.equal(item.strokeScaling,false);assert.deepEqual(item.dashArray,[]);
   });
   assert.equal(item.fillColor,'#00ff00');
+  assert.deepEqual(item.dashArray,[4,2]);
+});
+test('engraving uses Cut world width under affine parents and preserves fixed world-mm strokes',()=>{
+  for(const zoom of [.5,2,8])for(const strokeScaling of [true,false]){
+    const item={...path(),globalMatrix:{a:2,b:0,c:.5,d:1},strokeScaling,strokeWidth:strokeScaling?2:2*zoom};
+    withLaserAppearance(item,{resolve:()=>resolved('Engrave'),zoom},()=>{
+      assert.ok(Math.abs(item.strokeWidth-2*zoom*(strokeScaling?Math.sqrt(2):1))<1e-9);
+      assert.equal(item.strokeScaling,false);
+    });
+    assert.equal(item.strokeWidth,strokeScaling?2:2*zoom);assert.equal(item.strokeScaling,strokeScaling);
+  }
+});
+test('engraving hides display arrowheads and restores them after drawing, including errors',()=>{
+  const base=path(),arrow=path(),root={className:'Group',children:[base,arrow]},roles=new Map([[arrow,{id:'p',role:'arrows'}]]);
+  assert.throws(()=>withLaserAppearance(root,{roles,resolve:()=>resolved('Engrave')},()=>{
+    assert.equal(arrow.visible,false);assert.deepEqual(base.dashArray,[]);throw Error('draw failed');
+  }),/draw failed/);
+  assert.equal(arrow.visible,true);assert.deepEqual(base.dashArray,[4,2]);
 });
 test('exceptions restore styles, visibility, dash arrays and raster draw function',()=>{
   const item=path(),dash=item.dashArray;
@@ -59,4 +77,17 @@ test('policy uses actual process settings and keeps advanced output unresolved',
   assert.equal(laserPreviewIntent(fx.doc,'p',fx.snapshot).reason,'expand-appearance');
   const hidden=fixture({visible:false});assert.equal(laserPreviewIntent(hidden.doc,'p',hidden.snapshot).reason,'hidden');
   const template=fixture({},{template:true});assert.equal(laserPreviewIntent(template.doc,'p',template.snapshot).status,'reference');
+});
+test('single dashed engraving strokes with arrowheads resolve; width profiles and paint stacks stay unresolved',()=>{
+  const look=appearance(null,'#00FF00',2);
+  Object.assign(look.strokes[0],{dash:{array:[4,3],offset:1},startArrow:{type:'triangle',scale:1},endArrow:{type:'circle',scale:1}});
+  const {doc,snapshot}=fixture({appearance:look});snapshot.layers[0].op='Engrave';
+  assert.equal(laserPreviewIntent(doc,'p',snapshot).status,'resolved');
+  for(const appearance of [
+    {...look,strokes:[{...look.strokes[0],widthProfile:[{t:0,left:1,right:1},{t:1,left:2,right:2}]}]},
+    {...look,strokes:[...look.strokes,...look.strokes]},
+  ]){
+    const f=fixture({appearance});f.snapshot.layers[0].op='Engrave';
+    assert.equal(laserPreviewIntent(f.doc,'p',f.snapshot).reason,'expand-stroke');
+  }
 });

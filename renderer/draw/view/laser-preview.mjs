@@ -20,7 +20,7 @@ export function laserPreviewIntent(doc, id, snapshot) {
     node.appearance?.effects?.some(e=>!e.hidden))return {...process,status:'unresolved',reason:'expand-appearance'};
   if(node.type==='text'&&(!hasTextLayout(node)||node.layout.overflow))return {...process,status:'unresolved',reason:'text-layout'};
   const fills=(node.appearance?.fills??[]).filter(e=>!e.hidden),strokes=(node.appearance?.strokes??[]).filter(e=>!e.hidden);
-  if(process.operation==='Engrave'&&node.type!=='image'&&(fills.length>1||strokes.length>1||strokes.some(s=>s.widthProfile?.length||s.dash?.array?.length||s.startArrow||s.endArrow||(s.align&&s.align!=='center'))))return {...process,status:'unresolved',reason:'expand-stroke'};
+  if(process.operation==='Engrave'&&node.type!=='image'&&(fills.length>1||strokes.length>1||strokes.some(s=>s.widthProfile?.length||(s.align&&s.align!=='center'))))return {...process,status:'unresolved',reason:'expand-stroke'};
   if(node.type==='image' && process.layer.dither && process.layer.dither!=='Grayscale')return {...process,status:'unresolved',reason:'raster-dither'};
   return process;
 }
@@ -29,7 +29,7 @@ export function laserPreviewIntent(doc, id, snapshot) {
  * Export, hit testing, thumbnails and document data keep the original appearance.
  * `resolve` is evaluated once per node per draw by the caller.
  */
-export function withLaserAppearance(root, {resolve,roles=new Map()}, draw) {
+export function withLaserAppearance(root, {resolve,roles=new Map(),zoom=1}, draw) {
   const restore=[];
   const patch=(item,props)=>{const old={};for(const key of Object.keys(props))old[key]=item[key];restore.push(()=>Object.assign(item,old));Object.assign(item,props);};
   function walk(item,inherited=null) {
@@ -39,6 +39,7 @@ export function withLaserAppearance(root, {resolve,roles=new Map()}, draw) {
     if(intent?.status==='reference'){patch(item,{opacity:.18});return;}
     const op=intent?.status==='resolved'?intent.operation:null;
     if((op==='Cut'||op==='Score')&&['stack','arrows','shadow','raster'].includes(role)){patch(item,{visible:false});return;}
+    if(op==='Engrave'&&role==='arrows'){patch(item,{visible:false});return;}
     if(intent?.status==='unresolved'&&role==='shadow'){patch(item,{visible:false});return;}
     if(item.className==='Raster') {
       if(intent?.status==='unresolved'){patch(item,{opacity:.25});return;}
@@ -61,7 +62,12 @@ export function withLaserAppearance(root, {resolve,roles=new Map()}, draw) {
         dashArray:op==='Cut'?[]:op==='Score'?[6,3]:[2,3],dashOffset:0,opacity:1,blendMode:'normal'});
     } else if(op==='Engrave') {
       // Vector engraving uses the painted silhouette (alpha), not RGB darkness.
-      patch(item,{fillColor:item.fillColor?LASER_COLORS.Engrave:null,strokeColor:item.strokeColor?LASER_COLORS.Engrave:null,strokeCap:'butt',strokeJoin:'miter',miterLimit:4,opacity:1,blendMode:'normal'});
+      // Canonical Send to Cut emits a plain SVG stroke: no dashes or arrowheads.
+      // Cut bakes the path transform and scales width by sqrt(abs(det(world))).
+      // Use a screen-space width so anisotropic parents cannot deform the stroke.
+      const m=item.globalMatrix,scale=m?Math.sqrt(Math.abs(m.a*m.d-m.b*m.c)):1;
+      const width=item.strokeScaling===false?item.strokeWidth:item.strokeWidth*scale*zoom;
+      patch(item,{fillColor:item.fillColor?LASER_COLORS.Engrave:null,strokeColor:item.strokeColor?LASER_COLORS.Engrave:null,strokeWidth:width,strokeScaling:false,strokeCap:'butt',strokeJoin:'miter',miterLimit:4,dashArray:[],dashOffset:0,opacity:1,blendMode:'normal'});
     }
   }
   try{walk(root);return draw();}finally{for(let i=restore.length-1;i>=0;i--)restore[i]();}

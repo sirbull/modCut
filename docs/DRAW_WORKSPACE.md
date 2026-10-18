@@ -351,7 +351,7 @@ for kontrakt, verifisering og eksplisitte grenser.
   Eksplisitte Draw-prosessvalg beholdes også når Cut er tom, ved fanebytte og ved filåpning.
 * Uavklarte prosesser eller utseender vises med ravfarget prikkontur eller dempet bilde og
   teller i tegnforklaringen. Første versjon merker avanserte kompositter, uekspanderte effekter,
-  avanserte graveringsstreker og rasterdithering uavklart. Ikke vis dette som en eksakt simulering.
+  graveringsstreker med breddeprofiler/flere malingslag og rasterdithering uavklart. Ikke vis dette som en eksakt simulering.
 * Skjult, ikke-utskrivbart og Ignore blir ikke presentert som output. Template-lag er dempet
   referanse. Tegning, redigering, markører og håndtak fortsetter å virke med visningen aktiv.
 * Selve av/på-valget endrer bare visning: modell, originalfarger, Cut-design, eksport,
@@ -373,6 +373,8 @@ Preview explanation** lar brukeren tilbakestille den. Nye tekster finnes på eng
 * [x] Forklaringsdialog, Cancel, varig brukerpreferanse, Help/Preferences og oversettelser.
 * [x] Stabilisering: objektvis forklaring av uavklart prosess/utseende, med råd og målrettet Electron-verifisering.
 * [x] Isolert IO/recovery→Laser Preview-kontroll; rettet testkjørerens timer som kunne avslutte ny app.
+* [x] Stiplede enkeltstreker og pilspisser ved vektorgravering følger faktisk heltrukken Cut-output;
+  67 306 canvas-/Cut-rasterpunkter uten avvik (kantpiksler utelatt), inkludert affine foreldre og fast mm-strekbredde.
 * [x] Enhetstester og målrettet Electron med ekte piksler, musegest, uendret SVG/modell/historikk,
   prosessvalg, filåpning/fanebytte og ekte normal appomstart.
 * [ ] Full støtte for de utseendene som nå vises uavklart; spesifiseres som egne deloppgaver.

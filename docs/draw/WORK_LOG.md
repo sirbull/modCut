@@ -2073,3 +2073,41 @@ er ikke gjentatt. 340 Draw-enhetstester, i18n og kontrast passerte i dette arbei
 Målrettet `--draw-laser-preview` passerer også på siste testkjører, inkludert en ekte normal
 appomstart med husket visning og undertrykt forklaring. Begge avslutningsbaner er dermed
 kontrollert. Trinnet committes og pushes før videre produktutvidelser.
+
+## 2026-10-18: Preview-utvidelse — stiplede streker og pilspisser
+
+Grenen er ren og synkronisert mot origin før start. Neste avgrensede utvidelse er
+vektorgravering av én vanlig strek med stipling/pilspisser. Den kanoniske Send to Cut-SVG-en
+sender strekens bredde, men ingen dash-/arrow-attributter. Preview skal derfor vise den
+heltrukne graveringen uten pilspisser, uten å endre normal visning, eksport eller dokument.
+Breddeprofiler, flere fyll/streker, effekter og kompositter forblir uavklart i dette trinnet.
+
+Planlagt kontroll: policy/stil-opprydding i enhetstester, faktisk Send to Cut-import med
+geometri/stilkontroll og pikselsammenligning mot Laser Preview. Ingen ferdigmerking før
+kontrollene passerer; ferdig trinn committes/pushes med oppdatert plan og status.
+
+Gjennomført: Engrave-projeksjonen skjuler visningspilspisser og nullstiller stipling/offset
+midlertidig. Forklaringen i Help/intro og bokmålsoversettelsen beskriver at dette følger
+faktisk Send to Cut, mens normal visning/eksport beholder originalene. Breddeprofiler,
+flere malingslag og effekter forblir uavklart.
+
+Output-sammenligningen avdekket også en reell feil ved ulik X/Y-skalering: Cut baker
+geometrien og bruker sqrt(abs(det(world))) for strekbredden, mens Paper kunne deformere
+hele strekflaten. Et diagnostisk løp ga 696 pikselavvik. Preview bruker nå tilsvarende
+verdensbredde i skjermpiksler; fast verdens-mm-strekbredde beholdes uten ekstra skalering.
+Originale bredder og strokeScaling gjenopprettes i finally.
+
+Sluttkontroll: 343 Draw-enhetstester, fire i18n-tester og kontrast passerer. Electron
+`--draw-laser-strokes` og samlet `--draw-recovery` passerer, inkludert opprinnelig Laser
+Preview, IO/autosave og faktisk krasj/gjenoppretting. Den nye testen overfører fire reelle
+stiplete/pildekorerte streker til Cut: vanlig, uniformt skalert, fast mm-bredde og ulik
+skalering med shear. Importerte bredder er 2, 3, 2 og 2,1166 mm. Alfaflaten fra Cut-rasteret
+sammenlignes med Draw-canvas: 67 306 sammenlignede punkter, 5 140 svarte, null avvik.
+Anti-aliasing og rasterets én-pikselrand utelates for å unngå forskjellig pikseljustering.
+
+Testen kontrollerer modell-/historikknøytral preview, originale dash/cap/farger og identisk
+Cut-SVG/artwork. Selve Send to Cut legger forventet til én Cut-lenke og ett historikksteg;
+dette var en testforutsetning som ble rettet etter første prøve, ikke en appfeil. Skjermbildet
+er visuelt kontrollert. Full Draw/npm test er ikke gjentatt; målrettede tester er kjørt
+etter siste kodeendring. Plan, STATUS, HANDOFF, README og kontrakt er oppdatert. Trinnet
+committes/pushes før neste utvidelse.

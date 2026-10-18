@@ -2,6 +2,7 @@
 // value that is carried over. Product and workspace names (modCut, Cut, Draw) stay as they are.
 export const NB = Object.freeze({
   // Laser Preview
+  "Vector dashes and arrowheads are not sent to Cut. Preview shows solid strokes without arrowheads.": "Stipling og pilspisser på vektorer sendes ikke til Cut. Forhåndsvisningen viser heltrukne streker uten pilspisser.",
   "Unresolved Laser Preview objects": "Uavklarte objekter i laserforhåndsvisningen",
   "Show unresolved objects": "Vis uavklarte objekter",
   "Choose an operation in Laser processes, then review its settings in Cut.": "Velg en operasjon i Laserprosesser, og kontroller deretter innstillingene i Cut.",

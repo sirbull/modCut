@@ -18,6 +18,8 @@ og verifisert gjennom normal appomstart. Selve togglen bevarer modell, historikk
 Uavklarte prosesser/utseender merkes eksplisitt. Avanserte effekter/kompositter, graveringsstreker
 og rasterdithering kan fortsatt kreve kontroll i Cut. «Engrave as seen», maskinbevegelser og
 materialresultat er ikke implementert som simulering. Se [kontrakt og restliste](cut-optimized.md).
+Stiplede enkeltstreker og pilspisser ved gravering følger nå faktisk Cut-output;
+affine foreldres strekbredde er også kontrollert. Se siste utvidelse nederst.
 Plan/status/arbeidslogg er oppdatert ved hvert trinn; hver ferdige leveranse er committet på
 `feat/vector-draw`. GitHub-tilgangen er rettet; alle tidligere leveransecommits er pushet og kontrollert på origin.
 
@@ -1063,3 +1065,20 @@ Ingen appfeil eller assertion er skjult av retry. Full Draw er ikke kjørt på n
 Neste produktsteg er støttede preview-utvidelser med sammenligning mot faktisk Cut-output.
 
 Målrettet Laser Preview med normal appomstart passerer også etter timerrettingen.
+
+
+## Siste preview-utvidelse: stipling og pilspisser (2026-10-18)
+
+Enkle stiplede graveringsstreker med pilspisser er nå støttet. De vises heltrukket og uten
+pilspisser fordi det er slik Send to Cut faktisk overfører dem. Normal visning og eksport
+beholder originalene. Flere fyll/streker, breddeprofiler og effekter forblir uavklart.
+
+343 Draw-enhetstester, i18n og kontrast passerer. Ny målrettet Electron-test sammenligner
+67 306 punkter mot rasterflaten fra faktisk Cut-import, med 0 avvik. Testen dekker også
+affine foreldre (inkludert ulik skalering/shear), verdens-mm-bredde, modell-/historikknøytral preview og den ene
+forventede Cut-lenken fra Send to Cut. Se cut-optimized.md og siste WORK_LOG.
+
+Rasterets én-pikselrand og anti-aliasing utelates fra pikselsammenligningen. Ulik X/Y-
+skalering av graveringsstreker følger nå Cuts breddeberegning i stedet for å deformere
+strekflaten. `--draw-recovery` passerer på siste kode, med både gammel og ny preview-test.
+Full Draw/npm test er ikke gjentatt i dette trinnet.

@@ -28,6 +28,10 @@ avanserte utseender er tilsiktet; ikke fjern disse markeringene for å få pene 
 av en foreldet shutdown-timer i testkjøreren; denne er rettet og `--draw-recovery` passerer
 hele IO/recovery→preview-overgangen. Ingen full omkjøring etter rettingen. Neste produktsteg
 er å utvide støttede preview-tilfeller med faktisk Send to Cut-sammenligning.
+Stiplede enkeltstreker/pilspisser ved vektorgravering er nå en slik verifisert utvidelse:
+de vises heltrukket uten pilspisser, i samsvar med Cut-import. `--draw-laser-strokes` måler
+67 306 prøvepunkter uten avvik; 343 Draw-tester passerer. Breddeprofiler og flere malingslag
+forblir uavklart. Behold sammenligningen når flere preview-tilfeller støttes.
 
 Ferdige trinn committes og pushes på `feat/vector-draw`. GitHub-tilgangen er rettet;
 `b194897` er pushet og kontrollert på origin. Hent før du fortsetter og bevar parallelle commits.

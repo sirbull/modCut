@@ -1,4 +1,5 @@
 import { runDrawLaserPreviewWorkflows,verifyLaserPreviewPreferences } from './draw-laser-preview-workflows.mjs';
+import { runDrawLaserStrokeWorkflows } from './draw-laser-stroke-workflows.mjs';
 import { spawn } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -190,6 +191,9 @@ try {
   } else if (process.argv.includes('--draw-place')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawPlaceWorkflows(first);first.socket.close();
+  } else if (process.argv.includes('--draw-laser-strokes')) {
+    for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
+    await runDrawLaserStrokeWorkflows(first);first.socket.close();
   } else if (process.argv.includes('--draw-laser-preview')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawLaserPreviewWorkflows(first);
@@ -307,6 +311,7 @@ try {
       }
       await verifyProjectRecovery(recovered, expected);
       await runDrawLaserPreviewWorkflows(recovered);
+      await runDrawLaserStrokeWorkflows(recovered);
       recovered.socket.close();
       break;
     }

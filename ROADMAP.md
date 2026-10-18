@@ -52,6 +52,8 @@ the same commit that completes an item.
   See `docs/draw/cut-optimized.md` and DRAW_WORKSPACE 4.4.1.
 - [x] Laser Preview unresolved object details: per-object guidance, read-only dialog,
   English/Bokmål, model-neutral Electron checks and app restart.
+- [x] Laser Preview for dashed single strokes and arrowheads during vector engraving:
+  match the solid strokes actually sent to Cut, with 67,306 output comparison samples.
 - [x] Resolve the final full-Draw E2E connection close: cancel the old process shutdown
   timeout and target the captured process; verified with `--draw-recovery`.
 
