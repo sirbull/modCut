@@ -659,3 +659,17 @@ export function workspacesDialog(names,current) {
     {key:'name',label:'Workspace',type:'select',value:current&&names.includes(current)?current:names[0],options:names.map(n=>({value:n,label:n}))},
     {key:'action',label:'Action',type:'select',value:'apply',options:[{value:'apply',label:'Switch to it'},{value:'delete',label:'Delete it'}]}]}).then(v=>v&&{name:v.name,action:v.action});
 }
+/** Shown the first time Cut Preview is turned on: what changes on the canvas. Resolves to { hide } or null. */
+export function cutPreviewIntroDialog() {
+  const result=openDrawModal({title:'Cut Preview',submitLabel:'OK',className:'draw-cut-preview-dialog',fields:[
+    {key:'hide',label:'Don’t show this again',type:'checkbox',value:false},
+  ]});
+  const form=document.querySelector('.draw-cut-preview-dialog form'),list=document.createElement('ul');list.className='draw-cut-preview-dialog__list';
+  for(const text of ['Fills show in grayscale, the way they engrave: darker is a deeper burn.',
+    'Strokes show as thin black lines, where the laser cuts or scores.',
+    'Transparency and blending modes show as they will engrave when you send with Engrave as seen.',
+    'Only the view changes. Colors, strokes and the document stay as they are, and you can keep drawing.',
+    'Turn it off again from View > Cut Preview or the Cut Preview button.']){const li=document.createElement('li');li.textContent=text;list.append(li);}
+  form.prepend(list);
+  return result;
+}

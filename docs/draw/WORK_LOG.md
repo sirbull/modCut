@@ -1883,3 +1883,17 @@ E2E: hele Draw-E2E 41 passerte, 47 av 47 (også prosjektsuiten). Suitene for det
 Ctrl/Cmd forsvant fra modifikatorene ved musebevegelse (Lasso med Alt+Ctrl virket ikke), perspektiv målte fra hjørnet
 i stedet for pekerens bevegelse, og Expand Appearance fant ikke grupper med vektoreffekter. Alt er rettet.
 
+
+## 2026-10-18: Cut Preview og gravering som vist (påbegynt, ikke ferdig)
+
+Ønske fra brukeren:
+1. En av/på-bryter i View-menyen (og ved Outline-knappen) for å tegne "cut optimized": fyll i gråtoner slik de graveres, strøk som tynne svarte linjer der laseren kutter. Første gang den slås på vises et vindu som forklarer hva som endrer seg, med "Don't show this again" (huskes i localStorage).
+2. Blend modes og transparens skal kunne påvirke graveringen.
+
+Gjort så langt: `cutPreviewIntroDialog()` i `renderer/draw/ui/dialogs.mjs` (introvinduet med avkrysning). Ikke koblet til noe ennå.
+
+Gjenstår, i denne rekkefølgen:
+- `setCutPreview` i `render/paper-adapter.mjs`: gråtonefilter bare på artwork-laget (pakk `artwork.draw` med `ctx.filter='grayscale(1)'`, slik at markering og hjelpelinjer beholder farge), strøk som svarte hårlinjer (1/zoom, ingen stiplinger, oppdateres ved zoom i `updateView` som Outline), ingen pilspisser, profilerte strøk som hårlinjer. Outline vinner over Cut Preview.
+- Kommandoen `cut-preview` og knapp ved Outline i `index.mjs`, menyvalg View > Cut Preview i `electron/main.mjs`, i18n-oppføringer, introvinduet første gang.
+- Send to Cut: valget "Engrave as seen" som flater ut transparente eller blandede fylte områder (med fylte objekter de overlapper) til et graveringsbilde via exportBoard med `only`, sender strøkene fortsatt som kutt, gir en advarsel og lagres i cut-lenken for Update in Cut.
+- E2E-test for bryteren og introvinduet, enhetstest for utflatingen, oppdatering av STATUS.md og DRAW_WORKSPACE.md.

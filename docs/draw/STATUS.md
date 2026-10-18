@@ -18,6 +18,13 @@ JPEG-eksport, PDF/EPS/DXF-eksport, Export for Screens, punkttekst, rektangulær 
 systemfonter, Google Fonts og **Create Outlines** finnes. Send to Cut gjør tekst til konturer automatisk
 uten å endre Draw-teksten. Image Trace og effekter gjenstår.
 
+
+**Neste oppgave (påbegynt 2026-10-18, ikke ferdig): Cut Preview og gravering som vist.** En av/på-bryter i
+View-menyen viser fyll i gråtoner og strøk som svarte hårlinjer, med et introvindu første gang og "Don't show
+this again". Send to Cut skal få valget "Engrave as seen" slik at blend modes og transparens påvirker
+graveringen. Bare introvinduet (`cutPreviewIntroDialog` i `ui/dialogs.mjs`) er laget. Detaljert plan og
+rekkefølge står i WORK_LOG.md under samme dato.
+
 ## 2. Høyresiden sammenlignet med Illustrator
 
 | Del | Status | Som i Illustrator | Mangler |
