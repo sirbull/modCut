@@ -951,9 +951,10 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
     return {...result,...transformProperties(result,node.transform)};
   }
   function clearTransformPreview(){transformPreview?.remove();transformPreview=null;transformPreviewOptions=null;transformPreviewIds.clear();}
-  function previewTransform(ids,matrix,{scaleStrokes=null}={}){
-    clearTransformPreview();transformPreviewOptions={matrix,scaleStrokes};transformPreview=new scope.Group({insert:false});overlay.addChild(transformPreview);
-    for(const id of ids){const original=items.get(id);if(!original)continue;const clone=original.clone({insert:false});
+  /** `matrix` is one matrix for all, or a function giving each object its own (Transform Each). */
+  function previewTransform(ids,matrixOf,{scaleStrokes=null}={}){
+    clearTransformPreview();transformPreviewOptions={matrix:typeof matrixOf==='function'?[1,0,0,1,0,0]:matrixOf,scaleStrokes:typeof matrixOf==='function'?null:scaleStrokes};transformPreview=new scope.Group({insert:false});overlay.addChild(transformPreview);
+    for(const id of ids){const original=items.get(id);if(!original)continue;const clone=original.clone({insert:false}),matrix=typeof matrixOf==='function'?matrixOf(id):matrixOf;
       const prepare=item=>{const record=records.get(item.data.nodeId);if(record){item.visible=record.node.visible;
         if(scaleStrokes!==null&&!outlineFor(item.data.nodeId)){const properties=scaledStrokeProperties(record.node,record.worldMatrix.values,matrix,scaleStrokes);if(properties.appearance)style(item,{...record.node,...properties},false);}}
         item.children?.forEach(prepare);

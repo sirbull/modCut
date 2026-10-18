@@ -1184,11 +1184,15 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     // Transform Each: every selected object around its own reference point; Random picks a factor per object.
     if(command==='transform-each')return async()=>{
       const targets=selectedIds().filter(id=>doc.isEditable(id));if(!targets.length)throw new Error('Select objects to transform.');
-      const values=await transformEachDialog(state.ui.transformEachDefaults??{});if(!values||destroyed)return;state.ui.transformEachDefaults=values;
+      // One random factor per object, so the preview and the result agree.
+      const factors=new Map(targets.map(id=>[id,Math.random()])),before=state.document.data;
+      const values=await transformEachDialog(state.ui.transformEachDefaults??{},preview=>withScope(()=>{renderer.clearTransformPreview();
+        if(preview&&state.document.data===before)renderer.previewTransform(targets,id=>{const box=renderer.bounds(id);return box?transformEachMatrix(box,preview,factors.get(id)):[1,0,0,1,0,0];});else renderer.updateView();}));
+      if(!values||destroyed)return;state.ui.transformEachDefaults=values;
       run(()=>{const created=[];
         state.history.transaction(values.copy?'Copy Transform Each':'Transform Each',()=>{for(const id of targets){
           const box=renderer.bounds(id);if(!box)continue;
-          transforms.apply(transformEachMatrix(box,values,Math.random()),'Transform Each',{ids:[id],copy:values.copy,remember:false});created.push(...state.selection.ids);}});
+          transforms.apply(transformEachMatrix(box,values,factors.get(id)),'Transform Each',{ids:[id],copy:values.copy,remember:false});created.push(...state.selection.ids);}});
         select(values.copy?created:targets);});
     };
     // Crop Image: non-destructive; the asset stays whole and the crop can be widened again or reset.

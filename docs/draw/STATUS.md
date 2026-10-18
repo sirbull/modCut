@@ -558,7 +558,10 @@ verktøyalternativer for Smooth og Path Eraser (fast bredde i skjermpiksler nå)
 * Kode: `geom/transform-each.mjs` (`transformEachMatrix`, `gridCells`, `distortSubpaths`), kommandoene i
   `pathCommand` og `freeDistort*` i `index.mjs`, gesten i `tools/interactions.mjs`.
 
-Gjenstår i D3.6: perspektiv (Shift i Free Transform) og forhåndsvisning i Transform Each-dialogen.
+Transform Each-dialogen har Preview: hvert objekt vises transformert mens dialogen er åpen (Random bruker samme
+tilfeldige tall i forhåndsvisningen og resultatet).
+
+Gjenstår i D3.6: perspektiv (Shift i Free Transform).
 
 ### 2.24 Levende effekter, del A (D3.2, 2026-10-17)
 

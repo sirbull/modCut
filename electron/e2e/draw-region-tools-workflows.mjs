@@ -60,7 +60,12 @@ export async function runDrawRegionToolWorkflows(client) {
   steps = await applied();
   await evaluate(`(async()=>{${active}.handle('transform-each')})()`);
   for (let i = 0; i < 100 && !await evaluate("!!document.querySelector('.draw-transform-each-dialog form')"); i++) await wait(30);
-  await evaluate("(()=>{const f=document.querySelector('.draw-transform-each-dialog form');f.elements.scaleX.value='50';f.elements.moveX.value='5';f.requestSubmit();})()"); await wait(80);
+  // Preview: each object is shown transformed while the dialog is open, before OK changes anything.
+  const undoBefore = await evaluate(`(async()=>${active}.state.history.entries.filter(e=>e.applied).length)()`);
+  await evaluate("(()=>{const f=document.querySelector('.draw-transform-each-dialog form');f.elements.scaleX.value='50';f.elements.moveX.value='5';f.dispatchEvent(new Event('input',{bubbles:true}));})()"); await wait(50);
+  const previewed = await evaluate(`(async()=>{const w=${active};return {hidden:w.state.selection.ids.every(id=>!w.renderer.items.get(id).visible),steps:w.state.history.entries.filter(e=>e.applied).length}})()`);
+  assert.deepEqual(previewed, { hidden: true, steps: undoBefore }, 'The originals give way to the preview; nothing is changed yet');
+  await evaluate("document.querySelector('.draw-transform-each-dialog form').requestSubmit()"); await wait(80);
   let boxes = (await layer()).filter(p => pair.includes(p.id)).map(p => p.b);
   assert.deepEqual(boxes, [[18, 50, 5, 10], [38, 50, 5, 10]].map(b => b), `Each scaled around its centre and moved: ${JSON.stringify(boxes)}`);
   assert.equal(await applied(), steps + 1, 'Transform Each is one undo step');

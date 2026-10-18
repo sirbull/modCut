@@ -506,10 +506,10 @@ export function effectDialog(type, values = {}) {
     k==='join'||k==='style'||k==='orientation'||k==='op'||k==='background'?x:k==='color'?String(x).toUpperCase():k==='smooth'||k==='antialias'?!!x:k==='opacity'&&['drop-shadow','outer-glow','inner-glow'].includes(type)?Number(x)/100:whole.has(k)?Math.round(Number(x)):Number(x)])));
 }
 /** Transform Each: scale, move, rotate and reflect each object around its own reference point. */
-export function transformEachDialog(defaults={}) {
+export function transformEachDialog(defaults={},onPreview=()=>{}) {
   const d={scaleX:100,scaleY:100,moveX:0,moveY:0,angle:0,reflectX:false,reflectY:false,random:false,copy:false,anchor:'center',...defaults};
   const anchors=[['top-left','Top left'],['top','Top'],['top-right','Top right'],['left','Left'],['center','Center'],['right','Right'],['bottom-left','Bottom left'],['bottom','Bottom'],['bottom-right','Bottom right']];
-  return openDrawModal({title:'Transform Each',submitLabel:'OK',className:'draw-transform-each-dialog',fields:[
+  const result=openDrawModal({title:'Transform Each',submitLabel:'OK',className:'draw-transform-each-dialog',fields:[
     {key:'scaleX',label:'Scale horizontal (%)',type:'number',value:d.scaleX,min:-100000,max:100000,step:'any',required:true},
     {key:'scaleY',label:'Scale vertical (%)',type:'number',value:d.scaleY,min:-100000,max:100000,step:'any',required:true},
     {key:'moveX',label:'Move horizontal (mm)',type:'number',value:d.moveX,min:-100000,max:100000,step:'any',required:true},
@@ -518,11 +518,21 @@ export function transformEachDialog(defaults={}) {
     {key:'reflectX',label:'Reflect X',type:'checkbox',value:d.reflectX},{key:'reflectY',label:'Reflect Y',type:'checkbox',value:d.reflectY},
     {key:'anchor',label:'Reference point',type:'select',value:d.anchor,options:anchors.map(([value,label])=>({value,label}))},
     {key:'random',label:'Random',type:'checkbox',value:d.random},{key:'copy',label:'Copy',type:'checkbox',value:d.copy},
-  ]}).then(v=>{
-    if(!v)return null;
+    {key:'preview',label:'Preview',type:'checkbox',value:true},
+  ]});
+  const values=v=>{
     const [ax,ay]={'top-left':[0,0],top:[.5,0],'top-right':[1,0],left:[0,.5],center:[.5,.5],right:[1,.5],'bottom-left':[0,1],bottom:[.5,1],'bottom-right':[1,1]}[v.anchor]??[.5,.5];
     return {scaleX:Number(v.scaleX),scaleY:Number(v.scaleY),moveX:Number(v.moveX),moveY:Number(v.moveY),angle:Number(v.angle),reflectX:!!v.reflectX,reflectY:!!v.reflectY,
       random:!!v.random,copy:!!v.copy,anchor:v.anchor,reference:[ax,ay]};
+  };
+  // Preview shows each object transformed as OK would, while the dialog is open.
+  const form=document.querySelector('.draw-transform-each-dialog form');
+  const preview=()=>{if(!form)return;const v=Object.fromEntries([...form.elements].filter(e=>e.name).map(e=>[e.name,e.type==='checkbox'?e.checked:e.value]));onPreview(form.checkValidity()&&v.preview?values(v):null);};
+  form?.addEventListener('input',preview);form?.addEventListener('change',preview);preview();
+  return result.then(v=>{
+    onPreview(null);
+    if(!v)return null;
+    return values(v);
   });
 }
 /** Split Into Grid: rows, columns and gutters (mm). */
