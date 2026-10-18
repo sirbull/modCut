@@ -23,9 +23,11 @@ finnes. Målrettet Electron verifiserer piksler, musegest, eksport-/modellnøytr
 prosesser ved filåpning/fanebytte og normal appomstart. Visning av uavklarte prosesser og
 avanserte utseender er tilsiktet; ikke fjern disse markeringene for å få pene previews.
 «Engrave as seen» er fortsatt en separat planlagt output-endring, ikke del av visningen.
-«Show unresolved objects» er nå implementert og målrettet Electron-verifisert. Full Draw
-passerte alle funksjonsgrupper og recovery, men siste Laser Preview-del mistet DevTools-
-forbindelsen. Isoler denne overgangen som neste stabilisering; se siste STATUS/WORK_LOG.
+«Show unresolved objects» er nå implementert, målrettet Electron-verifisert og pushet som
+6122476. Full Draw passerte alle funksjonsgrupper og recovery. Siste preview-del ble drept
+av en foreldet shutdown-timer i testkjøreren; denne er rettet og `--draw-recovery` passerer
+hele IO/recovery→preview-overgangen. Ingen full omkjøring etter rettingen. Neste produktsteg
+er å utvide støttede preview-tilfeller med faktisk Send to Cut-sammenligning.
 
 Ferdige trinn committes og pushes på `feat/vector-draw`. GitHub-tilgangen er rettet;
 `b194897` er pushet og kontrollert på origin. Hent før du fortsetter og bevar parallelle commits.

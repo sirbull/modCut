@@ -1051,3 +1051,15 @@ lagring/autosave og faktisk krasjgjenoppretting. Den feilet deretter i avslutten
 med «DevTools connection closed while command 57 was pending». Fullkjøringen er derfor ikke
 grønn. Neste stabilisering isolerer denne avslutningen; øvrige funksjonsgrupper trenger ikke
 blind omkjøring for å diagnostisere den.
+
+
+### Rettet avslutning i testverktøyet
+
+Årsaken var `stop()` i E2E-kjøreren: en timer fra gammel prosess brukte den globale `child`
+etter relansering og kunne drepe den nye appen. Timeren ryddes nå når gammel prosess avsluttes,
+og avslutning bruker en fanget prosessreferanse. `--draw-recovery` gjenskapte feilen før
+rettingen og passerer etterpå med samme IO-/autosave-/recovery-/Laser Preview-assertions.
+Ingen appfeil eller assertion er skjult av retry. Full Draw er ikke kjørt på nytt etter dette.
+Neste produktsteg er støttede preview-utvidelser med sammenligning mot faktisk Cut-output.
+
+Målrettet Laser Preview med normal appomstart passerer også etter timerrettingen.

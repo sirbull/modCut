@@ -79,3 +79,8 @@ passerer med den nye objektlisten, riktige råd, trygg tekstvisning av navn, uen
 og normal appomstart. Full Draw passerte alle funksjonsgrupper, autosave og krasjgjenoppretting,
 men feilet deretter i siste Laser Preview-del med lukket DevTools-forbindelse. Hele kjøringen
 er derfor fortsatt ikke grønn; denne overgangen isoleres i neste stabilisering.
+
+Avslutningsfeilen er diagnostisert og rettet i testkjøreren: en gammel stop-timer kunne
+avslutte den relanserte appen. Nytt fokusert løp `node electron/e2e/run.mjs --draw-recovery`
+gjenskapte feilen før rettingen og passerer hele IO/autosave/crash/recovery/preview-overgangen
+etter rettingen. Ingen full omkjøring eller full grønn `npm test` er hevdet.

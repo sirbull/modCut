@@ -2049,3 +2049,27 @@ og fullkjøringen rapporteres ikke som grønn. Neste trinn isolerer recovery→p
 
 Planens foreldede «neste er fase 2» er erstattet med gjeldende prioritering. Dette trinnet
 committes og pushes før videre feilsøking, slik brukeren ba om.
+
+
+## 2026-10-18: Stabilisering av E2E-avslutning etter krasjgjenoppretting
+
+Objektoversikten er committet og pushet som 6122476 før videre feilsøking. Et fokusert
+`--draw-recovery`-løp bruker de samme prosjekt-IO-, autosave-, recovery- og Laser Preview-
+funksjonene som full Draw, med samme ikke-tomme Cut-fixture som grunnlag. Første forsøk
+manglet denne fixturen og feilet en uendret IO-assertion; etter at fixture-forutsetningen
+ble oppfylt gjenskapte løpet lukket DevTools-forbindelse etter vellykket recovery.
+
+Årsak: `stop()` brukte Promise.race med en 3-sekunders tvangsavslutning som aldri ble
+avbestilt ved tidlig prosessexit. Closure brukte den globale `child`, og kunne derfor
+drepe den nye appen etter relansering. Nå fanges prosessen lokalt, både exitCode og signalCode
+sjekkes, timeren ryddes ved exit og avslutning venter på den bestemte prosessen. Ingen
+assertions er svekket og ingen retry skjuler feilen.
+
+`--draw-recovery` passerer etter rettingen: v3/v4 IO, autosave, dirty guards, faktisk
+krasj/gjenoppretting av begge modeller, deretter hele Laser Preview med objektforklaring.
+Alle øvrige Draw-funksjonsgrupper passerte i fullkjøringen før timerfeilen; fullkjøringen
+er ikke gjentatt. 340 Draw-enhetstester, i18n og kontrast passerte i dette arbeidet.
+
+Målrettet `--draw-laser-preview` passerer også på siste testkjører, inkludert en ekte normal
+appomstart med husket visning og undertrykt forklaring. Begge avslutningsbaner er dermed
+kontrollert. Trinnet committes og pushes før videre produktutvidelser.

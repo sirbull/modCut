@@ -6,6 +6,7 @@ import { join } from "node:path";
 import electronPath from "electron";
 
 import { connectToApp, wait } from "./cdp.mjs";
+import { enterDraw } from './draw-test-helpers.mjs';
 import { runDrawWorkflows, runDrawTabWorkflows } from "./draw-workflows.mjs";
 import { runProjectWorkflows, verifyProjectRecovery } from "./project-workflows.mjs";
 import { runDrawUIWorkflows } from "./draw-ui-workflows.mjs";
@@ -75,20 +76,22 @@ function launch() {
 }
 
 async function stop(signal = "SIGTERM") {
-  if (!child || child.exitCode != null) return;
+  const stopping=child;
+  if (!stopping || stopping.exitCode != null || stopping.signalCode != null) return;
   const terminate = (nextSignal) => {
     try {
-      if (process.platform !== "win32") process.kill(-child.pid, nextSignal);
-      else child.kill(nextSignal);
+      if (process.platform !== "win32") process.kill(-stopping.pid, nextSignal);
+      else stopping.kill(nextSignal);
     } catch {
-      child.kill(nextSignal);
+      stopping.kill(nextSignal);
     }
   };
-  terminate(signal);
-  await Promise.race([
-    new Promise((resolve) => child.once("exit", resolve)),
-    wait(3000).then(() => { if (child?.exitCode == null) terminate("SIGKILL"); }),
-  ]);
+  // A timeout from the old process must never terminate a newly launched app.
+  await new Promise(resolve=>{
+    const timer=setTimeout(()=>terminate('SIGKILL'),3000);
+    stopping.once('exit',()=>{clearTimeout(timer);resolve();});
+    terminate(signal);
+  });
 }
 
 try {
@@ -224,60 +227,69 @@ try {
   } else if (process.argv.includes('--draw-tools')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawPhaseOneWorkflows(first);first.socket.close();
-  } else if (process.argv.includes("--draw")) {
+  } else if (process.argv.includes("--draw") || process.argv.includes('--draw-recovery')) {
     let ready = false;
     for (let attempt = 0; attempt < 100 && !ready; attempt++) {
       ready = await first.evaluate("!!document.querySelector('.doc-tab.is-active') && !!window.paper?.project");
       if (!ready) await wait(100);
     }
     if (!ready) throw new Error("Draw test: project did not initialize");
-    await runDrawTabWorkflows(first);
-    await first.evaluate(`(() => {
-      paper.project.layers[1].activate();
-      const shape = new paper.Path.Rectangle(new paper.Rectangle(10, 10, 40, 30));
-      shape.strokeColor = 'black'; shape.selected = true; paper.view.update();
-    })()`);
-    await runDrawWorkflows(first);
-    await runDrawUIWorkflows(first);
-    await runDrawPhaseOneWorkflows(first);
-    await runDrawPathWorkflows(first);
-    await runDrawCornerWorkflows(first);
-    await runDrawTransformWorkflows(first);
-    await runDrawPanelWorkflows(first);
-    await runDrawFeedbackWorkflows(first);
-    await runDrawScrubWorkflows(first);
-    await runDrawSwatchWorkflows(first);
-    await runDrawPathfinderWorkflows(first);
-    await runDrawObjectWorkflows(first);
-    await runDrawCutWorkflows(first);
-    await runDrawPlaceWorkflows(first);
-    await runDrawControlWorkflows(first);
-    await runDrawExportWorkflows(first);
-    await runDrawTextWorkflows(first);
-    await runDrawAreaTextWorkflows(first);
-    await runDrawPathTextWorkflows(first);
-    await runDrawCharacterWorkflows(first);
-    await runDrawCompoundWorkflows(first);
-    await runDrawPathCommandWorkflows(first);
-    await runDrawGradientWorkflows(first);
-    await runDrawToolsTwoWorkflows(first);
-    await runDrawHistoryInfoWorkflows(first);
-    await runDrawModeWorkflows(first);
-    await runDrawCutTwoWorkflows(first);
-    await runDrawSvgImportWorkflows(first);
-    await runDrawSelectWorkflows(first);
-    await runDrawRegionToolWorkflows(first);
-    await runDrawEffectWorkflows(first);
-    await runDrawLinkWorkflows(first);
-    await runDrawWidthWorkflows(first);
-    await runDrawBlendWorkflows(first);
-    await runDrawWarpMaskWorkflows(first);
-    await runDrawBrushWorkflows(first);
-    await runDrawWindowWorkflows(first);
-    await runDrawMcpWorkflows(first);
-    await runDrawLanguageWorkflows(first);
-    await runDrawPerfWorkflows(first);
-    await runDrawTextOutlineWorkflows(first);
+    if(process.argv.includes('--draw-recovery')) {
+      await enterDraw(first.evaluate);
+      // The IO assertions also preserve nonempty Cut geometry, as the full suite does.
+      await first.evaluate(`(() => { paper.project.layers[1].activate();
+        const shape=new paper.Path.Rectangle(new paper.Rectangle(10,10,40,30));
+        shape.strokeColor='black';paper.view.update(); })()`);
+    }
+    else {
+      await runDrawTabWorkflows(first);
+      await first.evaluate(`(() => {
+        paper.project.layers[1].activate();
+        const shape = new paper.Path.Rectangle(new paper.Rectangle(10, 10, 40, 30));
+        shape.strokeColor = 'black'; shape.selected = true; paper.view.update();
+      })()`);
+      await runDrawWorkflows(first);
+      await runDrawUIWorkflows(first);
+      await runDrawPhaseOneWorkflows(first);
+      await runDrawPathWorkflows(first);
+      await runDrawCornerWorkflows(first);
+      await runDrawTransformWorkflows(first);
+      await runDrawPanelWorkflows(first);
+      await runDrawFeedbackWorkflows(first);
+      await runDrawScrubWorkflows(first);
+      await runDrawSwatchWorkflows(first);
+      await runDrawPathfinderWorkflows(first);
+      await runDrawObjectWorkflows(first);
+      await runDrawCutWorkflows(first);
+      await runDrawPlaceWorkflows(first);
+      await runDrawControlWorkflows(first);
+      await runDrawExportWorkflows(first);
+      await runDrawTextWorkflows(first);
+      await runDrawAreaTextWorkflows(first);
+      await runDrawPathTextWorkflows(first);
+      await runDrawCharacterWorkflows(first);
+      await runDrawCompoundWorkflows(first);
+      await runDrawPathCommandWorkflows(first);
+      await runDrawGradientWorkflows(first);
+      await runDrawToolsTwoWorkflows(first);
+      await runDrawHistoryInfoWorkflows(first);
+      await runDrawModeWorkflows(first);
+      await runDrawCutTwoWorkflows(first);
+      await runDrawSvgImportWorkflows(first);
+      await runDrawSelectWorkflows(first);
+      await runDrawRegionToolWorkflows(first);
+      await runDrawEffectWorkflows(first);
+      await runDrawLinkWorkflows(first);
+      await runDrawWidthWorkflows(first);
+      await runDrawBlendWorkflows(first);
+      await runDrawWarpMaskWorkflows(first);
+      await runDrawBrushWorkflows(first);
+      await runDrawWindowWorkflows(first);
+      await runDrawMcpWorkflows(first);
+      await runDrawLanguageWorkflows(first);
+      await runDrawPerfWorkflows(first);
+      await runDrawTextOutlineWorkflows(first);
+    }
     const expected = await runProjectWorkflows(first, profile);
     first.socket.close();
     await stop("SIGKILL");

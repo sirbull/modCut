@@ -372,6 +372,7 @@ Preview explanation** lar brukeren tilbakestille den. Nye tekster finnes på eng
 * [x] Meny, knapp, tegnforklaring, prosessvalg og Outline-samspill.
 * [x] Forklaringsdialog, Cancel, varig brukerpreferanse, Help/Preferences og oversettelser.
 * [x] Stabilisering: objektvis forklaring av uavklart prosess/utseende, med råd og målrettet Electron-verifisering.
+* [x] Isolert IO/recovery→Laser Preview-kontroll; rettet testkjørerens timer som kunne avslutte ny app.
 * [x] Enhetstester og målrettet Electron med ekte piksler, musegest, uendret SVG/modell/historikk,
   prosessvalg, filåpning/fanebytte og ekte normal appomstart.
 * [ ] Full støtte for de utseendene som nå vises uavklart; spesifiseres som egne deloppgaver.
