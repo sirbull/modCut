@@ -517,7 +517,10 @@ Gjenstår i D3.1: utvidelse av effekter (kommer med D3.2), stiplede streker og p
 * Kode: `doc/select-rules.mjs` (rene regler), `selectionCommand` i `index.mjs`, `lasso` i `tools/paths.mjs`,
   gestene i `tools/interactions.mjs`, Select-menyen i `electron/main.mjs`.
 
-Gjenstår i D3.5: Select > Same > Graphic Style (krever grafiske stiler), Direction Handles, og Lasso som
+Select > Same > Graphic Style merker objektene som har samme grafiske stil fra dokumentet som det merkede (fyll,
+strek, effekter, opasitet og blanding).
+
+Gjenstår i D3.5: Direction Handles, og Lasso som
 velger hele objekter med Alt+Mod.
 
 ### 2.22 Shape Builder, Knife og Eraser (D3.4, 2026-10-17)

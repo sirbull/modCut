@@ -54,3 +54,17 @@ test('Select > Object, next object above and below, and saved selections', () =>
   assert.throws(() => saveSelection(doc.data.settings, '', [red.id]), /name/);
   assert.throws(() => savedSelection(doc, 'Reds'), /no longer exists/);
 });
+
+test('Select > Same > Graphic Style: objects with the same document style as the reference', async () => {
+  const { DrawDocument } = await import('../doc/document.mjs');
+  const { createDocument, createNode } = await import('../doc/schema.mjs');
+  const { appearance } = await import('../geometry.mjs');
+  const { sameAs: same } = await import('../doc/select-rules.mjs');
+  const look = appearance('#FF0000', '#000000', 1), other = appearance('#00FF00', null);
+  const sq = (x, app) => createNode('path', { subpaths: [{ closed: true, segments: [[x, 0], [x + 1, 0], [x + 1, 1]].map((p) => ({ p, in: [0, 0], out: [0, 0] })) }], appearance: app });
+  const nodes = [sq(0, look), sq(2, look), sq(4, other)];
+  const data = createDocument({ graphicStyles: [{ id: 'red', name: 'Red', appearance: look, opacity: 1, blendMode: 'normal' }] }); data.layers[0].children = nodes;
+  const doc = new DrawDocument(data);
+  assert.deepEqual(same(doc, [nodes[0].id], 'graphic-style'), [nodes[0].id, nodes[1].id]);
+  assert.throws(() => same(doc, [nodes[2].id], 'graphic-style'), /graphic styles/);
+});

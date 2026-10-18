@@ -31,10 +31,16 @@ function near(a, b, tolerance) {
 }
 export const SAME_MODES = Object.freeze({
   appearance: 'Appearance', 'fill-stroke': 'Fill & Stroke', 'fill-color': 'Fill Color', opacity: 'Opacity',
-  'stroke-color': 'Stroke Color', 'stroke-weight': 'Stroke Weight', shape: 'Shape', text: 'Text',
+  'stroke-color': 'Stroke Color', 'stroke-weight': 'Stroke Weight', 'graphic-style': 'Graphic Style', shape: 'Shape', text: 'Text',
 });
-/** What `mode` compares on a node. */
-function key(node, mode) {
+/** The graphic style whose look an object has (fills, strokes, effects, opacity and blending), or null. */
+const lookOf = (node) => JSON.stringify([node.appearance ?? null, node.opacity ?? 1, node.blendMode ?? 'normal']);
+function styleOf(node, styles) {
+  const look = lookOf(node);
+  return styles.find((s) => JSON.stringify([s.appearance ?? null, s.opacity ?? 1, s.blendMode ?? 'normal']) === look)?.id ?? null;
+}
+/** What `mode` compares on a node; `styles` are the document's graphic styles. */
+function key(node, mode, styles = []) {
   const fill = hex(visible(node.appearance?.fills)[0]), strokeEntry = visible(node.appearance?.strokes)[0], stroke = hex(strokeEntry);
   switch (mode) {
     case 'fill-color': return fill;
@@ -42,7 +48,8 @@ function key(node, mode) {
     case 'stroke-weight': return strokeEntry ? Math.round((strokeEntry.width ?? 0) * 1000) / 1000 : null;
     case 'fill-stroke': return `${fill}|${stroke}`;
     case 'opacity': return Math.round((node.opacity ?? 1) * 1000);
-    case 'appearance': return JSON.stringify([node.appearance ?? null, node.opacity ?? 1, node.blendMode ?? 'normal']);
+    case 'appearance': return lookOf(node);
+    case 'graphic-style': return styleOf(node, styles);
     case 'shape': return node.type === 'shape' ? `shape:${node.shape}` : node.type;
     case 'text': return node.type === 'text' ? JSON.stringify([node.character?.fontFamily, node.character?.fontSize, node.character?.fontWeight, node.character?.fontStyle]) : null;
     default: throw new Error(`Unknown Select > Same mode: ${mode}`);
@@ -53,8 +60,10 @@ export function sameAs(doc, referenceIds, mode) {
   const refs = referenceIds.flatMap((id) => { const n = doc.getNode(id); return n?.children ? doc.descendants(id).filter((c) => LEAVES.has(c.type)) : n ? [n] : []; });
   if (!refs.length) throw new Error('Select an object to match first.');
   if (mode === 'text' && !refs.some((n) => n.type === 'text')) throw new Error('Select a text object to match.');
-  const wanted = new Set(refs.map((n) => key(n, mode)).filter((k) => k !== null && k !== 'null|null'));
-  return leaves(doc).filter((id) => wanted.has(key(doc.getNode(id), mode)));
+  const styles = doc.data.graphicStyles ?? [];
+  const wanted = new Set(refs.map((n) => key(n, mode, styles)).filter((k) => k !== null && k !== 'null|null'));
+  if (mode === 'graphic-style' && !wanted.size) throw new Error('The selected object does not have one of the document\'s graphic styles.');
+  return leaves(doc).filter((id) => wanted.has(key(doc.getNode(id), mode, styles)));
 }
 /** Magic Wand: leaves whose fill (and, when asked, stroke colour, stroke weight, opacity) is close to `id`'s. */
 export function magicWand(doc, id, { fill = true, fillTolerance = 32, stroke = false, strokeTolerance = 32, weight = false, weightTolerance = .5, opacity = false, opacityTolerance = 5 } = {}) {

@@ -288,7 +288,7 @@ function buildMenu(mode = "cut") {
     template.find(item=>item.label==='Select').submenu=[objectItem('All','select-all'),objectItem('All on Active Artboard','select-artboard'),objectItem('Deselect','deselect'),
       objectItem('Reselect','reselect'),objectItem('Inverse','select-inverse'),{type:'separator'},objectItem('Next Object Above','select-next-above'),objectItem('Next Object Below','select-next-below'),
       {type:'separator'},{label:'Same',submenu:[['Appearance','appearance'],['Fill & Stroke','fill-stroke'],['Fill Color','fill-color'],['Opacity','opacity'],['Stroke Color','stroke-color'],
-        ['Stroke Weight','stroke-weight'],['Shape','shape'],['Text','text']].map(([label,mode])=>objectItem(label,`select-same-${mode}`))},
+        ['Stroke Weight','stroke-weight'],['Graphic Style','graphic-style'],['Shape','shape'],['Text','text']].map(([label,mode])=>objectItem(label,`select-same-${mode}`))},
       {label:'Object',submenu:[['All on Same Layers','same-layers'],['Stray Points','stray-points'],['Open Paths','open-paths'],['Clipping Masks','clipping-masks'],['Text Objects','text'],
         ['Raster Images','images']].map(([label,kind])=>objectItem(label,`select-object-${kind}`))},
       {type:'separator'},objectItem('Save Selection…','save-selection'),objectItem('Edit Selection…','edit-selection')];
