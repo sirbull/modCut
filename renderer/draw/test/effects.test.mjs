@@ -73,3 +73,12 @@ test('a group\'s vector effects follow an object\'s own, inner group first', asy
   assert.deepEqual(withGroupEffects(path, [inner, effect('zig-zag')]).appearance.effects.map((e) => e.type), ['round-corners', 'roughen', 'zig-zag']);
   assert.equal(withGroupEffects(path, []), path); assert.equal(withGroupEffects({ type: 'text' }, [inner]).type, 'text');
 });
+
+test('Free Distort as an effect moves the box corners by shares of the box, keeping the anchors live', () => {
+  const square = [{ closed: true, segments: [[0, 0], [10, 0], [10, 10], [0, 10]].map((p) => ({ p, in: [0, 0], out: [0, 0] })) }];
+  const e = effect('free-distort', { trx: 50, try: -20 });
+  assert.equal(e.type, 'free-distort'); assert.equal(e.tlx, 0);
+  const out = applyVectorEffects(square, [e]);
+  assert.deepEqual(out[0].segments.map((g) => g.p.map((v) => Math.round(v * 100) / 100)), [[0, 0], [15, -2], [10, 10], [0, 10]]);
+  assert.throws(() => effect('free-distort', { blx: 5000 }), /Invalid Free Distort/);
+});

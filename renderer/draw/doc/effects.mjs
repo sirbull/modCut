@@ -4,7 +4,7 @@
  * kept but skipped. Pure; Offset Path gets the polygon offset as a function.
  */
 import { roundCorners } from '../geom/corners.mjs';
-import { transformEachMatrix } from '../geom/transform-each.mjs';
+import { transformEachMatrix, distortSubpaths, boxCorners } from '../geom/transform-each.mjs';
 import { WARP_STYLES, warpMapping } from '../geom/warp.mjs';
 import { PATHFINDER_LABELS } from '../geom/pathfinder.mjs';
 import { scribble } from '../geom/scribble.mjs';
@@ -17,6 +17,8 @@ export const EFFECTS = Object.freeze({
   'pucker-bloat': { label: 'Pucker & Bloat', group: 'Distort & Transform', defaults: { amount: 30 } },
   roughen: { label: 'Roughen', group: 'Distort & Transform', defaults: { size: .5, detail: 2, seed: 1 } },
   twist: { label: 'Twist', group: 'Distort & Transform', defaults: { angle: 45 } },
+  // Free Distort: each corner of the object's box moves by a share of the box (x and y in %), as the effect's dialog sets.
+  'free-distort': { label: 'Free Distort', group: 'Distort & Transform', defaults: { tlx: 0, tly: 0, trx: 0, try: 0, brx: 0, bry: 0, blx: 0, bly: 0 } },
   warp: { label: 'Warp', group: 'Warp', defaults: { style: 'arc', bend: 50, horizontal: 0, vertical: 0, orientation: 'horizontal' } },
   // Live Pathfinder: on a group, its paths and shapes are drawn combined; the group keeps them editable.
   pathfinder: { label: 'Pathfinder', group: 'Pathfinder', container: true, defaults: { op: 'unite' } },
@@ -43,6 +45,7 @@ export function effect(type, settings = {}) {
     : type === 'pucker-bloat' ? finite(e.amount, -200, 200)
     : type === 'roughen' ? finite(e.size, 0, 1000) && finite(e.detail, 0, 100) && Number.isInteger(e.seed)
     : type === 'twist' ? finite(e.angle, -3600, 3600)
+    : type === 'free-distort' ? ['tlx', 'tly', 'trx', 'try', 'brx', 'bry', 'blx', 'bly'].every((k) => finite(e[k], -1000, 1000))
     : type === 'pathfinder' ? !!PATHFINDER_LABELS[e.op]
     : type === 'scribble' ? finite(e.angle, -360, 360) && finite(e.spacing, .05, 1000) && finite(e.strokeWidth, .01, 1000) && finite(e.overlap, -1000, 1000) && finite(e.variation, 0, 1000) && finite(e.curviness, 0, 100) && Number.isInteger(e.seed)
     : type === 'warp' ? !!WARP_STYLES[e.style] && finite(e.bend, -100, 100) && finite(e.horizontal, -100, 100) && finite(e.vertical, -100, 100) && ['horizontal', 'vertical'].includes(e.orientation)
@@ -146,6 +149,10 @@ export function applyVectorEffects(subpaths, effects = [], { offset = () => null
       // The outline is flattened (anchors kept) and filled with the scribbled line.
       const polygons = out.filter((sub) => sub.closed).map((sub) => resample(sub, (a, b) => Math.max(1, Math.ceil(segmentLength(a, b) / .25)), (a, b, t) => at(a, b, t)));
       out = scribble(polygons, e);
+    }
+    else if (e.type === 'free-distort') {
+      const box = boundsOf(out), [tl, tr, br, bl] = boxCorners(box), move = (p, x, y) => [p[0] + x / 100 * box.width, p[1] + y / 100 * box.height];
+      out = distortSubpaths(out, box, [move(tl, e.tlx, e.tly), move(tr, e.trx, e.try), move(br, e.brx, e.bry), move(bl, e.blx, e.bly)]);
     }
     else if (e.type === 'warp') {
       // Curves are sampled densely enough that the bent outline stays smooth.

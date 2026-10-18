@@ -1862,4 +1862,5 @@ Verifisering: effekt-enhetstest, `--draw-effects` (rød glød utenfor, myk kant 
   fontene; koden bruker samme vei som baner.
 - Vektoreffekter på grupper: barna arver gruppens vektoreffekter i tegning, eksport og Send to Cut; Expand Appearance
   på gruppen baker dem inn. Verifisering: effekt-enhetstest, `--draw-effects` (Zig Zag på begge rutene, bakt inn).
+- Free Distort som effekt (`free-distort`, hjørner i % av rammen). Verifisering: effekt-enhetstest, `--draw-effects`.
 

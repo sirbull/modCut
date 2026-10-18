@@ -269,7 +269,7 @@ function buildMenu(mode = "cut") {
     const objectItem=(label,command)=>({label,accelerator:acceleratorFor(command,{isMac}),click:()=>send(command)});
     // Effect menu (D3.2): live vector effects, kept in the object's Appearance.
     template.find(item=>item.label==='Effect').submenu=[objectItem('Apply Last Effect','effect-last'),objectItem('Last Effect…','effect-options'),{type:'separator'},
-      {label:'Distort & Transform',submenu:[objectItem('Pucker & Bloat…','effect-pucker-bloat'),objectItem('Roughen…','effect-roughen'),objectItem('Transform…','effect-transform'),
+      {label:'Distort & Transform',submenu:[objectItem('Free Distort…','effect-free-distort'),objectItem('Pucker & Bloat…','effect-pucker-bloat'),objectItem('Roughen…','effect-roughen'),objectItem('Transform…','effect-transform'),
         objectItem('Twist…','effect-twist'),objectItem('Zig Zag…','effect-zig-zag')]},{label:'Path',submenu:[objectItem('Offset Path…','effect-offset-path')]},
       objectItem('Rasterize…','effect-rasterize'),{label:'Blur',submenu:[objectItem('Gaussian Blur…','effect-gaussian-blur')]},
       {label:'Stylize',submenu:[objectItem('Drop Shadow…','effect-drop-shadow'),objectItem('Feather…','effect-feather'),objectItem('Inner Glow…','effect-inner-glow'),objectItem('Outer Glow…','effect-outer-glow'),objectItem('Round Corners…','effect-round-corners'),objectItem('Scribble…','effect-scribble')]},

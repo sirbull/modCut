@@ -113,6 +113,14 @@ export async function runDrawEffectWorkflows(client) {
   await evaluate(`(async()=>{const w=${active};w.select(['${grouped}']);w.handle('expand-appearance')})()`); await wait(80);
   const bakedGroup = await evaluate(`(async()=>{const w=${active},g=w.state.document.getNode('${grouped}');return {effects:g.appearance.effects.map(e=>e.type),anchors:g.children.map(k=>k.subpaths[0].segments.length)}})()`);
   assert.deepEqual(bakedGroup, { effects: ['drop-shadow'], anchors: [12, 12] }, 'The group keeps its shadow; the zig zag is now anchors');
+  // Effect > Distort & Transform > Free Distort…: the top right corner moves out by half the width; the anchors stay.
+  const distorted = await evaluate(`(async()=>{const w=${active},{createNode}=await import('./draw/doc/schema.mjs'),{insertNode}=await import('./draw/doc/commands.mjs'),{appearance}=await import('./draw/geometry.mjs');
+    const bd=w.state.document.data.artboards[0],n=createNode('path',{subpaths:[{closed:true,segments:[[100,10],[120,10],[120,30],[100,30]].map(p=>({p:[bd.x+p[0],bd.y+p[1]],in:[0,0],out:[0,0]}))}],appearance:appearance('#AA00AA',null)});
+    w.state.history.execute(insertNode(w.state.document.data.layers[0].id,n));w.select([n.id]);return n.id;})()`);
+  assert.equal(await evaluate("window.modcut.clickE2EMenuItem('Effect','Free Distort…')"), true);
+  await dialog({ trx: 50, try: 0 });
+  const corner = await evaluate(`(async()=>{const w=${active},bd=w.state.document.data.artboards[0],seg=w.renderer.items.get('${distorted}').segments[1].point;return {x:Math.round(seg.x-bd.x),anchors:w.state.document.getNode('${distorted}').subpaths[0].segments[1].p[0]-bd.x}})()`);
+  assert.deepEqual(corner, { x: 130, anchors: 120 });
   await restore();
-  console.log('PASS Draw effects: Rasterize (pixels at the chosen ppi, anchors kept, image in SVG), Outer Glow and Gaussian Blur, a drop shadow and Zig Zag on a group (Expand Appearance bakes it), Round Corners, Offset Path and Transform as live effects (menu and commands, one undo step each), hide and delete in Appearance, Send to Cut and Apply Last Effect use them, Expand Appearance bakes them; Zig Zag, and Drop Shadow on canvas and in PNG');
+  console.log('PASS Draw effects: Rasterize (pixels at the chosen ppi, anchors kept, image in SVG), Outer Glow and Gaussian Blur, a drop shadow and Zig Zag on a group (Expand Appearance bakes it), Free Distort as an effect, Round Corners, Offset Path and Transform as live effects (menu and commands, one undo step each), hide and delete in Appearance, Send to Cut and Apply Last Effect use them, Expand Appearance bakes them; Zig Zag, and Drop Shadow on canvas and in PNG');
 }

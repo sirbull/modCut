@@ -484,6 +484,7 @@ export function effectDialog(type, values = {}) {
     : type === 'pucker-bloat' ? [n('amount','Pucker (−) or Bloat (+) (%)',-200,200)]
     : type === 'roughen' ? [n('size','Size (mm)',0,1000),n('detail','Detail (per mm)',0,100),n('seed','Variation',0,1000000,1)]
     : type === 'twist' ? [n('angle','Angle (°)',-3600,3600)]
+    : type === 'free-distort' ? [['tl','Top left'],['tr','Top right'],['br','Bottom right'],['bl','Bottom left']].flatMap(([k,label])=>[n(`${k}x`,`${label} X (%)`,-1000,1000),n(`${k}y`,`${label} Y (%)`,-1000,1000)])
     : type === 'scribble' ? [n('angle','Angle (°)',-360,360),n('spacing','Spacing (mm)',.05,1000),n('strokeWidth','Stroke width (mm)',.01,1000),n('overlap','Path overlap (mm)',-1000,1000),
       n('variation','Variation (mm)',0,1000),n('curviness','Curviness (%)',0,100),n('seed','Variation seed',0,1000000,1)]
     : type === 'pathfinder' ? [{key:'op',label:'Operation',type:'select',value:values.op,options:Object.entries(LIVE_LABELS).map(([value,label])=>({value,label}))}]
@@ -499,7 +500,7 @@ export function effectDialog(type, values = {}) {
       {key:'color',label:'Color',type:'color',value:String(values.color??'#000000').toLowerCase()},{...n('opacity','Opacity (%)',0,100),value:Math.round((values.opacity??.75)*100)}]
     : [n('scaleX','Scale horizontal (%)',-100000,100000),n('scaleY','Scale vertical (%)',-100000,100000),n('moveX','Move horizontal (mm)',-100000,100000),
       n('moveY','Move vertical (mm)',-100000,100000),n('angle','Rotate (°)',-360,360),n('copies','Copies',0,1000,1)];
-  const title = {'offset-path':'Offset Path','round-corners':'Round Corners',transform:'Transform Effect','zig-zag':'Zig Zag','pucker-bloat':'Pucker & Bloat',roughen:'Roughen',twist:'Twist','drop-shadow':'Drop Shadow',rasterize:'Rasterize','gaussian-blur':'Gaussian Blur',feather:'Feather','outer-glow':'Outer Glow','inner-glow':'Inner Glow',warp:'Warp Options',pathfinder:'Pathfinder',scribble:'Scribble Options'}[type];
+  const title = {'offset-path':'Offset Path','round-corners':'Round Corners',transform:'Transform Effect','zig-zag':'Zig Zag','pucker-bloat':'Pucker & Bloat',roughen:'Roughen',twist:'Twist','free-distort':'Free Distort','drop-shadow':'Drop Shadow',rasterize:'Rasterize','gaussian-blur':'Gaussian Blur',feather:'Feather','outer-glow':'Outer Glow','inner-glow':'Inner Glow',warp:'Warp Options',pathfinder:'Pathfinder',scribble:'Scribble Options'}[type];
   const whole = new Set(['copies','ridges','seed']);
   return openDrawModal({title,submitLabel:'OK',className:'draw-effect-dialog',fields}).then(v=>v&&Object.fromEntries(Object.entries(v).map(([k,x])=>[k,
     k==='join'||k==='style'||k==='orientation'||k==='op'||k==='background'?x:k==='color'?String(x).toUpperCase():k==='smooth'||k==='antialias'?!!x:k==='opacity'&&['drop-shadow','outer-glow','inner-glow'].includes(type)?Number(x)/100:whole.has(k)?Math.round(Number(x)):Number(x)])));
