@@ -579,9 +579,9 @@ body[data-workspace="draw"] #sendToCut { display: inline-flex; }
 .draw-glyph:hover { border-color: var(--accent, #006B5C); }
 
 .draw-shell--laser-preview .draw-stage { background: #fff; }
-.draw-laser-legend { position:absolute; top:8px; left:12px; z-index:2; max-width:calc(100% - 24px); display:flex; flex-wrap:wrap; gap:12px; padding:8px 12px; background:var(--surface-1,#fff); color:var(--text); border:1px solid var(--border); border-radius:6px; font-size:12px; pointer-events:none; }
+.draw-laser-legend { position:absolute; top:8px; left:12px; z-index:2; max-width:calc(100% - 24px); display:flex; flex-wrap:wrap; gap:12px; padding:8px 12px; background:var(--surface,#fff); color:var(--text); border:1px solid var(--border); border-radius:6px; font-size:12px; pointer-events:none; }
 .draw-laser-legend[hidden] { display:none; }
-.draw-laser-key::before { content:''; display:inline-block; width:22px; margin-right:5px; vertical-align:middle; border-top:2px solid #C5221F; }
+.draw-laser-key::before { content:''; display:inline-block; width:22px; margin-right:5px; vertical-align:middle; height:9px; background:#fff; border-top:2px solid #C5221F; }
 .draw-laser-key--score::before { border-top-style:dashed; }
 .draw-laser-key--engrave::before { border:0; height:9px; background:#000; }
 .draw-laser-key--unresolved::before { border-top:2px dotted #965300; }

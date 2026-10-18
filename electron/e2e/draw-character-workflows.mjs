@@ -12,9 +12,9 @@ export async function runDrawCharacterWorkflows(client) {
   const node=id=>evaluate(`(async()=>(${active}.state.document.getNode('${id}')))()`);
   const applied=()=>evaluate(`(async()=>(${active}.state.history.entries.filter(e=>e.applied).length))()`);
   const set=(selector,value)=>evaluate(`(()=>{const i=document.querySelector(${JSON.stringify(selector)});if(i.type==='checkbox')i.checked=${JSON.stringify(value)};else i.value=${JSON.stringify(String(value))};i.dispatchEvent(new Event('change',{bubbles:true}));})()`);
-  // Two installed families, the first with Bold.
-  const [familyA,familyB]=await evaluate("(async()=>{const f=await window.modcut.listSystemFonts(),has=(n,w)=>f.some(x=>x.family===n&&x.fontWeight===w&&x.fontStyle==='normal');const names=[...new Set(f.map(x=>x.family))].filter(n=>has(n,'normal'));const a=names.find(n=>has(n,'bold'));return [a,names.find(n=>n!==a)];})()");
-  assert.ok(familyA&&familyB,'Two installed font families are needed');
+  // Both families need Bold: the test changes family while Bold is still selected.
+  const [familyA,familyB]=await evaluate("(async()=>{const f=await window.modcut.listSystemFonts(),has=(n,w)=>f.some(x=>x.family===n&&x.fontWeight===w&&x.fontStyle==='normal');const names=[...new Set(f.map(x=>x.family))].filter(n=>has(n,'normal')&&has(n,'bold'));const a=names[0];return [a,names.find(n=>n!==a)];})()");
+  assert.ok(familyA&&familyB,'Two installed font families with Regular and Bold are needed');
   const ids=await evaluate(`(async()=>{const w=${active},{pointText,textValues,DEFAULT_CHARACTER}=await import('./draw/doc/text.mjs'),{insertNode}=await import('./draw/doc/commands.mjs'),b=w.state.document.data.artboards[0],out=[];
     for(const [text,y] of [['Horten modCut',30],['Laser',70]]){const n=pointText([b.x+10,b.y+y],{text,...DEFAULT_CHARACTER,fontFamily:${JSON.stringify(familyA)},alignment:'left'});
       n.layout=await window.modcut.shapeText(textValues(n));n.character.fontPostscriptName=n.layout.font.postscriptName;w.state.history.execute(insertNode(w.state.document.data.layers[0].id,n));out.push(n.id);}

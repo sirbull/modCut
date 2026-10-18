@@ -254,7 +254,7 @@ function buildMenu(mode = "cut") {
       ...(isMac ? [] : [{ type: "separator" }, { label: "Preferences…", accelerator: acceleratorFor("preferences", { isMac }), click: () => send("preferences") }]),
     ];
     viewMenu.submenu = [viewMenu.submenu[0], { type: "separator" },
-      { id:"laser-preview",label:"Laser Preview",type:"checkbox",checked:menuLaserPreview,click:()=>send("laser-preview") },
+      { id:"laser-preview",label:"Laser Preview",type:"checkbox",checked:menuLaserPreview,click:item=>{item.checked=menuLaserPreview;send("laser-preview");} },
       { label:"Laser processes…",click:()=>send("laser-processes") },
       { label: "Outline / Preview", accelerator: acceleratorFor("outline", { isMac }), click: () => send("outline") },
       { label: "Reset Rotate View", click: () => send("reset-rotate-view") },
@@ -463,6 +463,7 @@ app.whenReady().then(async () => {
     ipcMain.handle("e2eExports", () => e2eExports.splice(0));
     ipcMain.handle("e2eWorkspaceMenu", () => ({
       label: Menu.getApplicationMenu()?.getMenuItemById("workspace-toggle")?.label,
+      laserPreviewChecked: Menu.getApplicationMenu()?.getMenuItemById("laser-preview")?.checked,
       top: Menu.getApplicationMenu()?.items.map((item) => item.label),
       edit: Menu.getApplicationMenu()?.items.find((item) => item.label === "Edit")?.submenu.items.map((item) => item.accelerator || null),
       file: Menu.getApplicationMenu()?.items.find((item) => item.label === "File")?.submenu.items.map((item) => ({ label: item.label, accelerator: item.accelerator || null })),

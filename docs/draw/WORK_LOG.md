@@ -1983,3 +1983,27 @@ visuelt kontrollert. Full regresjonskontroll følger i neste trinn før sluttsta
 Avgrensning: avanserte kompositter, uekspanderte effekter, avanserte graveringsstreker og
 rasterdithering vises som uavklart (ravfarget prikkontur eller dempet bilde), ikke som lovet output.
 «Engrave as seen», fysisk materialresultat og kjørerekkefølge er fortsatt separate oppgaver.
+
+## 2026-10-18: Laser Preview — Outline-lag og menyer
+
+Ved gjennomgang ble en kanttilstand funnet: et lag som selv står i Outline må fortsatt vises
+som faktisk output i Laser Preview. Modusen overstyrer nå lagets visningsvalg midlertidig og
+bygger riktige originalstiler ved modusbytte. Av/på gjenoppretter Outline-lagene. Den målrettede
+pikseltesten bruker nå et slikt lag, slik at manglende fyll ikke kan passere ubemerket.
+Inaktiv modus gjør ingen ekstra redraw, og uendrede native avkrysninger sendes ikke på hver
+modelloppdatering. Hjelpeteksten presiserer at stiplet Score er et visuelt skille, ikke hull i banen.
+
+## 2026-10-18: Regresjonskontroll — Character-testens fontvalg
+
+Full `npm test` passerer Java/bridge/main/renderer/Draw/kontrast og hele Cut-E2E med recovery.
+Draw-E2E passerer til og med tekst på path, men stopper i Character-testen: «family applied».
+Diagnose: testen velger familie B bare etter Regular, men har allerede slått på Bold før den
+bytter familie. Den valgte cmex10 har ingen Bold; fonttjenesten avviser dette korrekt.
+Testforutsetningen er rettet til to familier med både Regular og Bold. Ingen fontfallback,
+assertion eller applikasjonsvalidering er fjernet. Målrettet `--draw-character` passerer etter rettingen, med de samme typografi- og eksportassertionene.
+
+Sluttkontroll av stabiliseringstrinnet: `--draw-laser-preview` passerer også med et Outline-lag,
+fargebilde (gråtonepiksler, originale bildepiksler/opacity bevart), avbrutt native menyvalg,
+per-fane-visning, filåpning og ekte normal appomstart. `--draw-character` passerer med rettet
+fontforutsetning. 21 målrettede enhetstester passerer etter siste kodejustering. Tegnforklaringen
+bruker korrekt lyst/mørkt surface-token; hvite miniatyrfelt holder linjetegnene lesbare.

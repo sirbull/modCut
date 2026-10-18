@@ -102,11 +102,12 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   const renderer=withScope(()=>createDrawRenderer(scope,state,{withScope,onImageLoad:()=>panels?.render(),
     getLaserProcesses,onThumbnail:(id,url)=>{if(!destroyed)for(const img of shell.querySelectorAll(`[data-draw-thumb="${CSS.escape(id)}"]`)){img.src=url;img.classList.remove('is-empty');}}}));
   let laserDialog=null;
-  function syncLaserMenu(){void window.modcut?.setLaserPreviewState?.(!!state.ui.laserPreview);}
+  let lastLaserMenu=null;
+  function syncLaserMenu(force=false){const value=!!state.ui.laserPreview;if(root.style.display==='none'||(!force&&lastLaserMenu===value))return;lastLaserMenu=value;void window.modcut?.setLaserPreviewState?.(value);}
   function updateLaserView(){
     const enabled=!!state.ui.laserPreview;
     withScope(()=>renderer.setLaserPreview(enabled));shell.classList.toggle('draw-shell--laser-preview',enabled);
-    laserButton.setAttribute('aria-pressed',String(enabled));processesButton.hidden=!enabled;laserLegend.hidden=!enabled;
+    laserButton.setAttribute('aria-pressed',String(enabled));processesButton.hidden=!enabled;processesButton.disabled=state.document.readOnly;laserLegend.hidden=!enabled;
     if(enabled){
       const intents=state.document.descendants(null).map(n=>renderer.laserIntent(n.id));
       const count=intents.filter(i=>i.status==='unresolved').length;
@@ -121,7 +122,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     if(!state.ui.laserPreview&&!getPreferences().hideLaserPreviewIntro){
       const pending=cutPreviewIntroDialog();laserDialog=document.querySelector('.draw-cut-preview-dialog');
       const result=await pending;laserDialog=null;
-      if(destroyed||!result){syncLaserMenu();return;}
+      if(destroyed||!result){if(!destroyed)syncLaserMenu(true);return;}
       if(result.hide)setPreferences({hideLaserPreviewIntro:true});
     }
     if(!state.ui.laserPreview){state.ui.laserPreviousOutline=renderer.outline;state.ui.outline=false;withScope(()=>renderer.setOutline(false));}

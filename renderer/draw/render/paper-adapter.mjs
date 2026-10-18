@@ -51,7 +51,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
     finally{for(const [item,color] of saved)item.fillColor=color;}
   };
   // Template layers stay previewed in Outline view; other layers may request Outline individually.
-  const outlineFor = id => { const context = records.get(id)?.context ?? ROOT_CONTEXT; return !context.template && (outline || context.outline); };
+  const outlineFor = id => { const context = records.get(id)?.context ?? ROOT_CONTEXT; return !context.template && (outline || (!laserPreview && context.outline)); };
   const pointToWorld=(id,point)=>new scope.Point(...point).transform(records.get(id).worldMatrix);
   const editingMatrix=id=>{
     const node=state.document.getNode(id),parentId=node?.type==='shape'?state.document.locate(id).parentId:id;
@@ -1072,7 +1072,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
   }
   /** The width-profiled stroke `entry` of node `id` as filled outline subpaths in the node's own space (Outline Stroke). */
   const profiledStroke = (id, entry) => { const item = items.get(id); return item ? variableStrokeSubpaths(item, entry) : null; };
-  return { render, select: updateView, updateView, requestDraw, bounds, painted: id => paintedBounds.get(id)?.clone() ?? bounds(id), profiledStroke, blendSteps, liveSteps, envelopeSteps, strokeLocation, widthHandles, selectionBounds, hit, items, setOutline, setLaserPreview(value){laserPreview=!!value;lastFrame=null;scope.view._needsUpdate=true;requestDraw();}, get laserPreview(){return laserPreview;}, laserIntent(id){return laserPreviewIntent(state.document,id,getLaserProcesses());}, thumbnail, exportArtwork, clippedSubpaths, clipToRect, effectiveSubpaths, booleanOperand, selectionHandle:point=>selection.hit(point),
+  return { render, select: updateView, updateView, requestDraw, bounds, painted: id => paintedBounds.get(id)?.clone() ?? bounds(id), profiledStroke, blendSteps, liveSteps, envelopeSteps, strokeLocation, widthHandles, selectionBounds, hit, items, setOutline, setLaserPreview(value){const next=!!value,changed=next!==laserPreview;if(!next&&!changed)return;laserPreview=next;lastFrame=null;if(changed)setOutline(outline);scope.view._needsUpdate=true;requestDraw();}, get laserPreview(){return laserPreview;}, laserIntent(id){return laserPreviewIntent(state.document,id,getLaserProcesses());}, thumbnail, exportArtwork, clippedSubpaths, clipToRect, effectiveSubpaths, booleanOperand, selectionHandle:point=>selection.hit(point),
     glyphBounds(id,subpaths) {const item=new scope.CompoundPath({insert:false,children:subpaths.map(path)});try{return item.getBounds(records.get(id).worldMatrix).clone();}finally{item.remove();}},
     previewText(node, parentId = null) {
       textPreview?.remove(); textPreview = null;textPreviewFrame?.remove();textPreviewFrame=null;

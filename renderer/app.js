@@ -370,7 +370,7 @@ function setWorkspace(mode) {
     toast(tab.drawState.warning, "info"); tab.drawWarningShown = true;
   }
   closeContextMenu();
-  void window.modcut.setWorkspace(mode).then(()=>{if(tab===activeTab()&&mode==="draw")tab.draw?.syncLaserMenu();});
+  void window.modcut.setWorkspace(mode).then(()=>{if(tab===activeTab()&&mode==="draw")tab.draw?.syncLaserMenu(true);});
   scheduleRecovery();
   if (mode === "draw" && !tab.draw) void setupDrawDocument(tab);
 }

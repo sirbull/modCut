@@ -2,6 +2,7 @@
 // value that is carried over. Product and workspace names (modCut, Cut, Draw) stay as they are.
 export const NB = Object.freeze({
   // Laser Preview
+  "Score dashes are a display key, not gaps in the machine path.": "Stiplingen for Score er en tegnforklaring, ikke opphold i maskinens bane.",
   "Laser Preview": "Laserforhåndsvisning",
   "Laser processes": "Laserprosesser",
   "Laser processes…": "Laserprosesser…",
