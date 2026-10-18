@@ -86,6 +86,30 @@ export async function runDrawExportWorkflows(client) {
   await until(`(async()=>{const w=${active};return !!w&&!!w.state.document.getNode('ex-red')&&!!w.state.document.getNode('ex-blue');})()`, 'Editable objects from the PDF');
   await evaluate(`document.querySelector('[data-tab-id="${before}"]').click()`);
 
+  // PDF/X-4: the preset sets the standard and locks what the standard does not allow.
+  const [x4] = await exportAs('Export proof X4.pdf', async () => {
+    await until("!!document.querySelector('.draw-pdf-dialog form')", 'Save PDF dialog');
+    await evaluate("(()=>{const s=document.querySelector('.draw-pdf-dialog [name=preset]');s.value='pdfx4';s.dispatchEvent(new Event('change',{bubbles:true}));})()");
+    assert.deepEqual(await evaluate("['standard','version','preserveEditing','pageInfo'].map(n=>{const e=document.querySelector('.draw-pdf-dialog [name='+n+']');return e.type==='checkbox'?[e.checked,e.disabled]:e.value;})"), ['x4', '1.6', [false, true], [false, true]]);
+    assert.equal(await presetLabel(), '[PDF/X-4:2008]');
+    await evaluate("document.querySelector('.draw-pdf-dialog form').requestSubmit()");
+  });
+  const x4Text = Buffer.from(x4.data, 'base64').toString('latin1');
+  assert.match(x4Text, /\/S \/GTS_PDFX/); assert.match(x4Text, /GTS_PDFXVersion>PDF\/X-4</); assert.doesNotMatch(x4Text, /\/EmbeddedFiles/);
+
+  // EPS out and back in: the EPS importer turns the PostScript into editable paths in a new Draw tab.
+  const [epsFile] = await exportAs('Export proof.eps', async () => {
+    await until("!!document.querySelector('.draw-export-options form')", 'EPS options');
+    await evaluate("document.querySelector('.draw-export-options form').requestSubmit()");
+  });
+  assert.match(epsFile.text, /^%!PS-Adobe-3.0 EPSF-3.0/);
+  const beforeEps = await evaluate("document.querySelector('.doc-tab.is-active').dataset.tabId");
+  await evaluate(`window.modcut.setE2EImportResult(${JSON.stringify({ name: 'Export proof.eps', ext: 'eps', text: epsFile.text })})`);
+  await evaluate("document.querySelector('#import').click()");
+  await until(`document.querySelector('.doc-tab.is-active').dataset.tabId!=='${beforeEps}'`, 'EPS opened in a new tab');
+  await until(`(async()=>{const w=${active};return !!w&&w.state.document.descendants(null).filter(n=>n.type==='path'||n.type==='compound').length>=2;})()`, 'Editable paths from the EPS');
+  await evaluate(`document.querySelector('[data-tab-id="${beforeEps}"]').click()`);
+
   // DXF and PNG through the same flow, with their own options.
   const [dxf] = await exportAs('Export proof.dxf', async () => {
     await until("!!document.querySelector('.draw-export-options form')", 'DXF options');

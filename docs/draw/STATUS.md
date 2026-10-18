@@ -805,6 +805,50 @@ Gjenstår i fase 5: AVIF-eksport, Vertical Type, Touch Type, PDF/X-4, EPS-import
 Gjenstår i fase 5: AVIF-eksport, PDF/X-4, EPS-import, MCP-server og lokalisering. Loddrett tekst støttes ikke som
 områdetekst eller tekst på bane.
 
+### 2.37 Fase 5, del D: PDF/X-4 og EPS-import (2026-10-18)
+
+* **PDF/X-4:** Save PDF har valget **Standard** (None eller PDF/X-4:2008) og forhåndsinnstillingen
+  **[PDF/X-4:2008]** (lag og levende transparens beholdt, trim marks, 3 mm bleed). Filen får OutputIntent
+  (`GTS_PDFX`) med en innebygd ICC-profil, XMP med `pdfxid:GTS_PDFXVersion` og dokument-ID-er, `/Trapped /False`
+  og TrimBox/BleedBox på hver side. Kunstverket er DeviceRGB, så utdatahensikten er sRGB skrevet som en ICC v2
+  utdataprofil (klasse `prtr`, Lab-tabeller A2B0/B2A0/gamt) som modCut lager selv; LittleCMS leser den og gjengir
+  fargene eksakt. Standarden låser det den ikke tillater: PDF 1.6 eller nyere, ingen vedlagt Draw-dokument
+  (Preserve editing), ingen sideinformasjon (den bruker en ikke-innebygd font). Kode: `io/pdfx.mjs`, `pdf.mjs`.
+  Ikke gjort: CMYK-utdatahensikt (FOGRA/GRACoL) og CMYK-konvertering, og en ekstern PDF/X-validator (ingen er
+  installert her).
+* **EPS-import:** File > Open, Import og slipp av `.eps`, `.ps` og eldre `.ai` (PostScript, uten PDF-del) i både
+  Cut og Draw. `renderer/epsimport.js` er en liten PostScript-tolk: stakker, ordbøker, prosedyrer og løkker, stier
+  og buer, gråtone/RGB/CMYK/HSB og Separation/DeviceN via tint-funksjonen, transformasjoner, klipping (SVG
+  clipPath), 8-bits og 1-bits bilder (hex, ASCII85 eller binært, også `imagemask`), Type 3-fonter som konturer
+  og Illustrators egne operatorer (`m L C f S k Xa *u Ln` med flere) når procset mangler. Filer med DOS-binærhode
+  åpnes. Resultatet blir SVG i punkt med lag som grupper, og går gjennom samme import som SVG.
+  Advarsler sier hva som ikke ble med: tekst i andre fonter enn Type 3, gradienter (`shfill`), ukjente operatorer,
+  sider etter den første. Testet mot egen EPS-eksport, Illustrator AI-format og matplotlib-EPS (stier, klipp,
+  bilde, Type 3-tekst).
+  Ikke gjort: Type 1/TrueType-tekst, gradienter og mønstre, filtrene Flate/LZW/RunLength/DCT for bilder, og nyere
+  Illustrator-EPS som bare tegner gjennom AGM-procset kan mangle deler.
+
+### 2.38 Fase 5, del E: modCut som MCP-server (2026-10-18)
+
+* **Preferences > Automation:** bryteren «Let AI agents draw in modCut (MCP server)» (av som standard) starter en
+  lokal MCP-server (Streamable HTTP, bare JSON-svar) på `http://127.0.0.1:47823/mcp`. Feltet under viser kommandoen
+  for Claude Code: `claude mcp add --transport http modcut <url> --header "Authorization: Bearer <token>"`.
+* **Sikkerhet:** lytter bare på 127.0.0.1, krever bearer-token (tilfeldig, lagret i `mcp.json` i brukerdata med
+  filmodus 600), avviser `Origin` som ikke er lokal (nettsider kan ikke nå den), og alt går gjennom Draw-kommandoene,
+  så hvert kall er ett angresteg.
+* **Verktøy:** `document_info`, `list_objects`, `new_document`, `add_artboard`, `add_shape` (rektangel, avrundet
+  rektangel, ellipse, polygon, stjerne, linje), `add_svg`, `update_object` (navn, fyll, strek, opasitet, synlig,
+  lås, flytt), `delete_objects`, `select_objects`, `run_command` og `list_commands` (alle Draw-kommandoer, for
+  eksempel group, pathfinder-unite, undo), `export_artboard` (PNG som bilde eller SVG som tekst) og `send_to_cut`.
+  Mål i mm; x og y fra artboardets øvre venstre hjørne, y nedover.
+* **Kode:** `electron/mcp-tools.mjs` (verktøydefinisjoner), `electron/mcp-server.mjs` (JSON-RPC og HTTP),
+  `electron/mcp-host.mjs` (innstilling, token og rundtur til rendereren), `renderer/draw/mcp-runner.mjs` (utfører
+  kallene i aktiv Draw-fane), IPC `getMcpServer`/`setMcpServer`/`mcp-call`/`mcpResult`.
+* Ikke gjort: SSE-strøm (serveren sender aldri forespørsler selv), ressurser og prompts, valgfri port i
+  innstillingene, og tekst/tekst på bane som egne verktøy (det går via `add_svg`).
+
+Gjenstår i fase 5: AVIF-eksport (Chromium kan ikke kode AVIF fra lerret) og lokalisering.
+
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
 | Oppgave | Status |
@@ -839,7 +883,7 @@ områdetekst eller tekst på bane.
 | D4.4 Paintbrush og Blob Brush | Ferdig i grunnform (2.31); art-, scatter- og pattern-pensler gjenstår |
 | D4.5 EPS/TIFF, Graphic Styles, Navigator, Rotate View, Asset Export | Ferdig i grunnform (2.32) |
 | D4.6 Ytelsespass | Gjort (2.33); innsetting av tusenvis i én transaksjon gjenstår |
-| Fase 5 | Del A (2.34) PLT, GIF, Package del B (2.35) hurtigtaster, Glyphs, Scribble og del C (2.36) Touch Type, Vertical Type; resten gjenstår |
+| Fase 5 | Del A (2.34) PLT, GIF, Package del B (2.35) hurtigtaster, Glyphs, Scribble, del C (2.36) Touch Type, Vertical Type og del D (2.37) PDF/X-4, EPS-import og del E (2.38) MCP-server; resten gjenstår |
 
 ## 4. Rekkefølge videre
 
@@ -858,7 +902,7 @@ SVG-, PNG- og JPEG-eksport er gjort (2.5).
    gjort. Fra D2.1 er skalering, baseline shift, kerning, avsnitt og blandede stiler gjort (2.11).
 6. Fase 3: D3.1 Expand og Expand Appearance (2.20) og D3.5 Select-meny, Magic Wand og Lasso (2.21) er gjort.
    D3.4 Shape Builder, Knife og Eraser (2.22) og D3.6 Free Transform, Transform Each og Split Into Grid
-   (2.23) er også gjort, og D3.2 effekter (2.24), D3.8 (2.25), D3.3 Image Trace (2.26) og D3.7 AI-eksport (2.27). Fase 3 er ferdig i grunnform. Fase 4: D4.1 Width (2.28), D4.2 Blend (2.29) D4.3 Warp, Live Pathfinder og opacity masks (2.30) D4.4 Paintbrush og Blob Brush (2.31) og D4.5 TIFF, Graphic Styles, Navigator, Rotate View, Asset Export og arbeidsområder (2.32) og D4.6 ytelsespass (2.33) er gjort. Fase 4 er ferdig i grunnform. Fase 5 del A (2.34), del B (2.35) og del C (2.36) er gjort. **Neste: resten av fase 5 (lokalisering, EPS-import, PDF/X-4, MCP-server).**
+   (2.23) er også gjort, og D3.2 effekter (2.24), D3.8 (2.25), D3.3 Image Trace (2.26) og D3.7 AI-eksport (2.27). Fase 3 er ferdig i grunnform. Fase 4: D4.1 Width (2.28), D4.2 Blend (2.29) D4.3 Warp, Live Pathfinder og opacity masks (2.30) D4.4 Paintbrush og Blob Brush (2.31) og D4.5 TIFF, Graphic Styles, Navigator, Rotate View, Asset Export og arbeidsområder (2.32) og D4.6 ytelsespass (2.33) er gjort. Fase 4 er ferdig i grunnform. Fase 5 del A (2.34), del B (2.35), del C (2.36), del D (2.37) og del E (2.38) er gjort. **Neste: resten av fase 5 (lokalisering).**
 
 
 ## 5. Kjente begrensninger og risiko

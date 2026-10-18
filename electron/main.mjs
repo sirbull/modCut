@@ -9,10 +9,11 @@ import { createSidecar } from "./sidecar-bridge.mjs";
 import { createWindowCommandRouter } from "./window-lifecycle.mjs";
 import { createRecoveryStore } from "./recovery-store.mjs";
 import { writeProject } from "./project-store.mjs";
-import { IMAGE_FORMATS, PDF_FORMATS, TEXT_FORMATS, TIFF_FORMATS, importIssueFor } from "./import-formats.mjs";
+import { IMAGE_FORMATS, PDF_FORMATS, POSTSCRIPT_FORMATS, TEXT_FORMATS, TIFF_FORMATS, importIssueFor } from "./import-formats.mjs";
 import { createFontService } from './font-service.mjs';
 import { registerExportFiles } from './export-files.mjs';
 import { createGoogleFonts } from './google-fonts.mjs';
+import { createMcpHost } from './mcp-host.mjs';
 
 app.name = "modCut"; // makes the macOS app menu read "modCut", not "Electron"
 
@@ -21,6 +22,7 @@ const root = join(__dirname, "..");
 const appIconPath = join(root, "assets", "modcut_logo.png");
 const isMac = process.platform === "darwin";
 let win;
+let mcpHost = null;
 let sidecar;
 let recoveryStore;
 let imageEditorAvailable = false;
@@ -303,6 +305,11 @@ app.whenReady().then(async () => {
   fonts=createFontService({google:googleFonts});
   recoveryStore = createRecoveryStore(app.getPath("userData"));
   if (!isE2E) try { setKeyOverrides(JSON.parse(await readFile(shortcutsPath(), "utf8"))); } catch { /* none saved yet, or unreadable: the defaults stay */ }
+  // MCP server (off until the person turns it on in Preferences): tool calls run in the main window's renderer.
+  mcpHost = createMcpHost({ configPath: join(app.getPath("userData"), "mcp.json"), getWindow: () => win, version: app.getVersion(), ephemeral: isE2E });
+  ipcMain.handle("getMcpServer", (event) => { if (event.sender !== win?.webContents) throw new Error("Unavailable."); return mcpHost.status(); });
+  ipcMain.handle("setMcpServer", (event, enabled) => { if (event.sender !== win?.webContents) throw new Error("Unavailable."); return mcpHost.setEnabled(enabled === true); });
+  ipcMain.handle("mcpResult", (event, id, payload) => { if (event.sender !== win?.webContents) return false; return mcpHost.settle(id, payload); });
   const appIcon = nativeImage.createFromPath(appIconPath);
   appIcon.setTemplateImage?.(false);
   if (isMac && !appIcon.isEmpty()) app.dock.setIcon(appIcon);
@@ -473,6 +480,7 @@ app.whenReady().then(async () => {
         { name: "All supported files", extensions: supported },
         ...(allowDocuments ? [{ name: "modCut document", extensions: ["modcut"] }] : []),
         { name: "Vector", extensions: TEXT_FORMATS },
+        { name: "EPS / PostScript", extensions: POSTSCRIPT_FORMATS },
         { name: "PDF / Illustrator", extensions: PDF_FORMATS },
         { name: "Images", extensions: [...IMAGE_FORMATS, ...TIFF_FORMATS] },
         { name: "All files", extensions: ["*"] },
@@ -495,7 +503,7 @@ app.whenReady().then(async () => {
       } else if (TEXT_FORMATS.includes(ext)) {
         out.text = ext === "svgz"
           ? (await gunzipAsync(await readFile(path))).toString("utf8")
-          : await readFile(path, "utf8");
+          : await readFile(path, POSTSCRIPT_FORMATS.includes(ext) ? "latin1" : "utf8");
       } else if (IMAGE_FORMATS.includes(ext) || TIFF_FORMATS.includes(ext)) {
         const mime = ext === "jpg" ? "jpeg" : ext === "tif" ? "tiff" : ext;
         out.dataUrl = `data:image/${mime};base64,` + (await readFile(path)).toString("base64");
@@ -570,6 +578,7 @@ app.on("before-quit", (event) => {
 });
 
 app.on("will-quit", () => {
+  mcpHost?.close();
   sidecar?.close();
   sidecar = null;
 });

@@ -62,6 +62,7 @@ export function openModal({ title, fields, submitLabel = "Save", className = "" 
           .map((o) => `<option value="${o.value ?? o}">${o.label ?? o}</option>`)
           .join("");
         if (f.value != null) input.value = f.value;
+        if (f.readOnly) input.readOnly = true;
       } else if (f.type === "checkbox" || f.type === "switch") {
         input = document.createElement("input");
         input.type = "checkbox";

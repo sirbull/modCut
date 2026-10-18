@@ -4,7 +4,7 @@
  * File" is on. Illustrator opens it as artwork (live effects and type arrive expanded); modCut reopens the
  * attached document with everything editable. Pure.
  */
-export const AI_OPTIONS = Object.freeze({ version: '1.6', layers: true, preserveEditing: true, thumbnails: true, compressArt: true,
+export const AI_OPTIONS = Object.freeze({ standard: 'none', version: '1.6', layers: true, preserveEditing: true, thumbnails: true, compressArt: true,
   downsample: 'none', ppi: 300, above: 450, imageCompression: 'zip', jpegQuality: 'maximum', marks: {}, bleed: null });
 
 const xml = (text) => String(text ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);

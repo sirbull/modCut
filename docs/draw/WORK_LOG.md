@@ -1742,4 +1742,29 @@ Verifisering: Draw-enhetstester (`custom-shortcuts`, `scribble`), `electron/test
 
 Verifisering: 296 Draw-enhetstester, 16 fonttester (Touch Type og Vertical Type), `--draw-window` passerer.
 
-Neste: resten av fase 5.
+
+## 2026-10-18: Fase 5 del D, PDF/X-4 og EPS-import
+
+- PDF/X-4: `io/pdfx.mjs` lager en sRGB ICC v2 utdataprofil (Lab-tabeller), XMP for PDF/X-4 og sjekker hva
+  standarden ikke tillater; `pdfDocument({standard:'x4'})` skriver OutputIntent, Trapped og X-4-metadata.
+  Save PDF har valget Standard og forhåndsinnstillingen [PDF/X-4:2008].
+- EPS-import: `renderer/epsimport.js` (PostScript-tolk til SVG), koblet inn i filvelger, slipp, Cut og Draw.
+  Eldre Illustrator-filer uten PDF-del går samme vei i stedet for å bli avvist.
+- Funn: en SVG-transform på et element gjelder også klippestien, så klippede bilder får klippet på en gruppe rundt.
+
+Verifisering: 300 Draw-enhetstester (`pdfx`), 9 EPS-importtester, importformat-testene, profilen lest av LittleCMS,
+matplotlib-EPS tegnet riktig i Chromium. `--draw-export` dekker PDF/X-4 og EPS ut og inn.
+
+Neste: MCP-server og lokalisering.
+
+
+## 2026-10-18: Fase 5 del E, MCP-server
+
+- `electron/mcp-server.mjs`: JSON-RPC (initialize, ping, tools/list, tools/call) over lokal HTTP med token og
+  Origin-sjekk; `electron/mcp-host.mjs` styrer innstillingen og sender hvert kall til rendereren og tilbake.
+- `renderer/draw/mcp-runner.mjs` utfører 13 verktøy mot aktiv Draw-fane gjennom dokumentkommandoene.
+- Preferences fikk seksjonen Automation med bryter og ferdig `claude mcp add`-kommando.
+
+Verifisering: `electron/test-mcp-server.mjs` (protokoll, HTTP, token, Origin), `--draw-mcp` (ekte HTTP-kall mot appen).
+
+Neste: lokalisering.

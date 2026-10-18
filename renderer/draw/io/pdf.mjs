@@ -7,6 +7,7 @@
  * the bleed box adds bleed, and the media box leaves room for printer's marks.
  */
 import { multiply, straight } from './vector-model.mjs';
+import { PDFX_CONDITION, PDFX_PROFILE_NAME, pdfxMetadata, pdfxProblems, srgbOutputProfile } from './pdfx.mjs';
 
 export const PDF_COMPATIBILITY = Object.freeze([
   { id: '1.4', label: 'Acrobat 5 (PDF 1.4)' }, { id: '1.5', label: 'Acrobat 6 (PDF 1.5)' },
@@ -15,14 +16,17 @@ export const PDF_COMPATIBILITY = Object.freeze([
 /** Option sets in the spirit of Illustrator's Adobe PDF presets. */
 export const PDF_PRESETS = Object.freeze([
   { id: 'default', name: '[modCut Default]', description: 'Use these settings when you plan to open the PDF in modCut again, or when the final use of the file is unknown. Editing data is kept, images are not downsampled.',
-    options: { version: '1.6', preserveEditing: true, thumbnails: true, layers: true, viewAfter: false, downsample: 'none', ppi: 300, above: 450, imageCompression: 'zip', jpegQuality: 'maximum', compressArt: true, marks: {}, bleed: null } },
+    options: { standard: 'none', version: '1.6', preserveEditing: true, thumbnails: true, layers: true, viewAfter: false, downsample: 'none', ppi: 300, above: 450, imageCompression: 'zip', jpegQuality: 'maximum', compressArt: true, marks: {}, bleed: null } },
   { id: 'print', name: '[High Quality Print]', description: 'For printing on desktop printers and proofers. Images above 450 ppi are downsampled to 300 ppi; editing data is not kept.',
-    options: { version: '1.6', preserveEditing: false, thumbnails: false, layers: false, viewAfter: false, downsample: 'bicubic', ppi: 300, above: 450, imageCompression: 'zip', jpegQuality: 'maximum', compressArt: true, marks: {}, bleed: null } },
+    options: { standard: 'none', version: '1.6', preserveEditing: false, thumbnails: false, layers: false, viewAfter: false, downsample: 'bicubic', ppi: 300, above: 450, imageCompression: 'zip', jpegQuality: 'maximum', compressArt: true, marks: {}, bleed: null } },
   { id: 'press', name: '[Press Quality]', description: 'For prepress printing: trim marks, 3 mm bleed and images at 300 ppi.',
-    options: { version: '1.6', preserveEditing: false, thumbnails: false, layers: false, viewAfter: false, downsample: 'bicubic', ppi: 300, above: 450, imageCompression: 'zip', jpegQuality: 'maximum', compressArt: true, marks: { trim: true }, bleed: { top: 3, bottom: 3, left: 3, right: 3 } } },
+    options: { standard: 'none', version: '1.6', preserveEditing: false, thumbnails: false, layers: false, viewAfter: false, downsample: 'bicubic', ppi: 300, above: 450, imageCompression: 'zip', jpegQuality: 'maximum', compressArt: true, marks: { trim: true }, bleed: { top: 3, bottom: 3, left: 3, right: 3 } } },
   { id: 'smallest', name: '[Smallest File Size]', description: 'For on-screen display, e-mail and the web. Images are downsampled to 100 ppi and JPEG compressed.',
-    options: { version: '1.6', preserveEditing: false, thumbnails: false, layers: false, viewAfter: false, downsample: 'bicubic', ppi: 100, above: 150, imageCompression: 'jpeg', jpegQuality: 'medium', compressArt: true, marks: {}, bleed: null } },
+    options: { standard: 'none', version: '1.6', preserveEditing: false, thumbnails: false, layers: false, viewAfter: false, downsample: 'bicubic', ppi: 100, above: 150, imageCompression: 'jpeg', jpegQuality: 'medium', compressArt: true, marks: {}, bleed: null } },
+  { id: 'pdfx4', name: '[PDF/X-4:2008]', description: 'For print production: a PDF/X-4 file with live transparency and layers, colours tagged with an sRGB output intent, trim marks and 3 mm bleed. Editing data and page information are not allowed.',
+    options: { standard: 'x4', version: '1.6', preserveEditing: false, thumbnails: false, layers: true, viewAfter: false, downsample: 'bicubic', ppi: 300, above: 450, imageCompression: 'zip', jpegQuality: 'maximum', compressArt: true, marks: { trim: true }, bleed: { top: 3, bottom: 3, left: 3, right: 3 } } },
 ]);
+export const PDF_STANDARDS = Object.freeze([{ id: 'none', label: 'None' }, { id: 'x4', label: 'PDF/X-4:2008' }]);
 export const JPEG_QUALITY = Object.freeze({ maximum: .95, high: .85, medium: .7, low: .5, minimum: .3 });
 export const MARK_LENGTH = 5;
 
@@ -58,12 +62,15 @@ export function pageMargins({ marks = {}, bleed = null } = {}) {
 /**
  * @param pages [{model, thumbnail?:{width,height,rgb}}]
  * @param options see PDF_PRESETS; plus compress(bytes)→bytes (Flate), title, documentName, date, attachment {name,bytes,mime},
- *   metadata (an XMP packet) and artBox (each page's art box is the artboard)
+ *   metadata (an XMP packet), artBox (each page's art box is the artboard) and standard ('x4' writes PDF/X-4:2008)
  */
 export function pdfDocument(pages, options = {}) {
   const { version = '1.6', compress = null, compressArt = true, layers: wantLayers = true, title = '', documentName = title, marks = {}, bleed = null,
-    attachment = null, metadata = null, artBox = false, now = new Date() } = options;
+    attachment = null, artBox = false, standard = 'none', now = new Date() } = options;
   if (!pages.length) throw new Error('Choose at least one artboard.');
+  const pdfx = standard === 'x4';
+  if (pdfx) { const problems = pdfxProblems({ version, attachment, marks }); if (problems.length) throw new Error(problems[0]); }
+  const metadata = options.metadata ?? (pdfx ? pdfxMetadata({ title: title || documentName || 'Untitled', now }) : null);
   const objects = [];
   const reserve = () => { objects.push(null); return objects.length; };
   const set = (id, body) => { objects[id - 1] = body; return id; };
@@ -192,10 +199,14 @@ export function pdfDocument(pages, options = {}) {
     const spec = add(`<< /Type /Filespec /F ${pdfString(attachment.name)} /UF ${pdfString(attachment.name)} /EF << /F ${file} 0 R >> /Desc (modCut Draw document) >>`);
     extra += ` /Names << /EmbeddedFiles << /Names [${pdfString(attachment.name)} ${spec} 0 R] >> >>`;
   }
+  if (pdfx) {
+    const profile = add(stream('/N 3 /Alternate /DeviceRGB', srgbOutputProfile()));
+    extra += ` /OutputIntents [<< /Type /OutputIntent /S /GTS_PDFX /OutputConditionIdentifier (Custom) /OutputCondition ${pdfString(PDFX_CONDITION)} /RegistryName (http://www.color.org) /Info ${pdfString(PDFX_PROFILE_NAME)} /DestOutputProfile ${profile} 0 R >>]`;
+  }
   // XMP is read by other programs before the page tree, so it stays uncompressed and UTF-8.
   if (metadata) extra += ` /Metadata ${add(stream('/Type /Metadata /Subtype /XML', new TextEncoder().encode(metadata), { flate: false }))} 0 R`;
   set(catalogId, `<< /Type /Catalog /Pages ${pagesId} 0 R${extra} >>`);
-  const infoId = add(`<< /Title ${pdfString(title || documentName || 'Untitled')} /Creator (modCut Draw) /Producer (modCut) /CreationDate ${pdfString(date(now))} /ModDate ${pdfString(date(now))} >>`);
+  const infoId = add(`<< /Title ${pdfString(title || documentName || 'Untitled')} /Creator (modCut Draw) /Producer (modCut) /CreationDate ${pdfString(date(now))} /ModDate ${pdfString(date(now))}${pdfx ? ' /Trapped /False /GTS_PDFXVersion (PDF/X-4)' : ''} >>`);
 
   // Serialise with a cross-reference table.
   const chunks = [], offsets = []; let length = 0;

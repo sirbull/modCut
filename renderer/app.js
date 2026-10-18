@@ -9,6 +9,8 @@ import { createBed } from "./bed.js";
 import { prepareSVG } from "./svgimport.js";
 import { dxfToSvg } from "./dxfimport.js";
 import { hpglToSvg } from "./hpglimport.js";
+import { epsToSvg } from "./epsimport.js";
+import { runMcpTool } from "./draw/mcp-runner.mjs";
 import { pdfDrawDocument, pdfToArtwork } from "./pdfimport.js";
 import { tiffToPng } from "./tiffimport.js";
 import { OPERATIONS, canAssignRasterToOperation, distinctVectorColor, isOutputLayer, operationsForLayer } from "./layer-model.mjs";
@@ -26,6 +28,20 @@ function updatePreferences(values) {
   preferences = normalizePreferences(values, preferences);
   localStorage.setItem(PREFERENCES_KEY, JSON.stringify(preferences));
   bed.setViewPreferences(preferences);
+
+// MCP: an AI agent's tool calls (Preferences > Automation) run against the active Draw tab.
+window.modcut.onMcpCall?.(async ({ id, name, args }) => {
+  try {
+    const tab = activeTab(), workspace = document.body.dataset.workspace === "draw" ? tab?.draw ?? null : null;
+    const result = await runMcpTool(workspace, name, args, {
+      newDocument: async ({ name: title, width, height }) => {
+        newDocument("draw", newDrawDocument({ name: title || "Untitled", preset: "custom", width, height }));
+        return activeTab()?.draw ?? null;
+      },
+    });
+    window.modcut.mcpResult(id, { result });
+  } catch (error) { window.modcut.mcpResult(id, { error: error?.message || String(error) }); }
+});
   window.dispatchEvent(new Event("modcut-preferences-change"));
 }
 const OPS = OPERATIONS;
@@ -795,7 +811,25 @@ function resetWorkspace({ filename = "job", label = "Untitled" } = {}) {
   refreshPos();
 }
 
+// EPS, PostScript and older (PostScript based) Illustrator files.
+function postScriptOf(f) {
+  if (["eps", "ps"].includes(f.ext)) return f.text;
+  if (f.ext !== "ai" || !f.dataUrl) return null;
+  const head = atob(f.dataUrl.slice(f.dataUrl.indexOf(",") + 1, f.dataUrl.indexOf(",") + 1 + 1400));
+  return head.includes("%PDF-") ? null : atob(f.dataUrl.slice(f.dataUrl.indexOf(",") + 1));
+}
+function postScriptArtwork(text, name) {
+  const result = epsToSvg(text);
+  if (!result.count) throw new Error(`No artwork was found in ${name}.${result.warnings.length ? ` ${result.warnings.join(" ")}` : ""}`);
+  return { svgText: result.svg, warning: result.warnings.length ? `${name}: ${result.warnings.join(" ")}` : null };
+}
+
 async function prepareArtwork(f) {
+  const postScript = postScriptOf(f);
+  if (postScript !== null) {
+    const { svgText, warning } = postScriptArtwork(postScript, f.name);
+    return { kind: "vector", ...prepareSVG(svgText), warning };
+  }
   if (VECTOR_FILE_EXTENSIONS.has(f.ext)) {
     const svgText = f.ext === "dxf" ? dxfToSvg(f.text)
       : ["plt", "hpgl"].includes(f.ext) ? hpglToSvg(f.text)
@@ -1004,6 +1038,8 @@ async function addFiles() {
 
 async function prepareDrawArtwork(file) {
   if (["svg","svgz"].includes(file.ext)) return { kind:"vector", svgText:file.text };
+  const postScript = postScriptOf(file);
+  if (postScript !== null) return { kind:"vector", ...postScriptArtwork(postScript, file.name) };
   return prepareArtwork(file);
 }
 
@@ -1060,7 +1096,7 @@ async function openDrawFile() {
     let drawData = null;
     if (file.kind === "document") {
       openDocumentInNewTab(JSON.parse(file.text),file.path,file.name,"draw");
-    } else if (["pdf","ai"].includes(file.ext) && (drawData = await pdfDrawDocument(file.dataUrl))) {
+    } else if (["pdf","ai"].includes(file.ext) && postScriptOf(file) === null && (drawData = await pdfDrawDocument(file.dataUrl))) {
       // A PDF saved with "Preserve modCut editing capabilities", or an .ai from Draw, opens as the Draw document it carries.
       newDocument("draw", drawData);
     } else {
@@ -1118,9 +1154,10 @@ async function droppedFilePayload(file) {
   const payload = { name: file.name, path, ext };
   if (ext === PROJECT_FILE_EXTENSION) return { ...payload, kind: "document", text: await file.text() };
   if (VECTOR_FILE_EXTENSIONS.has(ext)) {
+    const latin1 = async () => { const bytes = new Uint8Array(await file.arrayBuffer()); let out = ""; for (let i = 0; i < bytes.length; i += 8192) out += String.fromCharCode(...bytes.subarray(i, i + 8192)); return out; };
     const text = ext === "svgz"
       ? await new Response(file.stream().pipeThrough(new DecompressionStream("gzip"))).text()
-      : await file.text();
+      : ["eps", "ps"].includes(ext) ? await latin1() : await file.text();
     return { ...payload, text };
   }
   if (RASTER_FILE_EXTENSIONS.has(ext)) {
@@ -2122,6 +2159,8 @@ $("settings").addEventListener("click", () => openSettings());
 async function openSettings() {
   const gu = state.gridUnit;
   const uiScaleLabels = ["Smallest", "Small", "Default", "Large", "Largest"];
+  const mcp = await window.modcut.getMcpServer?.().catch(() => null);
+  const mcpCommand = (status) => `claude mcp add --transport http modcut ${status.url} --header "Authorization: Bearer ${status.token}"`;
   const v = await openModal({
     title: "Preferences", submitLabel: "Save", className: "preferences-modal",
     fields: [
@@ -2141,6 +2180,17 @@ async function openSettings() {
       { key: "invertZoom", section: "Navigation & help", label: "Reverse zoom direction", type: "checkbox", value: preferences.invertZoom, description: "Reverse Cmd/Ctrl + scroll and trackpad pinch zoom in Cut. Panning stays the same. Applies immediately.", onChange: (value) => updatePreferences({ invertZoom: value }) },
       { key: "tooltips", label: "Show tooltips", type: "checkbox", value: preferences.tooltips, description: "Show explanations when hovering over or focusing toolbar buttons. Applies immediately.", onChange: (value) => updatePreferences({ tooltips: value }) },
       { key: "tooltipDelay", label: "Tooltip delay", type: "select", value: preferences.tooltipDelay, description: "How long to hover before showing a tooltip. Keyboard help appears sooner. Applies immediately.", showIf: (values) => values.tooltips, options: [{ value: 350, label: "Quick · 0.35 seconds" }, { value: 1000, label: "Normal · 1 second" }, { value: 1800, label: "Relaxed · 1.8 seconds" }], onChange: (value) => updatePreferences({ tooltipDelay: value }) },
+      ...(mcp ? [
+        { key: "mcp", section: "Automation", label: "Let AI agents draw in modCut (MCP server)", type: "switch", value: mcp.enabled,
+          description: "Runs a local MCP server so an agent such as Claude Code can read and change the active Draw document. Only programs on this computer with the token below can connect. Every change is an undo step.",
+          onChange: async (value) => {
+            const status = await window.modcut.setMcpServer(value);
+            if (status.error) toast(`MCP server: ${status.error}`, "err");
+            else toast(value ? `MCP server running at ${status.url}` : "MCP server stopped.", "ok");
+          } },
+        { key: "mcpCommand", label: "Connect Claude Code", type: "text", readOnly: true, value: mcpCommand(mcp), showIf: (values) => values.mcp,
+          description: "Run this command in a terminal on this computer. Keep the token private: it lets a program change your drawings." },
+      ] : []),
     ],
   });
   if (!v) return;

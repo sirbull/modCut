@@ -3,9 +3,10 @@
  * manner of Illustrator's Adobe PDF dialog (General, Compression, Marks and Bleeds, Summary).
  */
 import { enhanceNumberFields } from './number-field.mjs';
-import { PDF_COMPATIBILITY, PDF_PRESETS, JPEG_QUALITY } from '../io/pdf.mjs';
+import { PDF_COMPATIBILITY, PDF_PRESETS, PDF_STANDARDS, JPEG_QUALITY } from '../io/pdf.mjs';
 import { exportTarget, parseRange } from '../io/export-plan.mjs';
 import { EXPORT_RESOLUTIONS } from '../io/export.mjs';
+import { pdfxProblems } from '../io/pdfx.mjs';
 
 let dialogId = 0;
 const make = (tag, className, parent, text) => { const el = document.createElement(tag); if (className) el.className = className; if (text != null) el.textContent = text; parent?.append(el); return el; };
@@ -120,7 +121,7 @@ function storePdfPresets(list, storage = globalThis.localStorage) { try { storag
 
 /** The settings that define a preset, in a fixed shape, so a preset and the dialog compare equal. */
 export function normalizePdfOptions(o) {
-  return { version: o.version, preserveEditing: !!o.preserveEditing, thumbnails: !!o.thumbnails, viewAfter: !!o.viewAfter, layers: !!o.layers,
+  return { standard: o.standard ?? 'none', version: o.version, preserveEditing: !!o.preserveEditing, thumbnails: !!o.thumbnails, viewAfter: !!o.viewAfter, layers: !!o.layers,
     downsample: o.downsample, ppi: Number(o.ppi), above: Number(o.above), imageCompression: o.imageCompression, jpegQuality: o.jpegQuality, compressArt: !!o.compressArt,
     marks: { trim: !!o.marks?.trim, registration: !!o.marks?.registration, pageInfo: !!o.marks?.pageInfo, weight: Number(o.marks?.weight ?? 0.25), offset: Number(o.marks?.offset ?? 2.117) },
     bleed: Object.fromEntries(['top', 'bottom', 'left', 'right'].map((side) => [side, Number(o.bleed?.[side] ?? 0)])) };
@@ -128,6 +129,7 @@ export function normalizePdfOptions(o) {
 /** Plain sentences describing PDF options, for the Summary section and tests. */
 export function pdfSummary(o, boards) {
   const lines = [], warnings = [];
+  if (o.standard === 'x4') lines.push('Standard: PDF/X-4:2008, sRGB output intent');
   lines.push(`Compatibility: ${PDF_COMPATIBILITY.find((c) => c.id === o.version)?.label ?? o.version}`);
   lines.push(`Pages: ${o.range === 'range' ? `artboards ${o.rangeText}` : `all ${boards.length} artboard${boards.length === 1 ? '' : 's'}`}`);
   lines.push(`Editing data: ${o.preserveEditing ? 'kept — modCut opens the PDF as an editable Draw document' : 'not kept'}`);
@@ -136,6 +138,7 @@ export function pdfSummary(o, boards) {
   const marks = ['trim', 'registration', 'pageInfo'].filter((k) => o.marks?.[k]).map((k) => ({ trim: 'trim marks', registration: 'registration marks', pageInfo: 'page information' })[k]);
   lines.push(`Marks: ${marks.length ? marks.join(', ') : 'none'}`);
   const b = o.bleed ?? {}; lines.push(`Bleed: ${['top', 'bottom', 'left', 'right'].some((k) => b[k] > 0) ? `${b.top ?? 0} / ${b.bottom ?? 0} / ${b.left ?? 0} / ${b.right ?? 0} mm` : 'none'}`);
+  if (o.standard === 'x4') warnings.push(...pdfxProblems(o));
   if (o.layers && Number(o.version) < 1.5) warnings.push('PDF layers need Acrobat 6 (PDF 1.5) or later; layers will be flattened.');
   if (o.downsample !== 'none' && !(o.above >= o.ppi)) warnings.push('Images are downsampled only when above the threshold; it should be at least the target resolution.');
   if (o.preserveEditing) warnings.push('Keeping editing data makes the file larger, and it can contain artwork outside the artboards.');
@@ -152,6 +155,10 @@ export function pdfOptionsDialog({ boards, defaults = null, storage = globalThis
   const presetSelect = make('select', 'select'); presetSelect.name = 'preset';
   control(top, 'PDF Preset', presetSelect, { className: 'draw-pdf-preset' });
   const savePreset = make('button', 'btn btn--ghost btn--sm draw-pdf-save-preset', top, 'Save Preset…'); savePreset.type = 'button';
+  const standardSelect = make('select', 'select'); standardSelect.name = 'standard';
+  for (const s of PDF_STANDARDS) option(standardSelect, s.id, s.label);
+  standardSelect.value = start.standard ?? 'none';
+  control(top, 'Standard', standardSelect);
   const versionSelect = make('select', 'select'); versionSelect.name = 'version';
   for (const c of PDF_COMPATIBILITY) option(versionSelect, c.id, c.label);
   versionSelect.value = start.version;
@@ -216,7 +223,7 @@ export function pdfOptionsDialog({ boards, defaults = null, storage = globalThis
 
   const read = () => {
     const range = readRange(), num = (input, label, min, max) => { const v = Number(input.value); if (!(v >= min && v <= max)) throw new Error(`${label} must be between ${min} and ${max}.`); return v; };
-    return { preset: presetSelect.value, version: versionSelect.value, ...range,
+    return { preset: presetSelect.value, standard: standardSelect.value, version: versionSelect.value, ...range,
       preserveEditing: el.preserveEditing.checked, thumbnails: el.thumbnails.checked, viewAfter: el.viewAfter.checked, layers: el.layers.checked,
       downsample: el.downsample.value, ppi: num(el.ppi, 'Resolution', 9, 2400), above: num(el.above, 'The downsampling threshold', 9, 4800),
       imageCompression: el.imageCompression.value, jpegQuality: el.jpegQuality.value, compressArt: el.compressArt.checked,
@@ -227,7 +234,7 @@ export function pdfOptionsDialog({ boards, defaults = null, storage = globalThis
   let applying = false;
   function apply(preset) {
     applying = true;
-    const o = preset.options; versionSelect.value = o.version;
+    const o = preset.options; standardSelect.value = o.standard ?? 'none'; versionSelect.value = o.version;
     for (const key of ['preserveEditing', 'thumbnails', 'viewAfter', 'layers', 'compressArt']) el[key].checked = !!o[key];
     for (const key of ['downsample', 'imageCompression', 'jpegQuality']) el[key].value = o[key];
     el.ppi.value = String(o.ppi); el.above.value = String(o.above);
@@ -243,6 +250,11 @@ export function pdfOptionsDialog({ boards, defaults = null, storage = globalThis
     presetSelect.value = selected;
   }
   function sync() {
+    // PDF/X-4 rules: PDF 1.6 or later, no attached files, no unembedded fonts (page information).
+    const pdfx = standardSelect.value === 'x4';
+    if (pdfx) { if (Number(versionSelect.value) < 1.6) versionSelect.value = '1.6'; el.preserveEditing.checked = false; el.pageInfo.checked = false; }
+    for (const option of versionSelect.options) option.disabled = pdfx && Number(option.value) < 1.6;
+    el.preserveEditing.disabled = el.pageInfo.disabled = pdfx;
     el.ppi.disabled = el.above.disabled = el.downsample.value === 'none';
     el.jpegQuality.disabled = el.imageCompression.value !== 'jpeg';
     el.layers.disabled = Number(versionSelect.value) < 1.5;
