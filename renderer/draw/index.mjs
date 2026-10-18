@@ -1230,7 +1230,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
         const node=parts.length===1?{...parts[0],transform:[...group.transform],name:group.name}:createNode('group',{name:group.name,transform:[...group.transform],opacity:group.opacity,blendMode:group.blendMode,children:parts});
         state.history.execute(removeNode(id));state.history.execute(insertNode(parentId,node,index));made.push(node.id);}});select(made);};
     // Expand Appearance on groups with vector effects: the paths and shapes inside get the effects as anchors.
-    const effectGroups=()=>editable().filter(id=>doc.getNode(id).type==='group'&&vectorEffects(doc.getNode(id)).length);
+    const effectGroups=()=>selectedIds().filter(id=>doc.isEditable(id)&&doc.getNode(id)?.type==='group'&&vectorEffects(doc.getNode(id)).length);
     if(command==='expand-appearance'&&effectGroups().length)return()=>{const groups=effectGroups(),edits=[];
       for(const id of groups)for(const n of doc.descendants(id))if(['path','shape'].includes(n.type)){const subpaths=withScope(()=>renderer.effectiveSubpaths(n.id));if(subpaths)edits.push({id:n.id,subpaths});}
       run(()=>{state.history.transaction('Expand Appearance',()=>{

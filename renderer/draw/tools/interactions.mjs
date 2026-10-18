@@ -99,7 +99,7 @@ export function createInteractions(canvas, state, api) {
       return;
     }
     if(SHAPE_TOOLS.includes(gesture.tool) && api.tool()==='hand')gesture.start=gesture.start.add(p.subtract(gesture.end));
-    gesture.end=p;gesture.modifiers={shift:event.shiftKey,alt:event.altKey};
+    gesture.end=p;gesture.modifiers={shift:event.shiftKey,alt:event.altKey,mod:event.ctrlKey||event.metaKey};
     gesture.event=event;
     if (gesture.tool==='hand') {
       scope.view.center=gesture.center.subtract(screenDelta(event.clientX-gesture.screen[0],event.clientY-gesture.screen[1]));
@@ -144,11 +144,12 @@ export function createInteractions(canvas, state, api) {
       } else if (gesture.mode==='free-transform') {
         // Shift: perspective, as in Illustrator. The neighbouring corner along the edge the drag runs along moves the
         // mirror way, so that edge widens or narrows about its middle (corners are top left, top right, bottom right, bottom left).
-        const start=gesture.session.corners,k=gesture.corner,dx=p.x-start[k][0],dy=p.y-start[k][1];
+        const start=gesture.session.corners,k=gesture.corner,dx=p.x-gesture.start.x,dy=p.y-gesture.start.y;
         gesture.corners=start.map(c=>[...c]);gesture.corners[k]=[p.x,p.y];
         if(event.shiftKey){
+          // The pointer's movement, not its distance from the corner, so a press beside the corner does not jump.
           const horizontal=Math.abs(dx)>=Math.abs(dy),partner=horizontal?[1,0,3,2][k]:[3,2,1,0][k];
-          gesture.corners[k]=horizontal?[p.x,start[k][1]]:[start[k][0],p.y];
+          gesture.corners[k]=horizontal?[start[k][0]+dx,start[k][1]]:[start[k][0],start[k][1]+dy];
           gesture.corners[partner]=horizontal?[start[partner][0]-dx,start[partner][1]]:[start[partner][0],start[partner][1]-dy];
         }
         gesture.moved=true;api.freeDistortPreview(gesture.session,gesture.corners);

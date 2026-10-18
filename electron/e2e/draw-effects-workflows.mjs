@@ -88,7 +88,7 @@ export async function runDrawEffectWorkflows(client) {
     const img=new Image();img.src=url;await img.decode();const c=document.createElement('canvas');c.width=img.width;c.height=img.height;const g=c.getContext('2d');g.drawImage(img,0,0);
     return [[121,65],[105,65],[90.3,65]].map(([x,y])=>[...g.getImageData(Math.round(x/25.4*144),Math.round(y/25.4*144),1,1).data])})()`);
   let glow = await glowPixels();
-  assert.ok(glow[0][0] > 200 && glow[0][1] < 200, `Red glow just outside the square: ${glow[0]}`);
+  assert.ok(glow[0][0] > 240 && glow[0][1] < 235, `Red glow just outside the square: ${glow[0]}`);
   assert.ok(glow[1][0] < 40, `Black inside: ${glow[1]}`);
   await evaluate(`(async()=>{${active}.handle('effect-gaussian-blur')})()`); await dialog({ radius: 2 });
   glow = await glowPixels();

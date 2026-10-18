@@ -87,8 +87,10 @@ export async function runDrawRegionToolWorkflows(client) {
   // Shift: perspective. Dragging the top-left corner 2 mm to the right moves the top-right corner 2 mm to the left.
   await evaluate(`(async()=>{const w=${active};w.handle('undo');w.select(['${pair[1]}']);w.setTool('free-transform')})()`);
   await stroke([[before[0], before[1]], [before[0] + 1, before[1]], [before[0] + 2, before[1]]], 8);
-  const perspective = await evaluate(`(async()=>{const w=${active},n=w.state.document.getNode('${pair[1]}'),a=w.state.document.data.artboards[0];return n.subpaths[0].segments.map(s=>[Math.round(s.p[0]-a.x),Math.round(s.p[1]-a.y)])})()`);
-  assert.deepEqual(perspective, [[40, 50], [41, 50], [43, 60], [38, 60]], `The top edge narrows about its middle: ${JSON.stringify(perspective)}`);
+  const perspective = await evaluate(`(async()=>{const w=${active},n=w.state.document.getNode('${pair[1]}'),a=w.state.document.data.artboards[0];return n.subpaths[0].segments.map(s=>[s.p[0]-a.x,s.p[1]-a.y])})()`);
+  const [tl, tr, br, bl] = perspective, moved = [tl[0] - before[0], tr[0] - before[0] - before[2]];
+  assert.ok(moved[0] > 1 && Math.abs(moved[0] + moved[1]) < .3, `The top edge narrows about its middle: ${JSON.stringify(perspective)}`);
+  assert.deepEqual([tl[1], tr[1], br, bl].flat().map(Math.round), [50, 50, 43, 60, 38, 60], 'Only the top corners move, and only sideways');
   await evaluate(`(async()=>(${active}.setTool('select')))()`); await restore();
   console.log('PASS Draw region tools: Shape Builder merges crossed regions and Alt deletes them, Knife splits a shape, Eraser removes a brush stroke, Transform Each, Split Into Grid and Free Distort (Shift: perspective), one undo step each');
 }

@@ -1878,3 +1878,8 @@ Verifisering: `document-batch`-enhetstest, `--draw-history-info`.
 - Lasso med Alt+Ctrl/Cmd merker hele objekter. Verifisering: `--draw-select`.
 - Select > Object > Direction Handles. Verifisering: `--draw-select`.
 
+E2E: hele Draw-E2E 41 passerte, 47 av 47 (også prosjektsuiten). Suitene for det som kom etterpå passerer:
+`--draw-effects`, `--draw-warp-mask`, `--draw-history`, `--draw-region-tools`, `--draw-select`. Funn underveis:
+Ctrl/Cmd forsvant fra modifikatorene ved musebevegelse (Lasso med Alt+Ctrl virket ikke), perspektiv målte fra hjørnet
+i stedet for pekerens bevegelse, og Expand Appearance fant ikke grupper med vektoreffekter. Alt er rettet.
+
