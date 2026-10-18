@@ -62,6 +62,12 @@ export async function runDrawSelectWorkflows(client) {
   await mouse('mouseMoved', await at(47, 8), { buttons: 1 }); await mouse('mouseReleased', await at(47, 8));
   const anchors = await evaluate(`(async()=>(${active}.state.selection.anchors.map(a=>[a.nodeId,a.segment])))()`);
   assert.deepEqual(anchors.map(a => a[0]), [ids.blue, ids.blue], `The two top anchors of the blue square: ${JSON.stringify(anchors)}`);
+  // Alt+Ctrl: the same loop selects the whole blue square as an object.
+  const mods = 1 | 2; // Alt and Ctrl
+  await mouse('mouseMoved', await at(...path[0]), { modifiers: mods }); await mouse('mousePressed', await at(...path[0]), { buttons: 1, modifiers: mods });
+  for (const p of path.slice(1)) await mouse('mouseMoved', await at(...p), { buttons: 1, modifiers: mods });
+  await mouse('mouseMoved', await at(47, 8), { buttons: 1, modifiers: mods }); await mouse('mouseReleased', await at(47, 8), { modifiers: mods });
+  assert.deepEqual(await evaluate(`(async()=>(${active}.state.selection.ids))()`), [ids.blue], 'The whole object is selected');
   await evaluate(`(async()=>(${active}.setTool('select')))()`); await restore();
-  console.log('PASS Draw select: Inverse from the Select menu, Same Fill and Stroke Color, Reselect, Next Object Above/Below, Open Paths, Save and Edit Selection, Magic Wand with tolerance and Alt, Lasso anchor selection');
+  console.log('PASS Draw select: Inverse from the Select menu, Same Fill and Stroke Color, Reselect, Next Object Above/Below, Open Paths, Save and Edit Selection, Magic Wand with tolerance and Alt, Lasso anchor selection and whole objects with Alt+Ctrl');
 }

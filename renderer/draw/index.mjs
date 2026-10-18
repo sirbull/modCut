@@ -33,7 +33,7 @@ import { appearance } from './geometry.mjs';
 import { changeGradient, defaultGradient, isGradient, vectorGradient } from './doc/gradient.mjs';
 import { sampleAppearance, applySampleCommands, measure } from './doc/tool-rules.mjs';
 import { activeArtboard } from './doc/artboards.mjs';
-import { SAME_MODES, OBJECT_KINDS, magicWand, inverseSelection, sameAs, objectsOfKind, stackNeighbour, saveSelection, savedSelection } from './doc/select-rules.mjs';
+import { SAME_MODES, OBJECT_KINDS, magicWand, inverseSelection, sameAs, objectsOfKind, stackNeighbour, saveSelection, savedSelection, selectableObjects, insidePolygon } from './doc/select-rules.mjs';
 import { DRAW_MODE_LABELS, insideTarget, nextDrawMode, placement } from './doc/draw-mode.mjs';
 import { changePaint, changeStroke, paintHex } from './doc/paint.mjs';
 import { setWidthPoint, moveWidthPoint, removeWidthPoint, normalizeProfile } from './geom/width-profile.mjs';
@@ -135,7 +135,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       tool.id==='smooth' ? 'Drag along a selected path to smooth it (fewer, rounder curves)' :
       tool.id==='eraser' ? 'Drag to erase from filled shapes (the selection, or every shape) · Enter: diameter' :
       tool.id==='magic-wand' ? 'Click: objects with a similar fill · Shift: add · Alt: remove · Enter: tolerance' :
-      tool.id==='lasso' ? 'Drag around anchor points to select them · Shift: add · Alt: remove' :
+      tool.id==='lasso' ? 'Drag around anchor points to select them · Shift: add · Alt: remove · Alt+Ctrl/Cmd: whole objects' :
       tool.id==='pencil' ? 'Drag: draw freehand · End near the start: close · Enter: Pencil options' :
       tool.id==='scissors' ? 'Click a path: cut it there (a closed path opens, an open path splits)' :
       tool.id==='group-selection' ? 'Click: object · Click again: its group, one level up per click · Shift: add' :
@@ -1466,7 +1466,14 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       if(!hit){if(!add&&!subtract)select([]);return;}
       const found=magicWand(state.document,hit,state.ui.magicWand??{}),current=selectedIds();
       select(subtract?current.filter(id=>!found.includes(id)):add?[...new Set([...current,...found])]:found);},
-    lasso:(points,options)=>paths.lasso(points,options),
+    lasso:(points,options={})=>{
+      if(!options.objects)return paths.lasso(points,options);
+      // Whole objects: the selectable object around every path or shape with an anchor inside the loop.
+      const objects=new Set(selectableObjects(state.document,state.ui.isolation)),hits=new Set();
+      for(const n of state.document.descendants(null)){if(!['path','shape'].includes(n.type)||!state.document.isEditable(n.id))continue;
+        const node=renderer.editingNode(n.id),inside=node.subpaths.some(path=>path.segments.some(s=>{const w=renderer.editPointToWorld(n.id,s.p);return insidePolygon([w.x,w.y],points);}));
+        if(!inside)continue;const top=[n,...state.document.ancestors(n.id)].find(a=>objects.has(a.id));if(top)hits.add(top.id);}
+      select(options.add?[...new Set([...state.selection.ids,...hits])]:[...hits]);return hits.size;},
     freeDistortSession,freeDistortPreview,freeDistort,
     shapeBuilderSession,shapeBuilderPreview,shapeBuilder,knife,eraser,pathEraser,smoothPath,eraserSize:()=>state.ui.eraserSize??3,touchGlyphAt,touchGlyph,touchType:(id,index,change)=>touchType(id,index,change).catch(error=>{if(!destroyed)onError(error.message);}),rotateView,widthSession,widthDrag,widthPreview,widthPointEdit,paintbrush,blobBrush:points=>blobBrush(points).catch(error=>{if(!destroyed)onError(error.message);}),brushSize:()=>(state.ui.blobBrush?.size??BLOB_DEFAULTS.size),blendClick,blendOptions:()=>void blendOptionsCommand(),
     widthHandles:point=>{const id=renderer.hit(point)??selectedIds()[0],target=id&&widthTarget(id);return target?withScope(()=>renderer.widthHandles(id,target.stroke)):[];},

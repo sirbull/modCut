@@ -520,8 +520,9 @@ Gjenstår i D3.1: utvidelse av effekter (kommer med D3.2), stiplede streker og p
 Select > Same > Graphic Style merker objektene som har samme grafiske stil fra dokumentet som det merkede (fyll,
 strek, effekter, opasitet og blanding).
 
-Gjenstår i D3.5: Direction Handles, og Lasso som
-velger hele objekter med Alt+Mod.
+Lasso med Alt+Ctrl/Cmd merker hele objekter (de som har et anker inne i løkken).
+
+Gjenstår i D3.5: Select > Object > Direction Handles.
 
 ### 2.22 Shape Builder, Knife og Eraser (D3.4, 2026-10-17)
 

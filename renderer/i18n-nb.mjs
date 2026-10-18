@@ -132,6 +132,7 @@ export const NB = Object.freeze({
   "Drag to erase from filled shapes (the selection, or every shape) · Enter: diameter": "Dra for å viske ut fra fylte former (utvalget, eller alle former) · Enter: diameter",
   "Click: objects with a similar fill · Shift: add · Alt: remove · Enter: tolerance": "Klikk: objekter med lignende fyll · Shift: legg til · Alt: fjern · Enter: toleranse",
   "Drag around anchor points to select them · Shift: add · Alt: remove": "Dra rundt ankerpunkter for å merke dem · Shift: legg til · Alt: fjern",
+  "Drag around anchor points to select them · Shift: add · Alt: remove · Alt+Ctrl/Cmd: whole objects": "Dra rundt ankerpunkter for å merke dem · Shift: legg til · Alt: fjern · Alt+Ctrl/Cmd: hele objekter",
   "Drag: draw freehand · End near the start: close · Enter: Pencil options": "Dra: tegn på frihånd · Avslutt nær starten: lukk · Enter: Blyant-alternativer",
   "Click a path: cut it there (a closed path opens, an open path splits)": "Klikk en bane: kutt den der (en lukket bane åpnes, en åpen bane deles)",
   "Click: object · Click again: its group, one level up per click · Shift: add": "Klikk: objekt · Klikk igjen: gruppen, ett nivå opp per klikk · Shift: legg til",

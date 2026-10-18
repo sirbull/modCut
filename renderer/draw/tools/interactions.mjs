@@ -201,7 +201,7 @@ export function createInteractions(canvas, state, api) {
   canvas.addEventListener('pointerdown',event=>{
     if (event.button!==0) return;
     api.closeMenus();canvas.focus();canvas.setPointerCapture(event.pointerId);const p=point(event),tool=api.tool();
-    const base={tool,start:p,end:p,center:scope.view.center.clone(),zoom:scope.view.zoom,screen:[event.clientX,event.clientY],modifiers:{shift:event.shiftKey,alt:event.altKey}};
+    const base={tool,start:p,end:p,center:scope.view.center.clone(),zoom:scope.view.zoom,screen:[event.clientX,event.clientY],modifiers:{shift:event.shiftKey,alt:event.altKey,mod:event.ctrlKey||event.metaKey}};
     if (tool==='rotate-view') {gesture={...base,rotation:scope.view.rotation};return;}
     if (tool==='hand' || tool==='zoom') {gesture=base;if(tool==='hand')canvas.style.cursor=CURSORS['hand-active'];return;}
     if (state.document.readOnly) {
@@ -330,7 +330,8 @@ export function createInteractions(canvas, state, api) {
       }else if(drag.mode==='width') {
         if(drag.moved)api.widthDrag(drag.session,[drag.end.x,drag.end.y],{alt:drag.alt??drag.modifiers.alt});
       }else if(drag.mode==='lasso') {
-        if(drag.points.length>2)api.lasso(drag.points,{add:drag.modifiers.shift,subtract:drag.modifiers.alt});else if(!drag.modifiers.shift)api.select([]);
+        // Alt+Mod: whole objects (any anchor inside), as Illustrator's Lasso with those keys.
+        if(drag.points.length>2)api.lasso(drag.points,drag.modifiers.alt&&drag.modifiers.mod?{objects:true,add:drag.modifiers.shift}:{add:drag.modifiers.shift,subtract:drag.modifiers.alt});else if(!drag.modifiers.shift)api.select([]);
       }else if(drag.mode==='measure') {
         if(drag.end)api.setMeasure([drag.start.x,drag.start.y],[drag.end.x,drag.end.y]);
       }else if(drag.mode==='gradient') {
