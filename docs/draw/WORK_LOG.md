@@ -1883,3 +1883,46 @@ E2E: hele Draw-E2E 41 passerte, 47 av 47 (også prosjektsuiten). Suitene for det
 Ctrl/Cmd forsvant fra modifikatorene ved musebevegelse (Lasso med Alt+Ctrl virket ikke), perspektiv målte fra hjørnet
 i stedet for pekerens bevegelse, og Expand Appearance fant ikke grupper med vektoreffekter. Alt er rettet.
 
+
+## 2026-10-18: D5.1 Cut optimized — planlegging fullført
+
+Brukerbestilt visningsmodus i Draw, av/på fra View-menyen: svart-hvitt-forhåndsvisning
+av gravering og kutte-/scorebaner mens tegning og redigering fortsetter.
+
+- [x] Dokumentert krav, visuell oppførsel, avgrensning mot dokument/output og modussamspill i DRAW_WORKSPACE 4.4.1.
+- [x] Spesifisert forklaringsdialog, Continue/Cancel, «Don’t show this again», varig brukerpreferanse og tilbakestilling.
+- [x] Lagt til deloppgaver og akseptansekontroller, og oppdatert STATUS og overlevering.
+- [ ] Prosesskobling, funksjonskode og funksjonstester gjenstår i sin helhet.
+
+Neste: avklar hvordan Draw kjenner Cut/Score/Engrave uten å gjette fra farger. Uavklarte
+prosesser må merkes. Deretter implementeres visningsprojeksjon og UI etter delplanen.
+Kontroll i denne endringen: dokumentasjonsdiff og `git diff --check`; ingen apptester kjørt
+for denne rene planendringen. Videre arbeid skal loggføres ved hvert deltrinn, med faktiske
+resultater og restpunkter; planlagt arbeid må ikke presenteres som ferdig funksjon.
+
+## 2026-10-18: D5.1 første implementasjonstrinn — prosesskobling
+
+- [x] Ren `resolveCutPreviewProcess`: faktisk Cut/Score/Engrave fra samme fanes Cut-snapshot,
+  egne raster/vector-identiteter, global modus, Ignore/output og eksplisitt uavklart ved mangler.
+- [x] Delt `matchingProcessLayer` med faktisk Cut-lagavstemming og `cutPaint` med Send to Cut.
+  Ingen prosess gjettes fra en bestemt farge. Nytt bilde/ny farge uten prosessoppsett er uavklart.
+- [x] Dokumentert kontrakt og begrensninger i `cut-optimized.md`, og oppdatert plan/status/overlevering/roadmap.
+- [x] 12 nye enhetstester, blant annet samme svarte raster/vector, globale valg, gradient/Scribble,
+  arv av template/print/visibility, nye snapshots og uendret dokument/historikk/prosessoppsett.
+- [ ] Visningsprojeksjon, meny/renderintegrasjon, forklaringsdialog/preferanse og Electron-akseptansetest gjenstår.
+
+Verifisering fullført for dette deltrinnet: 329 Draw-tester (12 nye), 34 main-tester,
+69 renderer-tester og kontrastkontrollen passerer. Resolveren har 100 % linje-/gren-/funksjonsdekning.
+Et lokalt, signaturverifisert Debian-JDK 21 rettet manglende `javac` (`release version 17 not supported`).
+Deretter passerte alle 28 Java-tester, Java-bygget og Node–Java-brotesten. LibLaserCut finnes nå
+lokalt i Maven-cachen; dette dokumenterer ikke at en ny nedlasting fra jitpack.io er tillatt.
+Miljøets aktiveringshjelper velger nå riktig JAVA_HOME; install_script/start_skill er oppdatert i
+konfigurasjonsutkastet. Utkastet er lagret, ikke publisert. Den reviderte installasjonen er
+verifisert trinnvis, ikke kjørt på nytt som ett samlet script.
+
+Full `npm test` stopper i den tidligere dokumenterte Cut crop-E2E-feilen
+(`electron/e2e/workflows.mjs:369`, «dragging a crop edge must update the crop»). Den påfølgende
+fulle Draw-E2E ble derfor ikke kjørt. Separate Electron-kjøringer med `--draw-cut` og
+`--draw-export` passerer: import til Cut, add/replace/undo, kopi/lim inn mellom modusene og
+SVG/PDF/AI/DXF/raster-eksport. `git diff --check` og syntakskontroll av endrede inngangsfiler passerer.
+Ingen claim om full testsuksess eller ferdig Cut optimized-UI; neste deltrinn er visningsprojeksjonen.

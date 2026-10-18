@@ -5,8 +5,7 @@
  * bounds and expanded shape geometry.
  */
 import { isOutputNode } from '../doc/layers.mjs';
-import { paintHex } from '../doc/paint.mjs';
-import { gradientHex } from '../doc/gradient.mjs';
+import { cutPaint } from './cut-paint.mjs';
 import { multiply } from '../doc/arrange.mjs';
 import { hasTextLayout } from '../doc/text-layout.mjs';
 import { livePathfinder, scribbleOf } from '../doc/effects.mjs';
@@ -99,9 +98,9 @@ export function artboardCutSvg(doc, boardId, geometry, { only = null, clipToBoar
     const fills = shown(node.appearance?.fills), strokes = shown(node.appearance?.strokes);
     if (fills.length > 1 || strokes.length > 1) stacked++;
     // A gradient is one laser layer: its first stop's colour. A Scribble fill is cut as its line, in the fill colour.
-    const scribbled = scribbleOf(node), fillHex = paintHex(fills[0]) ?? gradientHex(fills[0]?.paint);
+    const scribbled = scribbleOf(node), { fill: fillHex, stroke } = cutPaint(node);
     if (scribbled && fillHex) { push(node, subpaths, { stroke: fillHex, width: scribbled.strokeWidth }, at, cut); return; }
-    const fill = fillHex, stroke = paintHex(strokes[0]) ?? gradientHex(strokes[0]?.paint);
+    const fill = fillHex;
     if (!fill && !stroke) { skipped.empty++; return; }
     if (fill && subpaths.some((p) => !p.closed)) openFilled++;
     // Outline Stroke: the stroke is sent as the filled area it paints, above the fill.

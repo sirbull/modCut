@@ -15,6 +15,15 @@ D1.8 (Transform, Align, Color, Stroke, Fill/Stroke-boks og Properties) ble fullf
 `feat/vector-draw` og er slått inn her; panelene ligger nå i panelgruppene.
 
 
+## Brukerbestilt tillegg 2026-10-18: Cut optimized
+
+D5.1 har **implementert og enhetstestet prosesskobling; visning og dialog er ikke implementert**. Les DRAW_WORKSPACE 4.4.1 og den nye delen øverst
+i STATUS. Modusen skal vise gravering og kuttebaner i svart-hvitt under redigering, med
+av/på-valg i View og forklaringsdialog med varig «Don’t show this again».
+Første deloppgave er fullført: se `cut-optimized.md`, `view/cut-process.mjs` og testene.
+Neste er visningsprojeksjon. Ikke tolk prosessoppslaget som ferdig renderstøtte. Dokumenter fremdrift
+underveis i deloppgavene, STATUS og WORK_LOG, med tydelig skille mellom gjort og gjenstående.
+
 ## Status og neste oppgave
 
 Fase 0 og fase 1 er fullført. Export As, **D2.1a/b punkttekst med systemfonter, shaping og

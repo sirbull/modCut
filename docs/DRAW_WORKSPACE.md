@@ -332,6 +332,62 @@ interface GeometryKernel {
 * Ytelsesmål: 5 000 paths med til sammen 200 000 ankre skal panorere og zoome i minst 50 fps
   på en vanlig bærbar (M1/Ryzen 5). Utenfor skjerm skal items deaktiveres (viewport culling).
 
+### 4.4.1 Cut optimized — forhåndsvisning mens man tegner (D5.1)
+
+**Status 2026-10-18: prosesskobling implementert og enhetstestet; visning og dialog gjenstår.** Brukerbestilt tillegg etter fase 5.
+
+Draw får et avkrysbart menyvalg **View > Cut Optimized** (norsk: **Vis > Kuttoptimalisert**).
+Det slår visningen av og på uten å forlate Draw, slik at man kan tegne og redigere med en
+svart-hvitt-forhåndsvisning av gravering og kuttebaner. Standard er av. Aktiv modus vises
+tydelig i statuslinjen; samme menyvalg går tilbake til normal fargevisning.
+
+* Hvit arbeidsflate; gravering vises som svart/hvitt eller gråtoner der raster/gråtonegravering
+  krever det. Kutte-/scorebaner vises som tydelige, tynne svarte senterlinjer. Skjermstore
+  banemarkeringer skal fortsatt være synlige ved zoom og ikke se ut som graverte flater.
+  En kort forklaring i visningen skiller gravert flate fra kutte-/scorebane.
+* Forhåndsvisningen skal bruke de samme reglene for utskrivbart innhold, tekstkonturer,
+  effekter, rasterbehandling og geometri som Send to Cut/Cut. Farger alene må ikke brukes
+  til å gjette Cut/Score/Engrave. Der prosessvalg mangler, vises det tydelig som uavklart;
+  implementasjonen må avklare hvordan aktive Cut-prosessprofiler kobles til Draw før den
+  lover en prosessriktig forhåndsvisning. Materiale, effekt og maskin påvirker faktisk resultat.
+* Template-/referanselag er fortsatt tilgjengelige som dempet tegnehjelp, tydelig adskilt
+  fra utskrivbart innhold. Skjulte og ikke-utskrivbare objekter blir ikke simulert som output.
+* Alle tegne- og redigeringsverktøy virker mens modusen er aktiv, med live oppdatering under
+  gester, tydelige markører, ankre og håndtak. Visningen er en renderinnstilling og endrer
+  ikke dokumentets farger, lag, geometri, eksport, Cut-tilstand, dirty-status eller angrehistorikk.
+* Aktiv visningsmodus er per fane/arbeidsøkt. Den er gjensidig utelukkende med Outline og
+  Pixel Preview; når den slås av, gjenopprettes den foregående visningsmodusen.
+
+**Forklaring ved aktivering:** Første gang brukeren slår på modusen, åpnes en dialog som
+forklarer svart-hvitt-visningen, graverte flater, kutte-/scorebaner, uavklarte prosessvalg og
+at designets originalfarger og eksport beholdes. Dialogen sier også at dette er en
+forhåndsvisning; endelig prosess og jobb må kontrolleres i Cut. Den har **Continue** og
+**Cancel**, samt en avkrysningsboks **Don’t show this again** / **Ikke vis dette igjen**.
+Avkrysningen er av som standard. Continue aktiverer modusen; Cancel beholder forrige visning
+og lagrer ingen preferanse. Uten avkrysning vises forklaringen ved neste aktivering.
+Med avkrysning huskes valget per bruker på tvers av faner og omstarter, utenfor prosjektfilen.
+Forklaringen kan åpnes igjen fra Help og preferansen tilbakestilles i Preferences.
+All ny grensesnittekst får engelsk original og bokmålsoversettelse.
+
+**Avgrenset byggeplan og fremdrift:**
+
+* [x] Krav, plassering, dialog og akseptansekriterier dokumentert (2026-10-18).
+* [x] Avklar og dokumenter koblingen fra Draw-objekter til Cut/Score/Engrave, inkludert
+  uavklarte objekter og hva visningen faktisk kan forutsi. Ren resolver og delte regler er
+  implementert; se [`draw/cut-optimized.md`](draw/cut-optimized.md). Ingen UI/renderkobling ennå.
+* [ ] Implementer ren visningsprojeksjon med gjenbruk av Cut-/eksportregler og tester for
+  vektorer, tekst, bilder, effekter, template-lag og uavklart prosess.
+* [ ] Legg til menyvalg, live renderintegrasjon, statusindikator og samspill med visningsmoduser.
+* [ ] Legg til forklaringsdialog, varig brukerpreferanse, gjenåpning og oversettelser.
+* [ ] Verifiser i Electron: av/på, første aktivering, Cancel, gjentatt dialog uten avkrysning,
+  «ikke vis igjen» etter omstart, tilbakestilling, fanebytte og tegning mens modusen er på.
+  Kontroller at dokument, undo/redo, eksport og Send to Cut er identiske før/etter toggling,
+  og sammenlign representative forhåndsvisninger med Cut.
+
+Oppdater denne sjekklisten, `docs/draw/STATUS.md` og `docs/draw/WORK_LOG.md` underveis ved
+hvert deltrinn, med gjennomført arbeid, faktisk kjørte kontroller og konkrete restpunkter.
+Oppgaven merkes ikke ferdig før både funksjonen og akseptansekontrollene er gjennomført.
+
 ### 4.5 Integrasjon med resten av modCut
 
 * `renderer/app.js` eier fanene. Hver fane får `tab.draw` (DrawDocument + historikk + UI-tilstand)
@@ -676,7 +732,7 @@ via preload. Menyen i Draw:
   Effects Settings, Distort & Transform, Path (Offset Path, Outline Object, Outline Stroke),
   Pathfinder, Rasterize, Stylize (Drop Shadow, Feather, Inner Glow, Outer Glow, Round Corners,
   Scribble), Blur (Gaussian Blur), Warp. Se 10.7.
-* **View**: Outline/Preview, Pixel Preview, Zoom, Fit Artboard, Fit All, Actual Size, Hide/Show
+* **View**: Outline/Preview, Pixel Preview, Cut Optimized (D5.1, planlagt), Zoom, Fit Artboard, Fit All, Actual Size, Hide/Show
   Edges, Artboards, Bounding Box, Transparency Grid, Rulers, Guides, Smart Guides, Grid, Snap
   to Grid/Point/Pixel, New View (fase 5), **Cut workspace**.
 * **Window**: alle paneler fra kapittel 8, Workspace (Reset, lagre eget oppsett i fase 4).
@@ -1419,6 +1475,8 @@ Arbeid videre på fellesgrenen feat/vector-draw; ikke opprett en ny gren for opp
 ---
 
 ## 23. Statussjekkliste
+
+* [ ] D5.1 Cut optimized — prosesskobling implementert/testet; rendering, UI/dialog og E2E gjenstår (4.4.1).
 
 Oppdateres når oppgaven fullføres. Løpende arbeidslogg: [`draw/WORK_LOG.md`](draw/WORK_LOG.md).
 Oversikt over hva som er gjort og gjenstår, inkludert delvis ferdige oppgaver: [`draw/STATUS.md`](draw/STATUS.md).

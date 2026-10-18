@@ -13,7 +13,7 @@ import { epsToSvg } from "./epsimport.js";
 import { runMcpTool } from "./draw/mcp-runner.mjs";
 import { pdfDrawDocument, pdfToArtwork } from "./pdfimport.js";
 import { tiffToPng } from "./tiffimport.js";
-import { OPERATIONS, canAssignRasterToOperation, distinctVectorColor, isOutputLayer, operationsForLayer } from "./layer-model.mjs";
+import { OPERATIONS, canAssignRasterToOperation, distinctVectorColor, isOutputLayer, matchingProcessLayer, operationsForLayer } from "./layer-model.mjs";
 import { RASTER_MODES, applyProcessProfile, combinedFocusOffset, normalizeProcessProfile, profilesForOperation } from "./process-profiles.mjs";
 import { groupJobOperations, jobFilename } from "./job-split.mjs";
 import { defaultMotionTiming, motionTimingForMachine } from "./motion-timing.mjs";
@@ -1366,8 +1366,7 @@ function syncLayers() {
       ...state.colors.filter((color) => !prev.has(color.key)),
     ];
     state.layers = orderedColors.map((c) => {
-      const candidates = state.layers.filter((layer) => layer.color?.toLowerCase() === c.color.toLowerCase());
-      const existing = prev.get(c.key) || candidates.find((layer) => Boolean(layer.raster) === Boolean(c.raster));
+      const existing = matchingProcessLayer(state.layers, c);
       if (!existing) return newLayer(c.color, c.raster ? "Engrave" : "Cut", c.raster, c.key);
       const layer = { ...existing, key: c.key, color: c.color, raster: c.raster };
       if (c.raster && !canAssignRasterToOperation(layer.op)) layer.op = "Engrave";

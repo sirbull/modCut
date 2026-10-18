@@ -7,6 +7,17 @@
 > Sist oppdatert: 2026-10-17 (verktøy, D2.8 del A og B). Arbeidsgren: `feat/vector-draw` (Claude og Codex
 > jobber begge der; hent alltid før du starter, og kjør `npm ci` ved endrede avhengigheter).
 
+## Nytt planlagt tillegg: D5.1 Cut optimized (2026-10-18)
+
+**Prosesskoblingen er implementert og enhetstestet; menyvalg, visning og dialog gjenstår.** Se
+[hovedplanen 4.4.1](../DRAW_WORKSPACE.md#441-cut-optimized--forhåndsvisning-mens-man-tegner-d51).
+View > Cut Optimized skal gi redigerbar svart-hvitt-visning av gravering og kutte-/scorebaner.
+En forklaring vises ved aktivering, med «Don’t show this again» som huskes per bruker.
+Første deltrinn er ferdig: ren Draw → Cut-prosesskobling med delte regler for prosesslag og
+fargeidentitet. Manglende prosessvalg er uavklart, og raster/vector skilles ved samme farge.
+Neste deltrinn er visningsprojeksjon, deretter meny/rendering, dialog/preferanse og Electron-kontroller. Originaldesign og output skal bevares.
+Fremdrift skal føres fortløpende i hovedplanens deloppgaver og WORK_LOG, også når bare en del er ferdig.
+
 ## 1. Kort oppsummert
 
 Draw kan i dag brukes til å tegne enkle logoer og former: artboards, utvalg, Pen og ankerredigering,
@@ -998,5 +1009,7 @@ SVG-, PNG- og JPEG-eksport er gjort (2.5).
   (skymiljøet har DejaVu Sans uten kursiv som standard).
 * Color, Stroke og Swatches endrer første fyll og første strek når en figur har flere.
 * Autolagringstesten (`project-workflows.mjs:113`) er ustabil i skymiljøet; se WORK_LOG.
-* Cut/sidecar-tester kan ikke kjøres i skymiljøet (jitpack.io er blokkert).
+* Oppdatert 2026-10-18: lokalt JDK 21 og cachet LibLaserCut lar sidecar/bridge passere.
+  Full `npm test` stopper i den tidligere dokumenterte crop-E2E-feilen (workflows.mjs:369).
+  Separate Send to Cut- og eksport-E2E passerer. Fersk jitpack.io-nedlasting er fortsatt ikke verifisert.
 * Geometrikjernens worker har bare polygonal union; Pathfinder bruker Paper.js i hovedtråden.

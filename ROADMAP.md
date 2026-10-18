@@ -46,6 +46,11 @@ the same commit that completes an item.
 
 ## P3: Draw workspace (vector editor)
 
+- [ ] D5.1 Cut optimized: shared Cut process lookup implemented and unit tested;
+  view projection, menu, introduction dialog/preferences and Electron tests remain.
+  See `docs/draw/cut-optimized.md` and DRAW_WORKSPACE 4.4.1.
+
+
 - [x] D0.1: Draw/Cut switch with an isolated canvas and PaperScope per tab,
   workspace-specific native menu and Electron regression coverage.
 - [x] D0.2: Pure JS document model, validated commands, atomic undo/redo,
