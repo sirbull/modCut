@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { inputHelpers, wait } from './cdp.mjs';
 import { activeDraw as active, enterDraw, rememberTabs, submitNewDrawDialog } from './draw-test-helpers.mjs';
 
-/** D4.2: Blend Make, Options, Reverse, Expand and Release, the Blend tool, PNG and Send to Cut. */
+/** D4.2: Blend Make, Options, Reverse, Expand, Replace and Reverse Spine and Release, the Blend tool, PNG and Send to Cut. */
 export async function runDrawBlendWorkflows(client) {
   const { evaluate } = client, { mouse } = inputHelpers(client), restore = await rememberTabs(evaluate);
   const until = async (expression, label) => { for (let i = 0; i < 100; i++) { if (await evaluate(expression)) return; await wait(40); } assert.fail(`Timed out: ${label}`); };
@@ -48,6 +48,23 @@ export async function runDrawBlendWorkflows(client) {
   assert.equal(expanded.blend, null); assert.equal(expanded.kids, 5); assert.equal(expanded.steps, 0);
   assert.equal(expanded.fills[0], '#ff0000'); assert.equal(expanded.fills[4], '#0000ff'); assert.match(expanded.fills[2], /^#(80|7f)00(80|7f)$/);
   await evaluate(`(async()=>{${active}.handle('undo')})()`);
+  // Replace Spine: a bent path becomes the spine (one undo step), the keys move to its ends and the steps follow it.
+  const spinePath = await evaluate(`(async()=>{const w=${active},{createNode}=await import('./draw/doc/schema.mjs'),{insertNode}=await import('./draw/doc/commands.mjs'),{appearance}=await import('./draw/geometry.mjs');
+    const b=w.state.document.data.artboards[0],L=w.state.document.data.layers[0].id,n=createNode('path',{subpaths:[{closed:false,segments:[[15,15],[40,60],[75,15]].map(p=>({p:[b.x+p[0],b.y+p[1]],in:[0,0],out:[0,0]}))}],appearance:appearance(null,'#000000')});
+    w.state.history.execute(insertNode(L,n));w.select(['${blend}',n.id]);return n.id;})()`);
+  steps = await applied();
+  await evaluate(`(async()=>{${active}.handle('blend-replace-spine')})()`);
+  assert.equal(await applied(), steps + 1, 'Replace Spine is one undo step');
+  assert.equal(await evaluate(`(async()=>!${active}.state.document.getNode('${spinePath}'))()`), true, 'The path becomes the spine');
+  assert.equal(await evaluate(`(async()=>${active}.state.document.getNode('${blend}').blend.spine.segments.length)()`), 3);
+  assert.deepEqual(await evaluate(`(async()=>{const w=${active},b=w.state.document.data.artboards[0],c=w.renderer.bounds('${red}').center;return [Math.round(c.x-b.x),Math.round(c.y-b.y)]})()`), [15, 15]);
+  const onSpine = await evaluate(`(async()=>{const w=${active},b=w.state.document.data.artboards[0];return w.renderer.blendSteps('${blend}')[0].steps.map(s=>{const ys=s.subpaths[0].segments.map(g=>g.p[1]),xs=s.subpaths[0].segments.map(g=>g.p[0]);return [Math.round((Math.min(...xs)+Math.max(...xs))/2-b.x),Math.round((Math.min(...ys)+Math.max(...ys))/2-b.y)];})})()`);
+  assert.equal(onSpine.length, 3); assert.ok(onSpine[1][1] > 50, `The middle step dips with the spine: ${onSpine}`);
+  // Reverse Spine: the keys change ends.
+  await evaluate(`(async()=>{const w=${active};w.select(['${blend}']);w.handle('blend-reverse-spine')})()`);
+  assert.deepEqual(await evaluate(`(async()=>{const w=${active},b=w.state.document.data.artboards[0],c=w.renderer.bounds('${red}').center;return [Math.round(c.x-b.x),Math.round(c.y-b.y)]})()`), [75, 15]);
+  await evaluate(`(async()=>{const w=${active};w.handle('undo');w.handle('undo');w.handle('undo')})()`);
+  assert.equal(await evaluate(`(async()=>${active}.state.document.getNode('${blend}').blend.spine??null)()`), null, 'Undo takes the spine away again');
   // Release: the keys stay, the steps go.
   await evaluate(`(async()=>{const w=${active};w.select(['${blend}']);w.handle('blend-release')})()`);
   assert.deepEqual(await evaluate(`(async()=>{const w=${active},n=w.state.document.getNode('${blend}');return [n.blend??null,n.children.length,w.renderer.blendSteps('${blend}').length]})()`), [null, 2, 0]);
@@ -62,5 +79,5 @@ export async function runDrawBlendWorkflows(client) {
   const tool = await evaluate(`(async()=>{const w=${active},n=w.state.document.getNode(w.state.selection.ids[0]);return {blend:!!n.blend,kids:n.children.map(c=>c.id)}})()`);
   assert.deepEqual(tool, { blend: true, kids: [a, b] });
   await restore();
-  console.log('PASS Draw blend: Make (one undo step, Smooth Color), Blend Options with specified steps, PNG and Send to Cut include the steps, Reverse Front to Back, Expand and Release; the Blend tool blends two clicked objects');
+  console.log('PASS Draw blend: Make (one undo step, Smooth Color), Blend Options with specified steps, PNG and Send to Cut include the steps, Reverse Front to Back, Expand, Replace and Reverse Spine (keys on the spine, steps along it) and Release; the Blend tool blends two clicked objects');
 }

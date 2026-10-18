@@ -9,7 +9,7 @@ import { scaledStrokeProperties } from '../geom/transforms.mjs';
 import { isOutputNode, layerContext, ROOT_CONTEXT } from '../doc/layers.mjs';
 import { arrowShapes } from '../geom/arrows.mjs';
 import { normalizeProfile, variableStrokeRings } from '../geom/width-profile.mjs';
-import { blendStepCount, matchShapes, interpolateShapes, stepPositions, lerpColor } from '../geom/blend.mjs';
+import { blendStepCount, matchShapes, interpolateShapes, stepPositions, lerpColor, spineCurve, placeOnSpine, keyPosition } from '../geom/blend.mjs';
 import { PT_TO_MM, textValues } from '../doc/text.mjs';
 import { applyVectorEffects, hasVectorEffects, dropShadow, livePathfinder, scribbleOf } from '../doc/effects.mjs';
 import { offsetPathsSync, geometryReady } from '../geom/kernel-js.mjs';
@@ -325,12 +325,21 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
   function blendData(node) {
     const keys = node.children.filter(child => child.visible).map(child => ({ node: child, shape: keyShape(child), look: keyLook(child) })).filter(k => k.shape);
     const pairs = []; let total = 0;
+    // With a spine the steps sit along it (keys at equal shares of its length) instead of on straight lines.
+    const spine = node.blend.spine ? spineCurve(node.blend.spine) : null, along = node.blend.orientation === 'path';
     for (let i = 0; i + 1 < keys.length; i++) {
-      const a = keys[i], b = keys[i + 1];
-      const count = Math.min(BLEND_LIMIT - total, blendStepCount(node.blend, { subpaths: a.shape, colors: [a.look.fill ?? a.look.stroke] }, { subpaths: b.shape, colors: [b.look.fill ?? b.look.stroke] }));
+      const a = keys[i], b = keys[i + 1], share = spine ? spine.length / (keys.length - 1) : null;
+      const count = Math.min(BLEND_LIMIT - total, blendStepCount(node.blend, { subpaths: a.shape, colors: [a.look.fill ?? a.look.stroke] }, { subpaths: b.shape, colors: [b.look.fill ?? b.look.stroke] }, share));
       if (count < 1) break; total += count;
       const [sa, sb] = matchShapes(a.shape, b.shape);
-      pairs.push({ after: a.node.id, before: b.node.id, steps: stepPositions(count).map(t => ({ subpaths: interpolateShapes(sa, sb, t), look: mixLook(a.look, b.look, t) })) });
+      const ua = keyPosition(i, keys.length), ub = keyPosition(i + 1, keys.length), angleA = spine?.at(ua).angle, angleB = spine?.at(ub).angle;
+      const shaped = (t) => {
+        const subpaths = interpolateShapes(sa, sb, t);
+        if (!spine) return subpaths;
+        const at = spine.at(ua + (ub - ua) * t);
+        return placeOnSpine(subpaths, at.p, along ? at.angle - (angleA + (angleB - angleA) * t) : 0);
+      };
+      pairs.push({ after: a.node.id, before: b.node.id, steps: stepPositions(count).map(t => ({ subpaths: shaped(t), look: mixLook(a.look, b.look, t) })) });
     }
     return pairs;
   }

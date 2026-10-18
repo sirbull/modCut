@@ -36,7 +36,9 @@ export const NB = Object.freeze({
   "Object": "Objekt", "Transform Again": "Transformer igjen", "Transform Each…": "Transformer hver…", "Rotate": "Roter", "Reflect": "Speilvend",
   "Scale": "Skaler", "Shear": "Skjevstill", "Bring to Front": "Flytt fremst", "Bring Forward": "Flytt fremover", "Send Backward": "Flytt bakover",
   "Send to Back": "Flytt bakerst", "Expand…": "Utvid…", "Expand": "Utvid", "Expand Appearance": "Utvid utseende", "Crop Image…": "Beskjær bilde…",
-  "Blend": "Overgang", "Make": "Opprett", "Release": "Frigi", "Blend Options…": "Overgangsalternativer…", "Reverse Front to Back": "Snu forfra og bak",
+  "Blend": "Overgang", "Make": "Opprett", "Replace Spine": "Erstatt ryggrad", "Reverse Spine": "Snu ryggrad", "Spine": "Ryggrad",
+  "Select one blend and one path.": "Merk én overgang og én bane.", "A blend spine is a path with at least two points.": "En ryggrad for en overgang er en bane med minst to punkter.",
+  "Select a blend with a spine. Replace Spine gives a blend one.": "Merk en overgang med ryggrad. Erstatt ryggrad gir en overgang det.", "Release": "Frigi", "Blend Options…": "Overgangsalternativer…", "Reverse Front to Back": "Snu forfra og bak",
   "Clipping Mask": "Utklippsmaske", "Compound Path": "Sammensatt bane", "Lock Selection": "Lås utvalg", "Unlock All": "Lås opp alle",
   "Hide Selection": "Skjul utvalg",
   // Path

@@ -15,7 +15,16 @@ export function blendOptions(options = {}) {
   if (!(Number.isInteger(o.steps) && o.steps >= 1 && o.steps <= MAX_STEPS)) throw new Error(`Use 1 to ${MAX_STEPS} steps.`);
   if (!(Number.isFinite(o.distance) && o.distance >= .01 && o.distance <= 10000)) throw new Error('Use a distance from 0.01 to 10000 mm.');
   if (!['page', 'path'].includes(o.orientation)) throw new Error('Unknown orientation.');
-  return { spacing: o.spacing, steps: o.steps, distance: o.distance, orientation: o.orientation };
+  const out = { spacing: o.spacing, steps: o.steps, distance: o.distance, orientation: o.orientation };
+  if (o.spine) out.spine = spineOption(o.spine);
+  return out;
+}
+/** A blend's spine: one subpath in the blend group's space, with at least two anchors. */
+function spineOption(spine) {
+  const vector = (v) => Array.isArray(v) && v.length === 2 && v.every(Number.isFinite);
+  if (!spine || typeof spine.closed !== 'boolean' || !Array.isArray(spine.segments) || spine.segments.length < 2
+      || !spine.segments.every((s) => s && vector(s.p) && vector(s.in) && vector(s.out))) throw new Error('A blend spine is a path with at least two points.');
+  return { closed: spine.closed, segments: spine.segments.map((s) => ({ p: [...s.p], in: [...s.in], out: [...s.out] })) };
 }
 
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -32,8 +41,9 @@ export function boxOf(subpaths) {
  * 8-bit level in 4 (at least 1); with the same colours, about one step per 1 mm between centres.
  * `a` and `b` are `{ subpaths, colors: [[r, g, b] 0..1, ...] }`.
  */
-export function blendStepCount(options, a, b) {
-  const o = blendOptions(options), dist = Math.hypot(...sub(boxOf(b.subpaths).centre, boxOf(a.subpaths).centre));
+export function blendStepCount(options, a, b, length = null) {
+  // `length`: the way between the keys when it is not straight (along a spine).
+  const o = blendOptions(options), dist = length ?? Math.hypot(...sub(boxOf(b.subpaths).centre, boxOf(a.subpaths).centre));
   if (o.spacing === 'steps') return o.steps;
   if (o.spacing === 'distance') return Math.min(MAX_STEPS, Math.max(1, Math.round(dist / o.distance) - 1));
   let delta = 0;
@@ -94,5 +104,40 @@ export function matchShapes(as, bs) {
 export const interpolateShapes = (as, bs, t) => as.map((a, i) => ({ closed: a.closed, segments: a.segments.map((s, j) => {
   const o = bs[i].segments[j]; return { p: mix(s.p, o.p, t), in: mix(s.in, o.in, t), out: mix(s.out, o.out, t) }; }) }));
 export const lerpColor = (a, b, t) => a.map((v, i) => lerp(v, b[i], t));
+/**
+ * A spine as a function of distance: `at(u)` (u from 0 to 1 along its length) gives the point and the
+ * direction in radians. Curves are measured as short straight pieces.
+ */
+export function spineCurve(spine, pieces = 32) {
+  const s = spine.segments, count = spine.closed ? s.length : s.length - 1, points = [[...s[0].p]];
+  for (let i = 0; i < count; i++) {
+    const a = s[i], b = s[(i + 1) % s.length], p0 = a.p, p1 = add(a.p, a.out), p2 = add(b.p, b.in), p3 = b.p;
+    for (let k = 1; k <= pieces; k++) {
+      const t = k / pieces, u = 1 - t;
+      points.push([u * u * u * p0[0] + 3 * u * u * t * p1[0] + 3 * u * t * t * p2[0] + t * t * t * p3[0], u * u * u * p0[1] + 3 * u * u * t * p1[1] + 3 * u * t * t * p2[1] + t * t * t * p3[1]]);
+    }
+  }
+  const lengths = [0];
+  for (let i = 1; i < points.length; i++) lengths.push(lengths[i - 1] + Math.hypot(...sub(points[i], points[i - 1])));
+  const total = lengths.at(-1);
+  return {
+    length: total,
+    at(u) {
+      const d = Math.min(1, Math.max(0, u)) * total;
+      let i = 1; while (i < points.length - 1 && lengths[i] < d) i++;
+      const a = points[i - 1], b = points[i], span = lengths[i] - lengths[i - 1] || 1, t = (d - lengths[i - 1]) / span;
+      return { p: mix(a, b, Math.min(1, Math.max(0, t))), angle: Math.atan2(b[1] - a[1], b[0] - a[0]) };
+    },
+  };
+}
+/** `subpaths` moved so their centre is at `to`, turned `angle` radians about it. */
+export function placeOnSpine(subpaths, to, angle = 0) {
+  const c = boxOf(subpaths).centre, cos = Math.cos(angle), sin = Math.sin(angle);
+  const turn = (v) => [v[0] * cos - v[1] * sin, v[0] * sin + v[1] * cos];
+  return subpaths.map((path) => ({ closed: path.closed, segments: path.segments.map((g) => ({ p: add(turn(sub(g.p, c)), to), in: turn(g.in), out: turn(g.out) })) }));
+}
+/** Where key `k` of `count` keys sits on the spine (0 to 1). */
+export const keyPosition = (k, count) => count > 1 ? k / (count - 1) : 0;
+
 /** The `count` positions strictly between the keys, evenly spaced. */
 export const stepPositions = (count) => Array.from({ length: count }, (_, i) => (i + 1) / (count + 1));

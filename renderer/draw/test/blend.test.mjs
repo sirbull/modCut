@@ -35,3 +35,21 @@ test('shapes are matched and interpolated; closed paths line up anchors', () => 
   const [, extra] = matchShapes([square(0, 0, 10), square(2, 2, 2)], [square(0, 0, 10)]);
   assert.deepEqual(extra[1].segments.map((s) => s.p), Array(4).fill([3, 3]));
 });
+
+test('a spine: points and directions by share of its length, shapes placed and turned on it, kept in the options', async () => {
+  const { spineCurve, placeOnSpine, keyPosition, blendOptions, blendStepCount } = await import('../geom/blend.mjs');
+  const line = { closed: false, segments: [{ p: [0, 0], in: [0, 0], out: [0, 0] }, { p: [100, 0], in: [0, 0], out: [0, 0] }, { p: [100, 50], in: [0, 0], out: [0, 0] }] };
+  const curve = spineCurve(line);
+  assert.equal(Math.round(curve.length), 150);
+  assert.deepEqual(curve.at(0).p, [0, 0]); assert.deepEqual(curve.at(1).p.map(Math.round), [100, 50]);
+  assert.deepEqual(curve.at(1 / 3).p.map((v) => Math.round(v * 100) / 100), [50, 0]);
+  assert.equal(Math.round(curve.at(.9).angle * 180 / Math.PI), 90, 'Along the second side the spine points down');
+  const square = [{ closed: true, segments: [[0, 0], [10, 0], [10, 10], [0, 10]].map((p) => ({ p, in: [0, 0], out: [1, 0] })) }];
+  const placed = placeOnSpine(square, [50, 50], Math.PI / 2);
+  assert.deepEqual(placed[0].segments[0].p.map(Math.round), [55, 45]); assert.deepEqual(placed[0].segments[0].out.map(Math.round), [0, 1]);
+  assert.deepEqual([0, 1, 2].map((k) => keyPosition(k, 3)), [0, .5, 1]);
+  const options = blendOptions({ spacing: 'distance', distance: 10, spine: line });
+  assert.deepEqual(options.spine, line); assert.equal(blendOptions({}).spine, undefined);
+  assert.throws(() => blendOptions({ spine: { closed: false, segments: [line.segments[0]] } }), /at least two points/);
+  assert.equal(blendStepCount(options, { subpaths: square }, { subpaths: square }, 150), 14, 'Distance steps follow the length along the spine');
+});

@@ -1800,3 +1800,13 @@ Målt i `--draw-perf` (5 000 baner, 200 000 ankre): innsetting 12,8 s til 5,6 s,
 lineært per innsetting i lange lister (kopien av listen), så tusenvis av enkeltinnsettinger er ikke gratis.
 Verifisering: 303 Draw-enhetstester (`document-batch`), `--draw-perf`.
 
+
+## 2026-10-18: Spine for blends (hull fra D4.2)
+
+- Replace Spine og Reverse Spine i Object > Blend; `blend.spine` valideres i `blendOptions`, og Blend Options
+  beholder den.
+- Trinnene legges langs ryggraden etter lengde, dreid ved «Align to Path»; Specified Distance måler langs den.
+
+Verifisering: blend-enhetstest (punkter, retning, plassering, antall trinn), `--draw-blend` (ryggrad, nøkler ved
+endene, trinn langs banen, snu, ett angresteg).
+

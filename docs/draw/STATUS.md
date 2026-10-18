@@ -666,8 +666,15 @@ finnes, men bare «within stroke»).
 * Kode: `geom/blend.mjs`, `blendData` og `placeBlend` i `render/paper-adapter.mjs`, `makeBlend`,
   `blendOptionsCommand`, `blendClick` og blend-kommandoene i `index.mjs`, blend i `io/cut-svg.mjs`.
 
-Gjenstår i D4.2: Replace Spine og Reverse Spine (blend langs en bane; «Align to Path» har ingen virkning ennå),
-tekst og grupper som nøkler (bare baner og former blir med), og Object > Expand på blends.
+**Spine (2026-10-18):** Object > Blend > Replace Spine gjør en merket bane til blendens ryggrad: banen lagres i
+`blend.spine` (i gruppens rom) og fjernes, nøklene flyttes til like store deler av lengden, og trinnene legges langs
+den. «Align to Path» dreier trinnene etter retningen. Reverse Spine snur den, så nøklene bytter plass. Reverse Front
+to Back snur ryggraden sammen med stablingen, Release gir den tilbake som en umalt bane, og Specified Distance måler
+langs ryggraden. Kode: `spineCurve`, `placeOnSpine` og `keyPosition` i `geom/blend.mjs`, `replaceSpine`,
+`placeKeys` og `reverseSpine` i `index.mjs`.
+
+Gjenstår i D4.2: redigere ryggraden direkte med Direct Selection (nå: Release, rediger, lag på nytt), tekst og
+grupper som nøkler (bare baner og former blir med), og Object > Expand på blends.
 
 ### 2.30 Warp, Live Pathfinder og opacity masks (D4.3, 2026-10-18)
 
@@ -899,7 +906,7 @@ Gjenstår i fase 5: AVIF-eksport (Chromium kan ikke kode AVIF fra lerret).
 | D3.7 AI- og DXF-eksport | Ferdig (2.27); Illustrators private AI-data gjenstår |
 | D3.8 Links, Crop Image, Document Info, Edit in Draw | Ferdig (2.25); lenkede bilder og beskjæringshåndtak gjenstår |
 | D4.1 Width og width profiles | Ferdig i grunnform (2.28); gradient langs strek og stiplet profil gjenstår |
-| D4.2 Blend | Ferdig i grunnform (2.29); spine gjenstår |
+| D4.2 Blend | Ferdig i grunnform (2.29), spine gjort; direkte redigering av ryggraden gjenstår |
 | D4.3 Warp, Live Pathfinder, opacity masks | Ferdig i grunnform (2.30); Rasterize og Envelope gjenstår |
 | D4.4 Paintbrush og Blob Brush | Ferdig i grunnform (2.31); art-, scatter- og pattern-pensler gjenstår |
 | D4.5 EPS/TIFF, Graphic Styles, Navigator, Rotate View, Asset Export | Ferdig i grunnform (2.32) |
@@ -923,7 +930,7 @@ SVG-, PNG- og JPEG-eksport er gjort (2.5).
    gjort. Fra D2.1 er skalering, baseline shift, kerning, avsnitt og blandede stiler gjort (2.11).
 6. Fase 3: D3.1 Expand og Expand Appearance (2.20) og D3.5 Select-meny, Magic Wand og Lasso (2.21) er gjort.
    D3.4 Shape Builder, Knife og Eraser (2.22) og D3.6 Free Transform, Transform Each og Split Into Grid
-   (2.23) er også gjort, og D3.2 effekter (2.24), D3.8 (2.25), D3.3 Image Trace (2.26) og D3.7 AI-eksport (2.27). Fase 3 er ferdig i grunnform. Fase 4: D4.1 Width (2.28), D4.2 Blend (2.29) D4.3 Warp, Live Pathfinder og opacity masks (2.30) D4.4 Paintbrush og Blob Brush (2.31) og D4.5 TIFF, Graphic Styles, Navigator, Rotate View, Asset Export og arbeidsområder (2.32) og D4.6 ytelsespass (2.33) er gjort. Fase 4 er ferdig i grunnform. Fase 5 del A (2.34) til del F (2.39) er gjort; fase 5 er ferdig i grunnform (AVIF venter på støtte i Chromium). **Neste: hullene listet under hver del i kapittel 2, for eksempel spine for blends, Rasterize-effekt og Envelope.**
+   (2.23) er også gjort, og D3.2 effekter (2.24), D3.8 (2.25), D3.3 Image Trace (2.26) og D3.7 AI-eksport (2.27). Fase 3 er ferdig i grunnform. Fase 4: D4.1 Width (2.28), D4.2 Blend (2.29) D4.3 Warp, Live Pathfinder og opacity masks (2.30) D4.4 Paintbrush og Blob Brush (2.31) og D4.5 TIFF, Graphic Styles, Navigator, Rotate View, Asset Export og arbeidsområder (2.32) og D4.6 ytelsespass (2.33) er gjort. Fase 4 er ferdig i grunnform. Fase 5 del A (2.34) til del F (2.39) er gjort; fase 5 er ferdig i grunnform (AVIF venter på støtte i Chromium). **Neste: hullene listet under hver del i kapittel 2, for eksempel Rasterize-effekt og Envelope.**
 
 
 ## 5. Kjente begrensninger og risiko

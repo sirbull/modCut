@@ -25,7 +25,7 @@ import { TRANSFORM_TOOLS, operationMatrix, dialogOperation, panelMatrix } from '
 import { transformedBox } from './tools/selection.mjs';
 import { SHAPE_TOOLS, shapeFromDrag } from './tools/shapes.mjs';
 import { insertNode, moveNode, removeNode, replaceLeaf, updateNode, updateDocument } from './doc/commands.mjs';
-import { BLEND_DEFAULTS, blendOptions } from './geom/blend.mjs';
+import { BLEND_DEFAULTS, blendOptions, keyPosition, spineCurve } from './geom/blend.mjs';
 import { WARP_STYLES } from './geom/warp.mjs';
 import { BLOB_DEFAULTS, blobOptions, calligraphicProfile, paintbrushOptions } from './geom/brush.mjs';
 import { createId, createNode } from './doc/schema.mjs';
@@ -63,7 +63,7 @@ const shortcutsReady=globalThis.window?.modcut?.getDrawShortcuts?.().then(map=>{
 const implementedTools=new Set(['vertical-type','touch-type','rotate-view','select','group-selection','magic-wand','lasso','shape-builder','knife','eraser','width','blend','paintbrush','blob-brush','free-transform','pencil','hand','zoom','artboard','gradient','eyedropper','measure','scissors','type','area-type','type-on-path',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
 const commands=new Set(['undo','redo','delete','select-all','select-artboard','deselect','cancel','fit-artboard','fit-all','actual-size','zoom-in','zoom-out','outline',
   'cut','copy','paste','paste-front','paste-back','paste-place','paste-all-artboards',
-  'edit-text','create-outlines','join','average','offset-path','outline-stroke','expand','expand-appearance','transform-each','split-into-grid','crop-image','effect-last','effect-options',...Object.keys(EFFECTS).map(t=>`effect-${t}`),...Object.keys(WARP_STYLES).map(t=>`warp-${t}`),...Object.keys(LIVE_LABELS).map(t=>`live-${t}`),'simplify','reverse-path','add-anchors','remove-anchors','clean-up','compound-make','compound-release','clip-make','clip-release','reset-rotate-view','package','keyboard-shortcuts','workspace-new','workspace-reset','workspace-manage','blend-make','blend-release','blend-expand','blend-options','blend-reverse','mask-make','mask-release','mask-clip','mask-invert','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
+  'edit-text','create-outlines','join','average','offset-path','outline-stroke','expand','expand-appearance','transform-each','split-into-grid','crop-image','effect-last','effect-options',...Object.keys(EFFECTS).map(t=>`effect-${t}`),...Object.keys(WARP_STYLES).map(t=>`warp-${t}`),...Object.keys(LIVE_LABELS).map(t=>`live-${t}`),'simplify','reverse-path','add-anchors','remove-anchors','clean-up','compound-make','compound-release','clip-make','clip-release','reset-rotate-view','package','keyboard-shortcuts','workspace-new','workspace-reset','workspace-manage','blend-make','blend-release','blend-expand','blend-options','blend-reverse','blend-replace-spine','blend-reverse-spine','mask-make','mask-release','mask-clip','mask-invert','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
   'paint-focus','paint-swap','paint-none','paint-solid','paint-gradient','default-paint','smart-guides','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','shear-dialog','toggle-panels','toggle-panels-except-tools','command-search','draw-mode','draw-normal','draw-behind','draw-inside','reselect','select-inverse','select-next-above','select-next-below','save-selection','edit-selection',
   ...Object.keys(SAME_MODES).map(m=>`select-same-${m}`),...Object.keys(OBJECT_KINDS).map(k=>`select-object-${k}`),
   ...PANEL_DEFINITIONS.map(p=>`panel.${p.id}`),...['left','right','up','down'].flatMap(d=>[`nudge-${d}`,`nudge-large-${d}`,`duplicate-${d}`])]);
@@ -666,13 +666,53 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     state.history.transaction('Make Blend',()=>{commands.forEach(c=>state.history.execute(c));state.history.execute(updateNode(group.id,{name:'Blend',blend:options}));});
     select([group.id]);return group.id;
   }
+  /**
+   * Object > Blend > Replace Spine: the blend and one path are selected; the path becomes the blend's spine (in the
+   * blend group's space), the keys move to equal shares of its length, and the path itself is removed.
+   */
+  function replaceSpine(chosen){
+    const doc=state.document,blendIds=[...new Set(chosen.map(id=>doc.getNode(id)?.blend?id:doc.ancestors(id).find(n=>n.blend)?.id).filter(Boolean))];
+    if(blendIds.length!==1)throw new Error('Select one blend and one path.');
+    const blendId=blendIds[0],paths=chosen.filter(id=>id!==blendId&&!doc.ancestors(id).some(n=>n.id===blendId)&&['path','shape'].includes(doc.getNode(id)?.type));
+    if(paths.length!==1)throw new Error('Select one blend and one path.');
+    const spine=withScope(()=>{
+      const item=renderer.items.get(paths[0]);if(!item)return null;
+      const copy=item.clone({insert:false});copy.matrix=new scope.Matrix(...renderer.worldMatrix(paths[0]));copy.applyMatrix=true;
+      copy.transform(new scope.Matrix(...renderer.worldMatrix(blendId)).inverted());
+      const out=toSubpaths(copy)[0];copy.remove();return out;});
+    if(!spine||spine.segments.length<2)throw new Error('A blend spine is a path with at least two points.');
+    state.history.transaction('Replace Spine',()=>{
+      state.history.execute(updateNode(blendId,{blend:{...doc.getNode(blendId).blend,spine}}));
+      placeKeys(blendId);
+      state.history.execute(removeNode(paths[0]));
+    });
+    select([blendId]);
+  }
+  /** Moves a blend's keys to their places on its spine. */
+  function placeKeys(blendId){
+    const doc=state.document,node=doc.getNode(blendId),curve=spineCurve(node.blend.spine);
+    const keys=node.children.filter(child=>child.visible&&['path','shape'].includes(child.type));
+    const moves=withScope(()=>{const world=new scope.Matrix(...renderer.worldMatrix(blendId));
+      return keys.map((key,k)=>{const target=world.transform(new scope.Point(...curve.at(keyPosition(k,keys.length)).p)),centre=renderer.bounds(key.id).center;return [key.id,target.x-centre.x,target.y-centre.y];});});
+    for(const [id,dx,dy] of moves)if(Math.hypot(dx,dy)>1e-9)transforms.apply([1,0,0,1,dx,dy],'Replace Spine',{ids:[id],remember:false});
+  }
+  /** Object > Blend > Reverse Spine: the spine runs the other way, so the keys swap places along it. */
+  function reverseSpine(list){
+    const doc=state.document,withSpine=list.filter(id=>doc.getNode(id).blend.spine);
+    if(!withSpine.length)throw new Error('Select a blend with a spine. Replace Spine gives a blend one.');
+    state.history.transaction('Reverse Spine',()=>{for(const id of withSpine){const blend=doc.getNode(id).blend;
+      state.history.execute(updateNode(id,{blend:{...blend,spine:reverseSubpaths([blend.spine])[0]}}));placeKeys(id);}});
+    select(withSpine);
+  }
   /** Blend Options: for the selected blends, or the options new blends get. */
   async function blendOptionsCommand(){
     const doc=state.document,list=selectedIds().map(id=>doc.getNode(id)?.blend?id:doc.ancestors(id).find(n=>n.blend)?.id).filter(Boolean);
     const current=list.length?doc.getNode(list[0]).blend:state.ui.blendOptions??BLEND_DEFAULTS,values=await blendOptionsDialog(current);
     if(!values||destroyed)return;
     run(()=>{const options=blendOptions(values);state.ui.blendOptions=options;
-      if(list.length)state.history.transaction('Blend Options',()=>[...new Set(list)].forEach(id=>state.history.execute(updateNode(id,{blend:options}))));});
+      // A spine stays: it is not one of the dialog's settings.
+      const {spine:ignored,...shared}=options;void ignored;
+      if(list.length)state.history.transaction('Blend Options',()=>[...new Set(list)].forEach(id=>{const spine=doc.getNode(id).blend.spine;state.history.execute(updateNode(id,{blend:spine?{...shared,spine}:shared}));}));});
   }
   /** Blend tool: click one object, then another; the second click makes the blend. */
   function blendClick(id){
@@ -1174,8 +1214,14 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     // Blends (D4.2): a group whose children are the keys and whose `blend` holds the options.
     const blends=()=>{const found=ids().map(id=>doc.getNode(id)?.blend?id:doc.ancestors(id).find(n=>n.blend)?.id).filter(Boolean);if(!found.length)throw new Error('Select a blend.');return [...new Set(found)];};
     if(command==='blend-make')return()=>makeBlend(ids());
-    if(command==='blend-release')return()=>{const list=blends();apply('Release Blend',list.map(id=>updateNode(id,{blend:null})));select(list);};
-    if(command==='blend-reverse')return()=>{const list=blends();apply('Reverse Front to Back',list.flatMap(id=>doc.getNode(id).children.map(child=>moveNode(child.id,id,0))));select(list);};
+    // Release leaves the keys as a plain group; a spine comes back as an unpainted path on top, as in Illustrator.
+    if(command==='blend-release')return()=>{const list=blends();apply('Release Blend',list.flatMap(id=>{const spine=doc.getNode(id).blend.spine;
+      return [updateNode(id,{blend:null}),...(spine?[insertNode(id,createNode('path',{name:'Spine',subpaths:[spine],appearance:appearance(null,null)}))]:[])];}));select(list);};
+    // With a spine, reversing the stacking also reverses the spine, so the keys keep their places on it.
+    if(command==='blend-reverse')return()=>{const list=blends();apply('Reverse Front to Back',list.flatMap(id=>{const node=doc.getNode(id);
+      return [...node.children.map(child=>moveNode(child.id,id,0)),...(node.blend.spine?[updateNode(id,{blend:{...node.blend,spine:reverseSubpaths([node.blend.spine])[0]}})]:[])];}));select(list);};
+    if(command==='blend-replace-spine')return()=>replaceSpine(ids());
+    if(command==='blend-reverse-spine')return()=>reverseSpine(blends());
     if(command==='blend-options')return()=>void blendOptionsCommand();
     if(command==='blend-expand')return()=>{const list=blends(),hex=c=>c&&'#'+c.map(v=>Math.round(Math.min(1,Math.max(0,v))*255).toString(16).padStart(2,'0')).join('').toUpperCase();
       // The steps become paths between their keys; the group stays, as a plain group.
