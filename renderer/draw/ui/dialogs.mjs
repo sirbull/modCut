@@ -682,3 +682,16 @@ export function laserProcessesDialog(entries) {
     options:['Unresolved','Cut','Score','Engrave','Ignore'].filter(op=>!entry.raster||!['Cut','Score'].includes(op)).map(value=>({value,label:value}))
   }))}).then(values=>values&&entries.flatMap((entry,i)=>values[`process${i}`]==='Unresolved'?[]:[{key:entry.key,color:entry.color,raster:entry.raster,op:values[`process${i}`]}]));
 }
+
+/** Read-only diagnostics. Artwork names are text, never markup or translated UI. */
+export function laserIssuesDialog(issues) {
+  const result=openDrawModal({title:'Unresolved Laser Preview objects',submitLabel:'Close',className:'draw-laser-issues-dialog',fields:[]});
+  const form=document.querySelector('.draw-laser-issues-dialog form');
+  const list=document.createElement('ol');list.className='draw-laser-issues-list';
+  for(const issue of issues){
+    const row=document.createElement('li'),name=document.createElement('strong'),advice=document.createElement('p');
+    name.textContent=issue.name;name.setAttribute('translate','no');row.dataset.nodeId=issue.id;
+    advice.textContent=issue.advice;row.append(name,advice);list.append(row);
+  }
+  form.prepend(list);form.querySelector('[type=submit]').focus();return result;
+}

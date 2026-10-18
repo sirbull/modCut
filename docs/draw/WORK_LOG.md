@@ -2027,3 +2027,25 @@ ikke et sandbox-auto-review-avslag. Lokale commits bevares i en Git-bundle for o
 brukerens maskin. Bundle og importinstruksjoner leveres utenfor checkout; ingen force-push,
 reset eller overskriving av parallelle commits. Neste arbeid er stabilisering og uttrykkelig
 utvidelse av støttede preview-tilfeller, deretter øvrige funksjonshull. Engrave as seen er utsatt.
+
+
+## 2026-10-18: Videre stabilisering og forklaring av uavklarte objekter
+
+GitHub-integrasjonen er oppdatert av brukeren. Push av de seks leveransecommittene
+lyktes, og origin/feat/vector-draw er verifisert på b194897. Grenen var ren og oppdatert
+ved start av videre arbeid. Full Draw-E2E er startet for å avklare resten etter Character.
+
+Neste del forbedrer forklaringen av uavklart Laser Preview: en lesbar objektliste med årsak
+og råd om prosessvalg, effekter, avanserte streker, tekst eller rasterdithering. Listen er
+lesende og endrer ingen objekter eller prosessvalg. Nye tekster får bokmålsoversettelser.
+340 Draw-enhetstester, i18n og kontrast passerer. Målrettet Electron passerer med listen for
+manglende prosesser og effekter, uendret dokument/SVG, navn som tekst (og ikke markup),
+fokus på Close, lukking og normal appomstart. Skjermbildet er visuelt kontrollert.
+
+Full Draw-E2E passerte alle funksjonsgrupper, inkludert Character og ytelse, v3/v4-IO,
+autosave og faktisk krasjgjenoppretting. Etter dette feilet avsluttende Laser Preview med
+«DevTools connection closed while command 57 was pending». Ingen assertion er deaktivert
+og fullkjøringen rapporteres ikke som grønn. Neste trinn isolerer recovery→preview-overgangen.
+
+Planens foreldede «neste er fase 2» er erstattet med gjeldende prioritering. Dette trinnet
+committes og pushes før videre feilsøking, slik brukeren ba om.

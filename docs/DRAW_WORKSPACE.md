@@ -2,7 +2,7 @@
 
 **Ny agent:** Start med [overleveringen](draw/HANDOFF.md) for gjeldende stoppunkt, teststatus og lokale kjøreinstruksjoner.
 
-> Status: Fase 0 og fase 1 (D1.1 til D1.12) er fullført, inkludert Send til Cut v1, Place med Template og kontrollinjen. Neste er fase 2. Oppdatert oversikt og rekkefølge: [draw/STATUS.md](draw/STATUS.md).
+> Status: Fase 0–5 er gjennomført i grunnform. Laser Preview er implementert i første versjon; stabilisering og eksplisitte begrensninger prioriteres før øvrige funksjonshull. Oppdatert oversikt og rekkefølge: [draw/STATUS.md](draw/STATUS.md).
 > Sist oppdatert: 2026-10-15.
 > Målgruppe: utviklere og kodeagenter (Claude Code og Codex) som skal bygge løsningen.
 
@@ -371,6 +371,7 @@ Preview explanation** lar brukeren tilbakestille den. Nye tekster finnes på eng
 * [x] Ren visningspolicy og midlertidig renderprojeksjon uten endret output.
 * [x] Meny, knapp, tegnforklaring, prosessvalg og Outline-samspill.
 * [x] Forklaringsdialog, Cancel, varig brukerpreferanse, Help/Preferences og oversettelser.
+* [x] Stabilisering: objektvis forklaring av uavklart prosess/utseende, med råd og målrettet Electron-verifisering.
 * [x] Enhetstester og målrettet Electron med ekte piksler, musegest, uendret SVG/modell/historikk,
   prosessvalg, filåpning/fanebytte og ekte normal appomstart.
 * [ ] Full støtte for de utseendene som nå vises uavklart; spesifiseres som egne deloppgaver.

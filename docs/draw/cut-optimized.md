@@ -45,6 +45,13 @@ Skjult, Ignore og ikke-utskrivbart blir ikke vist som output; templates er dempe
 Outline og Laser Preview er gjensidig utelukkende. Av/på gjenoppretter tidligere Outline.
 Pixel Preview har ingen separat implementert visningsmodus i dagens app.
 
+## Forklaring av uavklarte objekter
+
+«Show unresolved objects» i tegnforklaringen åpner en lesende objektliste. Hvert objekt får
+råd ut fra årsaken: velg prosess, kontroller/ekspander utseende eller strek på en kopi, rett
+tekstutlegg/overløp eller kontroller rasterdithering i Cut. Navn fra dokumentet beholdes som
+tekst og oversettes ikke. Å åpne/lukke oversikten endrer ingen prosessvalg eller dokumentdata.
+
 ## Eksplisitte begrensninger
 
 - Dotted/ravfarget kontur eller dempet bilde betyr uavklart prosess eller utseende. Avanserte
@@ -67,7 +74,8 @@ også etter recovery i full Draw-E2E. Skjermbilde er visuelt kontrollert.
 Neste er stabilisering og utvidelse av de støttede tilfellene, med output-sammenligninger for
 hvert nytt tilfelle. Oppdater denne kontrakten, hovedplanen, STATUS og WORK_LOG fortløpende.
 
-Siste kontroll: 338 Draw-enhetstester og kontrast er grønne. Fullkjøringen passerte Java,
-bridge/main/renderer og hele Cut-E2E, men stoppet i en eldre Character-test som valgte en familie
-uten Bold. Dette er rettet, og målrettet Character-E2E er grønn. Resten av full Draw-E2E er ikke
-kjørt på nytt; målrettet Laser Preview-E2E med bilde, Outline-lag og omstart er grønn på siste kode.
+Siste kontroll: 340 Draw-enhetstester, i18n og kontrast er grønne. Målrettet Laser Preview-E2E
+passerer med den nye objektlisten, riktige råd, trygg tekstvisning av navn, uendret dokument/SVG
+og normal appomstart. Full Draw passerte alle funksjonsgrupper, autosave og krasjgjenoppretting,
+men feilet deretter i siste Laser Preview-del med lukket DevTools-forbindelse. Hele kjøringen
+er derfor fortsatt ikke grønn; denne overgangen isoleres i neste stabilisering.

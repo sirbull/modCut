@@ -19,7 +19,7 @@ Uavklarte prosesser/utseender merkes eksplisitt. Avanserte effekter/kompositter,
 og rasterdithering kan fortsatt kreve kontroll i Cut. «Engrave as seen», maskinbevegelser og
 materialresultat er ikke implementert som simulering. Se [kontrakt og restliste](cut-optimized.md).
 Plan/status/arbeidslogg er oppdatert ved hvert trinn; hver ferdige leveranse er committet på
-`feat/vector-draw`. Push ble avvist med HTTP 403; lokale commits må overføres før videre arbeid.
+`feat/vector-draw`. GitHub-tilgangen er rettet; alle tidligere leveransecommits er pushet og kontrollert på origin.
 
 ## 1. Kort oppsummert
 
@@ -990,7 +990,13 @@ Gjenstår i fase 5: AVIF-eksport (Chromium kan ikke kode AVIF fra lerret).
 
 ## 4. Rekkefølge videre
 
-Fase 1 er ferdig. Neste er fase 2, i denne rekkefølgen:
+Gjeldende prioritet etter brukerens valg:
+
+1. Stabilisere Laser Preview, fullføre samlet regresjonskontroll og gjøre uavklarte tilfeller forståelige.
+2. Utvide støttede preview-tilfeller med sammenligning mot faktisk Send to Cut-output.
+3. Øvrige funksjonshull i kapittel 2. «Engrave as seen» krever en egen output-endring.
+
+Rekkefølgen under beskriver gjennomføringen av grunnfasene og beholdes som historikk:
 
 SVG-, PNG- og JPEG-eksport er gjort (2.5).
 
@@ -1023,7 +1029,7 @@ SVG-, PNG- og JPEG-eksport er gjort (2.5).
   Fersk jitpack.io-nedlasting er fortsatt ikke verifisert.
 * Geometrikjernens worker har bare polygonal union; Pathfinder bruker Paper.js i hovedtråden.
 
-## Siste verifisering av Laser Preview (2026-10-18)
+## Forrige verifisering av Laser Preview (2026-10-18)
 
 338 Draw-enhetstester og kontrastkontrollen passerer på siste kode. 34 main-, 69 renderer- og
 28 Java-tester samt bridge passerte i fullkjøringen. Hele Cut-E2E passerte. Full Draw-E2E kom
@@ -1031,3 +1037,17 @@ forbi tekst på path og stoppet på Character-fontforutsetningen; rettingen er s
 Målrettet Laser Preview-E2E passerer på siste kode, inkludert bilde/Outline, virkelig musegest,
 filåpning/fanebytte, originaldokument/SVG og normal appomstart. Ingen claim om full grønn
 `npm test` eller ferdig støtte for alle avanserte utseender.
+
+
+## Siste stabilisering (2026-10-18)
+
+«Show unresolved objects» forklarer uavklarte objekter og gir råd per årsak. Listen er lesende;
+navn behandles som tekst og oversettes ikke. 340 Draw-enhetstester, i18n og kontrast passerer.
+Målrettet Laser Preview-E2E passerer med prosess-/effektråd, modell-/SVG-nøytralitet og normal
+appomstart. Skjermbildet er kontrollert.
+
+Den samlede Draw-kjøringen passerte alle funksjonsgrupper, inkludert Character, ytelse,
+lagring/autosave og faktisk krasjgjenoppretting. Den feilet deretter i avsluttende Laser Preview
+med «DevTools connection closed while command 57 was pending». Fullkjøringen er derfor ikke
+grønn. Neste stabilisering isolerer denne avslutningen; øvrige funksjonsgrupper trenger ikke
+blind omkjøring for å diagnostisere den.

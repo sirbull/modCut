@@ -32,6 +32,12 @@ export async function runDrawLaserPreviewWorkflows(client){
   await evaluate("document.querySelector('.draw-cut-preview-dialog form').requestSubmit()");
   await until(`(async()=>${active}.renderer.laserPreview)()`,'preview enabled');
   assert.equal(await evaluate(`(async()=>${active}.renderer.laserIntent('laser-0').status)()`),'unresolved');
+  // Diagnostics explain missing processes without changing artwork or interpreting names as HTML.
+  await evaluate("document.querySelector('.draw-laser-legend button').click()");
+  await until("!!document.querySelector('.draw-laser-issues-dialog')",'unresolved object details');
+  assert.equal(await evaluate("document.querySelectorAll('.draw-laser-issues-list li').length"),4);
+  assert.match(await evaluate("document.querySelector('.draw-laser-issues-list').textContent"),/Choose an operation in Laser processes/);
+  await evaluate("document.querySelector('.draw-laser-issues-dialog form').requestSubmit()");
   await evaluate(`(async()=>(${active}.handle('laser-preview')))()`);
   await evaluate(`(async()=>(${active}.handle('laser-preview')))()`);
   await until("!!document.querySelector('.draw-cut-preview-dialog')",'unchecked explanation repeats again');
@@ -57,6 +63,7 @@ export async function runDrawLaserPreviewWorkflows(client){
   const shot=await client.command('Page.captureScreenshot',{format:'png'});await writeFile('/tmp/modcut-laser-preview.png',Buffer.from(shot.data,'base64'));
   assert.ok(pixels.imageGray[0]>10&&pixels.imageGray[0]<245&&Math.max(...pixels.imageGray)-Math.min(...pixels.imageGray)<3,JSON.stringify(pixels));assert.equal(pixels.originalImage,'#ff0000');assert.equal(pixels.imageOpacity,.4);
   assert.equal(pixels.source,'#ff0000');assert.equal(pixels.document,true);assert.equal(pixels.history,true);assert.equal(pixels.dirty,true);assert.equal(pixels.svg,true);
+  assert.equal(await evaluate("!!document.querySelector('.draw-laser-legend button')"),false,'resolved objects need no diagnostics button');
   // A real drawing gesture remains live and commits exactly once while preview is on.
   const gesture=await evaluate(`(async()=>{const w=${active},b=w.state.document.data.artboards[0],r=w.scope.view.element.getBoundingClientRect(),point=(x,y)=>{const p=w.scope.view.projectToView(new w.scope.Point(x,y));return {x:r.x+p.x,y:r.y+p.y};};w.setTool('rectangle');return {start:point(b.x+112,b.y+55),end:point(b.x+127,b.y+70),entries:w.state.history.entries.length};})()`);
   const input=inputHelpers(client);await input.mouse('mousePressed',gesture.start,{buttons:1});await input.mouse('mouseMoved',gesture.end,{buttons:1});
@@ -64,6 +71,16 @@ export async function runDrawLaserPreviewWorkflows(client){
   await input.mouse('mouseReleased',gesture.end);
   assert.equal(await evaluate(`(async()=>${active}.state.history.entries.length)()`),gesture.entries+1,'one gesture, one undo step');
   await evaluate(`(async()=>{const w=${active};w.handle('undo');w.select([]);w.setTool('select');})()`);
+  await evaluate(`(async()=>{const w=${active},{updateNode}=await import('./draw/doc/commands.mjs'),n=w.state.document.getNode('laser-2');w.state.history.execute(updateNode(n.id,{name:'<img src=x onerror=alert(1)>',appearance:{...n.appearance,effects:[{type:'zigzag',size:1,ridges:4,points:'corner'}]}}));})()`);
+  await evaluate("document.querySelector('.draw-laser-legend button').click()");
+  await until("!!document.querySelector('.draw-laser-issues-dialog')",'effect details');
+  assert.match(await evaluate("document.querySelector('.draw-laser-issues-list').textContent"),/Expand the appearance on a copy/);
+  assert.equal(await evaluate("document.querySelector('.draw-laser-issues-list strong').textContent"),'<img src=x onerror=alert(1)>');
+  assert.equal(await evaluate("document.querySelector('.draw-laser-issues-list strong').getAttribute('translate')"),'no');
+  assert.equal(await evaluate("!!document.querySelector('.draw-laser-issues-list img')"),false);
+  const detailsShot=await client.command('Page.captureScreenshot',{format:'png'});await writeFile('/tmp/modcut-laser-issues.png',Buffer.from(detailsShot.data,'base64'));
+  await evaluate("document.querySelector('.draw-laser-issues-dialog [data-x=cancel]').click()");
+  await evaluate(`(async()=>${active}.handle('undo'))()`);
   await evaluate(`(async()=>(${active}.handle('outline')))()`);
   assert.deepEqual(await evaluate(`(async()=>{const w=${active};return [w.renderer.outline,w.renderer.laserPreview];})()`),[true,false]);
   await evaluate(`(async()=>(${active}.handle('laser-preview')))()`);
@@ -98,7 +115,7 @@ export async function runDrawLaserPreviewWorkflows(client){
   await evaluate(`(async()=>{const w=${active};w.handle('laser-preview');w.handle('laser-preview');})()`);
   // Process setup is an explicit Cut change; toggling alone was already proved document-neutral.
   await restoreTabs();
-  process.stdout.write('PASS Laser Preview: intro/cancel/suppression, actual Cut/Score/Engrave processes, red and black pixels, original styles/document/history/output, Outline restore and native menu\n');
+  process.stdout.write('PASS Laser Preview: intro/cancel/suppression, unresolved object guidance, actual Cut/Score/Engrave processes, red and black pixels, original styles/document/history/output, Outline restore and native menu\n');
 }
 
 export async function verifyLaserPreviewPreferences(client){

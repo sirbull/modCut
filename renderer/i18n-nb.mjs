@@ -2,6 +2,14 @@
 // value that is carried over. Product and workspace names (modCut, Cut, Draw) stay as they are.
 export const NB = Object.freeze({
   // Laser Preview
+  "Unresolved Laser Preview objects": "Uavklarte objekter i laserforhåndsvisningen",
+  "Show unresolved objects": "Vis uavklarte objekter",
+  "Choose an operation in Laser processes, then review its settings in Cut.": "Velg en operasjon i Laserprosesser, og kontroller deretter innstillingene i Cut.",
+  "Expand the appearance on a copy, or review this effect in Cut.": "Ekspander utseendet på en kopi, eller kontroller effekten i Cut.",
+  "Expand the stroke on a copy, or review its engraving in Cut.": "Ekspander streken på en kopi, eller kontroller graveringen i Cut.",
+  "Resolve missing fonts or text overflow before sending to Cut.": "Rett opp manglende fonter eller tekstoverløp før du sender til Cut.",
+  "Review image dithering in Cut. Laser Preview only supports Grayscale.": "Kontroller bildedithering i Cut. Laserforhåndsvisningen støtter bare Grayscale.",
+  "Review this object in Cut before running the job.": "Kontroller dette objektet i Cut før du kjører jobben.",
   "Score dashes are a display key, not gaps in the machine path.": "Stiplingen for Score er en tegnforklaring, ikke opphold i maskinens bane.",
   "Laser Preview": "Laserforhåndsvisning",
   "Laser processes": "Laserprosesser",

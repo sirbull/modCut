@@ -9,7 +9,7 @@ Layers, dragbar delelinje, panelgrupper som flyout med faner) trinn 2 (scrubby l
 (Layers-rader, søk, bunnlinje, thumbnails og Layer Options) og trinn 4 (Swatches og Recent Colors)
 er ferdige. Trinn 5 (Transparency) og Pathfinder-delen av trinn 7 er også ferdige. Appearance (resten av trinn 7) og trinn 8 (Properties) er også ferdige,
 så hele høyrepanel-planen er gjennomført. D1.10 (Group, Arrange, Lock/Hide, utklippstavle og
-isolasjonsmodus), D1.11 (Place med Template, STATUS.md 2.3) D1.12 (Send til Cut v1, STATUS.md 2.2) og D1.9 (kontrollinje, STATUS.md 2.4) er også ferdige. Fase 1 er ferdig; neste er fase 2 i rekkefølgen i STATUS.md kapittel 4. Autolagringstesten `project-workflows.mjs:113` har
+isolasjonsmodus), D1.11 (Place med Template, STATUS.md 2.3) D1.12 (Send til Cut v1, STATUS.md 2.2) og D1.9 (kontrollinje, STATUS.md 2.4) er også ferdige. Grunnfasene er gjennomført; gjeldende prioritet er Laser Preview-stabilisering i STATUS.md kapittel 4. Autolagringstesten `project-workflows.mjs:113` har
 vært ustabil på Linux, se arbeidsloggen.
 D1.8 (Transform, Align, Color, Stroke, Fill/Stroke-boks og Properties) ble fullført på
 `feat/vector-draw` og er slått inn her; panelene ligger nå i panelgruppene.
@@ -23,9 +23,12 @@ finnes. Målrettet Electron verifiserer piksler, musegest, eksport-/modellnøytr
 prosesser ved filåpning/fanebytte og normal appomstart. Visning av uavklarte prosesser og
 avanserte utseender er tilsiktet; ikke fjern disse markeringene for å få pene previews.
 «Engrave as seen» er fortsatt en separat planlagt output-endring, ikke del av visningen.
+«Show unresolved objects» er nå implementert og målrettet Electron-verifisert. Full Draw
+passerte alle funksjonsgrupper og recovery, men siste Laser Preview-del mistet DevTools-
+forbindelsen. Isoler denne overgangen som neste stabilisering; se siste STATUS/WORK_LOG.
 
-Ferdige trinn committes på `feat/vector-draw`. GitHub avviste push med 403 i denne økten;
-kontroller hva som faktisk finnes på origin før du fortsetter. Ikke overskriv parallelle commits.
+Ferdige trinn committes og pushes på `feat/vector-draw`. GitHub-tilgangen er rettet;
+`b194897` er pushet og kontrollert på origin. Hent før du fortsetter og bevar parallelle commits.
 
 ## Status og neste oppgave
 

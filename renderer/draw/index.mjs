@@ -38,7 +38,8 @@ import { DRAW_MODE_LABELS, insideTarget, nextDrawMode, placement } from './doc/d
 import { changePaint, changeStroke, paintHex } from './doc/paint.mjs';
 import { setWidthPoint, moveWidthPoint, removeWidthPoint, normalizeProfile } from './geom/width-profile.mjs';
 import { importArtwork, rasterAsset } from './import-artwork.mjs';
-import { cutPreviewIntroDialog,laserProcessesDialog,shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog,layerOptionsDialog,swatchOptionsDialog,sendToCutDialog,averageDialog,offsetDialog,simplifyDialog,pencilDialog,expandDialog,cropImageDialog,effectDialog,magicWandDialog,eraserDialog,transformEachDialog,splitGridDialog,saveSelectionDialog,editSelectionDialog,widthPointDialog,blendOptionsDialog,paintbrushDialog,blobBrushDialog,workspaceNameDialog,workspacesDialog } from './ui/dialogs.mjs';
+import { cutPreviewIntroDialog,laserProcessesDialog,laserIssuesDialog,shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog,layerOptionsDialog,swatchOptionsDialog,sendToCutDialog,averageDialog,offsetDialog,simplifyDialog,pencilDialog,expandDialog,cropImageDialog,effectDialog,magicWandDialog,eraserDialog,transformEachDialog,splitGridDialog,saveSelectionDialog,editSelectionDialog,widthPointDialog,blendOptionsDialog,paintbrushDialog,blobBrushDialog,workspaceNameDialog,workspacesDialog } from './ui/dialogs.mjs';
+import { laserPreviewIssues } from './view/laser-issues.mjs';
 import { shortcutsDialog } from './ui/shortcuts-dialog.mjs';
 import { ESSENTIALS, applyWorkspace, captureWorkspace, deleteWorkspace, loadWorkspaces, saveWorkspace } from './ui/workspaces.mjs';
 import { ALL_ARTBOARDS, artboardCutSvg } from './io/cut-svg.mjs';
@@ -109,11 +110,18 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     withScope(()=>renderer.setLaserPreview(enabled));shell.classList.toggle('draw-shell--laser-preview',enabled);
     laserButton.setAttribute('aria-pressed',String(enabled));processesButton.hidden=!enabled;processesButton.disabled=state.document.readOnly;laserLegend.hidden=!enabled;
     if(enabled){
-      const intents=state.document.descendants(null).map(n=>renderer.laserIntent(n.id));
-      const count=intents.filter(i=>i.status==='unresolved').length;
+      const issues=laserPreviewIssues(state.document,id=>renderer.laserIntent(id)),count=issues.length;
       laserLegend.replaceChildren();
       for(const [cls,text] of [['cut','Cut'],['score','Score'],['engrave','Engrave'],['unresolved','Unresolved']]){const span=document.createElement('span');span.className=`draw-laser-key draw-laser-key--${cls}`;span.textContent=text;laserLegend.append(span);}
       const note=document.createElement('span');note.textContent=count?'Unresolved objects: {count}'.replace('{count}',String(count)):'This tab’s Cut settings · Review final job in Cut';laserLegend.append(note);
+      if(count){
+        const details=document.createElement('button');details.type='button';details.className='btn btn--ghost btn--sm';details.textContent='Show unresolved objects';
+        details.addEventListener('click',async()=>{
+          if(destroyed||document.querySelector('.modal-overlay'))return;
+          const pending=laserIssuesDialog(laserPreviewIssues(state.document,id=>renderer.laserIntent(id)));
+          laserDialog=document.querySelector('.draw-laser-issues-dialog');await pending;laserDialog=null;
+        });laserLegend.append(details);
+      }
     }
     syncLaserMenu();
   }

@@ -50,6 +50,9 @@ the same commit that completes an item.
   engraving, controls, explicit process setup, remembered introduction and Electron checks.
   Advanced unresolved appearances and Engrave as seen remain separate follow-ups.
   See `docs/draw/cut-optimized.md` and DRAW_WORKSPACE 4.4.1.
+- [x] Laser Preview unresolved object details: per-object guidance, read-only dialog,
+  English/Bokmål, model-neutral Electron checks and app restart.
+- [ ] Resolve the final full-Draw E2E connection close after successful crash recovery.
 
 
 - [x] D0.1: Draw/Cut switch with an isolated canvas and PaperScope per tab,
