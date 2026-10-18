@@ -1946,3 +1946,17 @@ Prosessgrunnlaget er committet, og ekstern commit 84daced med introvindu og vide
 er bevart. Brukerens nyeste valg gjelder for D5.1: Laser Preview, røde Cut-linjer, stiplet
 rød Score, gråtonegravering, uavklarte prosesser og husket visningsvalg. «Engrave as seen»
 er fortsatt en separat, planlagt output-endring; forhåndsvisningen må ikke love at den finnes.
+
+## 2026-10-18: Laser Preview — visningsprojeksjon
+
+Implementert ren visningspolicy og midlertidig Paper-visningsprojeksjon: Cut rødt/heltrukket,
+Score rødt/stiplet, vektorgravering svart silhuett og bilder i gråtoner, hvite artboards.
+Originale view-stiler gjenopprettes med finally etter hver draw, også ved feil; eksport,
+modellen og trefftesting beholder originalene. Referanser dempes og skjulte/Ignore utelates.
+Effektkompositter og uverifisert raster-dithering merkes uavklart i stedet for å love output.
+
+Viktig funn: Cut bruker vektorens malte alfa-silhuett til gravering, ikke originalfargens
+mørkhet. Derfor er vektorgravering svart i denne modusen. «Engrave as seen» er ikke implementert.
+Ingen dybde eller fysisk brennstyrke loves av visningen. Seks nye tester dekker røde linjer,
+zoom, stiplemønster, svart silhuett, feilopprydding, referanser, Ignore og klippemasker.
+Meny/UI og dialog kobles i neste trinn; funksjonen er ennå ikke tilgjengelig for brukeren.
