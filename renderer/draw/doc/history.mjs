@@ -3,8 +3,8 @@ function composite(label, batch, mergeKey) {
   const nodeIds = [...new Set(batch.flatMap((item) => item.nodeIds || []))];
   return {
     label, nodeIds, mergeKey, batch,
-    do: (doc) => { for (const item of batch) item.do(doc); },
-    undo: (doc) => { for (const item of [...batch].reverse()) item.undo(doc); },
+    do: (doc) => doc.batch(() => { for (const item of batch) item.do(doc); }),
+    undo: (doc) => doc.batch(() => { for (const item of [...batch].reverse()) item.undo(doc); }),
     merge(next) {
       if (!mergeKey || next.mergeKey !== mergeKey || !next.batch || JSON.stringify([...next.nodeIds].sort()) !== JSON.stringify([...nodeIds].sort())) return null;
       return composite(next.label, [...batch, ...next.batch], mergeKey);
@@ -87,7 +87,7 @@ export class History {
     const outer = this.#transaction, batch = [], before = this.#doc.data;
     this.#transaction = batch;
     try {
-      const result = fn();
+      const result = this.#doc.batch(fn);
       if (result?.then) throw new TypeError('Transactions must be synchronous');
     } catch (error) { this.#doc._restore(before); throw error; }
     finally { this.#transaction = outer; }

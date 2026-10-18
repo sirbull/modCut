@@ -1,6 +1,6 @@
 import { parseSVG } from '../svgimport.js';
 import { createNode } from './doc/schema.mjs';
-import { insertNode, updateDocument, updateArtboard } from './doc/commands.mjs';
+import { insertNodes, updateDocument, updateArtboard } from './doc/commands.mjs';
 import { appearance } from './geometry.mjs';
 import { pointText, PT_TO_MM } from './doc/text.mjs';
 import { activeArtboard } from './doc/artboards.mjs';
@@ -188,7 +188,8 @@ export async function importArtwork(scope, state, prepared, name, layerId, { fit
     if (fitArtboard && dimensions?.width > 0 && dimensions?.height > 0) state.history.execute(updateArtboard(board.id,dimensions));
     if (Object.keys(assets).length) state.history.execute(updateDocument({ assets: { ...state.document.data.assets, ...assets } }));
     if (template) templateLayerCommands(state.document, layer ? layerId : state.document.data.layers.at(-1).id, { name, nodes }).commands.forEach(command => state.history.execute(command));
-    else for (const node of nodes) state.history.execute(insertNode(layerId,node));
+    // One edit for all of them: a large import walks the layer once.
+    else state.history.execute(insertNodes(nodes.map(node => [layerId,node])));
   });
   return { ids: nodes.map(node => node.id), warning };
 }

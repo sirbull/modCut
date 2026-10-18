@@ -756,8 +756,9 @@ Tiltak:
   `selectedIds` var kubisk.
 
 Gjenstår i D4.6: full tegning av 200 000 ankre er ca 45 ms (ca 22 bilder/s) og ikke 50 bilder/s; under panorering
-brukes derfor forrige bilde. Å sette inn tusenvis av objekter i én transaksjon er fortsatt kvadratisk (én kommando per objekt);
-import og lim inn bør bruke `insertNodes`. Gjenopprettingskopien (JSON av hele dokumentet) tar ca 150 ms etter
+brukes derfor forrige bilde. Innsetting av tusenvis av objekter er forbedret (se WORK_LOG «Innsetting av mange
+objekter»): en transaksjon validerer én gang, og import bruker `insertNodes`; 5 000 enkeltinnsettinger tar ca 5,6 s
+(før 12,8 s). Gjenopprettingskopien (JSON av hele dokumentet) tar ca 150 ms etter
 en pause.
 
 ### 2.34 Fase 5, del A: PLT- og GIF-eksport og Package (2026-10-18)
@@ -902,7 +903,7 @@ Gjenstår i fase 5: AVIF-eksport (Chromium kan ikke kode AVIF fra lerret).
 | D4.3 Warp, Live Pathfinder, opacity masks | Ferdig i grunnform (2.30); Rasterize og Envelope gjenstår |
 | D4.4 Paintbrush og Blob Brush | Ferdig i grunnform (2.31); art-, scatter- og pattern-pensler gjenstår |
 | D4.5 EPS/TIFF, Graphic Styles, Navigator, Rotate View, Asset Export | Ferdig i grunnform (2.32) |
-| D4.6 Ytelsespass | Gjort (2.33); innsetting av tusenvis i én transaksjon gjenstår |
+| D4.6 Ytelsespass | Gjort (2.33); innsetting av tusenvis forbedret (5,6 s for 5 000 enkeltvis) |
 | Fase 5 | Del A (2.34) PLT, GIF, Package del B (2.35) hurtigtaster, Glyphs, Scribble, del C (2.36) Touch Type, Vertical Type og del D (2.37) PDF/X-4, EPS-import, del E (2.38) MCP-server og del F (2.39) lokalisering; bare AVIF gjenstår |
 
 ## 4. Rekkefølge videre
@@ -922,7 +923,7 @@ SVG-, PNG- og JPEG-eksport er gjort (2.5).
    gjort. Fra D2.1 er skalering, baseline shift, kerning, avsnitt og blandede stiler gjort (2.11).
 6. Fase 3: D3.1 Expand og Expand Appearance (2.20) og D3.5 Select-meny, Magic Wand og Lasso (2.21) er gjort.
    D3.4 Shape Builder, Knife og Eraser (2.22) og D3.6 Free Transform, Transform Each og Split Into Grid
-   (2.23) er også gjort, og D3.2 effekter (2.24), D3.8 (2.25), D3.3 Image Trace (2.26) og D3.7 AI-eksport (2.27). Fase 3 er ferdig i grunnform. Fase 4: D4.1 Width (2.28), D4.2 Blend (2.29) D4.3 Warp, Live Pathfinder og opacity masks (2.30) D4.4 Paintbrush og Blob Brush (2.31) og D4.5 TIFF, Graphic Styles, Navigator, Rotate View, Asset Export og arbeidsområder (2.32) og D4.6 ytelsespass (2.33) er gjort. Fase 4 er ferdig i grunnform. Fase 5 del A (2.34) til del F (2.39) er gjort; fase 5 er ferdig i grunnform (AVIF venter på støtte i Chromium). **Neste: hullene listet under hver del i kapittel 2, for eksempel innsetting av tusenvis av objekter, spine for blends, Rasterize-effekt og Envelope.**
+   (2.23) er også gjort, og D3.2 effekter (2.24), D3.8 (2.25), D3.3 Image Trace (2.26) og D3.7 AI-eksport (2.27). Fase 3 er ferdig i grunnform. Fase 4: D4.1 Width (2.28), D4.2 Blend (2.29) D4.3 Warp, Live Pathfinder og opacity masks (2.30) D4.4 Paintbrush og Blob Brush (2.31) og D4.5 TIFF, Graphic Styles, Navigator, Rotate View, Asset Export og arbeidsområder (2.32) og D4.6 ytelsespass (2.33) er gjort. Fase 4 er ferdig i grunnform. Fase 5 del A (2.34) til del F (2.39) er gjort; fase 5 er ferdig i grunnform (AVIF venter på støtte i Chromium). **Neste: hullene listet under hver del i kapittel 2, for eksempel spine for blends, Rasterize-effekt og Envelope.**
 
 
 ## 5. Kjente begrensninger og risiko

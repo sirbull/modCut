@@ -3,6 +3,8 @@ import { findNode } from './document.mjs';
 
 const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const isObject = (value) => value !== null && typeof value === 'object';
+// A node copied once and frozen can be placed in the document as it is, and placed again on redo.
+const frozenCopy = (value) => { const deep = (v) => { if (isObject(v) && !Object.isFrozen(v)) { Object.values(v).forEach(deep); Object.freeze(v); } return v; }; return deep(structuredClone(value)); };
 /** Patches between two snapshots; shared (identical) objects are skipped, so only edited paths are walked. */
 function differences(before, after, path = [], result = []) {
   if (before === after) return result;
@@ -71,11 +73,11 @@ function editable(data, id) {
   }
 }
 export function insertNode(parentId, node, index) {
-  const copy = structuredClone(node);
+  const copy = frozenCopy(node);
   return new EditCommand('Insert', (data) => {
     if (parentId !== null) editable(data, parentId);
     const list = children(data, parentId);
-    list.splice(indexAt(index, list.length), 0, structuredClone(copy));
+    list.splice(indexAt(index, list.length), 0, copy);
   }, { nodeIds: [node.id, parentId].filter(Boolean) });
 }
 export function removeNode(id) {
@@ -114,12 +116,12 @@ export function updateNodes(entries, { label = 'Edit', mergeKey = null } = {}) {
 }
 /** Several inserts as one edit: `[[parentId, node, index], ...]`, applied in order. */
 export function insertNodes(entries) {
-  const copies = entries.map(([parentId, node, index]) => [parentId, structuredClone(node), index]);
+  const copies = entries.map(([parentId, node, index]) => [parentId, frozenCopy(node), index]);
   return new EditCommand('Insert', (data) => {
     for (const [parentId, copy, index] of copies) {
       if (parentId !== null) editable(data, parentId);
       const list = children(data, parentId);
-      list.splice(indexAt(index, list.length), 0, structuredClone(copy));
+      list.splice(indexAt(index, list.length), 0, copy);
     }
   }, { nodeIds: copies.flatMap(([parentId, node]) => [node.id, parentId]).filter(Boolean) });
 }

@@ -19,6 +19,7 @@ export class DrawDocument {
   #data;
   #index;
   #readOnly;
+  #batching = 0;
   constructor(data = createDocument(), { readOnly = false } = {}) {
     this.#readOnly = readOnly;
     this._restore(data);
@@ -47,6 +48,25 @@ export class DrawDocument {
     return !!node && [node, ...this.ancestors(id)].every((item) => item.visible && !item.locked);
   }
   /**
+   * Many edits validated once (D4.6): inside `fn`, edits are published and indexed as usual but the document is
+   * checked only at the end. If that check fails, the document goes back to how it was and the error is thrown,
+   * as a failed transaction does. Nested batches are checked by the outermost one.
+   */
+  batch(fn) {
+    const before = this.#data;
+    this.#batching++;
+    let result;
+    try { result = fn(); }
+    finally { this.#batching--; }
+    if (!this.#batching && this.#data !== before) {
+      try { assertDocument(this.#data, { trusted: validNodes }); }
+      catch (error) { this._restore(before); throw error; }
+      const mark = (nodes) => { for (const node of nodes) { if (validNodes.has(node)) continue; validNodes.add(node); mark(node.children ?? []); } };
+      mark(this.#data.layers);
+    }
+    return result;
+  }
+  /**
    * Internal command boundary: the edit works on a copy-on-write draft, so only the changed paths are new
    * objects, and the candidate is validated (untouched nodes were validated before) before it is published.
    */
@@ -60,14 +80,17 @@ export class DrawDocument {
   }
   /** `owned`: a finished draft (new objects around shared, frozen ones); a frozen snapshot needs no copy either. */
   _restore(data, { owned = false, previous = null } = {}) {
-    assertDocument(data, { trusted: validNodes });
+    // In a batch, new nodes are checked (and then trusted) when the batch ends.
+    const batching = this.#batching > 0 && owned, trust = batching ? () => {} : (node) => validNodes.add(node);
+    if (!batching) assertDocument(data, { trusted: validNodes });
     const next = freeze(owned || Object.isFrozen(data) ? data : structuredClone(data));
-    const index = previous && previous === this.#data ? new Map(this.#index) : new Map();
+    // After an edit the published index is updated in place: validation has passed, so nothing below throws.
+    const index = previous && previous === this.#data ? this.#index : new Map();
     function visit(nodes, parentId, path) {
       nodes.forEach((node, i) => {
         const nodePath = [...path, i];
         index.set(node.id, Object.freeze({ node, parentId, index: i, path: Object.freeze(nodePath) }));
-        validNodes.add(node);
+        trust(node);
         visit(node.children || [], node.id, [...nodePath, 'children']);
       });
     }
@@ -78,19 +101,26 @@ export class DrawDocument {
       const forget = (node, path) => { removed.push([node.id, path]); (node.children ?? []).forEach((c, i) => forget(c, `${path}.children.${i}`)); };
       const walk = (before, after, parentId, path) => {
         if (before === after) return;
-        const kept = new Set(after);
-        before.forEach((node, i) => { if (!kept.has(node) && !(after[i]?.id === node.id)) forget(node, `${path.join('.')}.${i}`); });
+        // Only the part between an unchanged start and an unchanged end can differ (an insert at the end of a
+        // long list compares references, then looks at one node).
+        let start = 0, endB = before.length, endA = after.length;
+        while (start < endB && start < endA && before[start] === after[start]) start++;
+        while (endB > start && endA > start && before[endB - 1] === after[endA - 1]) { endB--; endA--; }
+        const shifted = before.length !== after.length;
+        const kept = new Set(after.slice(start, endA));
+        for (let i = start; i < endB; i++) { const node = before[i]; if (!kept.has(node) && !(after[i]?.id === node.id)) forget(node, `${path.join('.')}.${i}`); }
         after.forEach((node, i) => {
+          if (i < start || (i >= endA && !shifted)) return;
           const old = before[i], nodePath = [...path, i];
           if (old === node) return;
           if (old?.id === node.id) {
-            index.set(node.id, Object.freeze({ node, parentId, index: i, path: Object.freeze(nodePath) })); validNodes.add(node);
+            index.set(node.id, Object.freeze({ node, parentId, index: i, path: Object.freeze(nodePath) })); trust(node);
             if (node.children || old.children) walk(old.children ?? [], node.children ?? [], node.id, [...nodePath, 'children']);
           } else visitAt(node, parentId, nodePath);
         });
       };
       const visitAt = (node, parentId, nodePath) => {
-        index.set(node.id, Object.freeze({ node, parentId, index: nodePath.at(-1), path: Object.freeze(nodePath) })); validNodes.add(node);
+        index.set(node.id, Object.freeze({ node, parentId, index: nodePath.at(-1), path: Object.freeze(nodePath) })); trust(node);
         visit(node.children || [], node.id, [...nodePath, 'children']);
       };
       walk(previous.layers, next.layers, null, ['layers']);

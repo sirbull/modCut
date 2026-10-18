@@ -1785,3 +1785,18 @@ i stedet for på toppnivå, tilkoblingskommandoen i Preferences viste porten fra
 « · » (panelgrupper) ble ikke oversatt, og attributter ble ikke satt tilbake til engelsk. Alt er rettet.
 
 Fase 5 er ferdig i grunnform. Neste: hullene i STATUS.md.
+
+
+## 2026-10-18: Innsetting av mange objekter (hull fra D4.6)
+
+- En transaksjon (og angre/gjør om av den) validerer dokumentet én gang til slutt (`DrawDocument.batch`); feiler
+  valideringen, rulles hele transaksjonen tilbake som før.
+- `insertNode`/`insertNodes` lager én frossen kopi og setter den inn direkte (før: to kopier per innsetting).
+- Indeksen oppdateres på stedet etter en redigering, og bare den delen av en barneliste som faktisk er endret,
+  gås gjennom.
+- Import setter inn alle objektene med én `insertNodes`.
+
+Målt i `--draw-perf` (5 000 baner, 200 000 ankre): innsetting 12,8 s til 5,6 s, angre 1,2 s til 0,7 s. Fortsatt
+lineært per innsetting i lange lister (kopien av listen), så tusenvis av enkeltinnsettinger er ikke gratis.
+Verifisering: 303 Draw-enhetstester (`document-batch`), `--draw-perf`.
+
