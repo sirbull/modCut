@@ -245,6 +245,21 @@ scrolling still pans. Tooltips default to a one-second hover delay and can be
 shown sooner, later or disabled. Unit and grid-spacing edits use **Save**.
 Exported preferences include these options and grid spacing.
 
+## Laser Preview in Draw
+
+Use **View → Laser Preview** or the **Laser Preview** button beside Outline while drawing.
+Solid red lines show Cut, dashed red lines distinguish Score, black shapes show vector
+engraving, and supported images show in grayscale. Score dashes are a visual key; they do
+not create gaps in the machine path. Normal colour view is the default; your last choice is remembered.
+
+**Laser processes** configures this tab's actual Cut/Score/Engrave/Ignore choices. Amber dotted
+outlines or faded images indicate an unresolved process or appearance. Effects, advanced
+composites and image dithering may need expansion or checking in Cut. Review the final machine,
+material, power and speed in Cut; the view does not predict burn depth or movement order.
+
+The first activation explains the view and offers **Don’t show this again**. Reopen the explanation
+from Help or reset it in Preferences. Toggling the view keeps the original artwork and exports.
+
 ## Commands
 
 | Command | Purpose |

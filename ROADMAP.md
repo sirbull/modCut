@@ -46,8 +46,9 @@ the same commit that completes an item.
 
 ## P3: Draw workspace (vector editor)
 
-- [ ] D5.1 Cut optimized: shared Cut process lookup implemented and unit tested;
-  view projection, menu, introduction dialog/preferences and Electron tests remain.
+- [x] D5.1 Laser Preview first version: shared process lookup, red Cut/dashed Score,
+  engraving, controls, explicit process setup, remembered introduction and Electron checks.
+  Advanced unresolved appearances and Engrave as seen remain separate follow-ups.
   See `docs/draw/cut-optimized.md` and DRAW_WORKSPACE 4.4.1.
 
 

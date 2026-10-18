@@ -4,19 +4,22 @@
 > Detaljer: [hovedplanen](../DRAW_WORKSPACE.md) (spesifikasjon og byggeplan),
 > [RIGHT_PANELS.md](RIGHT_PANELS.md) (høyresiden), [WORK_LOG.md](WORK_LOG.md) (hva som er gjort, dag for dag)
 > og [HANDOFF.md](HANDOFF.md) (overlevering til neste agent).
-> Sist oppdatert: 2026-10-17 (verktøy, D2.8 del A og B). Arbeidsgren: `feat/vector-draw` (Claude og Codex
+> Sist oppdatert: 2026-10-18 (Laser Preview). Arbeidsgren: `feat/vector-draw` (Claude og Codex
 > jobber begge der; hent alltid før du starter, og kjør `npm ci` ved endrede avhengigheter).
 
-## Nytt planlagt tillegg: D5.1 Cut optimized (2026-10-18)
+## D5.1 Laser Preview — første versjon implementert (2026-10-18)
 
-**Prosesskoblingen er implementert og enhetstestet; menyvalg, visning og dialog gjenstår.** Se
-[hovedplanen 4.4.1](../DRAW_WORKSPACE.md#441-cut-optimized--forhåndsvisning-mens-man-tegner-d51).
-View > Cut Optimized skal gi redigerbar svart-hvitt-visning av gravering og kutte-/scorebaner.
-En forklaring vises ved aktivering, med «Don’t show this again» som huskes per bruker.
-Første deltrinn er ferdig: ren Draw → Cut-prosesskobling med delte regler for prosesslag og
-fargeidentitet. Manglende prosessvalg er uavklart, og raster/vector skilles ved samme farge.
-Neste deltrinn er visningsprojeksjon, deretter meny/rendering, dialog/preferanse og Electron-kontroller. Originaldesign og output skal bevares.
-Fremdrift skal føres fortløpende i hovedplanens deloppgaver og WORK_LOG, også når bare en del er ferdig.
+**Tilgjengelig fra View og knappen ved Outline:** Cut rødt, Score stiplet rødt, vektorgravering
+svart og Grayscale-bilder i gråtoner. Tegning fortsetter mens visningen er på. Laser processes
+konfigurerer faktiske Cut-prosessvalg i samme fane, også før noe er sendt til Cut.
+Forklaringsdialog med «Ikke vis dette igjen», Help/Preferences og husket visningsvalg er koblet
+og verifisert gjennom normal appomstart. Selve togglen bevarer modell, historikk, dirty og SVG.
+
+Uavklarte prosesser/utseender merkes eksplisitt. Avanserte effekter/kompositter, graveringsstreker
+og rasterdithering kan fortsatt kreve kontroll i Cut. «Engrave as seen», maskinbevegelser og
+materialresultat er ikke implementert som simulering. Se [kontrakt og restliste](cut-optimized.md).
+Plan/status/arbeidslogg er oppdatert ved hvert trinn; hver ferdige leveranse er committet på
+`feat/vector-draw`. Push ble avvist med HTTP 403; lokale commits må overføres før videre arbeid.
 
 ## 1. Kort oppsummert
 
@@ -27,14 +30,11 @@ utklippstavle, isolasjonsmodus, kontrollinje og Place med Template. Et artboard 
 med **Send to Cut** (D1.12 v1), så det man tegner kan kuttes. Fase 1 er ferdig. SVG-, PNG- og
 JPEG-eksport, PDF/EPS/DXF-eksport, Export for Screens, punkttekst, rektangulær områdetekst, **tekst på path**,
 systemfonter, Google Fonts og **Create Outlines** finnes. Send to Cut gjør tekst til konturer automatisk
-uten å endre Draw-teksten. Image Trace og effekter gjenstår.
+uten å endre Draw-teksten. Image Trace, effekter og fase 4/5-funksjoner finnes i grunnform; se detaljene og restlisten nedenfor.
 
 
-**Neste oppgave (påbegynt 2026-10-18, ikke ferdig): Cut Preview og gravering som vist.** En av/på-bryter i
-View-menyen viser fyll i gråtoner og strøk som svarte hårlinjer, med et introvindu første gang og "Don't show
-this again". Send to Cut skal få valget "Engrave as seen" slik at blend modes og transparens påvirker
-graveringen. Bare introvinduet (`cutPreviewIntroDialog` i `ui/dialogs.mjs`) er laget. Detaljert plan og
-rekkefølge står i WORK_LOG.md under samme dato.
+**Neste:** stabilisering og de eksplisitte Laser Preview-begrensningene. «Engrave as seen»
+er en separat output-oppgave som fortsatt bare er planlagt.
 
 ## 2. Høyresiden sammenlignet med Illustrator
 
@@ -1017,6 +1017,17 @@ SVG-, PNG- og JPEG-eksport er gjort (2.5).
 * Color, Stroke og Swatches endrer første fyll og første strek når en figur har flere.
 * Autolagringstesten (`project-workflows.mjs:113`) er ustabil i skymiljøet; se WORK_LOG.
 * Oppdatert 2026-10-18: lokalt JDK 21 og cachet LibLaserCut lar sidecar/bridge passere.
-  Full `npm test` stopper i den tidligere dokumenterte crop-E2E-feilen (workflows.mjs:369).
-  Separate Send to Cut- og eksport-E2E passerer. Fersk jitpack.io-nedlasting er fortsatt ikke verifisert.
+  Siste `npm test` passerte hele Cut-E2E (inkludert crop og recovery), men stoppet i Character-testens
+  valg av familie uten Bold. Testforutsetningen er rettet og `--draw-character` passerer separat.
+  Full Draw-E2E etter dette punktet er ikke kjørt på nytt. Laser Preview-E2E passerer separat.
+  Fersk jitpack.io-nedlasting er fortsatt ikke verifisert.
 * Geometrikjernens worker har bare polygonal union; Pathfinder bruker Paper.js i hovedtråden.
+
+## Siste verifisering av Laser Preview (2026-10-18)
+
+338 Draw-enhetstester og kontrastkontrollen passerer på siste kode. 34 main-, 69 renderer- og
+28 Java-tester samt bridge passerte i fullkjøringen. Hele Cut-E2E passerte. Full Draw-E2E kom
+forbi tekst på path og stoppet på Character-fontforutsetningen; rettingen er separat verifisert.
+Målrettet Laser Preview-E2E passerer på siste kode, inkludert bilde/Outline, virkelig musegest,
+filåpning/fanebytte, originaldokument/SVG og normal appomstart. Ingen claim om full grønn
+`npm test` eller ferdig støtte for alle avanserte utseender.

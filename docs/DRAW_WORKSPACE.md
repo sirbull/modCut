@@ -334,59 +334,50 @@ interface GeometryKernel {
 
 ### 4.4.1 Cut optimized — forhåndsvisning mens man tegner (D5.1)
 
-**Status 2026-10-18: prosesskobling implementert og enhetstestet; visning og dialog gjenstår.** Brukerbestilt tillegg etter fase 5.
+**Status 2026-10-18: første versjon implementert som Laser Preview.** Navn og fargevalg er
+oppdatert etter brukerens godkjenning. Se [`draw/cut-optimized.md`](draw/cut-optimized.md)
+for kontrakt, verifisering og eksplisitte grenser.
 
-Draw får et avkrysbart menyvalg **View > Cut Optimized** (norsk: **Vis > Kuttoptimalisert**).
-Det slår visningen av og på uten å forlate Draw, slik at man kan tegne og redigere med en
-svart-hvitt-forhåndsvisning av gravering og kuttebaner. Standard er av. Aktiv modus vises
-tydelig i statuslinjen; samme menyvalg går tilbake til normal fargevisning.
+* **View > Laser Preview**, avkrysbart, og en synlig knapp ved Outline. Vanlig fargevisning
+  er standard for nye brukere; brukerens siste valg huskes mellom økter. Visningen er per fane.
+* Hvitt artboard; heltrukne røde, skjermfaste linjer for **Cut**, stiplede røde for **Score**,
+  svarte malte områder for **vektorgravering** og gråtonebilder for **Grayscale-gravering**.
+  Tegnforklaringen bruker både linjemønster og tekst, slik at farge ikke er eneste skille.
+* Cut bruker vektorens malte alfa-silhuett, ikke fyllfargens mørkhet. Forhåndsvisningen følger
+  dette. Den lover ikke graveringsdybde, materialresultat eller kjørerekkefølge.
+* Faktiske prosesslag fra **samme fanes Cut** bestemmer operasjonen. Fargen identifiserer
+  laget; den gjetter aldri Cut/Score/Engrave. **Laser processes** lar brukeren eksplisitt
+  konfigurere prosessvalgene. Dette endrer Cut-innstillingene og markerer prosjektet endret.
+  Eksplisitte Draw-prosessvalg beholdes også når Cut er tom, ved fanebytte og ved filåpning.
+* Uavklarte prosesser eller utseender vises med ravfarget prikkontur eller dempet bilde og
+  teller i tegnforklaringen. Første versjon merker avanserte kompositter, uekspanderte effekter,
+  avanserte graveringsstreker og rasterdithering uavklart. Ikke vis dette som en eksakt simulering.
+* Skjult, ikke-utskrivbart og Ignore blir ikke presentert som output. Template-lag er dempet
+  referanse. Tegning, redigering, markører og håndtak fortsetter å virke med visningen aktiv.
+* Selve av/på-valget endrer bare visning: modell, originalfarger, Cut-design, eksport,
+  dirty-status og historikk beholdes. Outline og Laser Preview utelukker hverandre; av/på
+  gjenoppretter forrige Outline-visning. Pixel Preview har ingen implementert separat modus her.
 
-* Hvit arbeidsflate; gravering vises som svart/hvitt eller gråtoner der raster/gråtonegravering
-  krever det. Kutte-/scorebaner vises som tydelige, tynne svarte senterlinjer. Skjermstore
-  banemarkeringer skal fortsatt være synlige ved zoom og ikke se ut som graverte flater.
-  En kort forklaring i visningen skiller gravert flate fra kutte-/scorebane.
-* Forhåndsvisningen skal bruke de samme reglene for utskrivbart innhold, tekstkonturer,
-  effekter, rasterbehandling og geometri som Send to Cut/Cut. Farger alene må ikke brukes
-  til å gjette Cut/Score/Engrave. Der prosessvalg mangler, vises det tydelig som uavklart;
-  implementasjonen må avklare hvordan aktive Cut-prosessprofiler kobles til Draw før den
-  lover en prosessriktig forhåndsvisning. Materiale, effekt og maskin påvirker faktisk resultat.
-* Template-/referanselag er fortsatt tilgjengelige som dempet tegnehjelp, tydelig adskilt
-  fra utskrivbart innhold. Skjulte og ikke-utskrivbare objekter blir ikke simulert som output.
-* Alle tegne- og redigeringsverktøy virker mens modusen er aktiv, med live oppdatering under
-  gester, tydelige markører, ankre og håndtak. Visningen er en renderinnstilling og endrer
-  ikke dokumentets farger, lag, geometri, eksport, Cut-tilstand, dirty-status eller angrehistorikk.
-* Aktiv visningsmodus er per fane/arbeidsøkt. Den er gjensidig utelukkende med Outline og
-  Pixel Preview; når den slås av, gjenopprettes den foregående visningsmodusen.
+**Forklaring:** Første aktivering åpner et tilgjengelig introvindu med **Continue**, **Cancel**
+og **Don’t show this again** / **Ikke vis dette igjen**. Continue aktiverer visningen; Cancel
+beholder forrige visning og lagrer ingen avkrysning. Uten avkrysning vises forklaringen igjen
+ved neste aktivering. Med avkrysning huskes valget per bruker, også etter normal appomstart.
+**Help > Laser Preview explained…** åpner forklaringen igjen, og **Preferences > Skip Laser
+Preview explanation** lar brukeren tilbakestille den. Nye tekster finnes på engelsk og bokmål.
 
-**Forklaring ved aktivering:** Første gang brukeren slår på modusen, åpnes en dialog som
-forklarer svart-hvitt-visningen, graverte flater, kutte-/scorebaner, uavklarte prosessvalg og
-at designets originalfarger og eksport beholdes. Dialogen sier også at dette er en
-forhåndsvisning; endelig prosess og jobb må kontrolleres i Cut. Den har **Continue** og
-**Cancel**, samt en avkrysningsboks **Don’t show this again** / **Ikke vis dette igjen**.
-Avkrysningen er av som standard. Continue aktiverer modusen; Cancel beholder forrige visning
-og lagrer ingen preferanse. Uten avkrysning vises forklaringen ved neste aktivering.
-Med avkrysning huskes valget per bruker på tvers av faner og omstarter, utenfor prosjektfilen.
-Forklaringen kan åpnes igjen fra Help og preferansen tilbakestilles i Preferences.
-All ny grensesnittekst får engelsk original og bokmålsoversettelse.
+**Fremdrift, første versjon:**
 
-**Avgrenset byggeplan og fremdrift:**
+* [x] Krav, prosesskobling og delte regler med Cut/Send to Cut.
+* [x] Ren visningspolicy og midlertidig renderprojeksjon uten endret output.
+* [x] Meny, knapp, tegnforklaring, prosessvalg og Outline-samspill.
+* [x] Forklaringsdialog, Cancel, varig brukerpreferanse, Help/Preferences og oversettelser.
+* [x] Enhetstester og målrettet Electron med ekte piksler, musegest, uendret SVG/modell/historikk,
+  prosessvalg, filåpning/fanebytte og ekte normal appomstart.
+* [ ] Full støtte for de utseendene som nå vises uavklart; spesifiseres som egne deloppgaver.
+* [ ] «Engrave as seen» som output-valg, full rasterprosess/DPI-simulering og bevegelsesrekkefølge.
 
-* [x] Krav, plassering, dialog og akseptansekriterier dokumentert (2026-10-18).
-* [x] Avklar og dokumenter koblingen fra Draw-objekter til Cut/Score/Engrave, inkludert
-  uavklarte objekter og hva visningen faktisk kan forutsi. Ren resolver og delte regler er
-  implementert; se [`draw/cut-optimized.md`](draw/cut-optimized.md). Ingen UI/renderkobling ennå.
-* [ ] Implementer ren visningsprojeksjon med gjenbruk av Cut-/eksportregler og tester for
-  vektorer, tekst, bilder, effekter, template-lag og uavklart prosess.
-* [ ] Legg til menyvalg, live renderintegrasjon, statusindikator og samspill med visningsmoduser.
-* [ ] Legg til forklaringsdialog, varig brukerpreferanse, gjenåpning og oversettelser.
-* [ ] Verifiser i Electron: av/på, første aktivering, Cancel, gjentatt dialog uten avkrysning,
-  «ikke vis igjen» etter omstart, tilbakestilling, fanebytte og tegning mens modusen er på.
-  Kontroller at dokument, undo/redo, eksport og Send to Cut er identiske før/etter toggling,
-  og sammenlign representative forhåndsvisninger med Cut.
-
-Oppdater denne sjekklisten, `docs/draw/STATUS.md` og `docs/draw/WORK_LOG.md` underveis ved
-hvert deltrinn, med gjennomført arbeid, faktisk kjørte kontroller og konkrete restpunkter.
-Oppgaven merkes ikke ferdig før både funksjonen og akseptansekontrollene er gjennomført.
+Plan, STATUS og WORK_LOG oppdateres ved hvert ferdige deltrinn, med faktisk kjørte kontroller
+og restpunkter. Ikke bruk ferdigmerking av første versjon som dokumentasjon for utsatte funksjoner.
 
 ### 4.5 Integrasjon med resten av modCut
 
@@ -1354,12 +1345,12 @@ Vertical Type, Touch Type, Glyphs-panel, Scribble, Package, PDF/X-4, bleed og me
 AVIF/GIF-eksport, PLT-eksport, EPS-import, egendefinerte hurtigtaster, modCut MCP-server,
 lokalisering (norsk/engelsk, samme system som resten av appen).
 
-### Påbegynt: Cut Preview og gravering som vist
+### Laser Preview og gravering som vist
 
-- [ ] View > Cut Preview: fyll i gråtoner slik de graveres, strøk som svarte hårlinjer der laseren kutter, av/på-knapp ved Outline.
-- [x] Introvindu første gang Cut Preview slås på, med "Don't show this again" (vinduet er laget, ikke koblet til ennå).
-- [ ] Send to Cut "Engrave as seen": blend modes og transparens flates ut til et graveringsbilde, strøkene sendes fortsatt som kutt.
-- [ ] Tester og dokumentasjon.
+Laser Preview er implementert i første versjon; se D5.1 i kapittel 4.4.1.
+«Engrave as seen» (å flate ut transparens/blending til graveringsbilder ved Send to Cut)
+er fortsatt planlagt, ikke implementert. Dette er en egen output-endring og skal ikke
+blandes sammen med den rene visningsmodusen.
 
 ### Planlagt senere: flere språk (ikke startet)
 
@@ -1483,7 +1474,7 @@ Arbeid videre på fellesgrenen feat/vector-draw; ikke opprett en ny gren for opp
 
 ## 23. Statussjekkliste
 
-* [ ] D5.1 Cut optimized — prosesskobling implementert/testet; rendering, UI/dialog og E2E gjenstår (4.4.1).
+* [x] D5.1 Laser Preview — første versjon implementert og målrettet verifisert; se grenser og oppfølging i 4.4.1.
 
 Oppdateres når oppgaven fullføres. Løpende arbeidslogg: [`draw/WORK_LOG.md`](draw/WORK_LOG.md).
 Oversikt over hva som er gjort og gjenstår, inkludert delvis ferdige oppgaver: [`draw/STATUS.md`](draw/STATUS.md).

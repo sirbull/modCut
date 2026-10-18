@@ -15,18 +15,21 @@ D1.8 (Transform, Align, Color, Stroke, Fill/Stroke-boks og Properties) ble fullf
 `feat/vector-draw` og er slått inn her; panelene ligger nå i panelgruppene.
 
 
-## Brukerbestilt tillegg 2026-10-18: Cut optimized
+## Laser Preview — første versjon implementert 2026-10-18
 
-D5.1 har **implementert og enhetstestet prosesskobling; visning og dialog er ikke implementert**. Les DRAW_WORKSPACE 4.4.1 og den nye delen øverst
-i STATUS. Modusen skal vise gravering og kuttebaner i svart-hvitt under redigering, med
-av/på-valg i View og forklaringsdialog med varig «Don’t show this again».
-Første deloppgave er fullført: se `cut-optimized.md`, `view/cut-process.mjs` og testene.
-Neste er visningsprojeksjon. Ikke tolk prosessoppslaget som ferdig renderstøtte. Dokumenter fremdrift
-underveis i deloppgavene, STATUS og WORK_LOG, med tydelig skille mellom gjort og gjenstående.
+Les `cut-optimized.md`, DRAW_WORKSPACE 4.4.1 og siste WORK_LOG. Meny/knapp, røde Cut-linjer,
+stiplet Score, gravering, faktisk prosessoppsett, introvindu, Help/Preferences og huskede valg
+finnes. Målrettet Electron verifiserer piksler, musegest, eksport-/modellnøytral visning,
+prosesser ved filåpning/fanebytte og normal appomstart. Visning av uavklarte prosesser og
+avanserte utseender er tilsiktet; ikke fjern disse markeringene for å få pene previews.
+«Engrave as seen» er fortsatt en separat planlagt output-endring, ikke del av visningen.
+
+Ferdige trinn committes på `feat/vector-draw`. GitHub avviste push med 403 i denne økten;
+kontroller hva som faktisk finnes på origin før du fortsetter. Ikke overskriv parallelle commits.
 
 ## Status og neste oppgave
 
-**Påbegynt, ikke ferdig: Cut Preview og gravering som vist** (se STATUS.md kapittel 1 og WORK_LOG.md 2026-10-18).
+**Laser Preview er implementert i første versjon. «Engrave as seen» er fortsatt planlagt.** Se siste WORK_LOG og cut-optimized.md.
 
 Fase 0 og fase 1 er fullført. Export As, **D2.1a/b punkttekst med systemfonter, shaping og
 Create Outlines** og **D2.1c rektangulær områdetekst med linjebryting** er ferdige.
@@ -251,3 +254,22 @@ Ikke kjør Electron-E2E samtidig. Skjermbilder skrives til `%TEMP%` (bl.a.
 markøren; markørgalleriet i feedback-testen gjør det. Ikke legg JDK, logger eller
 skjermbilder i repoet. Nye Tabler-ikoner hentes fra den låste pakken `@tabler/icons@3.49.0`
 (`npm pack`), kopieres med LF-linjeslutt og registreres med sha256 i `sources.json`.
+
+## Overføring til lokal maskin etter Laser Preview
+
+Ferdige kode-/stabiliseringstrinn er lokale commits 706a950, 9317e79, d4142c6 og 5d08ecd;
+6f6ad76 bevarer origin-commit 84daced fra den parallelle økten. GitHub avviste push med 403
+(«Permission to sirbull/modCut.git denied to sirbull»). Ikke anta at disse commitene ligger på origin.
+En selvstendig `modcut-feat-vector-draw.bundle` leveres utenfor repoet med hele branchhistorikken.
+Last ned denne og bruk følgende fra ditt eksisterende repo (endre filstien):
+
+```sh
+git status --short
+git fetch /path/to/modcut-feat-vector-draw.bundle feat/vector-draw
+git switch feat/vector-draw
+git merge FETCH_HEAD
+```
+
+Bevar/commit egne lokale endringer før merge, og bruk vanlig merge dersom lokal/origin-branch
+har egne nyere commits. Ingen reset/force-push trengs. Etter import kan du pushe med din vanlige
+lokale GitHub-tilgang. Se STATUS og WORK_LOG for faktisk teststatus og eksplisitte restpunkter.

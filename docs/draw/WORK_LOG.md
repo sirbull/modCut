@@ -2007,3 +2007,23 @@ fargebilde (gråtonepiksler, originale bildepiksler/opacity bevart), avbrutt nat
 per-fane-visning, filåpning og ekte normal appomstart. `--draw-character` passerer med rettet
 fontforutsetning. 21 målrettede enhetstester passerer etter siste kodejustering. Tegnforklaringen
 bruker korrekt lyst/mørkt surface-token; hvite miniatyrfelt holder linjetegnene lesbare.
+
+## 2026-10-18: Laser Preview — leveranse og faktisk teststatus
+
+Første versjon og stabilisering er committet trinnvis på feat/vector-draw. README, hovedplan,
+STATUS, kontrakt og HANDOFF beskriver den implementerte brukerflyten og hva som fortsatt er
+uavklart. Alle 338 Draw-tester og kontrastkontrollen passerer på siste kode. Fullkjøringen ga
+34 main-, 69 renderer-, 28 Java-tester, bridge og grønn Cut-E2E inkl. native close/recovery.
+Den stoppet ved Character-fontforutsetningen; denne er rettet og målrettet Character-E2E passerer.
+Resterende full Draw-E2E etter Character er ikke kjørt på nytt. Ingen tester er deaktivert.
+
+Siste målrettede Laser Preview-E2E er grønn: fargebildet vises i gråtoner mens originalpikslene
+og opacity beholdes, Outline-lag vises som output, native Cancel, ulike faners visning,
+filåpning/prosessvalg, ekte musegest og én history-commit, identisk dokument/SVG og normal
+appomstart med huskede valg. Skjermbildet er visuelt kontrollert.
+
+Push til origin ble forsøkt og avvist med HTTP 403; det er en faktisk GitHub-tilgangsfeil,
+ikke et sandbox-auto-review-avslag. Lokale commits bevares i en Git-bundle for overføring til
+brukerens maskin. Bundle og importinstruksjoner leveres utenfor checkout; ingen force-push,
+reset eller overskriving av parallelle commits. Neste arbeid er stabilisering og uttrykkelig
+utvidelse av støttede preview-tilfeller, deretter øvrige funksjonshull. Engrave as seen er utsatt.
