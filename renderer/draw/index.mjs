@@ -560,8 +560,8 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   async function addEffect(type,{ask=true,preset={}}={}){
     if(state.document.readOnly)return;
     // Drop Shadow also works on text; the vector effects change paths and shapes.
-    const kinds=EFFECTS[type].container?['group']:EFFECTS[type].raster?['path','shape','text']:['path','shape'],ids=selectedIds().filter(id=>kinds.includes(state.document.getNode(id)?.type)&&state.document.isEditable(id));
-    if(!ids.length)throw new Error(EFFECTS[type].container?'Group the objects first: Effect > Pathfinder works on a group.':type==='rasterize'?'Select paths, shapes or text to rasterize.':EFFECTS[type].pixels?'Select paths, shapes or text to add this effect to.':EFFECTS[type].raster?'Select paths, shapes or text to add a drop shadow to.':'Select paths or shapes to add an effect to.');
+    const kinds=EFFECTS[type].container?['group']:EFFECTS[type].raster?['path','shape','text','group']:['path','shape'],ids=selectedIds().filter(id=>kinds.includes(state.document.getNode(id)?.type)&&state.document.isEditable(id));
+    if(!ids.length)throw new Error(EFFECTS[type].container?'Group the objects first: Effect > Pathfinder works on a group.':type==='rasterize'?'Select paths, shapes, text or groups to rasterize.':EFFECTS[type].pixels?'Select paths, shapes, text or groups to add this effect to.':EFFECTS[type].raster?'Select paths, shapes, text or groups to add a drop shadow to.':'Select paths or shapes to add an effect to.');
     const last=state.ui.lastEffect?.type===type?state.ui.lastEffect:null;
     const values=ask?await effectDialog(type,{...EFFECTS[type].defaults,...last,...preset}):{...(last??EFFECTS[type].defaults),...preset};if(!values||destroyed)return;
     const e=effect(type,values);state.ui.lastEffect=e;

@@ -1857,4 +1857,5 @@ Verifisering: `envelope`-enhetstest (skjema), `--draw-warp-mask` (Arch løfter m
 - `rasterFor` lager pikslene med plass til spredning og bruker effektene i rekkefølge med lerretsfiltre.
 
 Verifisering: effekt-enhetstest, `--draw-effects` (rød glød utenfor, myk kant etter Gaussian Blur).
+- Grupper: Drop Shadow, Rasterize og pikseleffektene virker på hele gruppen (pikslene lages etter barna).
 

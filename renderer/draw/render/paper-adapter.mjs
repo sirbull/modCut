@@ -117,13 +117,16 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
    * resolution, white behind it or transparent, placed where it is. The object itself is hidden, not changed.
    */
   function rasterFor(item, node, record) {
-    const effects = pixelEffects(node);
-    if (!effects.length || !['path', 'shape', 'text'].includes(node.type)) return null;
+    // A group draws its drop shadow with its pixels too, since it has no outline of its own.
+    const effects = node.type === 'group' ? (node.appearance?.effects ?? []).filter(x => !x.hidden && (x.type === 'drop-shadow' || pixelEffects(node).includes(x))) : pixelEffects(node);
+    if (!effects.length || !['path', 'shape', 'text', 'group'].includes(node.type)) return null;
     const e = effects.filter(x => x.type === 'rasterize').at(-1) ?? { ppi: 0, background: 'transparent', padding: 0, antialias: true };
     // Room for blurs and glows to spread, plus any padding Rasterize asks for.
-    const spread = effects.reduce((sum, x) => sum + (x.type === 'outer-glow' ? x.blur * 2 : x.type === 'gaussian-blur' ? x.radius * 2 : 0), 0);
+    const spread = effects.reduce((sum, x) => sum + (x.type === 'outer-glow' ? x.blur * 2 : x.type === 'gaussian-blur' ? x.radius * 2 : x.type === 'drop-shadow' ? Math.max(Math.abs(x.x), Math.abs(x.y)) + x.blur * 2 : 0), 0);
     // Opacity is applied to the pixels as a whole afterwards, as for the object itself.
     const parts = [item, record.stack, record.arrows].filter(Boolean).map(part => { const copy = part.clone({ insert: false }); copy.visible = true; copy.opacity = 1; return copy; });
+    // In a group, children hidden only for this view (outside the viewport) are drawn; hidden ones stay hidden.
+    if (node.type === 'group') parts[0].getItems({ match: x => !!x.data.nodeId }).forEach(x => { const n = state.document.getNode(x.data.nodeId); x.visible = !!n?.visible && !coveredIds.has(n.id); });
     const art = new scope.Group({ insert: false, children: parts }), box = art.strokeBounds.expand(e.padding * 2 + spread * 2);
     if (!(box.width > 0 && box.height > 0)) { art.remove(); return null; }
     art.insertChild(0, new scope.Path.Rectangle({ rectangle: box, fillColor: new scope.Color(1, 1, 1, 0), insert: false }));
@@ -151,6 +154,12 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
       const mask = blurredAlpha(canvas, e.radius * ppmm / 2).getContext('2d').getImageData(0, 0, w, h).data, data = g.getImageData(0, 0, w, h);
       for (let i = 3; i < data.data.length; i += 4) data.data[i] = Math.round(data.data[i] * Math.max(0, Math.min(1, mask[i] / 255 * 2 - 1)));
       g.putImageData(data, 0, 0); return;
+    }
+    if (e.type === 'drop-shadow') {
+      const shade = document.createElement('canvas'); shade.width = w; shade.height = h;
+      const sg = shade.getContext('2d'); sg.drawImage(canvas, 0, 0); sg.globalCompositeOperation = 'source-in'; sg.fillStyle = e.color; sg.fillRect(0, 0, w, h);
+      const soft = blurredAlpha(shade, e.blur * ppmm / 2);
+      g.save(); g.globalAlpha = e.opacity; g.globalCompositeOperation = 'destination-over'; g.drawImage(soft, e.x * ppmm, e.y * ppmm); g.restore(); return;
     }
     if (e.type === 'outer-glow' || e.type === 'inner-glow') {
       const glow = document.createElement('canvas'); glow.width = w; glow.height = h;
@@ -570,7 +579,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
         record.arrows?.remove(); record.arrows = arrowGroup(item, node);
         record.stack?.remove(); record.stack = paintStack(item, node);
         record.shadow?.remove(); record.shadow = shadowFor(item, node);
-        record.raster?.remove(); record.raster = rasterFor(item, node, record);
+        if (node.type !== 'group') { record.raster?.remove(); record.raster = rasterFor(item, node, record); }
       }
       // Bounds must be measured before viewport visibility is applied.
       item.visible = node.visible;
@@ -585,6 +594,10 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
       if (node.type === 'group') {
         for (const child of node.children) coveredIds.delete(child.id);
         placeBlend(node, record); placeLivePathfinder(node, record, item); placeEnvelope(node, record, item); placeOpacityMask(node, record, item);
+        // Pixel effects on a group are drawn from its finished children, so they are made after them.
+        const pixelKey = JSON.stringify([node.appearance?.effects, node.children]);
+        if (record.groupPixelKey !== pixelKey) { record.groupPixelKey = pixelKey; record.raster?.remove(); record.raster = rasterFor(item, node, record); }
+        if (record.raster) record.raster.insertAbove(item);
       }
       // A clipping mask: the topmost child clips its siblings. Paper skips it when drawing and hit testing.
       if (node.type === 'group') {

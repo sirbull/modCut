@@ -580,7 +580,9 @@ Glow…. De tegner objektet som piksler (som Rasterize, i dokumentets oppløsnin
 rekkefølge; objektet beholder ankrene, og Send to Cut kutter banen. Kode: `pixelEffects` i `doc/effects.mjs`,
 `rasterFor` og `applyPixelEffect` i `render/paper-adapter.mjs`.
 
-Gjenstår i D3.2: Free Distort som effekt, effekter på grupper,
+Grupper kan få Drop Shadow, Rasterize og pikseleffektene; gruppen tegnes da som piksler laget av de ferdige barna.
+
+Gjenstår i D3.2: Free Distort som effekt, vektoreffekter (Roughen, Zig Zag og lignende) på grupper,
 og Preview i effektdialogene.
 
 ### 2.25 Document Info, Links, Crop Image og Edit in Draw (D3.8, 2026-10-17)
@@ -956,7 +958,7 @@ SVG-, PNG- og JPEG-eksport er gjort (2.5).
    gjort. Fra D2.1 er skalering, baseline shift, kerning, avsnitt og blandede stiler gjort (2.11).
 6. Fase 3: D3.1 Expand og Expand Appearance (2.20) og D3.5 Select-meny, Magic Wand og Lasso (2.21) er gjort.
    D3.4 Shape Builder, Knife og Eraser (2.22) og D3.6 Free Transform, Transform Each og Split Into Grid
-   (2.23) er også gjort, og D3.2 effekter (2.24), D3.8 (2.25), D3.3 Image Trace (2.26) og D3.7 AI-eksport (2.27). Fase 3 er ferdig i grunnform. Fase 4: D4.1 Width (2.28), D4.2 Blend (2.29) D4.3 Warp, Live Pathfinder og opacity masks (2.30) D4.4 Paintbrush og Blob Brush (2.31) og D4.5 TIFF, Graphic Styles, Navigator, Rotate View, Asset Export og arbeidsområder (2.32) og D4.6 ytelsespass (2.33) er gjort. Fase 4 er ferdig i grunnform. Fase 5 del A (2.34) til del F (2.39) er gjort; fase 5 er ferdig i grunnform (AVIF venter på støtte i Chromium). **Neste: hullene listet under hver del i kapittel 2, for eksempel Envelope med Mesh, tekst som blend-nøkkel og effekter på grupper.**
+   (2.23) er også gjort, og D3.2 effekter (2.24), D3.8 (2.25), D3.3 Image Trace (2.26) og D3.7 AI-eksport (2.27). Fase 3 er ferdig i grunnform. Fase 4: D4.1 Width (2.28), D4.2 Blend (2.29) D4.3 Warp, Live Pathfinder og opacity masks (2.30) D4.4 Paintbrush og Blob Brush (2.31) og D4.5 TIFF, Graphic Styles, Navigator, Rotate View, Asset Export og arbeidsområder (2.32) og D4.6 ytelsespass (2.33) er gjort. Fase 4 er ferdig i grunnform. Fase 5 del A (2.34) til del F (2.39) er gjort; fase 5 er ferdig i grunnform (AVIF venter på støtte i Chromium). **Neste: hullene listet under hver del i kapittel 2, for eksempel Envelope med Mesh, tekst som blend-nøkkel og vektoreffekter på grupper.**
 
 
 ## 5. Kjente begrensninger og risiko

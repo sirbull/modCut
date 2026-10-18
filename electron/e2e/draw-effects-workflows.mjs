@@ -94,6 +94,18 @@ export async function runDrawEffectWorkflows(client) {
   glow = await glowPixels();
   assert.ok(glow[2][0] > 40 || glow[2][1] > 40, `The inside edge is soft after Gaussian Blur: ${glow[2]}`);
   assert.equal(await evaluate(`(async()=>${active}.state.document.getNode('${glowing}').appearance.effects.map(e=>e.type).join())()`), 'outer-glow,gaussian-blur');
+  // Effects on a group: a drop shadow under two grouped squares, drawn from the whole group.
+  const grouped = await evaluate(`(async()=>{const w=${active},{createNode}=await import('./draw/doc/schema.mjs'),{insertNode}=await import('./draw/doc/commands.mjs'),{appearance}=await import('./draw/geometry.mjs');
+    const bd=w.state.document.data.artboards[0],L=w.state.document.data.layers[0].id,ids=[];
+    for(const x of [10,25]){const n=createNode('path',{subpaths:[{closed:true,segments:[[x,55],[x+10,55],[x+10,65],[x,65]].map(p=>({p:[bd.x+p[0],bd.y+p[1]],in:[0,0],out:[0,0]}))}],appearance:appearance('#0000FF',null)});w.state.history.execute(insertNode(L,n));ids.push(n.id);}
+    w.select(ids);w.handle('group');return w.state.selection.ids[0];})()`);
+  await evaluate(`(async()=>{${active}.handle('effect-drop-shadow')})()`); await dialog({ x: 3, y: 3, blur: 0, opacity: 100, color: '#ff0000' });
+  const groupShadow = await evaluate(`(async()=>{const w=${active},bd=w.state.document.data.artboards[0],item=w.renderer.items.get('${grouped}'),url=w.exportBoard(bd.id,'png',{ppi:144,background:'white'});
+    const img=new Image();img.src=url;await img.decode();const c=document.createElement('canvas');c.width=img.width;c.height=img.height;const g=c.getContext('2d');g.drawImage(img,0,0);
+    return {raster:!!item.nextSibling?.data?.rasterEffect,shadow:[...g.getImageData(Math.round(37/25.4*144),Math.round(66/25.4*144),1,1).data],square:[...g.getImageData(Math.round(30/25.4*144),Math.round(60/25.4*144),1,1).data]}})()`);
+  assert.equal(groupShadow.raster, true, 'The group is drawn as pixels with its shadow');
+  assert.ok(groupShadow.shadow[0] > 200 && groupShadow.shadow[2] < 80, `Red shadow beside the second square: ${groupShadow.shadow}`);
+  assert.ok(groupShadow.square[2] > 200 && groupShadow.square[0] < 60, `Blue square on top: ${groupShadow.square}`);
   await restore();
-  console.log('PASS Draw effects: Rasterize (pixels at the chosen ppi, anchors kept, image in SVG), Outer Glow and Gaussian Blur, Round Corners, Offset Path and Transform as live effects (menu and commands, one undo step each), hide and delete in Appearance, Send to Cut and Apply Last Effect use them, Expand Appearance bakes them; Zig Zag, and Drop Shadow on canvas and in PNG');
+  console.log('PASS Draw effects: Rasterize (pixels at the chosen ppi, anchors kept, image in SVG), Outer Glow and Gaussian Blur, a drop shadow on a group, Round Corners, Offset Path and Transform as live effects (menu and commands, one undo step each), hide and delete in Appearance, Send to Cut and Apply Last Effect use them, Expand Appearance bakes them; Zig Zag, and Drop Shadow on canvas and in PNG');
 }
