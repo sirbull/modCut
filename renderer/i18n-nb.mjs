@@ -46,6 +46,7 @@ export const NB = Object.freeze({
   "Select paths, shapes, text or groups to rasterize.": "Merk baner, former, tekst eller grupper du vil rasterisere.",
   "Select paths, shapes, text or groups to add this effect to.": "Merk baner, former, tekst eller grupper du vil gi denne effekten.",
   "Select paths, shapes, text or groups to add a drop shadow to.": "Merk baner, former, tekst eller grupper du vil gi slagskygge.",
+  "Select paths, shapes or groups to add an effect to.": "Merk baner, former eller grupper du vil gi en effekt.",
   "Rasterize…": "Rasteriser…", "Rasterize": "Rasteriser", "Use Document Raster Effects Resolution": "Bruk dokumentets oppløsning for rastereffekter",
   "Screen (72 ppi)": "Skjerm (72 ppi)", "Medium (150 ppi)": "Middels (150 ppi)", "High (300 ppi)": "Høy (300 ppi)", "Anti-aliasing": "Kantutjevning",
   "Add around object (mm)": "Legg til rundt objektet (mm)", "Select paths, shapes or text to rasterize.": "Merk baner, former eller tekst du vil rasterisere.",

@@ -47,7 +47,7 @@ import { createExportController } from './export-controller.mjs';
 import { layerOptionsPatch, templateLayerCommands, isOutputNode } from './doc/layers.mjs';
 import { compoundCommands, releaseCompoundCommands, clipCommands, releaseClipCommands } from './doc/compound.mjs';
 import { offsetPaths, flattenPath, outlineStroke, loadGeometry } from './geom/kernel-js.mjs';
-import { EFFECTS, LIVE_LABELS, effect, hasVectorEffects, livePathfinder } from './doc/effects.mjs';
+import { EFFECTS, LIVE_LABELS, effect, hasVectorEffects, livePathfinder, vectorEffects } from './doc/effects.mjs';
 import { cutSubpath } from './geom/path-commands.mjs';
 import { erasePath, smoothRange, sectionPoints } from './geom/path-eraser.mjs';
 import { bakeCorners } from './geom/corners.mjs';
@@ -560,8 +560,8 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   async function addEffect(type,{ask=true,preset={}}={}){
     if(state.document.readOnly)return;
     // Drop Shadow also works on text; the vector effects change paths and shapes.
-    const kinds=EFFECTS[type].container?['group']:EFFECTS[type].raster?['path','shape','text','group']:['path','shape'],ids=selectedIds().filter(id=>kinds.includes(state.document.getNode(id)?.type)&&state.document.isEditable(id));
-    if(!ids.length)throw new Error(EFFECTS[type].container?'Group the objects first: Effect > Pathfinder works on a group.':type==='rasterize'?'Select paths, shapes, text or groups to rasterize.':EFFECTS[type].pixels?'Select paths, shapes, text or groups to add this effect to.':EFFECTS[type].raster?'Select paths, shapes, text or groups to add a drop shadow to.':'Select paths or shapes to add an effect to.');
+    const kinds=EFFECTS[type].container?['group']:EFFECTS[type].raster?['path','shape','text','group']:['path','shape','group'],ids=selectedIds().filter(id=>kinds.includes(state.document.getNode(id)?.type)&&state.document.isEditable(id));
+    if(!ids.length)throw new Error(EFFECTS[type].container?'Group the objects first: Effect > Pathfinder works on a group.':type==='rasterize'?'Select paths, shapes, text or groups to rasterize.':EFFECTS[type].pixels?'Select paths, shapes, text or groups to add this effect to.':EFFECTS[type].raster?'Select paths, shapes, text or groups to add a drop shadow to.':'Select paths, shapes or groups to add an effect to.');
     const last=state.ui.lastEffect?.type===type?state.ui.lastEffect:null;
     const values=ask?await effectDialog(type,{...EFFECTS[type].defaults,...last,...preset}):{...(last??EFFECTS[type].defaults),...preset};if(!values||destroyed)return;
     const e=effect(type,values);state.ui.lastEffect=e;
@@ -1217,6 +1217,15 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
           return createNode('path',{name:'',subpaths:r.subpaths,fillRule:'nonzero',appearance:{...structuredClone(source.appearance),effects:[]},opacity:source.opacity,blendMode:source.blendMode});});
         const node=parts.length===1?{...parts[0],transform:[...group.transform],name:group.name}:createNode('group',{name:group.name,transform:[...group.transform],opacity:group.opacity,blendMode:group.blendMode,children:parts});
         state.history.execute(removeNode(id));state.history.execute(insertNode(parentId,node,index));made.push(node.id);}});select(made);};
+    // Expand Appearance on groups with vector effects: the paths and shapes inside get the effects as anchors.
+    const effectGroups=()=>editable().filter(id=>doc.getNode(id).type==='group'&&vectorEffects(doc.getNode(id)).length);
+    if(command==='expand-appearance'&&effectGroups().length)return()=>{const groups=effectGroups(),edits=[];
+      for(const id of groups)for(const n of doc.descendants(id))if(['path','shape'].includes(n.type)){const subpaths=withScope(()=>renderer.effectiveSubpaths(n.id));if(subpaths)edits.push({id:n.id,subpaths});}
+      run(()=>{state.history.transaction('Expand Appearance',()=>{
+        for(const {id,subpaths} of edits){const n=doc.getNode(id),effects=(n.appearance.effects??[]).filter(e=>!vectorEffects(n).includes(e));
+          const {shape,params,...rest}=n;void shape;void params;
+          state.history.execute(replaceLeaf(id,{...rest,type:'path',subpaths,fillRule:n.fillRule??'nonzero',transform:n.type==='shape'?[1,0,0,1,0,0]:n.transform,appearance:{...n.appearance,effects}}));}
+        for(const id of groups){const g=doc.getNode(id);state.history.execute(updateNode(id,{appearance:{...g.appearance,effects:g.appearance.effects.filter(e=>!vectorEffects(g).includes(e))}}));}});select(groups);});};
     if(command==='expand-appearance')return()=>expandSelection('Expand Appearance',editable().filter(id=>hasVectorEffects(doc.getNode(id))||visible(doc.getNode(id).appearance?.fills).length+visible(doc.getNode(id).appearance?.strokes).length>1),{fill:true,stroke:true},
       'Select objects with several fills or strokes, or a fill and a stroke.');
     if(command==='expand')return async()=>{

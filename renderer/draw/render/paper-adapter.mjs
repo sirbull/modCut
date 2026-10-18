@@ -11,7 +11,7 @@ import { arrowShapes } from '../geom/arrows.mjs';
 import { normalizeProfile, variableStrokeRings } from '../geom/width-profile.mjs';
 import { blendStepCount, matchShapes, interpolateShapes, stepPositions, lerpColor, spineCurve, placeOnSpine, keyPosition } from '../geom/blend.mjs';
 import { PT_TO_MM, textValues } from '../doc/text.mjs';
-import { applyVectorEffects, hasVectorEffects, dropShadow, livePathfinder, pixelEffects, scribbleOf } from '../doc/effects.mjs';
+import { applyVectorEffects, hasVectorEffects, dropShadow, livePathfinder, pixelEffects, scribbleOf, vectorEffects, withGroupEffects } from '../doc/effects.mjs';
 import { offsetPathsSync, geometryReady } from '../geom/kernel-js.mjs';
 import { toSubpaths, runPathfinder } from '../geom/pathfinder.mjs';
 import { textSubpaths } from '../doc/text-layout.mjs';
@@ -181,7 +181,8 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
   }
   /** Geometry after live effects, in the space `expandedShape` and a path's own subpaths use; null without effects. */
   function effectiveSubpaths(id) {
-    const node = state.document.getNode(id);
+    // The drawn node carries the effects of the groups around it.
+    const node = records.get(id)?.node ?? state.document.getNode(id);
     if (!node || !['path', 'shape'].includes(node.type) || !hasVectorEffects(node)) return null;
     const item = make(node);
     if (node.type === 'shape') item.transform(new scope.Matrix(...node.transform));
@@ -552,9 +553,19 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
   function place(parent, item, index) {
     if (parent.children[index] !== item) parent.insertChild(index, item);
   }
-  function reconcile(nodes, parent, alive, parentContext = ROOT_CONTEXT) {
+  // Paths and shapes in a group with vector effects are drawn with those effects too; the object kept per node
+  // and per inherited list keeps its cached keys while nothing changes.
+  const inheritedNodes = new WeakMap();
+  const effectiveNode = (node, inherited) => {
+    if (!inherited.length || !['path', 'shape'].includes(node.type)) return node;
+    const key = JSON.stringify(inherited), cached = inheritedNodes.get(node);
+    if (cached?.key === key) return cached.node;
+    const out = withGroupEffects(node, inherited); inheritedNodes.set(node, { key, node: out }); return out;
+  };
+  function reconcile(nodes, parent, alive, parentContext = ROOT_CONTEXT, inherited = []) {
     let index = 0;
-    for (const node of nodes) {
+    for (const original of nodes) {
+      const node = effectiveNode(original, inherited);
       alive.add(node.id);
       const geometry = geometryKey(node), context = layerContext(parentContext, node), fingerprint = `[${keysOf(node).own},${JSON.stringify(context)}]`;
       let record = records.get(node.id), item = items.get(node.id);
@@ -591,7 +602,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
       if (record.raster) place(parent, record.raster, index++);
       if (record.stack) place(parent, record.stack, index++);
       record.blendSteps?.forEach(g => g.remove()); record.maskView?.remove(); record.liveView?.remove(); record.envelopeView?.remove();
-      if (node.children) reconcile(node.children, item, alive, context);
+      if (node.children) reconcile(node.children, item, alive, context, node.type === 'group' ? [...vectorEffects(node), ...inherited] : inherited);
       if (node.type === 'group') {
         for (const child of node.children) coveredIds.delete(child.id);
         placeBlend(node, record); placeLivePathfinder(node, record, item); placeEnvelope(node, record, item); placeOpacityMask(node, record, item);

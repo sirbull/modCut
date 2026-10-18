@@ -1860,4 +1860,6 @@ Verifisering: effekt-enhetstest, `--draw-effects` (rød glød utenfor, myk kant 
 - Grupper: Drop Shadow, Rasterize og pikseleffektene virker på hele gruppen (pikslene lages etter barna).
 - Blend: tekst kan være nøkkel (glyfkonturene blendes). Ikke dekket av E2E ennå, fordi testmiljøet mangler de vanlige
   fontene; koden bruker samme vei som baner.
+- Vektoreffekter på grupper: barna arver gruppens vektoreffekter i tegning, eksport og Send to Cut; Expand Appearance
+  på gruppen baker dem inn. Verifisering: effekt-enhetstest, `--draw-effects` (Zig Zag på begge rutene, bakt inn).
 

@@ -106,6 +106,13 @@ export async function runDrawEffectWorkflows(client) {
   assert.equal(groupShadow.raster, true, 'The group is drawn as pixels with its shadow');
   assert.ok(groupShadow.shadow[0] > 200 && groupShadow.shadow[2] < 80, `Red shadow beside the second square: ${groupShadow.shadow}`);
   assert.ok(groupShadow.square[2] > 200 && groupShadow.square[0] < 60, `Blue square on top: ${groupShadow.square}`);
+  // Zig Zag on the group bends both squares (drawn and in Cut); Expand Appearance makes it their anchors.
+  await evaluate(`(async()=>{const w=${active};w.select(['${grouped}']);w.handle('effect-zig-zag')})()`); await dialog({ size: 1, ridges: 2 });
+  const zig = await evaluate(`(async()=>{const w=${active},kids=w.state.document.getNode('${grouped}').children;return kids.map(k=>w.renderer.items.get(k.id).segments.length)})()`);
+  assert.deepEqual(zig, [12, 12], 'Each square in the group gets the zig zag');
+  await evaluate(`(async()=>{const w=${active};w.select(['${grouped}']);w.handle('expand-appearance')})()`); await wait(80);
+  const bakedGroup = await evaluate(`(async()=>{const w=${active},g=w.state.document.getNode('${grouped}');return {effects:g.appearance.effects.map(e=>e.type),anchors:g.children.map(k=>k.subpaths[0].segments.length)}})()`);
+  assert.deepEqual(bakedGroup, { effects: ['drop-shadow'], anchors: [12, 12] }, 'The group keeps its shadow; the zig zag is now anchors');
   await restore();
-  console.log('PASS Draw effects: Rasterize (pixels at the chosen ppi, anchors kept, image in SVG), Outer Glow and Gaussian Blur, a drop shadow on a group, Round Corners, Offset Path and Transform as live effects (menu and commands, one undo step each), hide and delete in Appearance, Send to Cut and Apply Last Effect use them, Expand Appearance bakes them; Zig Zag, and Drop Shadow on canvas and in PNG');
+  console.log('PASS Draw effects: Rasterize (pixels at the chosen ppi, anchors kept, image in SVG), Outer Glow and Gaussian Blur, a drop shadow and Zig Zag on a group (Expand Appearance bakes it), Round Corners, Offset Path and Transform as live effects (menu and commands, one undo step each), hide and delete in Appearance, Send to Cut and Apply Last Effect use them, Expand Appearance bakes them; Zig Zag, and Drop Shadow on canvas and in PNG');
 }

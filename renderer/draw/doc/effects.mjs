@@ -61,6 +61,16 @@ export function effect(type, settings = {}) {
 /** Illustrator's names in Effect > Pathfinder. */
 export const LIVE_LABELS = Object.freeze({ unite: 'Add', intersect: 'Intersect', exclude: 'Exclude', minusFront: 'Subtract', minusBack: 'Minus Back', divide: 'Divide', trim: 'Trim', merge: 'Merge', crop: 'Crop', outline: 'Outline' });
 export const effectLabel = (e) => e.type === 'pathfinder' ? `Pathfinder: ${LIVE_LABELS[e.op] ?? e.op}` : e.type === 'warp' ? `Warp: ${WARP_STYLES[e.style] ?? e.style}` : EFFECTS[e.type]?.label ?? e.type;
+/** The visible vector effects of a node (those that change its geometry), in order. */
+export const vectorEffects = (node) => (node?.appearance?.effects ?? []).filter((e) => !e.hidden && EFFECTS[e.type] && !EFFECTS[e.type].raster && !EFFECTS[e.type].container);
+/**
+ * A path or shape with the vector effects of the groups around it added after its own (inner group first), as
+ * Illustrator applies a group's effects to what the group holds. `inherited` comes from the caller.
+ */
+export function withGroupEffects(node, inherited) {
+  if (!inherited?.length || !['path', 'shape'].includes(node?.type)) return node;
+  return { ...node, appearance: { ...node.appearance, effects: [...(node.appearance?.effects ?? []), ...inherited] } };
+}
 export const hasVectorEffects = (node) => (node.appearance?.effects ?? []).some((e) => !e.hidden && EFFECTS[e.type] && !EFFECTS[e.type].raster && !EFFECTS[e.type].container);
 /** The live Pathfinder operation of a group, or null. */
 export const livePathfinder = (node) => node?.type === 'group' ? (node.appearance?.effects ?? []).filter((e) => !e.hidden && e.type === 'pathfinder').at(-1)?.op ?? null : null;

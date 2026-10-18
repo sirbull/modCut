@@ -63,3 +63,13 @@ test('blur, feather and glows are pixel effects with their own checked settings,
   const node = { appearance: { effects: [effect('round-corners'), effect('outer-glow'), effect('gaussian-blur'), { ...effect('feather'), hidden: true }] } };
   assert.deepEqual(pixelEffects(node).map((e) => e.type), ['outer-glow', 'gaussian-blur']);
 });
+
+test('a group\'s vector effects follow an object\'s own, inner group first', async () => {
+  const { vectorEffects, withGroupEffects } = await import('../doc/effects.mjs');
+  const own = effect('round-corners'), inner = effect('roughen'), shadow = effect('drop-shadow');
+  const group = { type: 'group', appearance: { effects: [inner, shadow, { ...effect('twist'), hidden: true }] } };
+  assert.deepEqual(vectorEffects(group), [inner], 'Raster and hidden effects are not inherited');
+  const path = { type: 'path', appearance: { effects: [own] } };
+  assert.deepEqual(withGroupEffects(path, [inner, effect('zig-zag')]).appearance.effects.map((e) => e.type), ['round-corners', 'roughen', 'zig-zag']);
+  assert.equal(withGroupEffects(path, []), path); assert.equal(withGroupEffects({ type: 'text' }, [inner]).type, 'text');
+});
