@@ -24,7 +24,7 @@ import { createTransformController } from './tools/transforms.mjs';
 import { TRANSFORM_TOOLS, operationMatrix, dialogOperation, panelMatrix } from './geom/transforms.mjs';
 import { transformedBox } from './tools/selection.mjs';
 import { SHAPE_TOOLS, shapeFromDrag } from './tools/shapes.mjs';
-import { insertNode, moveNode, removeNode, replaceLeaf, updateNode, updateDocument } from './doc/commands.mjs';
+import { insertNode, moveNode, removeNode, replaceLeaf, revertTo, updateNode, updateDocument } from './doc/commands.mjs';
 import { BLEND_DEFAULTS, blendOptions, keyPosition, spineCurve } from './geom/blend.mjs';
 import { WARP_STYLES } from './geom/warp.mjs';
 import { BLOB_DEFAULTS, blobOptions, calligraphicProfile, paintbrushOptions } from './geom/brush.mjs';
@@ -997,6 +997,14 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
         }catch(error){if(!destroyed)onError(error.message);}});
       input.click();}),
     cutStatus,updateInCut:boardId=>sendToCut(boardId,{update:true}).catch(error=>{if(!destroyed)onError(error.message);}),
+    // Snapshots keep the document as it was (snapshots of the frozen data cost nothing) for this session.
+    historySnapshots:()=>state.ui.historySnapshots??[],
+    historySnapshot:()=>{const list=state.ui.historySnapshots??=[];list.push({id:createId(),name:`Snapshot ${list.length+1}`,data:state.document.data});refresh();},
+    historyRevert:id=>run(()=>{const snap=(state.ui.historySnapshots??[]).find(s=>s.id===id);if(!snap||state.document.readOnly||snap.data===state.document.data)return;
+      interactions.cancel();paths.finish();state.history.execute(revertTo(snap.data));select([]);}),
+    historyDeleteSnapshot:id=>{state.ui.historySnapshots=(state.ui.historySnapshots??[]).filter(s=>s.id!==id);refresh();},
+    /** Delete State: the current step and those after it go; the document goes back one step. */
+    historyDeleteState:()=>run(()=>{if(state.document.readOnly||!state.history.canUndo)return;interactions.cancel();paths.finish();state.history.undo();state.history.discardRedo();select(state.selection.ids);}),
     historyGoTo:index=>run(()=>{if(state.document.readOnly)return;interactions.cancel();paths.finish();
       const applied=()=>state.history.entries.filter(entry=>entry.applied).length;
       while(applied()>index&&state.history.undo());while(applied()<index&&state.history.redo());select(state.selection.ids);}),

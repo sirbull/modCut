@@ -39,3 +39,17 @@ test('an inserted node is a frozen copy: the caller keeps a node it can change',
   node.name = 'changed later';
   assert.equal(doc.getNode(node.id).name, 'mine'); assert.ok(Object.isFrozen(doc.getNode(node.id).subpaths[0].segments[0]));
 });
+
+test('a snapshot reverts the whole document in one undo step; Delete State drops the steps after', async () => {
+  const { revertTo } = await import('../doc/commands.mjs');
+  const { doc, history, layer } = setup(), a = square(0, 'a'), b = square(5, 'b');
+  history.execute(insertNode(layer, a));
+  const snapshot = doc.data;
+  history.execute(insertNode(layer, b)); history.execute(updateNode(a.id, { name: 'changed' }));
+  history.execute(revertTo(snapshot));
+  assert.equal(doc.getNode(b.id), null); assert.equal(doc.getNode(a.id).name, 'a'); assert.equal(doc.data.layers[0], snapshot.layers[0], 'Unchanged parts are the snapshot\'s own objects');
+  history.undo(); assert.equal(doc.getNode(a.id).name, 'changed'); assert.ok(doc.getNode(b.id));
+  history.undo(); history.undo();
+  assert.equal(history.discardRedo(), true); assert.equal(history.canRedo, false); assert.equal(history.entries.length, 1);
+  assert.equal(history.discardRedo(), false);
+});

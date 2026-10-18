@@ -178,6 +178,13 @@ export function reorderArtboard(id, index) {
     const [board] = data.artboards.splice(from,1); data.artboards.splice(index,0,board);
   }, {nodeIds:[id]});
 }
+/** History > snapshot: the whole document becomes `data` again (an earlier, frozen state), as one undo step. */
+export function revertTo(data, { label = 'Revert to Snapshot' } = {}) {
+  return new EditCommand(label, (draft) => {
+    for (const key of Object.keys(draft)) if (!Object.hasOwn(data, key)) delete draft[key];
+    for (const key of Object.keys(data)) draft[key] = data[key];
+  }, { nodeIds: [] });
+}
 export function updateDocument(properties, { label = 'Document Setup' } = {}) {
   const allowed = ['name', 'units', 'rasterEffectsPpi', 'colorMode', 'settings', 'swatches', 'swatchGroups', 'graphicStyles', 'assets', 'guides', 'cutLinks', 'exportAssets'];
   if (Object.keys(properties).some((key) => !allowed.includes(key))) throw new Error('Unsupported document property');

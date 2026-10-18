@@ -96,6 +96,12 @@ export class History {
     if (outer) outer.push(command);
     else this.#record(command);
   }
+  /** History > Delete State: the steps after the current one go (they can no longer be redone). */
+  discardRedo() {
+    if (this.#transaction) throw new Error('Cannot change history inside a transaction');
+    if (this.#cursor === this.#entries.length) return false;
+    this.#entries.splice(this.#cursor); this.#notify(); return true;
+  }
   markSaved() {
     this.captureSavepoint()();
   }

@@ -32,6 +32,19 @@ export async function runDrawHistoryInfoWorkflows(client) {
   await evaluate(`${panel}.querySelector('[data-draw-history="0"]').click()`);await wait(50);
   assert.equal(await applied(),0);assert.equal(await count(),0,'Open restores the document as opened');
   await evaluate(`${panel}.querySelector('[data-draw-history="${total}"]').click()`);await wait(50);assert.equal(await count(),3);
+  // New Snapshot keeps the three rectangles; after a delete, clicking the snapshot brings them back as one undo step.
+  await evaluate(`${panel}.querySelector('[data-draw-history-snapshot]').click()`);await wait(50);
+  assert.equal(await evaluate(`${panel}.querySelector('[data-draw-snapshot]')?.textContent`),'Snapshot 1');
+  await evaluate(`(async()=>{const w=${active},{removeNode}=await import('./draw/doc/commands.mjs');w.state.history.execute(removeNode(${JSON.stringify(ids[0])}))})()`);
+  assert.equal(await count(),2);
+  const beforeRevert=await applied();
+  await evaluate(`${panel}.querySelector('[data-draw-snapshot]').click()`);await wait(50);
+  assert.equal(await count(),3,'The snapshot brings the deleted rectangle back');assert.equal(await applied(),beforeRevert+1,'One undo step');
+  // Delete State: the current step goes and cannot be redone.
+  await evaluate(`${panel}.querySelector('[data-draw-history-delete]').click()`);await wait(50);
+  assert.equal(await count(),2);assert.equal(await evaluate(`(async()=>${active}.state.history.canRedo)()`),false,'The deleted state cannot be redone');
+  await evaluate(`${panel}.querySelector('[data-draw-snapshot-delete]').click()`);await wait(50);
+  assert.equal(await evaluate(`!!${panel}.querySelector('[data-draw-snapshot]')`),false,'The snapshot can be deleted');
 
   // Info (F8): selection bounds and paint, and the pointer position updating live.
   await evaluate(`(async()=>(${active}.select(['${ids[1]}'])))()`);await press('F8','F8');await wait(50);
@@ -68,5 +81,5 @@ export async function runDrawHistoryInfoWorkflows(client) {
   await evaluate("document.querySelector('.draw-command-search__input').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))");await wait(50);
   assert.equal(await evaluate(`${panel}.dataset.drawPanelBody`),'history','Panels open from the search');
   await evaluate(`(async()=>(${active}.handle('cancel')))()`);await restore();
-  console.log('PASS Draw history and info: History rows go back and forward (Open included), Info shows bounds, paint and the live pointer, command search runs commands, tools and panels');
+  console.log('PASS Draw history and info: History rows go back and forward (Open included), snapshots and Delete State, Info shows bounds, paint and the live pointer, command search runs commands, tools and panels');
 }

@@ -1864,3 +1864,11 @@ Verifisering: effekt-enhetstest, `--draw-effects` (rød glød utenfor, myk kant 
   på gruppen baker dem inn. Verifisering: effekt-enhetstest, `--draw-effects` (Zig Zag på begge rutene, bakt inn).
 - Free Distort som effekt (`free-distort`, hjørner i % av rammen). Verifisering: effekt-enhetstest, `--draw-effects`.
 
+
+## 2026-10-18: History-snapshots og Delete State (hull fra D2.9)
+
+- `revertTo(data)` (hele dokumentet tilbake som ett angresteg, med delte frosne objekter), `History.discardRedo()`,
+  og knappene New Snapshot og Delete State i History-panelet.
+
+Verifisering: `document-batch`-enhetstest, `--draw-history-info`.
+

@@ -1026,7 +1026,23 @@ export function createPanels(shell, state, api) {
       b.classList.toggle('is-undone',index > current); b.setAttribute('aria-current',String(index === current));
       b.addEventListener('click',() => api.historyGoTo(index)); item.append(b); list.append(item);
     });
+    // Snapshots above the steps: click one to return the document to it (one undo step).
+    const snaps = api.historySnapshots?.() ?? [];
+    if (snaps.length) {
+      const shots = document.createElement('ul'); shots.className = 'draw-history draw-history--snapshots'; shots.setAttribute('aria-label','Snapshots');
+      for (const snap of snaps) {
+        const item = document.createElement('li'), b = document.createElement('button'); b.type = 'button'; b.className = 'draw-history__step';
+        b.dataset.drawSnapshot = snap.id; b.textContent = snap.name; b.disabled = state.document.readOnly; b.addEventListener('click',() => api.historyRevert(snap.id));
+        const remove = iconButton(`Delete ${snap.name}`,'trash',() => api.historyDeleteSnapshot(snap.id)); remove.dataset.drawSnapshotDelete = snap.id;
+        item.append(b, remove); shots.append(item);
+      }
+      host.append(shots);
+    }
     host.append(list);
+    const actions = document.createElement('div'); actions.className = 'draw-panel__row';
+    const shot = button('New Snapshot',() => api.historySnapshot()); shot.dataset.drawHistorySnapshot = ''; shot.disabled = state.document.readOnly;
+    const drop = button('Delete State',() => api.historyDeleteState()); drop.dataset.drawHistoryDelete = ''; drop.disabled = state.document.readOnly || !current;
+    actions.append(shot, drop); host.append(actions);
     text(host,entries.length ? `${current} of ${entries.length} steps applied. Click a step to go back or forward to it.` : 'Edits appear here as you make them.');
     list.querySelector('[aria-current="true"]')?.scrollIntoView?.({ block: 'nearest' });
   }

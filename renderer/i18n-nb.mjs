@@ -50,6 +50,8 @@ export const NB = Object.freeze({
   "Free Distort…": "Fri forvrengning…", "Top left X (%)": "Øverst til venstre X (%)", "Top left Y (%)": "Øverst til venstre Y (%)",
   "Top right X (%)": "Øverst til høyre X (%)", "Top right Y (%)": "Øverst til høyre Y (%)", "Bottom right X (%)": "Nederst til høyre X (%)",
   "Bottom right Y (%)": "Nederst til høyre Y (%)", "Bottom left X (%)": "Nederst til venstre X (%)", "Bottom left Y (%)": "Nederst til venstre Y (%)",
+  "Snapshots": "Øyeblikksbilder", "New Snapshot": "Nytt øyeblikksbilde", "Delete State": "Slett trinn", "Snapshot {n}": "Øyeblikksbilde {n}",
+  "Revert to Snapshot": "Gå tilbake til øyeblikksbilde", "Cannot change history inside a transaction": "Kan ikke endre historikken inne i en transaksjon",
   "Rasterize…": "Rasteriser…", "Rasterize": "Rasteriser", "Use Document Raster Effects Resolution": "Bruk dokumentets oppløsning for rastereffekter",
   "Screen (72 ppi)": "Skjerm (72 ppi)", "Medium (150 ppi)": "Middels (150 ppi)", "High (300 ppi)": "Høy (300 ppi)", "Anti-aliasing": "Kantutjevning",
   "Add around object (mm)": "Legg til rundt objektet (mm)", "Select paths, shapes or text to rasterize.": "Merk baner, former eller tekst du vil rasterisere.",
