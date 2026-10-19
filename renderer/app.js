@@ -2402,6 +2402,7 @@ const drawKeyContext = (event) => ({ workspace: "draw",
   editable: !!event.target.closest?.("input, select, textarea, [contenteditable]:not([contenteditable=false]), [role=textbox]") });
 window.addEventListener("keydown", (event) => {
   if (document.body.dataset.workspace !== "draw") return;
+  activeTab()?.draw?.eyedropperModifiers(event);
   if (document.querySelector('.modal-overlay')) {drawKeymap.reset();return;}
   if (event.target.closest?.('.draw-context-menu')) {
     if (['ArrowDown','ArrowUp','Home','End','ArrowRight','ArrowLeft','Escape','Tab','Enter',' '].includes(event.key) && !event.ctrlKey && !event.metaKey && !event.altKey) return;
@@ -2413,7 +2414,7 @@ window.addEventListener("keydown", (event) => {
   drawKeymap.keydown(event, drawKeyContext(event));
 }, true);
 window.addEventListener("keyup", (event) => {
-  if (document.body.dataset.workspace === "draw") drawKeymap.keyup(event, drawKeyContext(event));
+  if (document.body.dataset.workspace === "draw") {activeTab()?.draw?.eyedropperModifiers(event);drawKeymap.keyup(event, drawKeyContext(event));}
 }, true);
 window.addEventListener("blur", () => drawKeymap.reset());
 

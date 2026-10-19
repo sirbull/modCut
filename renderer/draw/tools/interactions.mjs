@@ -4,17 +4,13 @@ import { CURSORS, RESIZE_CURSORS } from './cursors.mjs';
 import { resizeMatrix, rotationMatrix, transformedBox, snapTranslation } from './selection.mjs';
 import { activeArtboard } from '../doc/artboards.mjs';
 import { TRANSFORM_TOOLS,dragTransform,operationMatrix } from '../geom/transforms.mjs';
+import { createEyedropperPreview } from './eyedropper-preview.mjs';
 
 export function createInteractions(canvas, state, api) {
   const {scope,renderer,withScope,run}=api, controller=new AbortController(), events={signal:controller.signal};
   let gesture=null,preview=null;
   const point=event=>{const b=canvas.getBoundingClientRect();return scope.view.viewToProject(new scope.Point(event.clientX-b.left,event.clientY-b.top));};
-  /** The colour under the pointer on the canvas, for Shift+Eyedropper. */
-  function pixelHex(event) {
-    const box=canvas.getBoundingClientRect(),ratio=canvas.width/box.width,x=Math.floor((event.clientX-box.left)*ratio),y=Math.floor((event.clientY-box.top)*ratio);
-    const [r,g,b,a]=canvas.getContext('2d').getImageData(x,y,1,1).data;
-    return a?'#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('').toUpperCase():null;
-  }
+  const eyedropperPreview=createEyedropperPreview(canvas,{active:()=>api.tool()==='eyedropper',current:()=>state.ui[state.ui.paintFocus==='stroke'?'stroke':'fill']});
   // A screen movement in project units, turned back through Rotate View.
   const screenDelta=(dx,dy)=>new scope.Point(dx,dy).rotate(-scope.view.rotation).divide(scope.view.zoom);
   function clearPreview() {preview?.remove();preview=null;renderer.clearTransformPreview();state.ui.transformPreviewBox=null;}
@@ -224,7 +220,7 @@ export function createInteractions(canvas, state, api) {
     }
     if(tool==='eyedropper') {
       // Click: copy the clicked object's look to the selection (or to new objects). Alt: apply the selection's look to it. Shift: only the colour under the pointer.
-      if(event.shiftKey){api.run(()=>api.eyedropper({mode:'pixel',hex:pixelHex(event)}));return;}
+      if(event.shiftKey){api.run(()=>api.eyedropper({mode:'pixel',hex:eyedropperPreview.sample(event)}));return;}
       const hit=renderer.hit(p);if(!hit){api.notify?.('Click a path, shape or text to sample its appearance.');return;}
       api.run(()=>api.eyedropper({mode:event.altKey?'apply':'sample',hitId:hit}));return;
     }
@@ -389,7 +385,7 @@ export function createInteractions(canvas, state, api) {
     else {scope.view.center=scope.view.center.add(screenDelta(event.deltaX,event.deltaY));withScope(()=>renderer.updateView({viewOnly:true}));api.status();}
   },{...events,passive:false});
   window.addEventListener('blur',cancel,events);
-  return {cancel,busy:()=>!!gesture,
+  return {cancel,busy:()=>!!gesture,refreshEyedropper:eyedropperPreview.refresh,eyedropperModifiers:eyedropperPreview.modifiers,
     adjust(direction) {
       if(!direction || !gesture)return false;
       if(['polygon','star'].includes(gesture.tool))state.ui.points=Math.max(gesture.tool==='polygon'?3:2,Math.min(100,(state.ui.points || (gesture.tool==='polygon'?6:5))+direction));
@@ -397,6 +393,6 @@ export function createInteractions(canvas, state, api) {
       else return false;
       if(gesture.event)update(gesture.event);return true;
     },
-    destroy(){cancel();controller.abort();},
+    destroy(){cancel();controller.abort();eyedropperPreview.destroy();},
   };
 }

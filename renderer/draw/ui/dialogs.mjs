@@ -1,7 +1,7 @@
 import { openModal } from '../../ui.js';
 import { MAX_ARTBOARDS, newDrawDocument } from '../doc/artboards.mjs';
 import { DOCUMENT_PRESETS, PRESET_CATEGORIES, UNIT_LABELS, RESOLUTIONS, RECENT_KEY, TEMPLATES_KEY, toMm, fromMm, formatSize, normalizeSetup,
-  rememberRecent, removeTemplate, loadStoredList, storeList } from '../doc/presets.mjs';
+  rememberRecent, saveTemplate, removeTemplate, loadStoredList, storeList } from '../doc/presets.mjs';
 import { dialogOperation } from '../geom/transforms.mjs';
 import { NAMED_LAYER_COLORS, layerColorName } from '../doc/layers.mjs';
 import { enhanceNumberFields } from './number-field.mjs';
@@ -273,11 +273,19 @@ export function newDocumentDialog(bed,{machines=[],storage=globalThis.localStora
   const spacingInput=input(field('Spacing',arrangeRow),'spacing',{type:'number',min:'0',step:'any',value:'20',required:true});
   const error=make('p','draw-new-doc__error',details);error.setAttribute('role','alert');
   const actions=make('div','modal-actions draw-new-doc__actions',form);
+  const save=make('button','btn btn--secondary btn--sm draw-new-doc__save-template',actions,'Save as template');save.type='button';save.dataset.x='save-template';
   const cancel=make('button','btn btn--ghost btn--sm',actions,'Cancel');cancel.type='button';cancel.dataset.x='cancel';
   const create=make('button','btn btn--primary btn--sm',actions,editDocument?'Apply':'Create');create.type='submit';
 
   // Sizes live in millimetres; the inputs show them in the chosen unit.
-  const state={tab:recent.length?'recent':'templates',category:'laser',widthMm:bed.width,heightMm:bed.height,spacingMm:20,label:machineEntries[0]?.name??'Custom'};
+  const state={tab:recent.length?'recent':'templates',category:'laser',widthMm:bed.width,heightMm:bed.height,spacingMm:20,label:machineEntries[0]?.name??'Custom',orientation:null};
+  const oriented=entry=>{
+    if(!state.orientation)return entry;
+    const short=Math.min(entry.width,entry.height),long=Math.max(entry.width,entry.height);
+    return {...entry,width:state.orientation==='landscape'?long:short,height:state.orientation==='landscape'?short:long};
+  };
+  const currentSetup=()=>normalizeSetup({width:state.widthMm,height:state.heightMm,units:unitSelect.value,ppi:Number(ppiSelect.value),count:Number(countInput.value),
+    layout:layoutSelect.value,columns:Number(columnsInput.value),spacing:state.spacingMm});
   const showUnits=()=>{const unit=unitSelect.value;widthInput.value=fromMm(state.widthMm,unit);heightInput.value=fromMm(state.heightMm,unit);spacingInput.value=fromMm(state.spacingMm,unit);};
   const syncControls=()=>{
     const landscape=state.widthMm>state.heightMm;
@@ -288,6 +296,7 @@ export function newDocumentDialog(bed,{machines=[],storage=globalThis.localStora
     error.textContent='';
   };
   function apply(entry,id) {
+    entry=oriented(entry);
     state.widthMm=entry.width;state.heightMm=entry.height;state.label=entry.label??entry.name??'Custom';presetInput.value=id;
     unitSelect.value=entry.units??'mm';
     const ppi=entry.ppi??300;if(![...ppiSelect.options].some(o=>o.value===String(ppi)))ppiSelect.append(new Option(`${ppi} ppi`,String(ppi)));ppiSelect.value=String(ppi);
@@ -295,10 +304,11 @@ export function newDocumentDialog(bed,{machines=[],storage=globalThis.localStora
     showUnits();syncControls();
   }
   const preview=(parent,width,height)=>{const box=make('span','draw-preset-card__preview',parent),scale=1/Math.max(width,height);
-    const page=make('span','',box);page.style.width=`${Math.max(8,width*scale*100)}%`;page.style.height=`${Math.max(8,height*scale*100)}%`;};
-  function card(id,entry,name,detail,onRemove) {
+    const page=make('span','',box);page.style.width=`${width*scale*100}%`;page.style.height=`${height*scale*100}%`;};
+  function card(id,entry,name,onRemove) {
     const wrap=make('div','draw-preset-card',grid),button=make('button','draw-preset-card__select',wrap);button.type='button';button.dataset.preset=id;
-    preview(button,entry.width,entry.height);make('span','draw-preset-card__name',button,name);make('span','draw-preset-card__size',button,detail);
+    const shown=oriented(entry);
+    preview(button,shown.width,shown.height);make('span','draw-preset-card__name',button,name);make('span','draw-preset-card__size',button,sizeText(shown));
     button.addEventListener('click',()=>apply(entry,id));button.addEventListener('dblclick',()=>{apply(entry,id);form.requestSubmit();});
     if(onRemove){const remove=make('button','draw-preset-card__remove',wrap,'×');remove.type='button';remove.setAttribute('aria-label',`Delete template ${name}`);remove.addEventListener('click',onRemove);}
   }
@@ -311,12 +321,12 @@ export function newDocumentDialog(bed,{machines=[],storage=globalThis.localStora
     grid.replaceChildren();
     if(state.tab==='recent'){
       if(!recent.length)empty('Documents you create appear here, so you can reuse their size and settings.');
-      recent.forEach((entry,i)=>card(`recent-${i}`,entry,entry.label,sizeText(entry)));
+      recent.forEach((entry,i)=>card(`recent-${i}`,entry,entry.label));
     } else if(state.tab==='saved'){
-      if(!templates.length)empty('No saved templates yet. In an open document, choose File › Save Document Properties as Template…');
-      for(const entry of templates)card(`template-${entry.id}`,entry,entry.name,sizeText(entry),()=>{
+      if(!templates.length)empty('No saved templates yet. Choose your settings, then click Save as template.');
+      for(const entry of templates)card(`template-${entry.id}`,entry,entry.name,()=>{
         templates=removeTemplate(templates,entry.id);storeList(storage,TEMPLATES_KEY,templates);renderGrid();});
-    } else for(const entry of presets.filter(p=>p.category===state.category))card(entry.id,entry,entry.name,formatSize(entry.width,entry.height,entry.units));
+    } else for(const entry of presets.filter(p=>p.category===state.category))card(entry.id,entry,entry.name);
     syncControls();
   }
   for(const [id,label] of [['recent','Recent'],['templates','Templates'],['saved','Saved']]){
@@ -328,15 +338,25 @@ export function newDocumentDialog(bed,{machines=[],storage=globalThis.localStora
   for(const category of PRESET_CATEGORIES){const chip=make('button','draw-new-doc__chip',chips,category.name);chip.type='button';chip.dataset.category=category.id;
     chip.addEventListener('click',()=>{state.category=category.id;renderGrid();});}
   for(const [id,button] of Object.entries(orientationButtons))button.addEventListener('click',()=>{
-    if((id==='landscape')!==(state.widthMm>state.heightMm)&&state.widthMm!==state.heightMm){[state.widthMm,state.heightMm]=[state.heightMm,state.widthMm];showUnits();syncControls();}});
+    state.orientation=id;
+    const size=oriented({width:state.widthMm,height:state.heightMm});state.widthMm=size.width;state.heightMm=size.height;
+    showUnits();renderGrid();});
   form.addEventListener('input',event=>{
     const target=event.target,unit=unitSelect.value;
     if(target===presetInput){const entry=presets.find(p=>p.id===presetInput.value);if(entry)apply(entry,entry.id);else{state.label='Custom';syncControls();}return;}
-    if(target===widthInput||target===heightInput){const mm=toMm(Number(target.value),unit);if(mm>0){state[target===widthInput?'widthMm':'heightMm']=mm;presetInput.value='custom';state.label='Custom';}}
+    if(target===widthInput||target===heightInput){const mm=toMm(Number(target.value),unit);if(mm>0){state[target===widthInput?'widthMm':'heightMm']=mm;state.orientation=null;presetInput.value='custom';state.label='Custom';renderGrid();}}
     if(target===spacingInput&&Number(spacingInput.value)>=0)state.spacingMm=toMm(Number(spacingInput.value),unit);
     syncControls();
   });
   unitSelect.addEventListener('change',showUnits);
+  save.addEventListener('click',()=>{
+    if(!form.reportValidity())return;
+    try{
+      const setup=currentSetup(),next=saveTemplate(templates,nameInput.value,setup);
+      if(!storeList(storage,TEMPLATES_KEY,next))throw new Error('Could not save the template.');
+      templates=next;state.tab='saved';presetInput.value=`template-${templates[0].id}`;state.label=templates[0].name;renderGrid();
+    }catch(problem){error.textContent=problem.message;}
+  });
   boardSelect?.addEventListener('change',()=>{
     boardSizes.set(editingBoard.id,{width:state.widthMm,height:state.heightMm});
     editingBoard=editDocument.artboards.find(b=>b.id===boardSelect.value);
@@ -352,8 +372,7 @@ export function newDocumentDialog(bed,{machines=[],storage=globalThis.localStora
     cancel.addEventListener('click',()=>close(null));overlay.addEventListener('click',event=>{if(event.target===overlay)close(null);});
     form.addEventListener('submit',event=>{event.preventDefault();
       try{
-        const setup=normalizeSetup({width:state.widthMm,height:state.heightMm,units:unitSelect.value,ppi:Number(ppiSelect.value),count:Number(countInput.value),
-          layout:layoutSelect.value,columns:Number(columnsInput.value),spacing:state.spacingMm});
+        const setup=currentSetup();
         if(editDocument){
           boardSizes.set(editingBoard.id,{width:setup.width,height:setup.height});
           const artboards=editDocument.artboards.map(board=>{

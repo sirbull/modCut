@@ -404,6 +404,8 @@ export const NB = Object.freeze({
   "Documents you create appear here, so you can reuse their size and settings.": "Dokumenter du lager, vises her, så du kan bruke størrelsen og innstillingene på nytt.",
   "No saved templates yet. In an open document, choose File › Save Document Properties as Template…": "Ingen lagrede maler ennå. I et åpent dokument velger du Fil › Lagre dokumentegenskaper som mal…",
   "Recent": "Nylige", "Templates": "Maler", "Saved": "Lagret", "Save Document Properties as Template": "Lagre dokumentegenskaper som mal", "Save template": "Lagre mal",
+  "Save as template": "Lagre som mal",
+  "No saved templates yet. Choose your settings, then click Save as template.": "Ingen lagrede maler ennå. Velg innstillinger, og klikk deretter Lagre som mal.",
   "Template name": "Navn på mal", "Saves the artboard size, count and arrangement, units and resolution. Artwork is not included.": "Lagrer størrelse, antall og plassering av tegnebrett, enheter og oppløsning. Grafikken tas ikke med.",
   "Pencil Tool Options": "Alternativer for Blyant-verktøyet", "Fidelity": "Nøyaktighet", "Close paths when ends are near": "Lukk baner når endene er nær hverandre",
   "Within (pixels)": "Innenfor (piksler)", "Keep selected": "Behold merket", "Radius (mm)": "Radius (mm)", "Inner / outer radius": "Indre / ytre radius",

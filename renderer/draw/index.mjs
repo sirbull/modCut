@@ -93,8 +93,6 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   const shell=element('div','draw-shell',root),tools=element('nav','draw-tool-rail',shell);tools.setAttribute('aria-label','Draw tools');
   const stage=element('div','draw-stage',shell),canvas=element('canvas','draw-canvas',stage);canvas.setAttribute('aria-label','Draw canvas');canvas.tabIndex=0;
   const isolationBar=element('nav','draw-isolation-bar',stage);isolationBar.hidden=true;isolationBar.setAttribute('aria-label','Isolation mode');
-  const hint=element('div','draw-workspace__hint',stage),hintCard=element('div','draw-workspace__hint-card',hint);
-  element('h1','',hintCard).textContent='Start drawing';element('p','',hintCard).textContent='Import artwork, or choose a drawing tool.';
   // Import has one primary location in the application toolbar; view controls join the app status bar when it is given.
   const controls=element('div','draw-view-controls',statusHost||stage),positionLabel=element('span','draw-position',controls);
   const viewButtons=element('div','draw-view-buttons',controls),boardSelect=element('select','draw-board-select',viewButtons);boardSelect.setAttribute('aria-label','Active artboard');
@@ -244,7 +242,6 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     withScope(()=>renderer.render());syncPaint();panels?.render();toolbar?.update();
     boardSelect.replaceChildren(...state.document.data.artboards.map((a,i)=>{const option=document.createElement('option');option.value=a.id;option.textContent=`${i+1}. ${a.name}`;return option;}));
     boardSelect.value=state.ui.artboardId;
-    hint.hidden=state.document.data.layers.some(layer=>layer.children.length) || state.document.readOnly || state.ui.tool!=='select';
     outlineButton.setAttribute('aria-pressed',String(renderer.outline));updateLaserView();status();
   }
   function paint(kind,value,{mergeKey=null,swatch=null}={}) {
@@ -1092,7 +1089,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     if(id!==state.ui.tool&&['direct-selection','anchor-point','delete-anchor'].some(tool=>tool===id||tool===state.ui.tool))state.selection.set(state.selection.ids);
     if(state.ui.tool==='measure'&&id!=='measure'&&state.ui.measurement)setMeasure(null);
     interactions?.cancel();paths?.finish();toolbar?.close();temporary=null;state.ui.tool=id;canvas.dataset.tool=id;canvas.style.cursor=cursor();
-    withScope(()=>renderer.select());toolbar?.update();panels?.render();hint.hidden=state.document.data.layers.some(l=>l.children.length)||state.document.readOnly||id!=='select';status();
+    withScope(()=>renderer.select());toolbar?.update();panels?.render();interactions?.refreshEyedropper();status();
   }
   function openPanel(id) {toolbar?.close();panels.open(id);}
   artboards=createArtboardController(state,{refresh,fit,bounds:id=>renderer.bounds(id),localMatrix:(id,m)=>renderer.localMatrix(id,m)});
@@ -1655,7 +1652,8 @@ typeOnPath:id=>editText(undefined,null,null,{pathFrom:id}),cursor,contextMenu:(x
   laserButton.addEventListener('click',()=>handle('laser-preview'));processesButton.addEventListener('click',()=>handle('laser-processes'));
   outlineButton.addEventListener('click',()=>handle('outline'));fitButton.addEventListener('click',()=>fit());
   const workspace={state,scope,renderer,closeContextMenu:()=>contextMenu.close({focus:true}),syncLaserMenu,refreshLaserPreview:updateLaserView,isolate,cutSvg,exportBoard,exporter,exportAs:()=>exportAs().catch(error=>onError(error.message)),exportScreens:()=>exportScreens().catch(error=>onError(error.message)),sendToCut:boardId=>sendToCut(boardId).catch(error=>onError(error.message)),exitIsolation,statusElement:controls,artboards,transforms,resize,select,setTool,handle,availableTool:id=>implementedTools.has(id),canHandle:command=>commands.has(command),commandNames:()=>[...commands].sort(),withScope,layerId,fit,
-    setTemporaryTool(value){temporary=value;canvas.dataset.tool=temporary?.id || state.ui.tool;canvas.style.cursor=cursor();status();},
+    eyedropperModifiers:event=>interactions?.eyedropperModifiers(event),
+    setTemporaryTool(value){temporary=value;canvas.dataset.tool=temporary?.id || state.ui.tool;canvas.style.cursor=cursor();interactions?.refreshEyedropper();status();},
     /** Cut > Edit in Draw: the copied Cut objects on a new bed-sized artboard, where they were on the bed. */
     async editFromCut({svg,warning},{width,height}){
       if(!svg)throw new Error(warning||'Nothing in the Cut selection can be edited in Draw.');

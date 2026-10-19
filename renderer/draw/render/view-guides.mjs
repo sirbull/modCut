@@ -47,7 +47,8 @@ export function createViewGuides(scope, state, boards, overlay) {
         const bounds = view.bounds, zoom = view.zoom;
         // Thin dense grids at extreme zoom levels, keeping grid alignment.
         const sx = adaptive(spacing.x, zoom), sy = adaptive(spacing.y, zoom);
-        const color = new scope.Color(foreground); color.alpha = .22;
+        // Neutral grey stays visible over white artboards in both app themes.
+        const color = new scope.Color('#808080'); color.alpha = .28;
         for (let x = board.x + Math.ceil((bounds.left - board.x) / sx) * sx; x <= bounds.right; x += sx) line(grid, [x, bounds.top], [x, bounds.bottom], color, .7 / zoom);
         for (let y = board.y + Math.ceil((bounds.top - board.y) / sy) * sy; y <= bounds.bottom; y += sy) line(grid, [bounds.left, y], [bounds.right, y], color, .7 / zoom);
       }

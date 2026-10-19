@@ -4,8 +4,10 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { wait } from './cdp.mjs';
 import { activeDraw as active, enterDraw, submitNewDrawDialog, rememberTabs } from './draw-test-helpers.mjs';
+import { runDrawDocumentPresetWorkflows } from './draw-document-preset-workflows.mjs';
 
 export async function runDrawDocumentSettingsWorkflows(client) {
+  await runDrawDocumentPresetWorkflows(client);
   const {evaluate} = client, restore = await rememberTabs(evaluate);
   const until = async expression => {for(let i=0;i<100;i++){if(await evaluate(expression))return;await wait(40);}assert.fail(expression);};
   const snapshot = () => evaluate(`(async()=>${active}.state.snapshot())()`);
