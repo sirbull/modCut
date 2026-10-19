@@ -17,6 +17,19 @@ export function splitCurve(path,index,t) {
   a.out=sub(q0,p0);b.in=sub(q2,p3);
   result.segments.splice(index+1,0,{p,in:sub(r0,p),out:sub(r1,p)});return result;
 }
+/** Move the grabbed point on a cubic by delta without moving either anchor.
+ * The two control points share the smallest combined displacement that makes
+ * B(t) follow the pointer exactly. Other segments' handles remain unchanged.
+ */
+export function bendCurve(path,index,t,delta) {
+  if(!(t>0&&t<1)||!delta.every(Number.isFinite))throw new RangeError('Bend must be inside the curve with a finite delta');
+  const result=bakeCorners(path),a=result.segments[index],b=result.segments[(index+1)%result.segments.length];
+  if(!a||!b||!path.closed&&index===result.segments.length-1)throw new RangeError('Unknown curve');
+  const u=1-t,w1=3*u*u*t,w2=3*u*t*t,total=w1*w1+w2*w2;
+  a.out=add(a.out,delta.map(n=>n*w1/total));
+  b.in=add(b.in,delta.map(n=>n*w2/total));
+  return result;
+}
 export function moveAnchors(subpaths,selected,delta) {
   const result=structuredClone(subpaths);
   for(const index of new Set(selected.map(a=>a.subpath)))result[index]=editCornerSource(result[index],path=>{

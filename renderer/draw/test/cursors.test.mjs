@@ -35,6 +35,7 @@ test('the redrawn assets are used by their tools and all pen states share the ni
     'pen-new': 'PenNew_1_1', 'pen-active': 'Pen_1_1', 'pen-continue': 'PenContinue_1_1',
     'pen-close': 'PenClose_1_1', 'pen-add': 'PenAdd_1_1', 'pen-remove': 'PenSubstract_1_1',
     'pen-convert': 'PenCorner_1_1', 'pen-join': 'PenWeld_1_1', 'anchor-convert': 'EditAnchor_1_1',
+    'bend-curve': 'Arc_1_1',
     hand: 'Hand_11_11', 'hand-active': 'Fist_11_11', 'zoom-in': 'ZoomIn_8_8', 'zoom-out': 'ZoomOut_8_8',
     type: 'HorizontalText_1_1', 'type-on-path': 'HorizTextOnPath_11_12', shape: 'Precise_9_9',
     paintbrush: 'Brush_2_16', eyedropper: 'Eyedropper_2_17', scissors: 'Scissors_1_1',

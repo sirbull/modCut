@@ -2,20 +2,20 @@ import { createNode } from '../doc/schema.mjs';
 import { updateNode,removeNode,replaceLeaf } from '../doc/commands.mjs';
 import { insidePolygon } from '../doc/select-rules.mjs';
 import { appearance } from '../geometry.mjs';
-import { anchor,reversePath,splitCurve,moveAnchors,deleteAnchors,convertAnchor,constrain } from '../geom/path-editing.mjs';
+import { anchor,reversePath,splitCurve,bendCurve,moveAnchors,deleteAnchors,convertAnchor,constrain } from '../geom/path-editing.mjs';
 import { editablePath,editCornerSource,bakeCorners,roundCorners } from '../geom/corners.mjs';
 import { shapeSelectionKey } from '../doc/selection.mjs';
-import { CURSORS } from './cursors.mjs';
+import { CURSORS,toolCursor } from './cursors.mjs';
 
 export const PATH_TOOLS=['direct-selection','pen','add-anchor','delete-anchor','anchor-point'];
 const same=(a,b)=>a.nodeId===b.nodeId&&a.subpath===b.subpath&&a.segment===b.segment;
 const xy=p=>[p.x,p.y];
 export function createPathInteractions(canvas,state,api) {
   const {scope,renderer,run,withScope}=api,controller=new AbortController(),events={signal:controller.signal};
-  let gesture=null,session=null,previews=[];
+  let gesture=null,session=null,previews=[],pointer=null;
   const point=e=>{const b=canvas.getBoundingClientRect();return scope.view.viewToProject(new scope.Point(e.clientX-b.left,e.clientY-b.top));};
   function clear(){for(const item of previews)item.remove();previews=[];renderer.setEditPreview();}
-  function cancelDrag(){const previous=gesture;gesture=null;if(previous?.mode==='direct')canvas.style.cursor=CURSORS.direct;withScope(()=>{clear();renderer.requestDraw();});}
+  function cancelDrag(){const previous=gesture;gesture=null;if(previous?.mode==='direct'||previous?.mode==='pen-anchor'||previous?.mode==='pen-bend')canvas.style.cursor=toolCursor(api.tool());withScope(()=>{clear();renderer.requestDraw();});}
   function finish(){cancelDrag();session=null;}
   function selectAnchors(anchors){state.selection.setAnchors(anchors);api.selectionChanged();}
   const spaceId=node=>state.document.getNode(node.id)?renderer.editSpaceId(node.id):api.layerId();
@@ -43,7 +43,7 @@ export function createPathInteractions(canvas,state,api) {
   }
   function preview(nodes,handles=null){withScope(()=>{clear();for(const node of nodes){const item=renderer.shapePreview(node,spaceId(node));item.opacity=node.opacity;previews.push(item);
     const outline=item.clone();outline.opacity=1;outline.fillColor=null;outline.dashArray=[];outline.strokeColor=renderer.layerColor(state.document.getNode(node.id)?node.id:spaceId(node));outline.strokeScaling=false;outline.strokeWidth=1;previews.push(outline);}
-    if(handles)for(const item of handleItems(handles.node,handles.subpath,handles.index)){scope.project.layers.at(-1).addChild(item);previews.push(item);}
+    for(const h of Array.isArray(handles)?handles:handles?[handles]:[])for(const item of handleItems(h.node,h.subpath,h.index)){scope.project.layers.at(-1).addChild(item);previews.push(item);}
     renderer.setEditPreview(nodes);scope.view.update();});}
   function cornerSelection(){return renderer.cornerWidgets().map(({nodeId,subpath,segment})=>descriptor(nodeId,subpath,segment));}
   function roundedNodes(anchors,radius){
@@ -69,6 +69,20 @@ export function createPathInteractions(canvas,state,api) {
         selectAnchors(anchors);gesture={mode:'corner',hit:corner,anchors,start:p,last:p,radius:corner.corner.radius,before:[...new Set(anchors.map(a=>a.nodeId))].map(editNode)};return;}
     }
     const hit=withScope(()=>renderer.pathHit(p,{handles:tool==='direct-selection'||tool==='pen',shapes:tool==='direct-selection',logical:tool!=='pen'}));
+    if(tool==='pen'&&e.altKey){
+      // Check anchors before handles: a short handle must not hide the point.
+      const at=withScope(()=>renderer.pathHit(p,{handles:false}));
+      const curve=!at&&!hit&&withScope(()=>renderer.curveHit(p));
+      if(at||curve&&curve.t>0&&curve.t<1){
+        const target=at??curve,node=editNode(target.nodeId),subpath=target.subpath;
+        node.subpaths[subpath]=bakeCorners(node.subpaths[subpath]);
+        gesture={mode:at?'pen-anchor':'pen-bend',node,before:structuredClone(node),subpath,index:target.segment,t:curve?.t,start:p,last:p};
+        const next=(target.segment+1)%node.subpaths[subpath].segments.length;
+        selectAnchors([target,...(at?[]:[{nodeId:node.id,subpath,segment:next}])].map(({nodeId,subpath,segment})=>({nodeId,subpath,segment})));
+        canvas.style.cursor=CURSORS[at?'anchor-convert':'bend-curve'];
+        return;
+      }
+    }
     if(tool==='add-anchor') {
       addAt(renderer.curveHit(p));return;
     }
@@ -134,6 +148,12 @@ export function createPathInteractions(canvas,state,api) {
       const tool0=api.tool(),base={'add-anchor':'anchor-add','delete-anchor':'anchor-remove','anchor-point':'anchor-convert'}[tool0]??'direct';
       canvas.style.cursor=CURSORS[corner?'corner':hit&&tool0==='direct-selection'?(hit.kind==='point'?'direct-anchor':'direct-segment'):base];
       if(api.tool()==='pen') {
+        const at=e.altKey&&renderer.pathHit(p,{handles:false}),altCurve=e.altKey&&!at&&!hit&&renderer.curveHit(p);
+        if(at||altCurve&&altCurve.t>0&&altCurve.t<1){
+          canvas.dataset.pathAction=at?'convert-anchor':'bend-curve';
+          canvas.style.cursor=CURSORS[at?'anchor-convert':'bend-curve'];
+          scope.view.update();return;
+        }
         const current=validSession(),node=current&&state.document.getNode(current.id),first=current?.reverse?node.subpaths[current.subpath].segments.length-1:0;
         const closing=current&&hit?.nodeId===current.id&&hit.subpath===current.subpath&&hit.segment===first&&node.subpaths[current.subpath].segments.length>1;
         const endpoint=!current&&renderer.pathHit(p,{handles:false,endpoints:true}),curve=!current&&!hit&&!endpoint&&renderer.curveHit(p);
@@ -157,6 +177,18 @@ export function createPathInteractions(canvas,state,api) {
         const delta=renderer.editPointToLocal(g.hit.nodeId,p).subtract(renderer.editPointToLocal(g.hit.nodeId,g.start)),c=g.hit.corner;
         g.radius=Math.max(0,c.radius+(delta.x*c.bisector[0]+delta.y*c.bisector[1])*c.sin);
         g.result=roundedNodes(g.anchors,g.radius);preview(g.result);
+      }else if(g.mode==='pen-anchor') {
+        const s=g.node.subpaths[g.subpath].segments[g.index],origin=renderer.editPointToWorld(g.node.id,s.p);
+        const end=e.shiftKey?new scope.Point(...constrain(xy(p),xy(origin))):p;
+        const local=renderer.editPointToLocal(g.node.id,end),v=xy(local).map((n,i)=>n-s.p[i]);
+        if(p.getDistance(g.start)>2/scope.view.zoom||g.dragged){s.out=v;s.in=v.map(n=>-n);g.dragged=true;}
+        preview([g.node],{node:g.node,subpath:g.subpath,index:g.index});
+      }else if(g.mode==='pen-bend') {
+        const delta=renderer.editPointToLocal(g.node.id,p).subtract(renderer.editPointToLocal(g.node.id,g.start));
+        g.node.subpaths[g.subpath]=bendCurve(g.before.subpaths[g.subpath],g.index,g.t,xy(delta));
+        g.dragged=p.getDistance(g.start)>2/scope.view.zoom;
+        const next=(g.index+1)%g.node.subpaths[g.subpath].segments.length;
+        preview([g.node],[g.index,next].map(index=>({node:g.node,subpath:g.subpath,index})));
       }else if(g.mode==='direct') {
         canvas.style.cursor=CURSORS['direct-move'];
         let delta=p.subtract(g.start);if(e.shiftKey&&g.hit.kind==='point'){if(Math.abs(delta.x)>Math.abs(delta.y))delta.y=0;else delta.x=0;}
@@ -186,6 +218,10 @@ export function createPathInteractions(canvas,state,api) {
   function up(e){
     if(!gesture)return;e.stopImmediatePropagation();if(point(e).getDistance(gesture.last)>1e-8)update(e);
     const g=gesture;cancelDrag();run(()=>{
+      if(g.mode==='pen-anchor'||g.mode==='pen-bend'){
+        if(g.dragged&&JSON.stringify(g.node.subpaths)!==JSON.stringify(g.before.subpaths))commit(g.node,g.mode==='pen-anchor'?'Convert Anchor':'Bend Curve');
+        api.selectionChanged();update(e);return;
+      }
       if(g.mode==='marquee') {
         const rectangle=new scope.Rectangle(g.start,point(e)),anchors=[];
         for(const original of state.document.descendants(null)){if(!['path','shape'].includes(original.type)||!state.document.isEditable(original.id))continue;
@@ -203,7 +239,11 @@ export function createPathInteractions(canvas,state,api) {
       selectAnchors([{nodeId:g.node.id,subpath:g.subpath,segment:g.index??g.hit.segment}]);
     });
   }
-  canvas.addEventListener('pointerdown',e=>run(()=>down(e)),events);canvas.addEventListener('pointermove',e=>run(()=>update(e)),events);canvas.addEventListener('pointerup',e=>run(()=>up(e)),events);
+  canvas.addEventListener('pointerdown',e=>run(()=>down(e)),events);canvas.addEventListener('pointermove',e=>{pointer={clientX:e.clientX,clientY:e.clientY};run(()=>update(e));},events);canvas.addEventListener('pointerup',e=>run(()=>up(e)),events);
+  canvas.addEventListener('pointerleave',()=>{pointer=null;},events);
+  // Option can be pressed or released while the mouse is stationary.
+  const modifiers=e=>{if(e.key!=='Alt'||gesture||!pointer||api.tool()!=='pen'||!canvas.matches(':hover'))return;
+    run(()=>update({...pointer,altKey:e.altKey,shiftKey:e.shiftKey,stopImmediatePropagation(){}}));};
   canvas.addEventListener('pointercancel',cancelDrag,events);canvas.addEventListener('lostpointercapture',cancelDrag,events);window.addEventListener('blur',cancelDrag,events);
   /** Lasso: anchors of editable paths and shapes inside the freehand polygon; Shift adds, Alt removes. */
   function lasso(polygon,{add=false,subtract=false}={}){
@@ -222,6 +262,7 @@ export function createPathInteractions(canvas,state,api) {
     selectAnchors(anchors);return anchors.length;
   }
   return {
+    modifiers,
     lasso,
     directionHandles,
     finish,

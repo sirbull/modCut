@@ -56,6 +56,7 @@ import { runDrawWindowWorkflows } from './draw-window-workflows.mjs';
 import { runDrawPerfWorkflows } from './draw-perf-workflows.mjs';
 import { runDrawTextOutlineWorkflows } from './draw-text-outline-workflows.mjs';
 import { runDrawFeedbackWorkflows } from './draw-feedback-workflows.mjs';
+import { runDrawPenAltWorkflows } from './draw-pen-alt-workflows.mjs';
 import { runWorkflows, verifyRecoveredSession } from "./workflows.mjs";
 import { runThemeWorkflows } from "./theme-workflows.mjs";
 import { runBackgroundWorkflows } from "./background-workflows.mjs";
@@ -114,6 +115,9 @@ try {
   } else if (process.argv.includes("--theme")) {
     await runThemeWorkflows(first, port);
     first.socket.close();
+  } else if (process.argv.includes('--draw-pen-alt')) {
+    for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
+    await runDrawPenAltWorkflows(first);first.socket.close();
   } else if (process.argv.includes('--draw-feedback')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawFeedbackWorkflows(first);first.socket.close();
@@ -287,6 +291,7 @@ try {
       await runDrawUIWorkflows(first);
       await runDrawPhaseOneWorkflows(first);
       await runDrawPathWorkflows(first);
+      await runDrawPenAltWorkflows(first);
       await runDrawCornerWorkflows(first);
       await runDrawTransformWorkflows(first);
       await runDrawPanelWorkflows(first);

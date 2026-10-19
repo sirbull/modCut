@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {anchor,splitCurve,reversePath,moveAnchors,deleteAnchors,convertAnchor,constrain} from '../geom/path-editing.mjs';
+import {anchor,splitCurve,bendCurve,reversePath,moveAnchors,deleteAnchors,convertAnchor,constrain} from '../geom/path-editing.mjs';
 import {createProjectDraw} from '../io/project.mjs';
 import {createNode} from '../doc/schema.mjs';
 import {insertNode,replaceLeaf} from '../doc/commands.mjs';
@@ -17,6 +17,25 @@ test('closed closing-curve split and path reversal retain tangents',()=>{
   const path={closed:true,segments:[{...anchor([0,0]),in:[-3,2]},{...anchor([10,10]),out:[3,-4]}]};
   const split=splitCurve(path,1,.5);assert.equal(split.segments.length,3);close(split.segments[2].p,cubic(path.segments[1],path.segments[0],.5));
   assert.deepEqual(reversePath(reversePath(path)),path);close(add(reversePath(path).segments[0].p,reversePath(path).segments[0].in),[13,6]);
+});
+test('bending a cubic follows the grabbed parameter without moving anchors or adjacent handles',()=>{
+  for(const curved of [false,true])for(const t of [.08,.23,.5,.81,.95]){
+    const path={closed:false,segments:[{...anchor([0,0]),in:[-5,-7],out:curved?[10,40]:[0,0]},{...anchor([50,20]),in:curved?[-25,5]:[0,0],out:[7,9]},anchor([70,30])]},saved=structuredClone(path);
+    const delta=[6,-11],result=bendCurve(path,0,t,delta);
+    close(cubic(result.segments[0],result.segments[1],t),add(cubic(path.segments[0],path.segments[1],t),delta));
+    for(let i=0;i<path.segments.length;i++)close(result.segments[i].p,path.segments[i].p);
+    close(result.segments[0].in,path.segments[0].in);close(result.segments[1].out,path.segments[1].out);
+    assert.deepEqual(result.segments[2],path.segments[2]);assert.deepEqual(path,saved);
+  }
+});
+test('bending the closing segment preserves closure and rejects non-existent curves',()=>{
+  const path={closed:true,segments:[anchor([0,0]),anchor([30,20]),anchor([0,40])]},t=.37,delta=[-9,4];
+  const result=bendCurve(path,2,t,delta);assert.equal(result.closed,true);assert.equal(result.segments.length,3);
+  close(cubic(result.segments[2],result.segments[0],t),add(cubic(path.segments[2],path.segments[0],t),delta));
+  for(const time of [0,1,NaN])assert.throws(()=>bendCurve(path,0,time,delta),RangeError);
+  assert.throws(()=>bendCurve({...path,closed:false},2,.5,delta),RangeError);
+  assert.throws(()=>bendCurve(path,9,.5,delta),RangeError);
+  assert.throws(()=>bendCurve(path,0,.5,[Infinity,0]),RangeError);
 });
 test('moving, deleting and converting anchors do not alter unrelated subpaths',()=>{
   const paths=[{closed:false,segments:[[0,0],[10,0],[10,10]].map(anchor)},{closed:true,segments:[[20,20],[30,20],[30,30]].map(anchor)}],selected=[{subpath:0,segment:1}];

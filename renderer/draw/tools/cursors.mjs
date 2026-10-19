@@ -50,6 +50,7 @@ export const CURSORS = Object.freeze({
   'pen-remove': pen('PenSubstract'),
   'pen-convert': pen('PenCorner'),
   'pen-join': pen('PenWeld'),
+  'bend-curve': custom('Arc_1_1', 1, 1),
   'anchor-add': pen('PenAdd'),
   'anchor-remove': pen('PenSubstract'),
   'anchor-convert': custom('EditAnchor_1_1', 1, 1),

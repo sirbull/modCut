@@ -177,7 +177,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     statusLine.textContent=`${tool.name} · ${drawMode}${state.selection.ids.length} selected · `+(
       SHAPE_TOOLS.includes(tool.id) ? 'Shift: constrain · Alt: from center · Space: move · Click: exact size' :
       TRANSFORM_TOOLS.includes(tool.id) ? 'Click: reference point · Drag: transform · Shift: constrain · Alt: copy · Enter: dialog' :
-      tool.id==='pen' ? 'Click: corner · Drag: curve · Alt: break handles · Space: move anchor · Enter/Esc: finish' :
+      tool.id==='pen' ? 'Click: corner · Drag: curve · Alt+drag: smooth anchor or bend segment · Space: move anchor · Enter/Esc: finish' :
       ['type','area-type'].includes(tool.id) ? 'Click: '+(tool.id==='type'?'point text':'area text')+' · Drag: text frame · Click existing text: edit' :
       tool.id==='type-on-path' ? 'Click a path or shape: type along it · Click existing text: edit' :
       tool.id==='gradient' ? 'Drag across the selection: gradient direction and length · Shift: 45° steps · Click: apply gradient' :
@@ -1656,6 +1656,7 @@ typeOnPath:id=>editText(undefined,null,null,{pathFrom:id}),cursor,contextMenu:(x
   outlineButton.addEventListener('click',()=>handle('outline'));fitButton.addEventListener('click',()=>fit());
   const workspace={state,scope,renderer,closeContextMenu:()=>contextMenu.close({focus:true}),syncLaserMenu,refreshLaserPreview:updateLaserView,isolate,cutSvg,exportBoard,exporter,exportAs:()=>exportAs().catch(error=>onError(error.message)),exportScreens:()=>exportScreens().catch(error=>onError(error.message)),sendToCut:boardId=>sendToCut(boardId).catch(error=>onError(error.message)),exitIsolation,statusElement:controls,artboards,transforms,resize,select,setTool,handle,availableTool:id=>implementedTools.has(id),canHandle:command=>commands.has(command),commandNames:()=>[...commands].sort(),withScope,layerId,fit,
     eyedropperModifiers:event=>interactions?.eyedropperModifiers(event),
+    pathModifiers:event=>paths?.modifiers(event),
     setTemporaryTool(value){temporary=value;canvas.dataset.tool=temporary?.id || state.ui.tool;canvas.style.cursor=cursor();interactions?.refreshEyedropper();status();},
     /** Cut > Edit in Draw: the copied Cut objects on a new bed-sized artboard, where they were on the bed. */
     async editFromCut({svg,warning},{width,height}){

@@ -23,10 +23,13 @@ export async function runDrawFeedbackWorkflows(client) {
   // Draw with no fill and no stroke: the path must still be visible while drawing.
   await evaluate(`(async()=>{const w=${active};w.state.ui.fill=null;w.state.ui.stroke=null;})()`);
   await tool('pen');
-  const a = await screen([20, 40]), b = await screen([60, 40]), c = await screen([60, 20]);
+  let a = await screen([20, 40]), b = await screen([60, 40]), c = await screen([60, 20]);
   await mouse('mouseMoved', a);
   assert.equal(await cursor(), 'pen-new', 'Pen shows the new-path cursor');
   await click(a);
+  // Selecting the first path changes the Properties panel and can resize the
+  // canvas. Refresh screen coordinates after that layout has settled.
+  await wait(100); b = await screen([60, 40]); c = await screen([60, 20]);
   await mouse('mouseMoved', b); await wait(30);
   assert.equal(await cursor(), 'pen-active');
   assert.ok(await ink([40, 40]) > 0, 'The rubber-band segment is visible before the second click');
@@ -39,6 +42,7 @@ export async function runDrawFeedbackWorkflows(client) {
   const curveMid = await evaluate(`(async()=>{const w=${active},items=w.scope.project.getItems({match:i=>i.className==='Path'&&i.segments?.length===2&&!i.data.nodeId});return items.length})()`);
   assert.ok(curveMid > 0, 'A live curve preview exists while dragging');
   await mouse('mouseReleased', c);
+  a = await screen([20, 40]);
   await mouse('mouseMoved', a); await wait(30);
   assert.equal(await cursor(), 'pen-close', 'Hovering the first anchor shows the close cursor');
   await evaluate(`(async()=>(${active}.handle('cancel')))()`);
@@ -50,6 +54,7 @@ export async function runDrawFeedbackWorkflows(client) {
   assert.equal(await cursor(), 'select');
   await tool('direct-selection'); await mouse('mouseMoved', await screen([100, 70]));
   assert.equal(await cursor(), 'direct');
+  a = await screen([20, 40]);
   await mouse('mouseMoved', a); assert.equal(await cursor(), 'direct-anchor', 'Direct Selection over an anchor');
   await mouse('mousePressed', a, { buttons: 1 });
   await mouse('mouseMoved', await screen([22, 40]), { buttons: 1 });

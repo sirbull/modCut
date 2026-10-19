@@ -2412,9 +2412,10 @@ window.addEventListener("keydown", (event) => {
   if ((event.key === "ArrowUp" || event.key === "ArrowDown") && event.target.closest?.("[data-draw-scrub-input]")) return;
   event.stopImmediatePropagation();
   drawKeymap.keydown(event, drawKeyContext(event));
+  activeTab()?.draw?.pathModifiers(event);
 }, true);
 window.addEventListener("keyup", (event) => {
-  if (document.body.dataset.workspace === "draw") {activeTab()?.draw?.eyedropperModifiers(event);drawKeymap.keyup(event, drawKeyContext(event));}
+  if (document.body.dataset.workspace === "draw") {activeTab()?.draw?.eyedropperModifiers(event);drawKeymap.keyup(event, drawKeyContext(event));activeTab()?.draw?.pathModifiers(event);}
 }, true);
 window.addEventListener("blur", () => drawKeymap.reset());
 
