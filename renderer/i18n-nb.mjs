@@ -1,6 +1,7 @@
 // Norwegian bokmål. Keys are the English interface text exactly as written in the code; {name} marks a
 // value that is carried over. Product and workspace names (modCut, Cut, Draw) stay as they are.
 export const NB = Object.freeze({
+  "Cut tools": "Cut-verktøy", "Basic tools": "Grunnleggende verktøy", "View controls": "Visningskontroller",
   "Scale stroke widths, dash lengths and effect sizes with objects.": "Skaler strekbredder, stipling og effektstørrelser sammen med objektene.",
   "Ruler units": "Linjalenheter", "Percentage": "Prosent", "Points (pt)": "Punkter (pt)", "Picas": "Pica",
   "These settings apply to new text.": "Disse innstillingene brukes for ny tekst.",

@@ -8,6 +8,7 @@ import { newDocumentDialog, documentSettingsDialog, placeOptionsDialog, saveTemp
 import { updateDocument, updateArtboard } from "./draw/doc/commands.mjs";
 import { saveTemplate, setupFromDocument, loadStoredList, storeList, TEMPLATES_KEY } from "./draw/doc/presets.mjs";
 import { createBed } from "./bed.js";
+import { initWorkspaceChrome } from "./workspace-chrome.mjs";
 import { prepareSVG } from "./svgimport.js";
 import { dxfToSvg } from "./dxfimport.js";
 import { hpglToSvg } from "./hpglimport.js";
@@ -26,6 +27,7 @@ import { LANGUAGES, localizeTree, resolveLanguage, translator, watchLocalization
 import { DOCUMENT_FORMATS, IMAGE_FORMATS, PDF_FORMATS, TEXT_FORMATS, TIFF_FORMATS } from "../electron/import-formats.mjs";
 
 const $ = (id) => document.getElementById(id);
+initWorkspaceChrome();
 let preferences = loadPreferences(localStorage);
 // Language: the window is translated as it changes; the main process translates the menus.
 let language = resolveLanguage(preferences.language, navigator.languages), t = translator(language);

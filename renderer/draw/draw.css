@@ -5,7 +5,7 @@ body[data-workspace="draw"] .draw-workspace {
   display: block; position: absolute; inset: 0; z-index: 1;
   overflow: hidden; background: var(--surface-2);
 }
-body[data-workspace="draw"] :is(#stage, #side, .actionbar, #tools, #zoomOut, #zoomFit, #zoomIn, #selMode, #togglePanel) {
+body[data-workspace="draw"] :is(#stage, #side, .actionbar, .cut-tool-rail, #tools, #zoomOut, #zoomFit, #zoomIn, #selMode, #togglePanel) {
   visibility: hidden; pointer-events: none;
 }
 body[data-workspace="draw"] .statusbar > :is(#coords, #sel, .sep) { display:none; }

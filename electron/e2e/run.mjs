@@ -59,6 +59,7 @@ import { runDrawFeedbackWorkflows } from './draw-feedback-workflows.mjs';
 import { runWorkflows, verifyRecoveredSession } from "./workflows.mjs";
 import { runThemeWorkflows } from "./theme-workflows.mjs";
 import { runBackgroundWorkflows } from "./background-workflows.mjs";
+import { runWorkspaceLayoutWorkflows } from './workspace-layout-workflows.mjs';
 
 const port = 9400 + (process.pid % 200);
 const profile = await mkdtemp(join(tmpdir(), "modcut-e2e-profile-"));
@@ -104,7 +105,10 @@ async function stop(signal = "SIGTERM") {
 try {
   launch();
   const first = await connectToApp(port);
-  if (process.argv.includes("--background")) {
+  if (process.argv.includes('--workspace-layout')) {
+    await runWorkspaceLayoutWorkflows(first);
+    first.socket.close();
+  } else if (process.argv.includes("--background")) {
     await runBackgroundWorkflows(first, port);
     first.socket.close();
   } else if (process.argv.includes("--theme")) {

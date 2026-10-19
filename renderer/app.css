@@ -1,13 +1,18 @@
 /* modCut workspace layout. Imports design tokens; adds only app-specific structure. */
 
-.app { height: 100vh; display: grid; grid-template-rows: auto auto auto 1fr auto auto; }
+.app { height: 100vh; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto auto; }
 
 /* --- toolbar ------------------------------------------------------------ */
-.toolbar { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3);
+.toolbar { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center;
+           column-gap: var(--sp-3); padding: 0 var(--sp-3);
            background: var(--bg); border-bottom: 1px solid var(--border); }
+.toolbar__actions, .toolbar__options { display: flex; align-items: center; gap: var(--sp-2);
+                                      padding: var(--sp-2) 0; white-space: nowrap; }
+.toolbar__options { grid-column: 3; grid-row: 1; justify-self: end; }
+.toolbar--tabs-below .doc-tabs { grid-column: 1 / -1; grid-row: 2; margin: 0 calc(-1 * var(--sp-3));
+                               padding: 5px var(--sp-3) 0; background: var(--surface-2); }
 .toolbar .brand { display: flex; align-items: center; gap: var(--sp-2); font-weight: 800; font-size: var(--fs-lg); }
 .toolbar .brand-logo { width: 28px; height: 28px; display: block; border-radius: 7px; box-shadow: var(--shadow-1); }
-.toolbar .spacer { flex: 1; }
 .tb-sep { width: 1px; height: 22px; background: var(--border); margin: 0 var(--sp-1); }
 .toolgroup { display: flex; gap: 4px; }
 .tool-on { background: var(--grad-primary); color: var(--on-brand); }
@@ -22,14 +27,15 @@
 .accent { height: 3px; background: var(--grad-hero); }
 
 /* --- document tabs ------------------------------------------------------ */
-.doc-tabs { min-width: 0; display: flex; align-items: stretch; gap: 3px; padding: 5px 8px 0;
-            background: var(--surface-2); border-bottom: 1px solid var(--border); overflow: hidden; }
+.doc-tabs { min-width: 0; display: flex; align-items: stretch; align-self: stretch; gap: 3px; padding: 5px 0 0;
+            overflow: hidden; }
 .doc-tabs__items { min-width: 0; display: flex; align-items: stretch; gap: 3px; overflow-x: auto; scrollbar-width: thin; }
-.doc-tab { flex: 0 1 210px; min-width: 116px; max-width: 240px; display: flex; align-items: center; gap: 7px;
+.doc-tab { flex: 0 0 160px; width: 160px; display: flex; align-items: center; gap: 7px;
            padding: 7px 7px 7px 11px; border: 1px solid transparent; border-bottom: 0; border-radius: 9px 9px 0 0;
            background: transparent; color: var(--text-muted); cursor: pointer; font: 600 var(--fs-sm) var(--font-sans); }
 .doc-tab:hover { background: color-mix(in srgb, var(--bg) 58%, transparent); color: var(--text); }
-.doc-tab.is-active { background: var(--bg); color: var(--text); border-color: var(--border); }
+.doc-tab.is-active { background: var(--surface-2); color: var(--text); border-color: var(--border); }
+.toolbar--tabs-below .doc-tab.is-active { background: var(--bg); }
 .doc-tab__dirty { width: 7px; height: 7px; border-radius: 50%; background: var(--brand); flex: none; }
 .doc-tab__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; text-align: left; }
 .doc-tab__close { width: 21px; height: 21px; display: grid; place-items: center; border: 0; border-radius: 5px;
@@ -40,8 +46,16 @@
 .doc-tabs__new:hover { background: var(--bg); color: var(--brand-deep); }
 
 /* --- workspace split ---------------------------------------------------- */
-.workspace { display: grid; grid-template-columns: 1fr 344px; min-height: 0; transition: grid-template-columns .18s ease; }
-.workspace.collapsed { grid-template-columns: 1fr 0; }
+.workspace { display: grid; grid-template-columns: 52px minmax(0, 1fr) 344px; min-height: 0; transition: grid-template-columns .18s ease; }
+.workspace.collapsed { grid-template-columns: 52px minmax(0, 1fr) 0; }
+.cut-tool-rail { display: flex; flex-direction: column; align-items: center; gap: 12px; min-height: 0;
+                 padding: 10px 4px; overflow-y: auto; scrollbar-width: thin;
+                 background: var(--surface); border-right: 1px solid var(--border); }
+.cut-tool-rail .toolgroup, .cut-tool-rail__view { display: flex; flex-direction: column; gap: 5px; }
+.cut-tool-rail__view { border-top: 1px solid var(--border); padding-top: 12px; }
+.cut-tool-rail .btn { width: 38px; height: 38px; flex: 0 0 38px; padding: 0; justify-content: center; border-radius: var(--rad-2, 6px); }
+.cut-tool-rail .btn svg { width: 22px; height: 22px; }
+.cut-tool-rail .btn:focus-visible { outline: 2px solid var(--brand-mid); outline-offset: 1px; }
 .canvas { position: relative; overflow: hidden; background: var(--surface); }
 .group-nav { position: absolute; z-index: 12; top: 12px; left: 12px; display: flex; align-items: center; gap: 8px;
              max-width: calc(100% - 24px); padding: 6px 10px 6px 6px; border: 1px solid var(--border);
@@ -258,6 +272,8 @@ fieldset.field { min-width: 0; padding: 0; border: 0; margin-inline: 0; }
              background: var(--surface); border-top: 1px solid var(--border);
              font-size: var(--fs-xs); color: var(--text-muted); font-family: var(--font-mono); }
 .statusbar .spacer { flex: 1; }
+.statusbar #file { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.statusbar #selMode { flex: none; height: 22px; padding: 0 6px; font-size: var(--fs-xs); }
 .statusbar #msg { color: var(--brand-deep); font-family: var(--font-sans); font-weight: 600; }
 
 /* --- bed canvas (Paper.js draws the plate, grid, design and selection) --- */
