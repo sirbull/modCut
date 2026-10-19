@@ -1,6 +1,6 @@
 # Laser Preview (D5.1): kontrakt, verifisering og restliste
 
-Oppdatert 2026-10-18. Første versjon implementert. Hovedplan: DRAW_WORKSPACE 4.4.1.
+Oppdatert 2026-10-19. Førsteversjon ferdigstilt og samlet npm test passerer. Hovedplan: DRAW_WORKSPACE 4.4.1.
 
 ## Brukerflyt
 
@@ -76,8 +76,8 @@ originale Paper-stiler og identisk dokument/historikk/dirty/SVG, ekte musegest m
 dialogvalg, filåpning/fanebytte, native meny/Help/Outline og normal appomstart. Testen inngår
 også etter recovery i full Draw-E2E. Skjermbilde er visuelt kontrollert.
 
-Neste er stabilisering og utvidelse av de støttede tilfellene, med output-sammenligninger for
-hvert nytt tilfelle. Oppdater denne kontrakten, hovedplanen, STATUS og WORK_LOG fortløpende.
+Førsteversjonen er ferdigstilt innenfor kontrakten over. Videre utvidelser skal ha
+output-sammenligninger for hvert nytt tilfelle. Oppdater denne kontrakten, hovedplanen, STATUS og WORK_LOG fortløpende.
 
 Forrige kontroll før strekeutvidelsen: 340 Draw-enhetstester, i18n og kontrast er grønne. Målrettet Laser Preview-E2E
 passerer med den nye objektlisten, riktige råd, trygg tekstvisning av navn, uendret dokument/SVG
@@ -140,3 +140,14 @@ og tekst markeres uavklart inntil nye grenser/tekstgeometri kan projiseres rikti
 
 Modell og historikk beholdes av preview. Ny test inngår i full Draw og `--draw-recovery`.
 Samlet npm test er startet etter rettingen; sluttutfall føres separat i WORK_LOG/STATUS.
+
+## Samlet sluttkontroll 2026-10-19
+
+Samlet `npm test` på 5a03cca fullførte med exit 0: Java 28, main 34, renderer 69 og
+Draw 347 passerte, uten hoppede enhetstester; bridge og kontrast passerte. Hele Cut-E2E
+og Draw-E2E passerte, med lagring/autosave, krasjgjenoppretting og alle preview-testene
+i samme kjøring. Tidligere fullkjøringsfeil omtalt over er dermed historikk.
+Førsteversjonen er ferdigstilt; den utvider ikke støtten til de eksplisitt utsatte tilfellene.
+
+Ekstra målrettet kontroll av normal appomstart passerer også: visningsvalget og «Ikke vis
+dette igjen» beholdes etter at appen faktisk avsluttes og startes på nytt.

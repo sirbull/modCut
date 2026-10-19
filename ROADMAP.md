@@ -59,6 +59,9 @@ the same commit that completes an item.
   Clipped stacks and remembered Outline Stroke transfers remain unresolved.
 - [x] Verify clipping against actual Cut imports; keep stroke-width/whole-image and
   Cut/Score boundary limitations explicit in Laser Preview.
+- [x] Complete Laser Preview first-version regression (2026-10-19): full `npm test`
+  passes, including Java/bridge/main/renderer/Draw/contrast and all Cut/Draw E2E.
+  Advanced appearance/output simulation remains separate follow-up work.
 - [x] Resolve the final full-Draw E2E connection close: cancel the old process shutdown
   timeout and target the captured process; verified with `--draw-recovery`.
 

@@ -7,7 +7,12 @@
 > Sist oppdatert: 2026-10-19 (Laser Preview). Arbeidsgren: `feat/vector-draw` (Claude og Codex
 > jobber begge der; hent alltid før du starter, og kjør `npm ci` ved endrede avhengigheter).
 
-## D5.1 Laser Preview — første versjon implementert (2026-10-18)
+## D5.1 Laser Preview — førsteversjon ferdigstilt (2026-10-19)
+
+**Samlet `npm test` passerer på appkoden i `5a03cca` i Linux-skymiljøet.** Java, bridge,
+main, renderer, Draw, kontrast og hele Cut-/Draw-E2E er kontrollert, inkludert native
+Close/Quit, lagring/autosave, krasjgjenoppretting og alle preview-/output-sammenligninger.
+Det er ingen feilede eller hoppede enhetstester. Se sluttkontrollen nederst og WORK_LOG.
 
 **Tilgjengelig fra View og knappen ved Outline:** Cut rødt, Score stiplet rødt, vektorgravering
 svart og Grayscale-bilder i gråtoner. Tegning fortsetter mens visningen er på. Laser processes
@@ -38,8 +43,9 @@ systemfonter, Google Fonts og **Create Outlines** finnes. Send to Cut gjør teks
 uten å endre Draw-teksten. Image Trace, effekter og fase 4/5-funksjoner finnes i grunnform; se detaljene og restlisten nedenfor.
 
 
-**Neste:** stabilisering og de eksplisitte Laser Preview-begrensningene. «Engrave as seen»
-er en separat output-oppgave som fortsatt bare er planlagt.
+**Videre arbeid:** Førsteversjonen er ferdigstilt innenfor den dokumenterte kontrakten.
+Avanserte effekter/kompositter, rasterdithering, flere overføringsvalg og «Engrave as seen»
+er egne, åpne oppgaver. Øvrige Draw-funksjonshull står fortsatt i kapittel 2 og 4.
 
 ## 2. Høyresiden sammenlignet med Illustrator
 
@@ -1114,3 +1120,22 @@ kontroll i Cut. Preview bevarer modell/historikk. Ny test inngår i full Draw/re
 Samlet npm test er startet på endelig kode. Førsteversjonen ferdigstilles innenfor
 støttede tilfeller; avanserte effekter, kompositter, dithering og Engrave as seen står
 som utsatte oppgaver. Sluttresultat fra fullkjøringen føres i neste logg-/statusoppdatering.
+
+
+## Samlet sluttkontroll — førsteversjon (2026-10-19)
+
+`npm test` fullførte med exit 0 på appkoden i 5a03cca. Java: 28 passerte; main: 34;
+renderer: 69; Draw: 347. Ingen feil eller hoppede enhetstester. Bridge og kontrast passerer.
+Hele Cut-E2E og hele Draw-E2E passerer, inkludert alle funksjonsgrupper, 5 000 baner/
+200 000 ankre, prosjekt-IO, kontinuerlig autosave og faktisk krasj/gjenoppretting.
+De avsluttende Laser Preview-testene bekrefter dialog/preferanser, prosessvalg,
+modell-/historikk-/SVG-nøytralitet, faktisk Cut-raster for streker/malingsstacker og
+klippebegrensninger med konkrete råd.
+
+Førsteversjonen er ferdig innenfor kontrakten i cut-optimized.md. De åpne rutene for
+avanserte utseender, eksakt raster-/maskinsimulering og Engrave as seen er bevisst åpne,
+og er ikke ferdigmerket av denne sluttkontrollen. Ingen påstand om testede installatører
+på alle operativsystemer eller fysisk materialresultat.
+
+Ekstra målrettet `--draw-laser-preview` passerer på samme appkode, inkludert faktisk normal
+appomstart med husket visning og undertrykt forklaring. Sluttcommit endrer bare dokumentasjon.

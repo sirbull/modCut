@@ -2177,3 +2177,24 @@ råd og uendret Draw-modell/historikk. Test-fixturen fikk en ekte topp-path/asse
 oppfylle modellvalideringen; ingen appvalidering ble svekket. Klippingstesten inngår i
 full Draw/recovery. Plan, kontrakt, STATUS og HANDOFF er oppdatert før commit/push.
 Samlet npm test er nå startet på denne koden; sluttresultat dokumenteres i eget trinn.
+
+Delresultat fra samlet sluttkontroll: Java 28/28 (0 hoppet), main 34/34, renderer 69/69,
+Draw 347/347, bridge og kontrast passerer. Hele Cut-E2E, inkludert Close/Quit og recovery,
+passerer. Full Draw-E2E kjører videre og har passert eksport og områdetekst. Dette er
+fremdrift, ikke en ferdig full grønn status; sluttresultat følger etter avsluttet prosess.
+
+Samlet sluttkontroll ferdig: `source /workspace/.setup/modcut/activate.sh && npm test`
+fullførte med exit 0 på appkoden i 5a03cca. Java 28/28, main 34/34, renderer 69/69,
+Draw 347/347; ingen feil eller hoppede enhetstester. Bridge og kontrast passerer. Hele
+Cut-E2E og hele Draw-E2E passerer i samme kjøring, inkludert alle funksjonsgrupper,
+ytelse (5 000 baner / 200 000 ankre), lagring/autosave, faktisk krasj/gjenoppretting og
+samtlige Laser Preview-, strek-, malingsstack- og klippingstester. Ingen nye kodefeil
+eller rettinger var nødvendige under fullkjøringen, og ingen assertions er deaktivert.
+
+Førsteversjonen av Laser Preview er dermed ferdigstilt innenfor cut-optimized-kontrakten.
+De åpne avanserte utseendene, rasterdithering, øvrige overføringsvalg, eksakt maskin-/
+materialsimulering og Engrave as seen er fortsatt egne oppgaver. Plan, STATUS og HANDOFF
+skiller nå ferdig førsteversjon fra disse restpunktene, og eldre feilede fullkjøringer
+beholdes som historikk. Ekstra `--draw-laser-preview` passerer også på siste appkode, inkludert ekte normal
+appomstart med husket visningsvalg og «Ikke vis dette igjen». Sluttstatus committes og
+pushes som eget dokumentasjonstrinn; appkoden fra den grønne fullkjøringen er uendret.

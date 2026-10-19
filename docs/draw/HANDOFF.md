@@ -36,10 +36,12 @@ malingslag på vanlige baner/former, med første synlige fyll/strek og konstant 
 346 Draw-tester, i18n og kontrast passerer. Klippede stacker, avansert tekst og lagret
 Outline Stroke-overføring forblir uavklart. Behold sammenligningene ved videre utvidelse.
 
-Ferdigstilling pågår: `--draw-laser-clipping` verifiserer riktig fylt klippegeometri,
-strokebredde utenfor masken og hele bilder ved faktisk Cut-import. Misvisende tilfeller
-får uavklart-status med råd. Samlet npm test er startet; se siste WORK_LOG/STATUS før
-noen full grønn ferdigstatus hevdes.
+**Førsteversjonen er ferdigstilt 2026-10-19:** Samlet npm test passerer på appkoden i
+5a03cca, inkludert Java/bridge/main/renderer/Draw/kontrast, hele Cut-/Draw-E2E,
+krasjgjenoppretting og alle Laser Preview-/output-/klippingstester. 347 Draw-tester passerer.
+Tidligere fullkjøringsfeil over er historikk. Se siste STATUS/WORK_LOG for sluttkontrollen.
+Videre utvidelser (avanserte effekter/kompositter, dithering, overføringsvalg og Engrave
+as seen) og øvrige Draw-hull er fortsatt åpne; ikke bland dem med ferdig førsteversjon.
 
 Ferdige trinn committes og pushes på `feat/vector-draw`. GitHub-tilgangen er rettet;
 `b194897` er pushet og kontrollert på origin. Hent før du fortsetter og bevar parallelle commits.

@@ -2,7 +2,7 @@
 
 **Ny agent:** Start med [overleveringen](draw/HANDOFF.md) for gjeldende stoppunkt, teststatus og lokale kjøreinstruksjoner.
 
-> Status: Fase 0–5 er gjennomført i grunnform. Laser Preview er implementert i første versjon; stabilisering og eksplisitte begrensninger prioriteres før øvrige funksjonshull. Oppdatert oversikt og rekkefølge: [draw/STATUS.md](draw/STATUS.md).
+> Status: Fase 0–5 er gjennomført i grunnform. Laser Preview-førsteversjonen er ferdigstilt og samlet npm test passerer 2026-10-19; avanserte begrensninger og øvrige funksjonshull føres separat. Oppdatert oversikt og rekkefølge: [draw/STATUS.md](draw/STATUS.md).
 > Sist oppdatert: 2026-10-15.
 > Målgruppe: utviklere og kodeagenter (Claude Code og Codex) som skal bygge løsningen.
 
@@ -334,7 +334,7 @@ interface GeometryKernel {
 
 ### 4.4.1 Cut optimized — forhåndsvisning mens man tegner (D5.1)
 
-**Status 2026-10-18: første versjon implementert som Laser Preview.** Navn og fargevalg er
+**Status 2026-10-19: førsteversjon ferdigstilt som Laser Preview; samlet npm test passerer.** Navn og fargevalg er
 oppdatert etter brukerens godkjenning. Se [`draw/cut-optimized.md`](draw/cut-optimized.md)
 for kontrakt, verifisering og eksplisitte grenser.
 
@@ -382,6 +382,8 @@ Preview explanation** lar brukeren tilbakestille den. Nye tekster finnes på eng
   Klippede stacker og lagret Outline Stroke-overføring markeres fortsatt uavklart.
 * [x] Klipping kontrollert mot Cut: vanlig fylt vektorgravering støttes; strokebredde,
   hele bilder, Cut/Score-grenser og klippet tekst får eksplisitt uavklart-status og råd.
+* [x] Samlet `npm test` på endelig appkode: Java/bridge/main/renderer/Draw/kontrast og
+  hele Cut-/Draw-E2E inkludert krasjgjenoppretting og alle preview-sammenligninger.
 * [ ] Full støtte for de utseendene som nå vises uavklart; spesifiseres som egne deloppgaver.
 * [ ] «Engrave as seen» som output-valg, full rasterprosess/DPI-simulering og bevegelsesrekkefølge.
 

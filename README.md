@@ -258,7 +258,9 @@ Normal colour view is the default; your last choice is remembered.
 
 **Laser processes** configures this tab's actual Cut/Score/Engrave/Ignore choices. Amber dotted
 outlines or faded images indicate an unresolved process or appearance. Effects, advanced
-composites and image dithering may need expansion or checking in Cut. Review the final machine,
+composites and image dithering may need expansion or checking in Cut. Clipped strokes and images
+are flagged when the transferred output can differ from the mask; **Show unresolved objects** explains why.
+Review the final machine,
 material, power and speed in Cut; the view does not predict burn depth or movement order.
 
 The first activation explains the view and offers **Don’t show this again**. Reopen the explanation
