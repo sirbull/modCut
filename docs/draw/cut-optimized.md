@@ -58,8 +58,8 @@ tekst og oversettes ikke. Å åpne/lukke oversikten endrer ingen prosessvalg ell
 ## Eksplisitte begrensninger
 
 - Dotted/ravfarget kontur eller dempet bilde betyr uavklart prosess eller utseende. Avanserte
-  kompositter (blend/envelope/masks), uekspanderte effekter, klippede malingsstacker, avansert
-  tekstutseende, ikke-sentrerte streker og rasterdithering krever ekspandering eller kontroll i Cut. Å velge en operasjon gjør ikke en
+  kompositter (blend/envelope/masks), uekspanderte effekter, klippede streker/bilder, klippede
+  malingsstacker, avansert tekstutseende, ikke-sentrerte streker og rasterdithering krever ekspandering eller kontroll i Cut. Å velge en operasjon gjør ikke en
   uverifisert effekt til en støttet simulering.
 - En lagret Cut-lenke med Outline Stroke gjør graveringsstreker uavklart. Dette er en
   konservativ dokumentregel inntil egne overføringsvalg kan forhåndsvises per artboard.
@@ -127,3 +127,16 @@ modell/historikk/SVG og Outline Stroke-varsel i objektlisten.
 
 346 Draw-enhetstester, i18n og kontrast passerer. Full Draw/npm test er ikke gjentatt.
 Klippede malingsstacker og avansert tekstutseende krever egne sammenligninger.
+
+## Klipping kontrollert før ferdigstilling (2026-10-19)
+
+`--draw-laser-clipping` passerer med faktisk Cut-import. Et klippet fylt vektorobjekt
+med én maling vises og overføres med riktig flate (kontrollert med piksler og mål).
+Klippede graveringsstreker markeres uavklart: Cut klipper senterbanen før bredden legges
+til, og en 2 mm strek blir i testen 2 mm høy selv innenfor en 1 mm høy maske. Klippede
+bilder markeres uavklart fordi hele bildet sendes; testen overfører 30 × 15 mm selv om
+masken er 10 × 8 mm. Objektlisten forklarer begge tilfellene. Klippede Cut/Score-baner
+og tekst markeres uavklart inntil nye grenser/tekstgeometri kan projiseres riktig.
+
+Modell og historikk beholdes av preview. Ny test inngår i full Draw og `--draw-recovery`.
+Samlet npm test er startet etter rettingen; sluttutfall føres separat i WORK_LOG/STATUS.

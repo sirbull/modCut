@@ -2151,3 +2151,29 @@ advarselen åpner med hensikt Send-dialogen; testen bekrefter og velger uendret 
 centerline-overføring. Ingen appvalidering/assertions er svekket. Skjermbildet er visuelt
 kontrollert. README, ROADMAP, hovedplan, STATUS, HANDOFF og kontrakt er oppdatert. Full
 Draw/npm test er ikke kjørt på nytt. Ferdig trinn committes og pushes før videre arbeid.
+
+## 2026-10-19: Ferdigstilling — klipping og samlet regresjon (pågår)
+
+Brukeren prioriterer å bli ferdig. Omfanget for denne ferdigstillingen er en verifisert
+førsteversjon av Laser Preview med eksplisitte grenser. Avanserte effekter/kompositter,
+rasterdithering, overføringsvalg og Engrave as seen blir fortsatt egne oppgaver, ikke
+stilltiende ferdigmerket. Grenen er ren og synkronisert før start.
+
+Før full regresjon kontrolleres klippede tilfeller mot faktisk Cut-import: en vanlig fylt
+vektor, en strek hvor gravering kan gå utenfor masken, og et bilde som Cut sender helt.
+Forskjeller som ennå ikke projiseres korrekt skal få uavklart-status med konkrete råd.
+Deretter kjøres npm test på endelig kode. Feil diagnostiseres og rettinger committes/pushes
+trinnvis; sluttstatus skal skille støttet førsteversjon, utsatte tilfeller og faktisk testutfall.
+
+Klippetrinn ferdig og målrettet Electron verifisert. En vanlig fylt vektor klippes til
+12 × 8 mm både i preview-pikslene og i Cut-import. En 2 mm gravert strek klippet av en
+1 mm maske overføres med 2 mm høy strekflate, og et 30 × 15 mm bilde sendes helt selv
+om masken er 10 × 8 mm. Disse får uavklart-status og presise råd i objektlisten. Også
+klippede Cut/Score-baner og tekst er konservativt uavklart, siden skjermklipping ikke
+lover riktige nye skjæregrenser eller overført tekstgeometri. Ingen Cut-output er endret.
+
+Ny `--draw-laser-clipping`-test kontrollerer reelle Cut-mål, rasterstørrelse, fyllpiksler,
+råd og uendret Draw-modell/historikk. Test-fixturen fikk en ekte topp-path/asset for å
+oppfylle modellvalideringen; ingen appvalidering ble svekket. Klippingstesten inngår i
+full Draw/recovery. Plan, kontrakt, STATUS og HANDOFF er oppdatert før commit/push.
+Samlet npm test er nå startet på denne koden; sluttresultat dokumenteres i eget trinn.

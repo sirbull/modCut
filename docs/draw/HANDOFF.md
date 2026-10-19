@@ -36,6 +36,11 @@ malingslag på vanlige baner/former, med første synlige fyll/strek og konstant 
 346 Draw-tester, i18n og kontrast passerer. Klippede stacker, avansert tekst og lagret
 Outline Stroke-overføring forblir uavklart. Behold sammenligningene ved videre utvidelse.
 
+Ferdigstilling pågår: `--draw-laser-clipping` verifiserer riktig fylt klippegeometri,
+strokebredde utenfor masken og hele bilder ved faktisk Cut-import. Misvisende tilfeller
+får uavklart-status med råd. Samlet npm test er startet; se siste WORK_LOG/STATUS før
+noen full grønn ferdigstatus hevdes.
+
 Ferdige trinn committes og pushes på `feat/vector-draw`. GitHub-tilgangen er rettet;
 `b194897` er pushet og kontrollert på origin. Hent før du fortsetter og bevar parallelle commits.
 

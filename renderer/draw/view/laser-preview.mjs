@@ -21,6 +21,11 @@ export function laserPreviewIntent(doc, id, snapshot) {
     node.appearance?.effects?.some(e=>!e.hidden))return {...process,status:'unresolved',reason:'expand-appearance'};
   if(node.type==='text'&&(!hasTextLayout(node)||node.layout.overflow))return {...process,status:'unresolved',reason:'text-layout'};
   const fills=(node.appearance?.fills??[]).filter(e=>!e.hidden),strokes=(node.appearance?.strokes??[]).filter(e=>!e.hidden);
+  if(ancestors.some(a=>a.clip)){
+    if(node.type==='image')return {...process,status:'unresolved',reason:'clipped-image-transfer'};
+    if(process.operation!=='Engrave'||node.type==='text')return {...process,status:'unresolved',reason:'clipped-vector-transfer'};
+    if(strokes.length)return {...process,status:'unresolved',reason:'clipped-stroke-transfer'};
+  }
   if(process.operation==='Engrave'&&node.type!=='image'){
     if(strokes.length&&doc.data.cutLinks?.some(link=>link.options?.strokes==='outline'))return {...process,status:'unresolved',reason:'outline-transfer'};
     const stackedPaint=fills.length>1||strokes.length>1||strokes.some(s=>s.widthProfile?.length);

@@ -380,6 +380,8 @@ Preview explanation** lar brukeren tilbakestille den. Nye tekster finnes på eng
 * [x] Breddeprofiler og flere fyll/streker på vanlige baner/former: første synlige maling
   og konstant bredde som standard Cut-overføring, 66 912 sammenlignede punkter uten avvik.
   Klippede stacker og lagret Outline Stroke-overføring markeres fortsatt uavklart.
+* [x] Klipping kontrollert mot Cut: vanlig fylt vektorgravering støttes; strokebredde,
+  hele bilder, Cut/Score-grenser og klippet tekst får eksplisitt uavklart-status og råd.
 * [ ] Full støtte for de utseendene som nå vises uavklart; spesifiseres som egne deloppgaver.
 * [ ] «Engrave as seen» som output-valg, full rasterprosess/DPI-simulering og bevegelsesrekkefølge.
 

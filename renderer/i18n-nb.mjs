@@ -2,6 +2,9 @@
 // value that is carried over. Product and workspace names (modCut, Cut, Draw) stay as they are.
 export const NB = Object.freeze({
   // Laser Preview
+  "Clipped path boundaries or text may transfer differently. Review the final paths in Cut.": "Klippede banegrenser eller tekst kan overføres annerledes. Kontroller de endelige banene i Cut.",
+  "Cut receives the whole image outside its clipping mask. Review the image in Cut.": "Cut mottar hele bildet uten klippemasken. Kontroller bildet i Cut.",
+  "Cut clips the path before applying stroke width. Engraving can extend outside the mask. Review it in Cut.": "Cut klipper banen før strekbredden legges til. Graveringen kan gå utenfor masken. Kontroller den i Cut.",
   "An earlier transfer used Outline Stroke. Review that output in Cut before updating.": "En tidligere overføring brukte Outline Stroke. Kontroller resultatet i Cut før du oppdaterer.",
   "For paths and shapes, the standard Send to Cut transfer uses the first visible fill and stroke with constant width. Extra paint layers and width profiles remain in Draw.": "For baner og former bruker vanlig Send to Cut-overføring første synlige fyll og strek med konstant bredde. Ekstra malingslag og breddeprofiler beholdes i Draw.",
   "Vector dashes and arrowheads are not sent to Cut. Preview shows solid strokes without arrowheads.": "Stipling og pilspisser på vektorer sendes ikke til Cut. Forhåndsvisningen viser heltrukne streker uten pilspisser.",

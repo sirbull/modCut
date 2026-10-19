@@ -1102,3 +1102,15 @@ Neste støttede tilfeller må avgrenses: klippede malingsstacker, avansert tekst
 effekter/kompositter og rasterdithering. Outline Stroke-overføringer må få egen preview;
 foreløpig er strokede graveringer uavklart når dokumentet har en slik Cut-lenke.
 Full Draw/npm test er ikke gjentatt, og «Engrave as seen» er fortsatt ikke implementert.
+
+
+## Ferdigstilling: klipping kontrollert (2026-10-19)
+
+Målrettet Electron-klippingstest passerer: fylt vektorgravering har riktige piksler/mål,
+klippet strek kan gravere utenfor masken, og bildet sendes helt til Cut. De to siste får
+nå uavklart-status med konkrete råd. Cut/Score-grenser og klippet tekst krever også
+kontroll i Cut. Preview bevarer modell/historikk. Ny test inngår i full Draw/recovery.
+
+Samlet npm test er startet på endelig kode. Førsteversjonen ferdigstilles innenfor
+støttede tilfeller; avanserte effekter, kompositter, dithering og Engrave as seen står
+som utsatte oppgaver. Sluttresultat fra fullkjøringen føres i neste logg-/statusoppdatering.

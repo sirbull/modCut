@@ -1,5 +1,11 @@
 /** User-facing explanations for unresolved Laser Preview output. No document writes. */
 export function laserIssueAdvice(reason) {
+  if (reason === 'clipped-image-transfer')
+    return 'Cut receives the whole image outside its clipping mask. Review the image in Cut.';
+  if (reason === 'clipped-stroke-transfer')
+    return 'Cut clips the path before applying stroke width. Engraving can extend outside the mask. Review it in Cut.';
+  if (reason === 'clipped-vector-transfer')
+    return 'Clipped path boundaries or text may transfer differently. Review the final paths in Cut.';
   if (['missing-process-settings','missing-process-layer','missing-output-setting','inconsistent-global-operation','invalid-operation'].includes(reason))
     return 'Choose an operation in Laser processes, then review its settings in Cut.';
   if (reason === 'expand-appearance')

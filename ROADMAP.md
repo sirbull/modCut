@@ -57,6 +57,8 @@ the same commit that completes an item.
 - [x] Laser Preview for width profiles and multiple fills/strokes on plain paths/shapes:
   first visible paint and constant width match standard Cut transfer (66,912 samples).
   Clipped stacks and remembered Outline Stroke transfers remain unresolved.
+- [x] Verify clipping against actual Cut imports; keep stroke-width/whole-image and
+  Cut/Score boundary limitations explicit in Laser Preview.
 - [x] Resolve the final full-Draw E2E connection close: cancel the old process shutdown
   timeout and target the captured process; verified with `--draw-recovery`.
 

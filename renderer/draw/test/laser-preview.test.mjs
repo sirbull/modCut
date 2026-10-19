@@ -103,14 +103,14 @@ test('engraving paints bare base geometry, hides its stack and restores everythi
   }),/draw failed/);
   assert.equal(stack.visible,true);assert.equal(base.fillColor,null);assert.equal(base.strokeColor,null);assert.equal(base.strokeWidth,0);
 });
-test('clipped paint stacks remain unresolved while ordinary clipped strokes keep their existing projection',()=>{
+test('clipped strokes remain unresolved because Cut applies stroke width after clipping',()=>{
   for(const stacked of [false,true]){
     const look=appearance(null,'#00FF00',2);if(stacked)look.strokes.push({...look.strokes[0],width:4});
     const p=createNode('path',{id:'p',subpaths:square,appearance:look}),group=createNode('group',{clip:true,children:[p]});
     const doc=new DrawDocument(createDocument({layers:[createNode('layer',{children:[group]})]}));
     const snapshot={mappingMode:'color',layers:[{color:'#00ff00',key:'vector:#00ff00',op:'Engrave',output:true,raster:false}]};
     const intent=laserPreviewIntent(doc,'p',snapshot);
-    assert.equal(intent.status,stacked?'unresolved':'resolved');
+    assert.equal(intent.status,'unresolved');assert.equal(intent.reason,'clipped-stroke-transfer');
     assert.equal(intent.vectorPaint,undefined);
   }
 });
@@ -121,5 +121,18 @@ test('a remembered Outline Stroke transfer stays unresolved instead of promising
     const intent=laserPreviewIntent(doc,'p',{mappingMode:'color',layers:[{color:'#00ff00',key:'vector:#00ff00',op:'Engrave',output:true,raster:false}]});
     assert.equal(intent.status,strokes==='outline'?'unresolved':'resolved');
     if(strokes==='outline')assert.equal(intent.reason,'outline-transfer');
+  }
+});
+test('clipped filled vectors resolve for engraving; Cut/Score boundaries and whole images need review',()=>{
+  for(const type of ['path','image'])for(const op of ['Cut','Score','Engrave']){
+    if(type==='image'&&op!=='Engrave')continue;
+    const node=createNode(type,{id:'p',...(type==='path'?{subpaths:square,appearance:appearance('#00FF00',null)}:{assetId:'image',width:10,height:10})});
+    const group=createNode('group',{clip:true,children:[node,createNode('path',{subpaths:square,appearance:appearance(null,null)})]});
+    const doc=new DrawDocument(createDocument({layers:[createNode('layer',{children:[group]})],assets:{image:{mimeType:'image/png',data:'AA==',width:10,height:10}}}));
+    const color=type==='image'?'#000000':'#00ff00',raster=type==='image';
+    const intent=laserPreviewIntent(doc,'p',{mappingMode:'color',layers:[{color,key:`${raster?'raster':'vector'}:${color}`,op,output:true,raster}]});
+    assert.equal(intent.status,type==='path'&&op==='Engrave'?'resolved':'unresolved');
+    if(type==='image')assert.equal(intent.reason,'clipped-image-transfer');
+    if(type==='path'&&op!=='Engrave')assert.equal(intent.reason,'clipped-vector-transfer');
   }
 });
