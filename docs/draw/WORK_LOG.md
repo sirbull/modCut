@@ -2268,3 +2268,29 @@ og regresjon for sammenhengende linje med overlap/variasjon. Normal Electron
 `--draw-window` passerer, inkludert Scribble-dialog, utseende og Cut-SVG. Samlet lokal
 Draw-enhetstestkjøring er også grønn (353 tester, inklusive pågående preview-tester).
 Preview-utvidelsen og kontroll av strekhjørner følger i separat commit.
+
+## 2026-10-19: Scribble-preview og korrekte strekhjørner — ferdig
+
+5ce474c er pushet før preview-utvidelsen. Scribble bruker fyllfargens faktiske prosesslag,
+egen effektbredde og åpne linjer, med originale strekstiler/malingsstacker ignorert som i
+Send to Cut. Manglende malbart fyll og klippet Scribble er fortsatt eksplisitt uavklart.
+
+Første pikselkontroll avdekket også et hjørneavvik. En midlertidig hypotese om affine
+transformasjoner ble forkastet etter at samme avvik ble reprodusert ved jevn skalering.
+Ekte Cut-import viser miterLimit 10, mens preview brukte 4. Preview er rettet til 10;
+Cut-output og normal Draw-stil endres ikke. Affin Scribble støttes uten særbegrensning.
+E2E krever fortsatt null avvik og bekrefter nå også faktisk importert hjørnegrense.
+
+353 Draw-tester, i18n og kontrast passerer. --draw-window med normal Scribble og samlet
+--draw-recovery med IO/autosave, virkelig krasj/restart og alle preview-scenarier passerer.
+Ny --draw-laser-scribble inngår i recovery/full Draw: 64 315 sammenlignede punkter,
+5 006 svarte, null avvik mot ekte Cut-raster. Cut/Score gir røde piksler; hull, ekstra
+maling, affine foreldre, fast mm-bredde, modell-/historikk-/SVG-nøytralitet, forventet
+Send-lenke og gjenopprettet normalstil er kontrollert. Skjermbildet er visuelt kontrollert.
+Samlet `npm test` fullførte med exit 0 på siste appkode: Java 28, main 34, renderer 69,
+Draw 353, ingen feil eller hoppede enhetstester; bridge og kontrast passerer. Hele Cut-/
+Draw-E2E passerer, med 5 000 baner / 200 000 ankre, prosjekt-IO/autosave, faktisk
+krasj/restart og alle preview-/Cut-raster-sammenligninger. Logg: /tmp/modcut-scribble-full.log.
+Plan, restliste, README, ROADMAP, STATUS og HANDOFF er oppdatert før commit/push.
+Gruppe-/kompositteffekter, pixeleffekter/dithering, avanserte overføringsvalg og
+Engrave as seen gjenstår og er ikke ferdigmerket.

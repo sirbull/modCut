@@ -254,8 +254,9 @@ not create gaps in the machine path. Vector engraving shows solid strokes withou
 as transferred by Send to Cut; normal Draw view keeps your original dashes and arrows.
 Standard transfer uses the first visible fill and stroke with constant width on paths and
 shapes, including artwork with width profiles or multiple paint layers. Extra paint stays in Draw.
-Round Corners, Zig Zag, Offset Path, Transform, Pucker & Bloat, Roughen, Twist, Free Distort
-and Warp on individual paths/shapes are supported.
+Round Corners, Zig Zag, Offset Path, Transform, Pucker & Bloat, Roughen, Twist, Free Distort,
+Warp and Scribble on individual paths/shapes are supported. Scribble uses its fill colour
+as the process identity and its own line width, matching the transferred open lines.
 Normal colour view is the default; your last choice is remembered.
 
 **Laser processes** configures this tab's actual Cut/Score/Engrave/Ignore choices. Amber dotted

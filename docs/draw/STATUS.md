@@ -9,7 +9,7 @@
 
 ## D5.1 Laser Preview — førsteversjon ferdigstilt (2026-10-19)
 
-**Samlet `npm test` passerer på appkoden i `5a03cca` i Linux-skymiljøet.** Java, bridge,
+**Samlet `npm test` passerer også etter Scribble-utvidelsen i Linux-skymiljøet.** Java, bridge,
 main, renderer, Draw, kontrast og hele Cut-/Draw-E2E er kontrollert, inkludert native
 Close/Quit, lagring/autosave, krasjgjenoppretting og alle preview-/output-sammenligninger.
 Det er ingen feilede eller hoppede enhetstester. Se sluttkontrollen nederst og WORK_LOG.
@@ -31,9 +31,9 @@ tekstutseende og lagrede Outline Stroke-valg forblir uavklart.
 Plan/status/arbeidslogg er oppdatert ved hvert trinn; hver ferdige leveranse er committet på
 `feat/vector-draw`. GitHub-tilgangen er rettet; alle tidligere leveransecommits er pushet og kontrollert på origin.
 
-**Siste utvidelse etter basisversjonen:** Round Corners, Zig Zag, Offset Path og Transform
-på enkeltobjekter er støttet, med 349 Draw-tester og grønn målrettet recovery/output-
-sammenligning. Full npm test er ikke gjentatt etter utvidelsen. Se siste oppføring nederst.
+**Siste utvidelser etter basisversjonen:** ni vektordeformasjoner og Scribble på
+enkeltobjekter er støttet. 353 Draw-tester og samlet målrettet recovery/output-
+sammenligning passerer. Se siste oppføring nederst for fullkjøring og begrensninger.
 
 ## 1. Kort oppsummert
 
@@ -1169,3 +1169,25 @@ og former. Samme Cut/Score/Engrave-regler og avgrensninger som for de fire førs
 vektoreffektene. E2E kontrollerer også Free Distort→Warp i kombinasjon. 66 798 punkter
 mot virkelig Cut-raster gir null avvik. Samlet recovery, 349 Draw-tester, i18n og
 kontrast passerer. Full npm test er ikke gjentatt. Neste avgrensede trinn er Scribble.
+
+## Scribble i Laser Preview og feilretting av hull (2026-10-19)
+
+Scribble på enkeltstående baner/former bruker fyllfargens Cut-prosess og egen linjebredde,
+også med malingsstacker, affine foreldre og fast mm-bredde. Ordinær strek ignoreres slik
+Cut allerede gjør. Ingen malbart fyll eller klippet Scribble gir fortsatt uavklart-status.
+En separat geometriretting (5ce474c) hindrer at radforbindelser uten variasjon krysser hull;
+bevisst overlap/variasjon og etterfølgende kurviness er ikke avgrenset som blekkmaske.
+
+Den faktiske SVG-importen i Cut bruker miterLimit 10; preview er rettet fra 4 til 10,
+som fjerner avvik ved spisse hjørner også under shear. Normalstilen endres ikke.
+`--draw-laser-scribble` inngår i full Draw/recovery: 64 315 sammenlignede punkter,
+5 006 svarte, null avvik mot virkelig Cut-raster (kantpiksler utelatt). Original modell,
+historikk, SVG og normalstil beholdes; bare Send legger til forventet lenke/historikksteg.
+353 Draw-tester, i18n, kontrast, `--draw-window` og samlet `--draw-recovery` passerer.
+Samlet `npm test` fullførte med exit 0 etter utvidelsen: Java 28, main 34, renderer 69
+og Draw 353, uten feil eller hoppede enhetstester. Bridge, kontrast og hele Cut-/Draw-
+E2E passerer, inkludert 5 000 baner / 200 000 ankre, prosjekt-IO/autosave, faktisk
+krasj/restart og alle tidligere og nye preview-/Cut-raster-sammenligninger.
+
+Neste områder er gruppe-/kompositteffekter, pixeleffekter/dithering, avanserte overførings-/
+klippetilfeller og Engrave as seen. Øvrige Draw-hull er fortsatt egne oppgaver.

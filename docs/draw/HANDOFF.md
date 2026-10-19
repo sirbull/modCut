@@ -2,7 +2,7 @@
 
 **Start med [STATUS.md](STATUS.md)**: én side med hva som er gjort og hva som gjenstår.
 
-Oppdatert 2026-10-17. Arbeidsgren: `feat/vector-draw` (Claude og Codex jobber der; hent før du starter).
+Oppdatert 2026-10-19. Arbeidsgren: `feat/vector-draw` (Claude og Codex jobber der; hent før du starter).
 
 **Høyrepanelet følger nå [RIGHT_PANELS.md](RIGHT_PANELS.md).** Trinn 1 (dokk med Properties over
 Layers, dragbar delelinje, panelgrupper som flyout med faner) trinn 2 (scrubby labels) og trinn 3
@@ -52,6 +52,15 @@ Gruppe-/pixeleffekter og øvrige vektoreffekter er fortsatt uavklart. Se siste S
 Ytterligere fem blad-/objekteffekter er verifisert: Pucker & Bloat, Roughen, Twist,
 Free Distort og Warp. `--draw-laser-distortions` inngår i recovery/full Draw; 349 Draw-
 tester og målrettet recovery er grønne. Full npm test er ikke gjentatt. Scribble tas separat.
+
+Siste tillegg: Scribble på enkeltobjekter er verifisert mot ekte Cut-raster (64 315 punkter,
+null avvik). Fyllbasert prosess, egen bredde, hull, malingsstacker, affine foreldre og fast
+mm-bredde er med. Klippet Scribble og manglende fyll forblir uavklart. Hullforbindelser er
+rettet separat i 5ce474c; preview bruker nå Cut-importens faktiske miterLimit 10.
+353 Draw-tester, i18n, kontrast, normal --draw-window og samlet recovery passerer.
+Ny samlet `npm test` er grønn etter Scribble-utvidelsen: hele Cut-/Draw-E2E,
+prosjekt-IO/autosave, krasj/restart og alle preview-sammenligninger. Gruppe-/kompositteffekter,
+pixeleffekter/dithering, overføringsvalg og Engrave as seen gjenstår.
 
 Ferdige trinn committes og pushes på `feat/vector-draw`. GitHub-tilgangen er rettet;
 `b194897` er pushet og kontrollert på origin. Hent før du fortsetter og bevar parallelle commits.

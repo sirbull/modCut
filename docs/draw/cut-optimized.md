@@ -171,7 +171,7 @@ fullkjøringen over gjelder appkoden i 5a03cca.
 
 Gjenværende områder:
 
-- Scribble på enkeltobjekter samt gruppe-/kompositteffekter (bl.a. Blend og masker).
+- Gruppe-/kompositteffekter (bl.a. Blend og masker).
 - Pixeleffekter og rasterdithering i preview.
 - Overføringsvalg som Outline Stroke per artboard, avansert tekst og flere klippetilfeller.
 - Engrave as seen, som endrer output og krever egen implementering/test.
@@ -185,3 +185,24 @@ endret geometri, kombinasjonen Free Distort→Warp, rød Cut/Score-visning og ek
 66 798 sammenlignede punkter, 14 419 svarte, null avvik (kantpiksler utelatt).
 Normalvisning, modell, historikk og SVG beholdes. 349 Draw-tester, i18n og kontrast
 passerer. Full npm test er ikke gjentatt etter utvidelsen. Scribble tas som eget trinn.
+
+## Scribble på enkeltobjekter (2026-10-19)
+
+Scribble på path/shape støttes med fyllfargens prosesslag, egen Scribble-bredde og åpne
+linjer, slik standard Send to Cut faktisk overfører effekten. Ordinære streker, pilspisser,
+breddeprofiler og ekstra maling påvirker ikke denne overføringen. Scribble uten synlig
+malbart fyll og klippet Scribble forblir uavklart. Gruppe-/pixeleffekter er fortsatt utsatt.
+
+En eksisterende feil i radforbindelser gjennom hull er rettet separat (5ce474c). Geometrien
+brukes både i normal Draw og Cut. Overlap/variasjon og kurviness kan fortsatt bevisst la
+streken stikke utenfor konturen; dette er ikke en garanti for at alt blekk ligger i fyllet.
+Preview matcher nå også Cut-importens faktiske miterLimit 10 ved spisse strekhjørner,
+uten å endre normal Draw-stil eller Cut-output.
+
+`--draw-laser-scribble` inngår i full Draw og målrettet recovery. Faktisk Cut/Score gir
+røde piksler; Engrave-canvas matcher virkelig Cut-import i 64 315 punkter (5 006 svarte,
+null avvik, kant-/anti-aliasing-piksler utelatt). Hull, flere fyll/streker, affine foreldre,
+fast mm-bredde, uendret dokument/historikk/SVG og gjenopprettet normalstil er verifisert.
+353 Draw-tester, i18n, kontrast, normal `--draw-window` og samlet `--draw-recovery` passerer.
+Samlet `npm test` passerer også etter denne utvidelsen (exit 0), inkludert hele Cut-/
+Draw-E2E, prosjekt-IO/autosave, krasjgjenoppretting og alle preview-sammenligninger.

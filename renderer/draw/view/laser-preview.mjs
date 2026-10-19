@@ -3,9 +3,10 @@ import { resolveCutPreviewProcess } from './cut-process.mjs';
 import { nodeContext } from '../doc/layers.mjs';
 import { hasTextLayout } from '../doc/text-layout.mjs';
 import { cutPaint } from '../io/cut-paint.mjs';
+import { scribbleOf } from '../doc/effects.mjs';
 
 export const LASER_COLORS = Object.freeze({Cut:'#C5221F',Score:'#C5221F',Engrave:'#000000',unresolved:'#965300'});
-const PREVIEW_VECTOR_EFFECTS=new Set(['round-corners','zig-zag','offset-path','transform','pucker-bloat','roughen','twist','free-distort','warp']);
+const PREVIEW_VECTOR_EFFECTS=new Set(['round-corners','zig-zag','offset-path','transform','pucker-bloat','roughen','twist','free-distort','warp','scribble']);
 
 export function laserPreviewIntent(doc, id, snapshot) {
   const node=doc.getNode(id), process=resolveCutPreviewProcess(doc,id,snapshot);
@@ -22,13 +23,16 @@ export function laserPreviewIntent(doc, id, snapshot) {
     node.appearance?.effects?.some(e=>!e.hidden&&(!['path','shape'].includes(node.type)||!PREVIEW_VECTOR_EFFECTS.has(e.type))))return {...process,status:'unresolved',reason:'expand-appearance'};
   if(node.type==='text'&&(!hasTextLayout(node)||node.layout.overflow))return {...process,status:'unresolved',reason:'text-layout'};
   const fills=(node.appearance?.fills??[]).filter(e=>!e.hidden),strokes=(node.appearance?.strokes??[]).filter(e=>!e.hidden);
+  const scribbled=scribbleOf(node);
+  if(scribbled&&!cutPaint(node).fill)return {...process,status:'unresolved',reason:'expand-appearance'};
   if(ancestors.some(a=>a.clip)){
     if(node.type==='image')return {...process,status:'unresolved',reason:'clipped-image-transfer'};
-    if(process.operation!=='Engrave'||node.type==='text')return {...process,status:'unresolved',reason:'clipped-vector-transfer'};
+    if(process.operation!=='Engrave'||node.type==='text'||scribbled)return {...process,status:'unresolved',reason:'clipped-vector-transfer'};
     if(strokes.length)return {...process,status:'unresolved',reason:'clipped-stroke-transfer'};
   }
   if(process.operation==='Engrave'&&node.type!=='image'){
     if(strokes.length&&doc.data.cutLinks?.some(link=>link.options?.strokes==='outline'))return {...process,status:'unresolved',reason:'outline-transfer'};
+    if(scribbled)return {...process,vectorPaint:{fill:false,stroke:true,width:scribbled.strokeWidth,strokeScaling:node.strokeScaling!==false}};
     const stackedPaint=fills.length>1||strokes.length>1||strokes.some(s=>s.widthProfile?.length);
     if(strokes.some(s=>s.align&&s.align!=='center')||
       (stackedPaint&&(!['path','shape'].includes(node.type)||ancestors.some(a=>a.clip))))return {...process,status:'unresolved',reason:'expand-stroke'};
@@ -86,7 +90,8 @@ export function withLaserAppearance(root, {resolve,roles=new Map(),zoom=1}, draw
       const m=item.globalMatrix,scale=m?Math.sqrt(Math.abs(m.a*m.d-m.b*m.c)):1;
       const paint=intent.vectorPaint;
       const width=paint?paint.width*(paint.strokeScaling?scale:1)*zoom:item.strokeScaling===false?item.strokeWidth:item.strokeWidth*scale*zoom;
-      patch(item,{fillColor:(paint?paint.fill:item.fillColor)?LASER_COLORS.Engrave:null,strokeColor:(paint?paint.stroke:item.strokeColor)?LASER_COLORS.Engrave:null,strokeWidth:width,strokeScaling:false,strokeCap:'butt',strokeJoin:'miter',miterLimit:4,dashArray:[],dashOffset:0,opacity:1,blendMode:'normal'});
+      // Paper's actual Cut SVG import defaults to miterLimit 10, not Draw's 4.
+      patch(item,{fillColor:(paint?paint.fill:item.fillColor)?LASER_COLORS.Engrave:null,strokeColor:(paint?paint.stroke:item.strokeColor)?LASER_COLORS.Engrave:null,strokeWidth:width,strokeScaling:false,strokeCap:'butt',strokeJoin:'miter',miterLimit:10,dashArray:[],dashOffset:0,opacity:1,blendMode:'normal'});
     }
   }
   try{walk(root);return draw();}finally{for(let i=restore.length-1;i>=0;i--)restore[i]();}

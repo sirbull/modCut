@@ -389,6 +389,11 @@ Preview explanation** lar brukeren tilbakestille den. Nye tekster finnes på eng
   349 Draw-tester og målrettet recovery passerer; full npm test er ikke gjentatt etter utvidelsen.
 * [x] Pucker & Bloat, Roughen, Twist, Free Distort og Warp på enkeltobjekter;
   66 798 Cut-raster-/canvaspunkter uten avvik og målrettet recovery passerer.
+* [x] Scribble på enkeltobjekter: fyllbasert prosess og egen strekbredde, hull, stacker,
+  affine foreldre og fast mm-bredde; 64 315 Cut-raster-/canvaspunkter uten avvik.
+  Rettet forbindelser gjennom hull og previewens grense for spisse strekhjørner.
+  353 Draw-tester og ny samlet npm test passerer, inkludert hele Cut-/Draw-E2E,
+  IO/autosave, faktisk krasj/restart og alle preview-sammenligninger.
 * [ ] Full støtte for de utseendene som nå vises uavklart; spesifiseres som egne deloppgaver.
 * [ ] «Engrave as seen» som output-valg, full rasterprosess/DPI-simulering og bevegelsesrekkefølge.
 

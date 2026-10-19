@@ -21,7 +21,7 @@ test('Cut and Score use distinct red centre lines at every zoom and restore orig
 test('engraving follows the painted vector silhouette, with no colour-layer darkness assumption',()=>{
   const item=path();
   withLaserAppearance(item,{resolve:()=>resolved('Engrave'),zoom:2},()=>{
-    assert.equal(item.fillColor,'#000000');assert.equal(item.strokeColor,'#000000');assert.equal(item.strokeWidth,4);assert.equal(item.strokeScaling,false);assert.deepEqual(item.dashArray,[]);
+    assert.equal(item.fillColor,'#000000');assert.equal(item.strokeColor,'#000000');assert.equal(item.strokeWidth,4);assert.equal(item.strokeScaling,false);assert.equal(item.miterLimit,10);assert.deepEqual(item.dashArray,[]);
   });
   assert.equal(item.fillColor,'#00ff00');
   assert.deepEqual(item.dashArray,[4,2]);
@@ -138,7 +138,7 @@ test('clipped filled vectors resolve for engraving; Cut/Score boundaries and who
   }
 });
 test('verified leaf vector effects resolve without changing parameters for Cut, Score and Engrave',()=>{
-  for(const op of ['Cut','Score','Engrave'])for(const type of ['round-corners','zig-zag','offset-path','transform','pucker-bloat','roughen','twist','free-distort','warp']){
+  for(const op of ['Cut','Score','Engrave'])for(const type of ['round-corners','zig-zag','offset-path','transform','pucker-bloat','roughen','twist','free-distort','warp','scribble']){
     const look=appearance('#00FF00',null);look.effects=[effect(type)];
     const {doc,snapshot}=fixture({appearance:look});snapshot.layers[0].op=op;const before=doc.serialize();
     assert.equal(laserPreviewIntent(doc,'p',snapshot).status,'resolved',`${op}: ${type}`);
@@ -146,7 +146,7 @@ test('verified leaf vector effects resolve without changing parameters for Cut, 
   }
 });
 test('pixel effects, unsupported vector effects and group effects remain unresolved',()=>{
-  for(const effects of [[effect('gaussian-blur')],[effect('round-corners'),effect('drop-shadow')],[effect('scribble')],[effect('warp'),effect('feather')]]){
+  for(const effects of [[effect('gaussian-blur')],[effect('round-corners'),effect('drop-shadow')],[effect('rasterize')],[effect('warp'),effect('feather')]]){
     const f=fixture({appearance:{...appearance('#00FF00',null),effects}});
     assert.equal(laserPreviewIntent(f.doc,'p',f.snapshot).reason,'expand-appearance');
   }
@@ -155,4 +155,20 @@ test('pixel effects, unsupported vector effects and group effects remain unresol
   const p=createNode('path',{id:'p',subpaths:square,appearance:appearance('#00FF00',null)}),group=createNode('group',{children:[p],appearance:{...appearance(null,null),effects:[effect('round-corners')]}});
   const doc=new DrawDocument(createDocument({layers:[createNode('layer',{children:[group]})]}));
   assert.equal(laserPreviewIntent(doc,'p',hidden.snapshot).reason,'expand-appearance');
+});
+test('Scribble uses fill process identity and its own stroke width, ignoring extra paint and original strokes',()=>{
+  const look=appearance('#00FF00','#0000FF',5);look.fills.push(appearance('#FF0000',null).fills[0]);look.strokes.push({...look.strokes[0],width:8});look.effects=[effect('scribble',{strokeWidth:1.2})];
+  const {doc,snapshot}=fixture({appearance:look,strokeScaling:false});snapshot.layers[0].op='Engrave';
+  const intent=laserPreviewIntent(doc,'p',snapshot);
+  assert.equal(intent.color,'#00ff00');assert.deepEqual(intent.vectorPaint,{fill:false,stroke:true,width:1.2,strokeScaling:false});
+  const noFill=fixture({appearance:{...appearance(null,'#00FF00',2),effects:[effect('scribble')]}});
+  assert.equal(laserPreviewIntent(noFill.doc,'p',noFill.snapshot).reason,'expand-appearance');
+});
+test('Scribble resolves under affine parents with scaled and world-mm widths',()=>{
+  for(const strokeScaling of [true,false])for(const transform of [[2,0,0,2,5,7],[2,0,.4,1,5,7]]){
+    const node=createNode('shape',{id:'p',shape:'rect',params:{width:10,height:10},strokeScaling,appearance:{...appearance('#00FF00',null),effects:[effect('scribble')]}});
+    const doc=new DrawDocument(createDocument({layers:[createNode('layer',{children:[createNode('group',{transform,children:[node]})]})]}));
+    const result=laserPreviewIntent(doc,'p',{mappingMode:'color',layers:[{color:'#00ff00',key:'vector:#00ff00',op:'Engrave',output:true,raster:false}]});
+    assert.equal(result.status,'resolved');
+  }
 });

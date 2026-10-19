@@ -67,6 +67,10 @@ the same commit that completes an item.
   and targeted recovery pass (full npm test not repeated after this extension).
 - [x] Verify leaf Pucker & Bloat, Roughen, Twist, Free Distort and Warp in Laser Preview:
   66,798 actual Cut raster comparison samples match; targeted recovery passes.
+- [x] Verify leaf Scribble in Laser Preview: fill-based process, own line width, holes,
+  paint stacks, affine parents and world-mm widths; 64,315 actual Cut raster samples match.
+  Fix row connectors crossing holes and match Cut’s imported sharp-corner limit.
+  Full npm test passes after these extensions, including all Cut/Draw E2E and recovery.
 - [x] Resolve the final full-Draw E2E connection close: cancel the old process shutdown
   timeout and target the captured process; verified with `--draw-recovery`.
 
