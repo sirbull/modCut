@@ -37,6 +37,19 @@ test('bending the closing segment preserves closure and rejects non-existent cur
   assert.throws(()=>bendCurve(path,9,.5,delta),RangeError);
   assert.throws(()=>bendCurve(path,0,.5,[Infinity,0]),RangeError);
 });
+test('rubber-band bending pulls the sides inward into a narrower, rounded peak',()=>{
+  const path={closed:false,segments:[anchor([0,0]),anchor([100,0])]};
+  assert.deepEqual(bendCurve(path,0,.5,[0,0]),path,'A stationary grab changes nothing');
+  const result=bendCurve(path,0,.5,[0,-40]),[a,b]=result.segments;
+  close(cubic(a,b,.5),[50,-40]);
+  assert.ok(a.out[0]>40&&b.in[0]<-40,'Both endpoint tangents slope toward the grabbed region');
+  assert.ok(cubic(a,b,.25)[0]>25,'The flank at 75% height is closer to the peak than the old broad arch');
+  const before=cubic(a,b,.5-1e-4),after=cubic(a,b,.5+1e-4);
+  assert.ok(after[0]>before[0],'The peak has a nonzero tangent, not a cusp');
+  close([before[1]],[after[1]]);
+  const reversed=bendCurve(reversePath(path),0,.5,[0,-40]);
+  assert.deepEqual(reversePath(reversed),result,'Pulling is independent of path direction');
+});
 test('moving, deleting and converting anchors do not alter unrelated subpaths',()=>{
   const paths=[{closed:false,segments:[[0,0],[10,0],[10,10]].map(anchor)},{closed:true,segments:[[20,20],[30,20],[30,30]].map(anchor)}],selected=[{subpath:0,segment:1}];
   const moved=moveAnchors(paths,selected,[3,4]);assert.deepEqual(moved[0].segments[1].p,[13,4]);assert.deepEqual(moved[1],paths[1]);assert.deepEqual(paths[0].segments[1].p,[10,0]);

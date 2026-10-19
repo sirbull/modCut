@@ -1,9 +1,12 @@
 const pathTools=new Set(['direct-selection','pen','add-anchor','delete-anchor','anchor-point']);
 export function createAnchorOverlay(scope,layer,state,toWorld,getNode=id=>state.document.getNode(id),corners=()=>[]) {
-  const group=new scope.Group({insert:false});layer.addChild(group);
+  const group=new scope.Group({insert:false,name:'Path anchors'});layer.addChild(group);
   return {
     update(){
       group.removeChildren();if(!pathTools.has(state.ui?.tool))return;
+      // Drag previews are appended to this same layer after the overlay was
+      // created. Keep every anchor and handle above their fill and outline.
+      group.bringToFront();
       const zoom=scope.view.zoom,selected=state.selection.anchors;
       for(const id of state.selection.ids){const node=getNode(id);if(node?.type!=='path')continue;
         node.subpaths.forEach((path,subpath)=>path.segments.forEach((segment,index)=>{

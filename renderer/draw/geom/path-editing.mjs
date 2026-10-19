@@ -17,17 +17,25 @@ export function splitCurve(path,index,t) {
   a.out=sub(q0,p0);b.in=sub(q2,p3);
   result.segments.splice(index+1,0,{p,in:sub(r0,p),out:sub(r1,p)});return result;
 }
-/** Move the grabbed point on a cubic by delta without moving either anchor.
- * The two control points share the smallest combined displacement that makes
- * B(t) follow the pointer exactly. Other segments' handles remain unchanged.
+/** Pull a cubic toward the grabbed point, like a rounded rubber-band peak.
+ * Draw the control points inward toward the target before solving B(t) exactly,
+ * so a straight segment forms sloping sides instead of a broad, vertical-sided arch.
+ * Anchors and the neighboring segments' handles remain unchanged.
  */
 export function bendCurve(path,index,t,delta) {
   if(!(t>0&&t<1)||!delta.every(Number.isFinite))throw new RangeError('Bend must be inside the curve with a finite delta');
   const result=bakeCorners(path),a=result.segments[index],b=result.segments[(index+1)%result.segments.length];
   if(!a||!b||!path.closed&&index===result.segments.length-1)throw new RangeError('Unknown curve');
-  const u=1-t,w1=3*u*u*t,w2=3*u*t*t,total=w1*w1+w2*w2;
-  a.out=add(a.out,delta.map(n=>n*w1/total));
-  b.in=add(b.in,delta.map(n=>n*w2/total));
+  const distance=Math.hypot(...delta);if(!distance)return result;
+  const u=1-t,w0=u*u*u,w1=3*u*u*t,w2=3*u*t*t,w3=t*t*t,total=w1*w1+w2*w2;
+  const p1=add(a.p,a.out),p2=add(b.p,b.in);
+  const target=a.p.map((n,i)=>w0*n+w1*p1[i]+w2*p2[i]+w3*b.p[i]+delta[i]);
+  // Increase the inward pull continuously with drag distance; no initial jump.
+  const span=Math.hypot(...sub(b.p,a.p))||Math.hypot(...sub(p2,p1))||1;
+  const pull=1-Math.exp(-8*distance/span),c1=lerp(p1,target,pull),c2=lerp(p2,target,pull);
+  const residual=target.map((n,i)=>n-(w0*a.p[i]+w1*c1[i]+w2*c2[i]+w3*b.p[i]));
+  a.out=sub(add(c1,residual.map(n=>n*w1/total)),a.p);
+  b.in=sub(add(c2,residual.map(n=>n*w2/total)),b.p);
   return result;
 }
 export function moveAnchors(subpaths,selected,delta) {

@@ -22,6 +22,26 @@ function setup(t, children = [], options = {}) {
 }
 const rect = b => [b.x, b.y, b.width, b.height].map(n => Math.round(n * 1e6) / 1e6);
 
+test('all anchor boxes remain above opaque drag previews at every zoom',t=>{
+  const node=createNode('path',{appearance:appearance('#FFFFFF','#071411',1),subpaths:[{closed:true,segments:[[20,30],[50,30],[80,40]].map(p=>({p,in:[0,0],out:[0,0]}))}]});
+  const {state,scope,renderer}=setup(t,[node]);state.ui={tool:'pen'};
+  state.selection.set([node.id]);state.selection.setAnchors([{nodeId:node.id,subpath:0,segment:0}]);
+  const saved=JSON.stringify(state.snapshot()),modified=structuredClone(node);modified.subpaths[0].segments[0].out=[5,10];
+  for(const zoom of [.5,1,3]){
+    scope.view.zoom=zoom;
+    const preview=renderer.shapePreview(modified,node.id);preview.opacity=1;
+    const outline=preview.clone();outline.fillColor=null;
+    renderer.setEditPreview([modified]);
+    const overlay=scope.project.layers.find(layer=>layer.name==='Selection'),anchors=overlay.children.find(item=>item.name==='Path anchors');
+    assert.ok(anchors.index>preview.index&&anchors.index>outline.index,'Opaque fill and outline cannot cover anchor UI');
+    const boxes=anchors.children.filter(item=>item.className==='Path'&&item.closed&&item.segments.length===4&&item.segments.every(s=>s.handleIn.isZero()&&s.handleOut.isZero()));
+    assert.equal(boxes.length,3,'Unselected anchors remain in front too');
+    for(const box of boxes)assert.ok(Math.abs(box.bounds.width*zoom-7)<1e-8,'Anchor boxes stay screen-sized');
+    preview.remove();outline.remove();renderer.setEditPreview();
+  }
+  assert.equal(JSON.stringify(state.snapshot()),saved,'Overlay ordering never changes document geometry');
+});
+
 test('grid and rulers follow the view without changing artwork, exports or history', t => {
   const node=rectangle(),{state,scope,renderer}=setup(t,[node]);
   state.ui={tool:'select'};

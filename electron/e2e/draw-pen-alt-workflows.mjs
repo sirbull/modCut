@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { inputHelpers,wait } from './cdp.mjs';
 import { activeDraw as active,enterDraw,submitNewDrawDialog,rememberTabs } from './draw-test-helpers.mjs';
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 const close=(actual,expected,label)=>actual.forEach((v,i)=>assert.ok(Math.abs(v-expected[i])<.04,`${label}: ${actual} != ${expected}`));
 
@@ -15,11 +18,13 @@ export async function runDrawPenAltWorkflows(client){
   const state=()=>evaluate(`(async()=>{const w=${active};return{history:w.state.history.entries,tool:w.state.ui.tool,cursor:w.scope.view.element.style.cursor,action:w.scope.view.element.dataset.pathAction}})()`);
   const expectCursor=async name=>assert.equal(await evaluate(`(async()=>{const w=${active},{CURSORS}=await import('./draw/tools/cursors.mjs');return w.scope.view.element.style.cursor.replace(/\\s+/g,'')===CURSORS['${name}'].replace(/\\s+/g,'')})()`),true,`${name} cursor`);
   const option=async down=>{await client.command('Input.dispatchKeyEvent',{type:down?'keyDown':'keyUp',key:'Alt',code:'AltLeft',modifiers:down?1:0});await wait(50);};
+  const shot=async name=>{const s=await client.command('Page.captureScreenshot',{format:'png'});await writeFile(join(tmpdir(),name),Buffer.from(s.data,'base64'));};
+  const visibleBoxSides=p=>evaluate(`(async()=>{const w=${active},v=w.scope.view,c=v.element,r=c.width/v.viewSize.width,q=v.projectToView(new w.scope.Point(${p})),ctx=c.getContext('2d');return [[-3.5,0],[3.5,0],[0,-3.5],[0,3.5]].map(([dx,dy])=>{const radius=Math.ceil(r),d=ctx.getImageData(Math.round((q.x+dx)*r)-radius,Math.round((q.y+dy)*r)-radius,2*radius+1,2*radius+1).data;for(let i=0;i<d.length;i+=4)if(d[i+1]>d[i]+20&&d[i+2]>d[i]+15&&d[i+1]<230)return true;return false;});})()`);
   const worldSegments=()=>evaluate(`(async()=>{const w=${active},n=w.state.document.data.layers[0].children[0];return n.subpaths[0].segments.map(s=>{const p=w.renderer.editPointToWorld(n.id,s.p),handle=k=>{const h=w.renderer.editPointToWorld(n.id,s.p.map((v,i)=>v+s[k][i]));return[h.x-p.x,h.y-p.y]};return{p:[p.x,p.y],in:handle('in'),out:handle('out')}})})()`);
   const curvePoint=(index,t)=>evaluate(`(async()=>{const w=${active},n=w.state.document.data.layers[0].children[0],segments=n.subpaths[0].segments,a=segments[${index}],b=segments[(${index}+1)%segments.length],t=${t},u=1-t,q=a.p.map((v,i)=>v*u*u*u+3*(v+a.out[i])*u*u*t+3*(b.p[i]+b.in[i])*u*t*t+b.p[i]*t*t*t),p=w.renderer.editPointToWorld(n.id,q);return[p.x,p.y]})()`);
   try{
     // Nonuniform scale and shear exercise conversion of pointer motion into path space.
-    await evaluate(`(async()=>{const w=${active},{updateNode}=await import('./draw/doc/commands.mjs');w.state.history.execute(updateNode(w.state.document.data.layers[0].id,{transform:[1.1,.2,-.15,.8,3,4]}));w.setTool('pen')})()`);
+    await evaluate(`(async()=>{const w=${active},{updateNode}=await import('./draw/doc/commands.mjs');w.state.history.execute(updateNode(w.state.document.data.layers[0].id,{transform:[1.1,.2,-.15,.8,3,4]}));w.state.ui.fill='#FFFFFF';w.state.ui.stroke='#071411';w.setTool('pen')})()`);
     await wait(150);
     for(const p of [[20,30],[50,30],[80,40]])await click(await screen(p));
     const original=JSON.stringify(await nodes()),history=(await state()).history.length;
@@ -41,7 +46,11 @@ export async function runDrawPenAltWorkflows(client){
     assert.equal(JSON.stringify(await nodes()),original,'Hover never changes geometry');
     await option(false);await expectCursor('pen-close');
     await option(true);
-    await drag(await screen([20,30]),await screen([25,40]),1);
+    await mouse('mousePressed',await screen([20,30]),{buttons:1,modifiers:1});
+    await mouse('mouseMoved',await screen([25,40]),{buttons:1,modifiers:1});
+    assert.deepEqual(await visibleBoxSides([50,30]),[true,true,true,true],'All four sides of an unselected anchor box stay above the opaque filled preview');
+    await shot('modcut-pen-anchor-foreground.png');
+    await mouse('mouseReleased',await screen([25,40]),{modifiers:1});
     let segments=await worldSegments();
     close(segments[0].p,[20,30],'Anchor stays fixed');close(segments[0].out,[5,10],'Outgoing handle follows drag');close(segments[0].in,[-5,-10],'Incoming handle mirrors drag');
     assert.equal((await nodes())[0].subpaths[0].closed,false,'Option does not close the path');
@@ -72,7 +81,10 @@ export async function runDrawPenAltWorkflows(client){
     await mouse('mouseMoved',await screen(start));
     await option(true);await expectCursor('bend-curve');assert.equal((await state()).action,'bend-curve');
     await option(false);await expectCursor('pen-add');await option(true);
-    await drag(await screen(start),await screen(end),1);
+    await mouse('mousePressed',await screen(start),{buttons:1,modifiers:1});
+    await mouse('mouseMoved',await screen(end),{buttons:1,modifiers:1});
+    await shot('modcut-pen-rubberband-bend.png');
+    await mouse('mouseReleased',await screen(end),{modifiers:1});
     close(await curvePoint(1,t),end,'Grabbed curve point follows the pointer');
     segments=await worldSegments();
     for(let i=0;i<segments.length;i++)close(segments[i].p,beforeSegments[i].p,'Curve anchors stay fixed');

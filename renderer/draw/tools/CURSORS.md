@@ -22,7 +22,9 @@ Update these coordinates if a future drawing moves its active tip.
 With Pen active, Option/Alt over an anchor uses `anchor-convert` (EditAnchor).
 Dragging creates symmetric handles without moving the anchor or ending the path.
 Option/Alt over a segment uses `bend-curve` (Arc); dragging bends the picked
-point while keeping both anchors fixed. Pressing/releasing Option updates the
+point while keeping both anchors fixed. Its handles pull inward toward the grab
+for a narrower, rounded rubber-band peak. Anchor boxes and handles stay above
+opaque filled drag previews. Pressing/releasing Option updates the
 cursor even with a stationary pointer. Each completed drag is one undo step.
 
 The supplied PenWeld and DirectMoveCopy artwork is packaged and exposed as
