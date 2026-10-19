@@ -50,7 +50,7 @@ test('physical punctuation, Norwegian ISO alternative and legacy synthetic event
   assert.equal(command(event('<', { code: 'IntlBackslash' })), 'tool.line');
   assert.equal(command(event('ø', { code: 'Semicolon', ctrlKey: true })), 'guides');
   assert.equal(command(event('æ', { code: 'Quote', ctrlKey: true, shiftKey: true })), 'snap-grid');
-  assert.equal(command(event('å', { code: 'BracketLeft', ctrlKey: true })), 'send-backward');
+  assert.equal(command(event('PageDown', { code: 'PageDown', ctrlKey: true })), 'send-backward');
   assert.equal(command(event('0', { ctrlKey: true })), 'fit-artboard');
   assert.equal(command(event('F7')), 'panel.layers');
   assert.equal(command(event('+', { ctrlKey: true, shiftKey: true, code: 'Equal' })), 'zoom-in');
@@ -75,6 +75,18 @@ test('editable controls, IME composition and repeats cannot select tools or fire
   assert.equal(command(event('b', { ctrlKey: true }), { keymap }), null);
 });
 
+test('arrange, rulers, grid and paste in place use layout-independent shortcuts', () => {
+  for(const isMac of [false,true]) {
+    const mod=isMac?{metaKey:true}:{ctrlKey:true};
+    for(const [key,shiftKey,id] of [['PageUp',false,'bring-forward'],['PageDown',false,'send-backward'],['PageUp',true,'bring-front'],['PageDown',true,'send-back'],['r',false,'rulers'],['r',true,'grid'],['v',true,'paste-place']]) {
+      assert.equal(command(event(key,{...mod,shiftKey}),{isMac}),id);
+      assert.equal(command(event(key,{...mod,shiftKey}),{isMac,editable:true}),null);
+    }
+  }
+  assert.equal(shortcutLabel('bring-front'),'Ctrl+Shift+PageUp');
+  assert.equal(shortcutLabel('grid'),'Ctrl+Shift+R');
+});
+
 test('native menu accelerators and tooltips use the central data', () => {
   assert.equal(acceleratorFor('new', { isMac: true }), 'Cmd+N');
   assert.equal(acceleratorFor('new'), 'Ctrl+N');
@@ -82,7 +94,7 @@ test('native menu accelerators and tooltips use the central data', () => {
   assert.equal(acceleratorFor('add', { workspace: 'cut' }), 'Ctrl+Shift+O');
   assert.equal(acceleratorFor('redo'), 'Ctrl+Shift+Z');
   assert.equal(acceleratorFor('zoom-in'), 'Ctrl+Plus');
-  assert.equal(acceleratorFor('bring-forward'), 'Ctrl+]');
+  assert.equal(acceleratorFor('bring-forward'), 'Ctrl+PageUp');
   assert.equal(acceleratorFor('not-a-command'), undefined);
   assert.equal(acceleratorFor('temporary.hand'), undefined);
   assert.equal(formatShortcut('Mod+Shift+Alt+Digit8', { isMac: true }), 'Cmd+Shift+Option+8');

@@ -37,6 +37,7 @@ export function openModal({ title, fields, submitLabel = "Save", className = "" 
       if (f.type === "segmented") {
         const segments = document.createElement("div");
         segments.className = "field-segments";
+        if (f.options.some((option) => option.swatch)) segments.classList.add("field-segments--swatches");
         for (const option of f.options) {
           const segment = document.createElement("label");
           segment.className = "field-segments__option";
@@ -49,6 +50,13 @@ export function openModal({ title, fields, submitLabel = "Save", className = "" 
           const face = document.createElement("span");
           if (appearanceIcons[option.icon]) {
             face.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${appearanceIcons[option.icon]}</svg>`;
+          }
+          if (option.swatch) {
+            const swatch = document.createElement("i");
+            swatch.className = "field-segments__swatch";
+            swatch.style.backgroundColor = option.swatch;
+            swatch.setAttribute("aria-hidden", "true");
+            face.append(swatch);
           }
           face.append(document.createTextNode(option.label));
           segment.append(radio, face);
@@ -117,17 +125,18 @@ export function openModal({ title, fields, submitLabel = "Save", className = "" 
           v[f.key] = String(next);
         }
       }
-      for (const label of form.querySelectorAll("label.field")) {
+      for (const label of form.querySelectorAll(".field")) {
         const f = label._field;
         if (f && f.showIf) {
           const visible = f.showIf(v);
-          const input = label.querySelector("input,select");
           label.style.display = visible ? "" : "none";
           // Hidden conditional fields must not participate in native form
           // validation. They remain available through form.elements so their
           // defaults can still be included when the form is submitted.
-          input.disabled = !visible;
-          input.required = visible && !!f.required;
+          for (const input of label.querySelectorAll("input,select")) {
+            input.disabled = !visible;
+            input.required = visible && !!f.required;
+          }
         }
       }
       previousValues = { ...v };
@@ -158,7 +167,7 @@ export function openModal({ title, fields, submitLabel = "Save", className = "" 
     actions.querySelector('[data-x="cancel"]').addEventListener("click", () => close(null));
     overlay.addEventListener("click", (e) => { if (e.target === overlay) close(null); });
     document.body.append(overlay);
-    (form.querySelector('input[type="radio"]:checked') || form.querySelector("input,select"))?.focus();
+    (form.querySelector('input[type="radio"]:checked:not(:disabled)') || form.querySelector("input:not(:disabled),select:not(:disabled)"))?.focus();
   });
 }
 

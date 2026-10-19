@@ -3,6 +3,20 @@ import test from "node:test";
 
 import { LANGUAGES, localizeMenuTemplate, resolveLanguage, translator } from "./i18n.mjs";
 import { NB } from "./i18n-nb.mjs";
+import { loadPreferences, normalizePreferences } from "./preferences.mjs";
+
+test("English is the default while saved language choices are preserved", () => {
+  for(const stored of [null, '{}', '{broken', JSON.stringify({language:'invalid'})]) {
+    const preferences=loadPreferences({getItem:()=>stored});
+    assert.equal(preferences.language,'en');
+    assert.equal(resolveLanguage(preferences.language,['nb-NO']),'en');
+  }
+  assert.equal(resolveLanguage(undefined,['nb-NO']),'en');
+  for(const choice of ['en','nb','system']) {
+    assert.equal(loadPreferences({getItem:()=>JSON.stringify({language:choice})}).language,choice);
+    assert.equal(normalizePreferences({language:choice}).language,choice);
+  }
+});
 
 test("the language follows the preference, or the first known system language", () => {
   assert.equal(resolveLanguage("nb"), "nb"); assert.equal(resolveLanguage("en", ["nb-NO"]), "en");

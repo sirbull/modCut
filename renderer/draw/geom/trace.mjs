@@ -17,12 +17,12 @@ const luminance = (d, i) => .299 * d[i] + .587 * d[i + 1] + .114 * d[i + 2];
 export function traceScale(width, height, maxPixels = 1_000_000) { return Math.min(1, Math.sqrt(maxPixels / Math.max(1, width * height))); }
 
 /** Colour index per pixel (-1 for transparent and ignored white) and the palette as [r, g, b]. */
-export function quantize(image, { mode = 'bw', threshold = 128, colors = 6, ignoreWhite = false } = {}) {
+export function quantize(image, { mode = 'bw', threshold = 128, colors = 6, ignoreWhite = mode === 'bw' } = {}) {
   const { width, height, data } = image, n = width * height, labels = new Int32Array(n).fill(-1);
   const opaque = (i) => data[i * 4 + 3] >= 128, white = (i) => data[i * 4] > 245 && data[i * 4 + 1] > 245 && data[i * 4 + 2] > 245;
   if (mode === 'bw') {
-    for (let i = 0; i < n; i++) if (opaque(i) && luminance(data, i * 4) < threshold) labels[i] = 0;
-    return { labels, palette: [[0, 0, 0]] };
+    for (let i = 0; i < n; i++) if (opaque(i)) labels[i] = luminance(data, i * 4) < threshold ? 0 : ignoreWhite ? -1 : 1;
+    return { labels, palette: ignoreWhite ? [[0, 0, 0]] : [[0, 0, 0], [255, 255, 255]] };
   }
   if (mode === 'gray') {
     const levels = Math.max(2, Math.min(256, colors)), palette = [];
@@ -124,4 +124,17 @@ export function ringCorners(ring, degrees = 60) {
     if ((u[0] * v[0] + u[1] * v[1]) / d < limit) out.push(i);
   });
   return out;
+}
+
+/** Pixel processing runs in a worker; the canvas and curve fitting stay with the caller. */
+export function traceRegions(image, options = {}) {
+  const { width, height } = image, { palette, labels: raw } = quantize(image, options);
+  const labels = removeNoise(raw, width, height, options.noise ?? 4);
+  const tolerance = .15 + (100 - (options.fidelity ?? 70)) / 66.67;
+  return palette.flatMap((color, index) => {
+    let rings = contours(labels, width, height, index).filter(r => Math.abs(ringArea(r)) >= Math.max(1, options.minArea ?? 0));
+    if (options.outerOnly) rings = rings.filter(r => ringArea(r) > 0);
+    rings = rings.map(r => simplifyRing(r, tolerance)).filter(r => r.length >= 3);
+    return rings.length ? [{ color, rings }] : [];
+  });
 }

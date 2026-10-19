@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
-import { wait } from './cdp.mjs';
+import { inputHelpers, wait } from './cdp.mjs';
 import { activeDraw as active,enterDraw,rememberTabs,submitNewDrawDialog } from './draw-test-helpers.mjs';
 
 /** D2.1e Character and Paragraph panels, Properties and control bar type fields. */
 export async function runDrawCharacterWorkflows(client) {
-  const {evaluate}=client,restore=await rememberTabs(evaluate);
+  const {evaluate}=client,{drag,click,key}=inputHelpers(client),restore=await rememberTabs(evaluate);
   await enterDraw(evaluate);await evaluate("document.querySelector('#newDoc').click()");
   await submitNewDrawDialog(evaluate,{preset:'custom',width:160,height:100,name:'Character proof'});
   const root='.draw-project[style*=block]',fly=`${root} .draw-flyout`;
@@ -15,6 +15,53 @@ export async function runDrawCharacterWorkflows(client) {
   // Both families need Bold: the test changes family while Bold is still selected.
   const [familyA,familyB]=await evaluate("(async()=>{const f=await window.modcut.listSystemFonts(),has=(n,w)=>f.some(x=>x.family===n&&x.fontWeight===w&&x.fontStyle==='normal');const names=[...new Set(f.map(x=>x.family))].filter(n=>has(n,'normal')&&has(n,'bold'));const a=names[0];return [a,names.find(n=>n!==a)];})()");
   assert.ok(familyA&&familyB,'Two installed font families with Regular and Bold are needed');
+  // Character and Paragraph can be configured before any artwork exists, with no dirty state or undo steps.
+  const empty = await evaluate(`(async()=>${active}.state.document.serialize())()`);
+  await evaluate(`(async()=>{const w=${active};w.select([]);w.handle('panel.character')})()`);
+  await until(`!!document.querySelector('${fly} [data-draw-field=font-family]')`,'Character without selected text');
+  await set(`${fly} [data-draw-field=font-family]`,familyA);
+  await set(`${fly} [data-draw-field=font-weight]`,'bold');
+  await set(`${fly} [data-draw-field=font-size]`,32);
+  await set(`${fly} [data-draw-field=leading]`,40);
+  await set(`${fly} [data-draw-field=tracking]`,75);
+  await set(`${fly} [data-draw-field=all-caps]`,true);
+  await set(`${fly} [data-draw-field=horizontal-scale]`,125);
+  await evaluate(`(async()=>${active}.setTool('area-type'))()`);
+  assert.equal(await evaluate(`document.querySelector('${root} [data-draw-field=prop-font-size]').value`),'32','Properties shows defaults for the text tool');
+  await set(`${root} [data-draw-field=cb-font-size]`,30);
+  assert.equal(await evaluate(`document.querySelector('${fly} [data-draw-field=font-size]').value`),'30','The control bar edits the same defaults');
+  await set(`${root} [data-draw-field=prop-tracking]`,80);
+  await evaluate(`(async()=>${active}.handle('panel.paragraph'))()`);
+  await evaluate(`document.querySelector('${fly} [data-draw-paragraph=center]').click()`);
+  await set(`${fly} [data-draw-field=left-indent]`,12);
+  await set(`${fly} [data-draw-field=space-after]`,6);
+  assert.equal(await applied(),0);assert.equal(await evaluate(`(async()=>${active}.state.dirty)()`),false);
+  assert.equal(await evaluate(`(async()=>${active}.state.document.serialize())()`),empty);
+  await evaluate(`document.querySelector('${fly} .draw-flyout__close').click()`);
+  const at=(x,y)=>evaluate(`(async()=>{const w=${active},b=w.state.document.data.artboards[0],p=w.scope.view.projectToView(new w.scope.Point(b.x+${x},b.y+${y})),r=w.scope.view.element.getBoundingClientRect();return {x:r.x+p.x,y:r.y+p.y}})()`);
+  const ready=()=>until("document.querySelector('.draw-text-dialog form')?.dataset.textReady==='true'",'new text preview');
+  await drag(await at(12,12),await at(78,72));await ready();
+  assert.deepEqual(await evaluate("(()=>{const f=document.querySelector('.draw-text-dialog form');return [f.elements.fontFamily.value,f.elements.fontSize.value,f.elements.leading.value,f.elements.fontWeight.value,f.elements.alignment.value]})()"),[familyA,'30','40','bold','center']);
+  await client.command('Input.insertText',{text:'Prepared ÆØÅ'});await ready();
+  assert.equal(await evaluate(`(async()=>${active}.state.document.serialize())()`),empty,'Typing still previews without editing the document');
+  await evaluate("document.querySelector('.draw-text-dialog form').requestSubmit()");
+  await until(`(async()=>${active}.state.document.getNode(${active}.state.selection.ids[0])?.type==='text')()`,'prepared text inserted');
+  const prepared=await evaluate(`(async()=>{const w=${active};return w.state.document.getNode(w.state.selection.ids[0])})()`);
+  assert.equal(prepared.kind,'area');assert.equal(prepared.character.fontFamily,familyA);assert.equal(prepared.character.fontSize,30);
+  assert.equal(prepared.character.fontWeight,'bold');assert.equal(prepared.character.leading,40);assert.equal(prepared.character.tracking,80);
+  assert.equal(prepared.character.allCaps,true);assert.equal(prepared.character.horizontalScale,125);
+  assert.deepEqual(prepared.paragraph,{alignment:'center',leftIndent:12,spaceAfter:6});
+  assert.equal(prepared.content.runs[0].text,'Prepared ÆØÅ');assert.ok(prepared.layout.glyphs.length>0);assert.equal(prepared.layout.overflow,false);
+  assert.equal(await applied(),1,'Preparing formatting adds no extra undo steps');
+  await evaluate(`(async()=>{const w=${active};w.select([]);w.setTool('type')})()`);
+  await click(await at(100,85));await ready();
+  assert.equal(await evaluate("document.querySelector('.draw-text-dialog form').elements.fontSize.value"),'30','Point text uses the same prepared settings');
+  await set('.draw-text-dialog [name=fontSize]',60);await ready();await key('Escape');
+  await click(await at(100,85));await ready();
+  assert.equal(await evaluate("document.querySelector('.draw-text-dialog form').elements.fontSize.value"),'30','Cancel does not overwrite the defaults');
+  await key('Escape');
+  await evaluate(`(async()=>{const w=${active};w.setTool('select');w.handle('undo');w.select([])})()`);
+  assert.equal(await evaluate(`(async()=>${active}.state.document.serialize())()`),empty,'Undo removes only the newly inserted text');
   const ids=await evaluate(`(async()=>{const w=${active},{pointText,textValues,DEFAULT_CHARACTER}=await import('./draw/doc/text.mjs'),{insertNode}=await import('./draw/doc/commands.mjs'),b=w.state.document.data.artboards[0],out=[];
     for(const [text,y] of [['Horten modCut',30],['Laser',70]]){const n=pointText([b.x+10,b.y+y],{text,...DEFAULT_CHARACTER,fontFamily:${JSON.stringify(familyA)},alignment:'left'});
       n.layout=await window.modcut.shapeText(textValues(n));n.character.fontPostscriptName=n.layout.font.postscriptName;w.state.history.execute(insertNode(w.state.document.data.layers[0].id,n));out.push(n.id);}
@@ -89,5 +136,5 @@ export async function runDrawCharacterWorkflows(client) {
   const svg=await evaluate(`(async()=>{const w=${active};return w.exportBoard(w.state.ui.artboardId,'svg')})()`);assert.match(svg,/<path[\s>]/);
   await evaluate(`(async()=>{${active}.handle('cancel')})()`);
   await restore();
-  console.log('PASS Draw Character and Paragraph: Mod+T, size, tracking, All Caps, horizontal scale, baseline shift, kerning, Bold face, family and unknown family, one undo step each, Paragraph alignment for several texts, justify, left indent and space after, Properties and control bar fields, save and export');
+  console.log('PASS Draw Character and Paragraph: defaults without selection, shared panel/Properties/control bar settings, inherited area and point text, cancel and undo, Mod+T, selected text shaping, family and unknown family, paragraph formatting, save and export');
 }

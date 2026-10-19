@@ -53,6 +53,39 @@ export async function runDrawTransformWorkflows(client){
   // Double-click the existing toolbar entry; no duplicate tool or panel is mounted.
   await tool('rotate');await evaluate("document.querySelector('.draw-project[style*=block] [data-draw-tool=rotate]').dispatchEvent(new MouseEvent('dblclick',{bubbles:true}))");assert.equal(await evaluate("!!document.querySelector('.draw-transform-dialog')"),true);
   await fields({angle:30});const shot=await client.command('Page.captureScreenshot',{format:'png'});await writeFile(join(tmpdir(),'modcut-draw-transform-dialog.png'),Buffer.from(shot.data,'base64'));await key('Escape');
+  // Properties keeps the shared scaling option outside its scrolling content, with or without a selection.
+  const root='.draw-project[style*=block]',footer=`${root} [data-draw-field=properties-scale-strokes]`;
+  const policy=enabled=>evaluate(`(()=>{const i=document.querySelector('${footer}');if(i.checked!==${enabled})i.click()})()`);
+  const width=()=>evaluate(`(async()=>${active}.state.document.getNode('${id}').appearance.strokes[0].width)()`);
+  const saved=await nodes();await policy(false);assert.deepEqual(await nodes(),saved,'The preference does not edit artwork');
+  assert.equal(await evaluate("localStorage.getItem('modcut.draw.scaleStrokes')"),'false');
+  assert.ok(await evaluate(`(()=>{const i=document.querySelector('${footer}'),f=i.closest('.draw-properties-footer'),s=f.parentElement,b=s.querySelector('.draw-dock-body');b.scrollTop=b.scrollHeight;return f.previousElementSibling===b&&f.getBoundingClientRect().bottom<=s.getBoundingClientRect().bottom+1&&f.getBoundingClientRect().top>=b.getBoundingClientRect().bottom-1})()`),'Footer remains visible below the scrolling body');
+  await command('deselect');assert.equal(await evaluate(`document.querySelector('${footer}').disabled`),false);
+  await evaluate(`(async()=>${active}.select(['${id}']))()`);await command('panel.transform');
+  assert.equal(await evaluate(`document.querySelector('${root} .draw-flyout [data-draw-field=scale-strokes]').checked`),false);
+  await evaluate(`document.querySelector('${root} .draw-flyout [data-draw-field=scale-strokes]').click()`);
+  assert.equal(await evaluate(`document.querySelector('${footer}').checked`),true,'Transform and Properties share the preference');
+  await evaluate(`document.querySelector('${root} .draw-flyout__close').click()`);
+  const setWidth=value=>evaluate(`(()=>{const i=document.querySelector('${root} [data-draw-dock=properties] [data-draw-field=width]');i.value=${value};i.dispatchEvent(new Event('change',{bubbles:true}))})()`);
+  for(const enabled of [false,true]){
+    await policy(enabled);await tool('select');await setWidth(40);
+    assert.ok(Math.abs(await width()-(enabled ? .5*Math.SQRT2 : .5))<1e-6,'Size fields honor the preference');await command('undo');
+    await drag(await screen([30,20]),await screen([50,30]));
+    assert.ok(Math.abs(await width()-(enabled?1:.5))<1e-6,'Bounding-box scaling honors the preference');await command('undo');
+  }
+  await evaluate(`(async()=>{const w=${active},{effect}=await import('./draw/doc/effects.mjs'),{updateNode}=await import('./draw/doc/commands.mjs'),n=w.state.document.getNode('${id}');w.state.history.execute(updateNode(n.id,{appearance:{...n.appearance,effects:[effect('zig-zag',{size:2})]}}))})()`);
+  for(const enabled of [false,true]){
+    await policy(enabled);await tool('scale');await key('Enter');
+    assert.equal(await evaluate("document.querySelector('.draw-transform-dialog form').elements.scaleStrokes.checked"),enabled,'Scale dialog starts with the shared value');
+    await fields({mode:'uniform',uniform:200});await submit(false);
+    const result=await nodes(),n=result[0];
+    assert.ok(Math.abs(n.appearance.effects[0].size*2-(enabled?4:2))<1e-6,'Effect size follows the preference in world units');
+    assert.ok(Math.abs(await width()-(enabled?1:.5))<1e-6);await command('undo');
+  }
+  await command('undo');await policy(false);
+  await evaluate("document.querySelector('#newDoc').click()");await submitNewDrawDialog(evaluate,{preset:'custom',width:100,height:80,name:'Scaling preference'});
+  assert.equal(await evaluate(`document.querySelector('${footer}').checked`),false,'The preference is retained for new workspaces');
+  await policy(true);await evaluate("document.querySelector('.doc-tab.is-active [data-close-tab]').click()");await wait(80);
   await evaluate(`document.querySelector('[data-close-tab="${scratch}"]').click()`);await wait(80);
   if(await evaluate("!!document.querySelector('[data-x=discard]')"))await evaluate("document.querySelector('[data-x=discard]').click()");await wait(80);
   assert.equal(await evaluate("document.querySelector('.doc-tab.is-active').dataset.tabId"),original.id);assert.equal(await evaluate("paper.project.layers[1].exportJSON({asString:true})"),original.cut);

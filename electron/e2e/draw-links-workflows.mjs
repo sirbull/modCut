@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { wait } from './cdp.mjs';
 import { activeDraw as active, enterDraw, rememberTabs, submitNewDrawDialog } from './draw-test-helpers.mjs';
 
@@ -46,16 +49,72 @@ export async function runDrawLinkWorkflows(client) {
   await evaluate("(()=>{const f=document.querySelector('.draw-crop-dialog form');f.elements.reset.checked=true;f.requestSubmit();})()"); await wait(80);
   assert.equal(await evaluate(`(async()=>(${active}.state.document.getNode('${image}').crop ?? null))()`), null, 'Reset shows the whole image');
 
-  // Image Trace: Black and White Logo with threshold 50 (red is darker than 128) traces the black half into one sharp-cornered path above the image, which is hidden.
-  await evaluate(`(async()=>{const w=${active};w.select(['${image}']);w.handle('panel.image-trace')})()`); await wait(50);
+  // The contextual action opens a compact live trace; preview leaves the document and history untouched.
+  const traceBefore = await evaluate(`(async()=>{const w=${active};w.select(['${image}']);return {model:JSON.stringify(w.state.document.data),steps:w.state.history.entries.filter(e=>e.applied).length}})()`);
+  assert.equal(await evaluate(`!!document.querySelector('${root} [data-draw-cb=image-trace]')`), true);
+  await evaluate(`document.querySelector('${root} [data-draw-cb=image-trace]').click()`);
+  const ready = () => until(`document.querySelector('${root} [data-draw-trace-stats]')?.dataset.tracePending==='false'&&!document.querySelector('${root} [data-draw-trace]').disabled`, 'live trace ready');
+  const setTrace = (key,value,event='input') => evaluate(`(()=>{const i=document.querySelector('${root} [data-draw-field=trace-${key}]');i.value=${JSON.stringify(String(value))};i.dispatchEvent(new Event('${event}',{bubbles:true}));})()`);
+  const rasterVisible = () => evaluate(`(async()=>${active}.renderer.items.get('${image}').visible)()`);
+  await ready();
+  assert.equal(await rasterVisible(), false, 'Live vectors replace the raster in the view');
+  assert.equal(await evaluate(`document.querySelector('${root} .draw-trace__advanced').open`), false);
+  assert.deepEqual(await evaluate(`(()=>{const i=document.querySelector('${root} [data-draw-field=trace-preset]'),p=i.closest('.draw-flyout');return [getComputedStyle(i).fontSize,i.getBoundingClientRect().height,p.scrollWidth<=p.clientWidth]})()`), ['12px',26,true], 'Compact selects fit without horizontal overflow');
+  assert.deepEqual(await evaluate(`(async()=>{const w=${active};return {model:JSON.stringify(w.state.document.data),steps:w.state.history.entries.filter(e=>e.applied).length}})()`), traceBefore);
+  await setTrace('view','source','change'); assert.equal(await rasterVisible(), true, 'View can show the original');
+  await setTrace('view','outlines','change'); assert.equal(await rasterVisible(), false);
+  await setTrace('view','result','change');
+  await evaluate(`document.querySelector('${root} [data-draw-field=trace-preview]').click()`);
+  assert.equal(await rasterVisible(), true, 'Disabling Preview restores the original');
+  await evaluate(`document.querySelector('${root} [data-draw-field=trace-preview]').click()`); await ready();
+  await evaluate(`document.querySelector('${root} .draw-trace__advanced summary').click()`); await wait(30);
+  assert.equal(await evaluate(`document.querySelector('${root} .draw-trace__advanced').open`), true);
+  await evaluate(`document.querySelector('${root} [data-draw-field=trace-ignoreWhite]').click()`); await ready();
+  await setTrace('threshold',50); await ready();
+  assert.match(await evaluate(`document.querySelector('${root} [data-draw-trace-stats]').textContent`), /Colors: 2/, 'Ignore White changes the actual BW result');
+  await evaluate(`document.querySelector('${root} [data-draw-field=trace-ignoreWhite]').click()`); await ready();
+  // A drag keeps focus and only the latest setting wins, including a temporarily empty result.
+  await evaluate(`(()=>{const i=document.querySelector('${root} [data-draw-field=trace-threshold-slider]');i.focus();for(const value of [0,220,0]){i.value=value;i.dispatchEvent(new Event('input',{bubbles:true}));}})()`);
+  await until(`document.querySelector('${root} [data-draw-trace-stats]')?.textContent.startsWith('Nothing to trace')`, 'empty live result');
+  assert.equal(await evaluate(`document.activeElement.dataset.drawField`), 'trace-threshold-slider');
+  assert.equal(await evaluate(`document.querySelector('${root} [data-draw-trace]').disabled`), true);
+  await setTrace('threshold-slider',50); await ready();
+  assert.equal(await evaluate(`document.querySelector('${root} [data-draw-field=trace-threshold]').value`), '50');
+  await setTrace('mode','color','change'); await ready();
+  assert.deepEqual(await evaluate(`(async()=>${active}.scope.project.getItem({name:'Image Trace preview'}).children.map(n=>n.fillColor.toCSS(true)).sort())()`), ['#000000','#ff0000'], 'Color mode previews real color paths');
+  await setTrace('mode','gray','change'); await ready();
+  assert.ok(await evaluate(`(async()=>${active}.scope.project.getItem({name:'Image Trace preview'}).children.every(n=>Math.abs(n.fillColor.red-n.fillColor.green)<1e-8&&Math.abs(n.fillColor.red-n.fillColor.blue)<1e-8))()`), 'Grayscale updates the actual preview paint');
+  await setTrace('mode','bw','change'); await ready();
+  await evaluate(`document.querySelector('${root} [data-draw-field=trace-fills]').click()`); await ready();
+  assert.deepEqual(await evaluate(`(async()=>{const n=${active}.scope.project.getItem({name:'Image Trace preview'}).firstChild;return [n.fillColor===null,n.strokeColor.toCSS(true)]})()`), [true,'#000000'], 'Outline output has a stroke and no fill');
+  assert.equal(await evaluate(`document.querySelector('${root} [data-draw-field=trace-strokeWidth]').disabled`), false);
+  await setTrace('strokeWidth',.5); await ready();
+  assert.equal(await evaluate(`(async()=>${active}.scope.project.getItem({name:'Image Trace preview'}).firstChild.strokeWidth)()`), .5);
+  await evaluate(`document.querySelector('${root} [data-draw-field=trace-strokes]').click()`); await ready();
+  assert.equal(await evaluate(`document.querySelector('${root} [data-draw-field=trace-fills]').checked`), true, 'At least one output type stays enabled');
+  await writeFile(join(tmpdir(),'modcut-draw-image-trace.png'),Buffer.from((await client.command('Page.captureScreenshot',{format:'png'})).data,'base64'));
+  // Closing or changing the selection during a pending preview cannot leave a stale overlay behind.
+  await setTrace('threshold-slider',220);
+  await evaluate(`document.querySelector('${root} .draw-flyout__close').click()`); await wait(350);
+  assert.equal(await rasterVisible(), true);
+  await evaluate(`document.querySelector('${root} [data-draw-cb=image-trace]').click()`); await ready();
+  await setTrace('threshold-slider',50);
+  await evaluate(`(async()=>${active}.select([]))()`); await wait(350);
+  assert.equal(await rasterVisible(), true);
+  assert.equal(await evaluate(`!!document.querySelector('${root} [data-draw-cb=image-trace]')`), false);
+  await evaluate(`(async()=>${active}.select(['${image}']))()`); await ready();
+  assert.deepEqual(await evaluate(`(async()=>{const w=${active};return {model:JSON.stringify(w.state.document.data),steps:w.state.history.entries.filter(e=>e.applied).length}})()`), traceBefore);
+  // Expand commits exactly the previewed black half as sharp-cornered vectors in one undo step.
   await evaluate(`(()=>{const s=document.querySelector('${root} [data-draw-field=trace-preset]');s.value='bw-logo';s.dispatchEvent(new Event('change',{bubbles:true}));})()`); await wait(30);
   await evaluate(`(()=>{const s=document.querySelector('${root} [data-draw-field=trace-threshold]');s.value='50';s.dispatchEvent(new Event('change',{bubbles:true}));})()`); await wait(30);
+  await until(`document.querySelector('${root} [data-draw-trace-stats]')?.dataset.tracePending==='false'&&!document.querySelector('${root} [data-draw-trace]').disabled`, 'trace preview ready');
   await evaluate(`document.querySelector('${root} [data-draw-trace]').click()`);
-  await until(`!!document.querySelector('${root} [data-draw-trace-stats]')`, 'trace done');
+  await until(`(async()=>{const w=${active};return w.state.document.getNode(w.state.selection.ids[0])?.type==='group'})()`, 'trace done');
   const traced = await evaluate(`(async()=>{const w=${active},d=w.state.document,g=d.getNode(w.state.selection.ids[0]),b=d.data.artboards[0],img=d.getNode('${image}'),r=w.renderer.bounds(g.children[0].id);
     return {anchors:g.children[0].subpaths[0].segments.length,type:g.type,kids:g.children.length,fill:(await import('./draw/doc/paint.mjs')).paintHex(g.children[0].appearance.fills[0]),hidden:!img.visible,box:[r.x-img.transform[4],r.y-img.transform[5],r.width,r.height].map(v=>Math.round(v)),stats:document.querySelector('${root} [data-draw-trace-stats]').textContent}})()`);
   assert.equal(traced.type, 'group'); assert.equal(traced.kids, 1); assert.equal(traced.fill, '#000000'); assert.equal(traced.hidden, true, 'The image is hidden under the trace');
   assert.deepEqual(traced.box, [0, 0, 20, 20], `The black half: ${JSON.stringify(traced)}`); assert.match(traced.stats, /Paths: 1/); assert.equal(traced.anchors, 4, 'A square stays four corner anchors');
+  assert.equal(await evaluate(`(async()=>${active}.state.history.entries.filter(e=>e.applied).length)()`), traceBefore.steps+1);
   await evaluate(`(async()=>{${active}.handle('undo')})()`);
   assert.equal(await evaluate(`(async()=>${active}.state.document.getNode('${image}').visible)()`), true, 'Undo brings the image back');
 

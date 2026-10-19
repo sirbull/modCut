@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {operationMatrix,dragTransform,scaledStrokeProperties,dialogOperation} from '../geom/transforms.mjs';
+import {operationMatrix,dragTransform,scaledStrokeProperties,dialogOperation,strokeScalingPolicy} from '../geom/transforms.mjs';
+import {effect} from '../doc/effects.mjs';
 import {createTransformController} from '../tools/transforms.mjs';
 import {createNode,createDocument} from '../doc/schema.mjs';
 import {createProjectDraw} from '../io/project.mjs';
@@ -76,4 +77,39 @@ test('world transforms respect rotated parents, preserve live corners and rollba
 test('stroke normalization preserves paint and opaque effects, scaling dash dimensions by area-equivalent factor',()=>{
   const node=rect();node.appearance.effects=[{type:'future',amount:3}];node.appearance.strokes[0].dash={array:[2,4],offset:1};const saved=structuredClone(node);
   const props=scaledStrokeProperties(node,[1,0,0,1,0,0],[2,0,0,8,0,0],true);assert.equal(props.appearance.strokes[0].width,8);assert.deepEqual(props.appearance.strokes[0].dash,{array:[8,16],offset:4});assert.deepEqual(props.appearance.effects,node.appearance.effects);assert.deepEqual(node,saved);
+});
+
+test('the shared scaling preference controls transforms while movement and rotation leave appearance alone',t=>{
+  const node=rect(),{state,controller}=setup(t,[node]);state.ui.scaleStrokes=false;
+  const before=state.snapshot();controller.apply([2,0,0,2,0,0],'Resize');
+  assert.equal(state.document.getNode(node.id).appearance.strokes[0].width,2);state.history.undo();assert.deepEqual(state.snapshot(),before);
+  state.ui.scaleStrokes=true;controller.apply([2,0,0,2,0,0],'Resize');
+  assert.equal(state.document.getNode(node.id).appearance.strokes[0].width,4);
+  assert.equal(strokeScalingPolicy(state.ui,[1,0,0,1,20,30]),null);
+  assert.equal(strokeScalingPolicy(state.ui,[0,1,-1,0,0,0]),null);
+});
+
+for(const kind of ['path','shape','group'])for(const enabled of [false,true])test(`${kind}: stroke/effect scaling ${enabled?'on':'off'} agrees in preview, commit and undo`,t=>{
+  const square={closed:true,segments:[[0,0],[20,0],[20,20],[0,20]].map(p=>({p,in:[0,0],out:[0,0]}))};
+  const look=appearance('#ffffff','#000000',2);look.effects=[effect('zig-zag',{size:2})];
+  const child=createNode(kind==='path'?'path':'shape',{...(kind==='path'?{subpaths:[square]}:{params:{x:0,y:0,width:20,height:20}}),appearance:look});
+  const root=kind==='group'?createNode('group',{children:[child]}):child;
+  const{state,controller,renderer,scope}=setup(t,[root]);state.ui.scaleStrokes=enabled;const before=state.snapshot(),matrix=[2,0,0,2,0,0];
+  renderer.previewTransform([root.id],matrix);
+  const preview=scope.project.getItems({match:item=>item.data.nodeId===child.id&&item!==renderer.items.get(child.id)})[0];
+  const proposed=preview.bounds,tl=proposed.topLeft.transform(preview.parent.globalMatrix),br=proposed.bottomRight.transform(preview.parent.globalMatrix);const bounds=[tl.x,tl.y,br.x-tl.x,br.y-tl.y];
+  assert.equal(state.snapshot(),before);renderer.clearTransformPreview();
+  controller.apply(matrix,'Scale');const n=state.document.getNode(child.id),actual=renderer.bounds(child.id);
+  close([actual.x,actual.y,actual.width,actual.height],bounds);
+  assert.equal(n.appearance.strokes[0].width,enabled?4:2);
+  const effectWorld=n.appearance.effects[0].size*(kind==='path'?1:2);assert.equal(effectWorld,enabled?4:2);
+  state.history.undo();assert.deepEqual(state.snapshot(),before);
+});
+
+test('effect dimensions use the correct space, inverse density, and preserve percentages, colors and unknown effects',()=>{
+  const node=rect();node.appearance.effects=[effect('roughen',{size:2,detail:4}),effect('gaussian-blur',{radius:3}),effect('drop-shadow',{x:2,y:4,blur:1}),effect('transform',{moveX:5,scaleX:120}),{type:'future',size:9}];
+  const keep=scaledStrokeProperties(node,[1,0,0,1,0,0],[2,0,0,2,0,0],false).appearance.effects;
+  assert.equal(keep[0].size,1);assert.equal(keep[0].detail,8);assert.equal(keep[1].radius,3);assert.equal(keep[2].x,1);
+  const grow=scaledStrokeProperties(node,[1,0,0,1,0,0],[2,0,0,2,0,0],true).appearance.effects;
+  assert.equal(grow[0].size,2);assert.equal(grow[1].radius,6);assert.equal(grow[2].x,2);assert.equal(grow[3].scaleX,120);assert.deepEqual(grow[4],node.appearance.effects[4]);
 });

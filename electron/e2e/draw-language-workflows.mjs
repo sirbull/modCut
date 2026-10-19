@@ -15,6 +15,11 @@ export async function runDrawLanguageWorkflows(client) {
   };
   const panelTabs = "[...document.querySelectorAll('.draw-project[style*=block] [data-draw-panel]')].map(b=>b.getAttribute('aria-label')).join('|')";
 
+  if(process.argv.includes('--draw-language')) {
+    assert.equal(await evaluate('document.documentElement.lang'),'en','A fresh profile starts in English');
+    assert.ok((await evaluate('window.modcut.getE2EWorkspaceMenu()')).top.includes('Edit'),'Native menus also start in English');
+  }
+
   await choose('nb');
   await until("(async()=>(await window.modcut.getE2EWorkspaceMenu()).top.includes('Rediger'))()", 'Norwegian menus');
   const menu = await evaluate('window.modcut.getE2EWorkspaceMenu()');

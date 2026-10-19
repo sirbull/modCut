@@ -123,7 +123,7 @@ export function createInteractions(canvas, state, api) {
         gesture.operation=dragTransform(gesture.tool,gesture.origin,[gesture.start.x,gesture.start.y],[p.x,p.y],event.shiftKey);
         gesture.matrix=operationMatrix(gesture.operation,gesture.origin);state.ui.transformOrigin=gesture.origin;
         state.ui.transformPreviewBox=transformedBox(gesture.box,gesture.matrix);
-        renderer.previewTransform(gesture.ids,gesture.matrix,{scaleStrokes:gesture.tool==='scale'?(state.ui.transformDefaults?.scale?.scaleStrokes??true):null});
+        renderer.previewTransform(gesture.ids,gesture.matrix,{scaleStrokes:gesture.tool==='scale'?state.ui.scaleStrokes!==false:null});
       }else if (SHAPE_TOOLS.includes(gesture.tool)) {
         gesture.node=shapeFromDrag(gesture.tool,[gesture.start.x,gesture.start.y],[p.x,p.y],{...api.shapeOptions(),...gesture.modifiers});
         if(gesture.tool==='star' && gesture.node.params.outerRadius>0 && (event.ctrlKey || event.metaKey)) {
@@ -195,10 +195,24 @@ export function createInteractions(canvas, state, api) {
           guides=snapped.guides;gesture.matrix=[1,0,0,1,snapped.x,snapped.y];
         }
         preview=boxPreview(gesture.box,gesture.matrix,guides);
+        if(gesture.tool==='select'&&gesture.handle&&gesture.handle!=='rotate')renderer.previewTransform(api.selectedIds(),gesture.matrix);
       }
       scope.view.update();
     });
   }
+  canvas.addEventListener('contextmenu',event=>{
+    event.preventDefault();
+    if(gesture)return;
+    api.closeMenus();canvas.focus();
+    run(()=>{
+      const hit=renderer.hit(point(event));
+      // Preserve multi-selection, including direct-selected members of a group.
+      const selected=api.selectedIds(),inside=hit&&[hit,...state.document.ancestors(hit).map(n=>n.id)].some(id=>selected.includes(id));
+      const target=hit&&targetId(hit);
+      if(target&&!inside)api.select([target]);
+      api.contextMenu(event.clientX,event.clientY);
+    });
+  },events);
   canvas.addEventListener('pointerdown',event=>{
     if (event.button!==0) return;
     api.closeMenus();canvas.focus();canvas.setPointerCapture(event.pointerId);const p=point(event),tool=api.tool();
@@ -342,7 +356,7 @@ export function createInteractions(canvas, state, api) {
         void api.editText(frame?frame.topLeft:drag.start,null,frame?{width:frame.width,height:frame.height}:drag.tool==='area-type'?{width:60,height:30}:null);
       }else if(TRANSFORM_TOOLS.includes(drag.tool)){
         if(drag.originDrag){if(moved)api.transforms.setOrigin([end.x,end.y]);else api.transforms.setOrigin([drag.start.x,drag.start.y]);}
-        else if(moved&&drag.matrix)api.transform(drag.matrix,drag.tool[0].toUpperCase()+drag.tool.slice(1),{ids:drag.ids,copy:drag.modifiers.alt,scaleStrokes:drag.tool==='scale'?(state.ui.transformDefaults?.scale?.scaleStrokes??true):null});
+        else if(moved&&drag.matrix)api.transform(drag.matrix,drag.tool[0].toUpperCase()+drag.tool.slice(1),{ids:drag.ids,copy:drag.modifiers.alt,scaleStrokes:drag.tool==='scale'?state.ui.scaleStrokes!==false:null});
         else api.transforms.setOrigin([end.x,end.y]);
         if(!moved&&event.altKey)void api.transformDialog(drag.tool);
       }else if (SHAPE_TOOLS.includes(drag.tool)) {

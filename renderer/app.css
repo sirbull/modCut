@@ -203,6 +203,9 @@ fieldset.field { min-width: 0; padding: 0; border: 0; margin-inline: 0; }
 .field-segments__option:hover > span { background: var(--surface-2); color: var(--text); }
 .field-segments__option input:checked + span { background: var(--grad-primary); color: var(--on-brand); box-shadow: var(--shadow-1); }
 .field-segments__option input:focus-visible + span { outline: 2px solid var(--brand-mid); outline-offset: 2px; }
+.field-segments--swatches { grid-template-columns: repeat(auto-fit, minmax(76px, 1fr)); }
+.field-segments--swatches .field-segments__option > span { flex-direction: column; text-align: center; height: 100%; }
+.field-segments__swatch { display: block; width: 28px; height: 28px; border-radius: 5px; box-shadow: 0 0 0 1px var(--text-muted), inset 0 0 0 1px rgba(255,255,255,.25); }
 .field--check { display: flex; align-items: center; gap: 8px; }
 .field--check > span { order: 2; margin: 0; text-transform: none; letter-spacing: 0; font-size: var(--fs-sm); color: var(--text); }
 .field--check input { width: 16px; height: 16px; }
@@ -237,7 +240,7 @@ fieldset.field { min-width: 0; padding: 0; border: 0; margin-inline: 0; }
                    letter-spacing: .04em; color: var(--text-muted); }
 .ctx-menu button { width: 100%; display: flex; align-items: center; justify-content: space-between;
                    border: 0; background: transparent; color: var(--text); border-radius: 8px;
-                   padding: 7px 10px; cursor: pointer; font: 600 var(--fs-sm) var(--font-sans); }
+                   padding: 5px 8px; cursor: pointer; font: 600 var(--fs-xs) var(--font-sans); }
 .ctx-menu button:hover { background: var(--surface-2); }
 .ctx-menu button:disabled { color: var(--text-muted); opacity: .55; cursor: default; }
 .ctx-menu button:disabled:hover { background: transparent; }

@@ -11,7 +11,7 @@ export const LANGUAGES = Object.freeze([
 const CATALOGS = { nb: NB };
 
 /** The language to show: the preference, or for "system" the first system language modCut has. */
-export function resolveLanguage(preference = "system", systemLanguages = []) {
+export function resolveLanguage(preference = "en", systemLanguages = []) {
   if (preference === "en" || CATALOGS[preference]) return preference;
   for (const tag of systemLanguages) {
     const base = String(tag).toLowerCase().split(/[-_]/)[0];

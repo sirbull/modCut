@@ -21,9 +21,13 @@ import { runDrawScrubWorkflows } from './draw-scrub-workflows.mjs';
 import { runDrawSwatchWorkflows } from './draw-swatch-workflows.mjs';
 import { runDrawPathfinderWorkflows } from './draw-pathfinder-workflows.mjs';
 import { runDrawObjectWorkflows } from './draw-object-workflows.mjs';
+import { runDrawContextWorkflows } from './draw-context-workflows.mjs';
+import { runDrawRulerWorkflows } from './draw-ruler-workflows.mjs';
 import { runDrawCutWorkflows } from './draw-cut-workflows.mjs';
 import { runDrawPlaceWorkflows } from './draw-place-workflows.mjs';
 import { runDrawControlWorkflows } from './draw-control-workflows.mjs';
+import { runDrawColorWorkflows } from './draw-color-workflows.mjs';
+import { runDrawDocumentSettingsWorkflows } from './draw-document-settings-workflows.mjs';
 import { runDrawExportWorkflows } from './draw-export-workflows.mjs';
 import { runDrawMcpWorkflows } from './draw-mcp-workflows.mjs';
 import { runDrawLanguageWorkflows } from './draw-language-workflows.mjs';
@@ -54,6 +58,7 @@ import { runDrawTextOutlineWorkflows } from './draw-text-outline-workflows.mjs';
 import { runDrawFeedbackWorkflows } from './draw-feedback-workflows.mjs';
 import { runWorkflows, verifyRecoveredSession } from "./workflows.mjs";
 import { runThemeWorkflows } from "./theme-workflows.mjs";
+import { runBackgroundWorkflows } from "./background-workflows.mjs";
 
 const port = 9400 + (process.pid % 200);
 const profile = await mkdtemp(join(tmpdir(), "modcut-e2e-profile-"));
@@ -99,7 +104,10 @@ async function stop(signal = "SIGTERM") {
 try {
   launch();
   const first = await connectToApp(port);
-  if (process.argv.includes("--theme")) {
+  if (process.argv.includes("--background")) {
+    await runBackgroundWorkflows(first, port);
+    first.socket.close();
+  } else if (process.argv.includes("--theme")) {
     await runThemeWorkflows(first, port);
     first.socket.close();
   } else if (process.argv.includes('--draw-feedback')) {
@@ -186,6 +194,12 @@ try {
   } else if (process.argv.includes('--draw-export')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawExportWorkflows(first);first.socket.close();
+  } else if (process.argv.includes('--draw-document-settings')) {
+    for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
+    await runDrawDocumentSettingsWorkflows(first);first.socket.close();
+  } else if (process.argv.includes('--draw-color')) {
+    for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
+    await runDrawColorWorkflows(first);first.socket.close();
   } else if (process.argv.includes('--draw-control')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawControlWorkflows(first);first.socket.close();
@@ -209,8 +223,16 @@ try {
   } else if (process.argv.includes('--draw-cut')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawCutWorkflows(first);first.socket.close();
+  } else if (process.argv.includes('--draw-rulers')) {
+    for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
+    await runDrawRulerWorkflows(first);first.socket.close();
+  } else if (process.argv.includes('--draw-context')) {
+    for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
+    await runDrawContextWorkflows(first);first.socket.close();
   } else if (process.argv.includes('--draw-objects')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
+    // This workflow clicks native menu items by their English labels.
+    await first.evaluate("window.modcut.setLanguage('en')");
     await runDrawObjectWorkflows(first);first.socket.close();
   } else if (process.argv.includes('--draw-pathfinder')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
@@ -269,9 +291,13 @@ try {
       await runDrawSwatchWorkflows(first);
       await runDrawPathfinderWorkflows(first);
       await runDrawObjectWorkflows(first);
+      await runDrawContextWorkflows(first);
+      await runDrawRulerWorkflows(first);
       await runDrawCutWorkflows(first);
       await runDrawPlaceWorkflows(first);
       await runDrawControlWorkflows(first);
+      await runDrawColorWorkflows(first);
+      await runDrawDocumentSettingsWorkflows(first);
       await runDrawExportWorkflows(first);
       await runDrawTextWorkflows(first);
       await runDrawAreaTextWorkflows(first);

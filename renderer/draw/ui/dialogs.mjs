@@ -9,8 +9,96 @@ import { textProperties } from '../doc/text.mjs';
 import { createFontPicker } from './font-picker.mjs';
 import { WARP_STYLES } from '../geom/warp.mjs';
 import { LIVE_LABELS } from '../doc/effects.mjs';
+import { COLOR_MODES, colorValues, colorFromValues, normalizeHex } from '../doc/color.mjs';
+import { createColorSurface } from './color-surface.mjs';
 
 let dialogId=0;
+
+/** Detached color choice: Cancel leaves the document untouched; OK commits one paint change. */
+export function colorPickerDialog(initial, recent = []) {
+  const result = openDrawModal({title:'Color Picker',submitLabel:'OK',className:'draw-color-dialog',fields:[]});
+  const modal = document.querySelector('.draw-color-dialog'), form = modal.querySelector('form');
+  let chosen = initial, shown = initial || '#FFFFFF';
+  const layout = document.createElement('div'); layout.className = 'draw-color-dialog__layout';
+  const controls = document.createElement('div'); controls.className = 'draw-color-dialog__controls';
+  const previews = document.createElement('div'); previews.className = 'draw-color-dialog__previews';
+  const preview = (label,value) => {
+    const wrap = document.createElement('div'), name = document.createElement('span'), chip = document.createElement('div');
+    name.textContent = label; chip.className = 'draw-color-preview'; chip.style.backgroundColor = value || '#FFFFFF'; chip.classList.toggle('is-none',!value);
+    wrap.append(name,chip); previews.append(wrap); return chip;
+  };
+  const next = preview('New color',initial); preview('Current color',initial); controls.append(previews);
+  const fields = new Map();
+  function sync(hsb = null) {
+    next.style.backgroundColor = chosen || '#FFFFFF'; next.classList.toggle('is-none',chosen === null);
+    for (const [mode,inputs] of fields) (mode === 'hsb' && Array.isArray(hsb) ? hsb : colorValues(mode,shown)).forEach((v,i) => { inputs[i].value = v; });
+    hex.value = chosen === null ? '' : shown.slice(1); hex.setCustomValidity(''); none.setAttribute('aria-pressed',String(chosen === null));
+  }
+  const surface = createColorSurface(shown,{verticalHue:true,onInput(value,hsb) { chosen = shown = value; sync(hsb); }});
+  for (const mode of ['hsb','rgb','cmyk']) {
+    const group = document.createElement('fieldset'); group.className = 'draw-color-dialog__channels';
+    const legend = document.createElement('legend'); legend.textContent = COLOR_MODES[mode].name; group.append(legend);
+    const inputs = COLOR_MODES[mode].channels.map(([label,max],i) => {
+      const row = document.createElement('label'), name = document.createElement('span'), input = document.createElement('input');
+      name.textContent = label; input.type = 'number'; input.min = '0'; input.max = max; input.step = 'any'; input.dataset.colorChannel = `${mode}-${i}`; input.setAttribute('aria-label',`${COLOR_MODES[mode].name} ${label}`);
+      input.addEventListener('input',() => { if (!inputs.every(i => i.validity.valid && Number.isFinite(i.valueAsNumber))) return;
+        chosen = shown = colorFromValues(mode,inputs.map(i => i.valueAsNumber));
+        if (mode === 'hsb') surface.setHsb(inputs.map(i => i.valueAsNumber)); else surface.setHex(shown);
+        // Keep the field being typed into intact until the value is committed.
+        next.style.backgroundColor = shown; next.classList.remove('is-none'); hex.value = shown.slice(1); hex.setCustomValidity('');
+        for (const [other,channels] of fields) if (other !== mode) colorValues(other,shown).forEach((v,i) => { channels[i].value = v; });
+      });
+      input.addEventListener('change',() => sync(mode === 'hsb' ? inputs.map(i => i.valueAsNumber) : null)); row.append(name,input); group.append(row); return input;
+    }); fields.set(mode,inputs); controls.append(group);
+  }
+  const hexLabel = document.createElement('label'); hexLabel.className = 'draw-field'; hexLabel.textContent = 'Hex';
+  const hex = document.createElement('input'); hex.type = 'text'; hex.maxLength = 7; hex.spellcheck = false; hex.dataset.colorHex = ''; hex.setAttribute('aria-label','Hex'); hexLabel.append(hex);
+  hex.addEventListener('input',() => { try { const color = normalizeHex(hex.value); chosen = shown = color; hex.setCustomValidity(''); surface.setHex(color); next.style.backgroundColor = color; next.classList.remove('is-none');
+    for (const [mode,channels] of fields) colorValues(mode,color).forEach((v,i) => { channels[i].value = v; }); }
+    catch { hex.setCustomValidity('Enter a hex color such as #1A2B3C.'); } });
+  hex.addEventListener('change',() => { if (hex.validity.valid) sync(); });
+  const hexRow = document.createElement('div'); hexRow.className = 'draw-color-dialog__hex'; hexRow.append(hexLabel); controls.append(hexRow);
+  const sampler = document.createElement('button'); sampler.type = 'button'; sampler.className = 'btn btn--ghost btn--sm draw-color-dialog__eyedropper';
+  sampler.dataset.colorEyedropper = ''; sampler.setAttribute('aria-label','Pick a color from the screen'); sampler.title = 'Pick a color from the screen';
+  sampler.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 5 5 5M4 20l4-1L20 7a2.1 2.1 0 0 0-3-3L5 16z"/></svg>';
+  sampler.disabled = typeof window.EyeDropper !== 'function'; hexRow.append(sampler);
+  const samplingNote = document.createElement('small'); samplingNote.className = 'draw-color-dialog__sampling-note'; samplingNote.setAttribute('role','status');
+  if (sampler.disabled) samplingNote.textContent = 'Screen color picking is unavailable on this platform.';
+  controls.append(samplingNote);
+  const overlay = modal.parentElement;
+  let sampling = null, alive = true;
+  sampler.addEventListener('click',async () => {
+    if (sampling || !alive) return;
+    sampling = new AbortController(); const signal = sampling.signal;
+    samplingNote.textContent = ''; overlay.classList.add('draw-color-sampling'); modal.dataset.sampling = 'true';
+    try {
+      // Let the dialog and its dimming layer disappear before the screen is sampled.
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      if (!alive || signal.aborted) return;
+      const { sRGBHex } = await new window.EyeDropper().open({signal});
+      if (!alive) return;
+      chosen = shown = normalizeHex(sRGBHex); surface.setHex(shown); sync();
+    } catch (error) {
+      if (alive && error.name !== 'AbortError') samplingNote.textContent = 'Could not pick a screen color. Try again.';
+    } finally {
+      sampling = null; overlay.classList.remove('draw-color-sampling'); delete modal.dataset.sampling;
+      if (alive) sampler.focus();
+    }
+  });
+  const palette = document.createElement('div'); palette.className = 'draw-swatch-row draw-color-dialog__swatches';
+  palette.setAttribute('role','group'); palette.setAttribute('aria-label','Recent Colors');
+  const none = document.createElement('button'); none.type = 'button'; none.className = 'draw-swatch is-none'; none.setAttribute('aria-label','None'); none.dataset.colorNone = '';
+  none.addEventListener('click',() => { chosen = null; sync(); }); palette.append(none);
+  for (const value of [...new Set(recent)].filter(Boolean).slice(0,10)) {
+    const chip = document.createElement('button'); chip.type = 'button'; chip.className = 'draw-swatch'; chip.style.setProperty('--swatch',value); chip.setAttribute('aria-label',value);
+    chip.dataset.colorRecent = value;
+    chip.addEventListener('click',() => { chosen = shown = normalizeHex(value); surface.setHex(shown); sync(); }); palette.append(chip);
+  }
+  const recentLabel = document.createElement('div'); recentLabel.className = 'draw-color-dialog__recent-label'; recentLabel.textContent = 'Recent Colors';
+  if (!recent.length) { const empty = document.createElement('span'); empty.className = 'draw-panel__hint'; empty.textContent = 'Colors you apply appear here.'; palette.append(empty); }
+  layout.append(surface.element,controls); form.prepend(layout); layout.after(recentLabel,palette); sync(); surface.element.querySelector('[role=slider]').focus();
+  return result.then(values => values ? { value: chosen } : null).finally(() => { alive = false; sampling?.abort(); });
+}
 /** Uniform text editor. Preview is detached; Apply is a single document command. */
 export function textDialog(defaults, onPreview = () => {}, {fonts=[],resolve=patch=>patch,...fontOptions}={}) {
   const choices = values => values.map(value => ({ value, label: value[0].toUpperCase() + value.slice(1) }));
@@ -122,10 +210,11 @@ function openDrawModal(options) {
 
 function trapDialogKeys(modal,cancel) {
   return event=>{
+    if(modal.dataset.sampling === 'true'){event.stopPropagation();return;}
     if(event.isComposing)return;
     if(event.key==='Escape'){event.preventDefault();event.stopPropagation();cancel();}
     if(event.key==='Tab'){
-      const items=[...modal.querySelectorAll('input:not(:disabled):not([type=hidden]),textarea:not(:disabled),select:not(:disabled),button:not(:disabled)')].filter(el=>el.getClientRects().length);
+      const items=[...modal.querySelectorAll('input:not(:disabled):not([type=hidden]),textarea:not(:disabled),select:not(:disabled),button:not(:disabled),[tabindex="0"]')].filter(el=>el.getClientRects().length);
       if(event.shiftKey && document.activeElement===items[0]){event.preventDefault();items.at(-1).focus();}
       else if(!event.shiftKey && document.activeElement===items.at(-1)){event.preventDefault();items[0].focus();}
     }
@@ -136,7 +225,7 @@ const ORIENTATION_ICONS={portrait:'<rect x="7" y="3" width="10" height="18" rx="
  * New document dialog with Recent, Templates and Saved tabs beside editable preset details.
  * `machines` are the configured laser profiles; `storage` holds recent setups and saved templates.
  */
-export function newDocumentDialog(bed,{machines=[],storage=globalThis.localStorage}={}) {
+export function newDocumentDialog(bed,{machines=[],storage=globalThis.localStorage,editDocument=null,activeArtboardId=null}={}) {
   const machineEntries=[{id:'bed',name:`${bed.name||'Machine bed'} (current)`,width:bed.width,height:bed.height},
     ...machines.filter(m=>m.name!==bed.name||m.width!==bed.width||m.height!==bed.height).map((m,i)=>({id:`machine-${i}`,name:m.name,width:m.width,height:m.height}))]
     .filter(m=>m.width>0&&m.height>0).map(m=>({...m,category:'laser',units:'mm',ppi:300,machine:true}));
@@ -145,14 +234,19 @@ export function newDocumentDialog(bed,{machines=[],storage=globalThis.localStora
   const previous=document.activeElement,overlay=document.createElement('div');overlay.className='modal-overlay';
   const modal=document.createElement('div');modal.className='modal panel draw-document-dialog';modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');
   const make=(tag,className,parent,text)=>{const el=document.createElement(tag);if(className)el.className=className;if(text!=null)el.textContent=text;parent?.append(el);return el;};
-  const title=make('div','panel__header',modal,'New document');title.id=`draw-dialog-${++dialogId}`;modal.setAttribute('aria-labelledby',title.id);
+  if(editDocument)modal.classList.add('draw-document-settings-dialog');
+  const title=make('div','panel__header',modal,editDocument?'Document settings':'New document');title.id=`draw-dialog-${++dialogId}`;modal.setAttribute('aria-labelledby',title.id);
   const form=make('form','draw-new-doc',make('div','panel__body',modal));form.noValidate=false;
   const browse=make('section','draw-new-doc__browse',form),tabs=make('div','draw-new-doc__tabs',browse);tabs.setAttribute('role','tablist');tabs.setAttribute('aria-label','Document sources');
   const chips=make('div','draw-new-doc__chips',browse),grid=make('div','draw-new-doc__grid',browse);grid.setAttribute('role','tabpanel');grid.id=`${title.id}-panel`;
   const details=make('aside','draw-new-doc__details',form);make('h3','draw-new-doc__heading',details,'Preset details');
   const field=(label,parent,className='')=>{const wrap=make('label',`draw-new-doc__field ${className}`,parent);make('span','',wrap,label);return wrap;};
   const input=(parent,name,attributes={})=>{const el=make('input','input',parent);el.name=name;Object.assign(el,attributes);return el;};
-  const nameInput=input(field('Name',details),'name',{value:'Untitled',required:true,maxLength:120});
+  const nameInput=input(field('Name',details),'name',{value:editDocument?.name??'Untitled',required:true,maxLength:120});
+  const boardSelect=editDocument?make('select','select',field('Artboard',details)):null;
+  const boardSizes=new Map(editDocument?.artboards.map(b=>[b.id,{width:b.width,height:b.height}])??[]);
+  let editingBoard=editDocument?.artboards.find(b=>b.id===activeArtboardId)??editDocument?.artboards[0];
+  if(boardSelect){boardSelect.name='artboard';for(const board of editDocument.artboards)boardSelect.append(new Option(board.name,board.id,false,board.id===editingBoard.id));}
   const presetInput=input(form,'preset',{type:'hidden',value:'bed'});
   const sizeRow=make('div','draw-new-doc__row',details);
   const number={type:'number',step:'any',min:'0.001',required:true};
@@ -167,8 +261,10 @@ export function newDocumentDialog(bed,{machines=[],storage=globalThis.localStora
     b.setAttribute('aria-label',id[0].toUpperCase()+id.slice(1));b.innerHTML=`<svg viewBox="0 0 24 24" aria-hidden="true">${ORIENTATION_ICONS[id]}</svg>`;return [id,b];}));
   const boardRow=make('div','draw-new-doc__row',details);
   const countInput=input(field('Artboards',boardRow),'count',{type:'number',min:'1',max:String(MAX_ARTBOARDS),step:'1',value:'1',required:true});
+  if(editDocument){countInput.disabled=true;countInput.closest('label').hidden=true;}
   const ppiSelect=make('select','select',field('Resolution',boardRow));ppiSelect.name='ppi';
   for(const ppi of RESOLUTIONS)ppiSelect.append(new Option(`${ppi} ppi${ppi===72?' (screen)':ppi===300?' (high)':''}`,String(ppi)));
+  if(editDocument&&!RESOLUTIONS.includes(editDocument.rasterEffectsPpi))ppiSelect.append(new Option(`${editDocument.rasterEffectsPpi} ppi`,String(editDocument.rasterEffectsPpi)));
   const arrange=make('div','draw-new-doc__arrange',details);
   const layoutSelect=make('select','select',field('Arrange',arrange));layoutSelect.name='layout';
   for(const [value,label] of [['grid-row','Grid by row'],['grid-column','Grid by column'],['row','Single row'],['column','Single column']])layoutSelect.append(new Option(label,value));
@@ -178,7 +274,7 @@ export function newDocumentDialog(bed,{machines=[],storage=globalThis.localStora
   const error=make('p','draw-new-doc__error',details);error.setAttribute('role','alert');
   const actions=make('div','modal-actions draw-new-doc__actions',form);
   const cancel=make('button','btn btn--ghost btn--sm',actions,'Cancel');cancel.type='button';cancel.dataset.x='cancel';
-  const create=make('button','btn btn--primary btn--sm',actions,'Create');create.type='submit';
+  const create=make('button','btn btn--primary btn--sm',actions,editDocument?'Apply':'Create');create.type='submit';
 
   // Sizes live in millimetres; the inputs show them in the chosen unit.
   const state={tab:recent.length?'recent':'templates',category:'laser',widthMm:bed.width,heightMm:bed.height,spacingMm:20,label:machineEntries[0]?.name??'Custom'};
@@ -186,15 +282,16 @@ export function newDocumentDialog(bed,{machines=[],storage=globalThis.localStora
   const syncControls=()=>{
     const landscape=state.widthMm>state.heightMm;
     orientationButtons.portrait.setAttribute('aria-pressed',String(!landscape));orientationButtons.landscape.setAttribute('aria-pressed',String(landscape));
-    const many=Number(countInput.value)>1;arrange.hidden=!many;for(const el of [layoutSelect,columnsInput,spacingInput])el.disabled=!many;
+    const many=!editDocument&&Number(countInput.value)>1;arrange.hidden=!many;for(const el of [layoutSelect,columnsInput,spacingInput])el.disabled=!many;
     columnsInput.closest('label').hidden=!layoutSelect.value.startsWith('grid');columnsInput.disabled=!many||columnsInput.closest('label').hidden;
     for(const card of grid.querySelectorAll('[data-preset]'))card.setAttribute('aria-pressed',String(card.dataset.preset===presetInput.value));
     error.textContent='';
   };
   function apply(entry,id) {
     state.widthMm=entry.width;state.heightMm=entry.height;state.label=entry.label??entry.name??'Custom';presetInput.value=id;
-    unitSelect.value=entry.units??'mm';ppiSelect.value=String(RESOLUTIONS.includes(entry.ppi)?entry.ppi:300);
-    if(entry.count){countInput.value=entry.count;layoutSelect.value=entry.layout;columnsInput.value=entry.columns;state.spacingMm=entry.spacing;}
+    unitSelect.value=entry.units??'mm';
+    const ppi=entry.ppi??300;if(![...ppiSelect.options].some(o=>o.value===String(ppi)))ppiSelect.append(new Option(`${ppi} ppi`,String(ppi)));ppiSelect.value=String(ppi);
+    if(entry.count&&!editDocument){countInput.value=entry.count;layoutSelect.value=entry.layout;columnsInput.value=entry.columns;state.spacingMm=entry.spacing;}
     showUnits();syncControls();
   }
   const preview=(parent,width,height)=>{const box=make('span','draw-preset-card__preview',parent),scale=1/Math.max(width,height);
@@ -240,7 +337,13 @@ export function newDocumentDialog(bed,{machines=[],storage=globalThis.localStora
     syncControls();
   });
   unitSelect.addEventListener('change',showUnits);
-  apply(machineEntries[0]??presets.find(p=>p.id==='a4'),machineEntries[0]?'bed':'a4');
+  boardSelect?.addEventListener('change',()=>{
+    boardSizes.set(editingBoard.id,{width:state.widthMm,height:state.heightMm});
+    editingBoard=editDocument.artboards.find(b=>b.id===boardSelect.value);
+    const size=boardSizes.get(editingBoard.id);state.widthMm=size.width;state.heightMm=size.height;presetInput.value='custom';showUnits();syncControls();
+  });
+  if(editDocument)apply({...boardSizes.get(editingBoard.id),units:editDocument.units,ppi:editDocument.rasterEffectsPpi},'custom');
+  else apply(machineEntries[0]??presets.find(p=>p.id==='a4'),machineEntries[0]?'bed':'a4');
   renderGrid();
   enhanceNumberFields(modal);overlay.append(modal);document.body.append(overlay);nameInput.focus();nameInput.select();
   return new Promise(resolve=>{
@@ -251,12 +354,23 @@ export function newDocumentDialog(bed,{machines=[],storage=globalThis.localStora
       try{
         const setup=normalizeSetup({width:state.widthMm,height:state.heightMm,units:unitSelect.value,ppi:Number(ppiSelect.value),count:Number(countInput.value),
           layout:layoutSelect.value,columns:Number(columnsInput.value),spacing:state.spacingMm});
+        if(editDocument){
+          boardSizes.set(editingBoard.id,{width:setup.width,height:setup.height});
+          const artboards=editDocument.artboards.map(board=>{
+            const size=boardSizes.get(board.id);normalizeSetup({...size});return {...board,...size};
+          });
+          close({properties:{name:nameInput.value.trim()||'Untitled',units:setup.units,rasterEffectsPpi:setup.ppi,artboards},artboardId:editingBoard.id});return;
+        }
         const doc=newDrawDocument({name:nameInput.value.trim()||'Untitled',preset:'custom',...setup},bed);
         recent=rememberRecent(recent,{label:state.label,...setup});storeList(storage,RECENT_KEY,recent);
         close(doc);
       }catch(problem){error.textContent=problem.message;}
     });
   });
+}
+export function documentSettingsDialog(doc,activeArtboardId,options={}) {
+  const board=doc.artboards.find(b=>b.id===activeArtboardId)??doc.artboards[0];
+  return newDocumentDialog(board,{...options,editDocument:doc,activeArtboardId});
 }
 export function saveTemplateDialog(name) {
   return openDrawModal({title:'Save Document Properties as Template',submitLabel:'Save template',className:'draw-template-dialog',fields:[
@@ -302,7 +416,7 @@ export function transformDialog(tool,origin,defaults={},onPreview=()=>{}) {
     numeric('uniform','Scale (%)',defaults.uniform??100,{min:.01,max:100000,showIf:v=>v.mode==='uniform'}),
     numeric('x','Horizontal (%)',defaults.x??100,{min:.01,max:100000,showIf:v=>v.mode==='nonuniform'}),
     numeric('y','Vertical (%)',defaults.y??100,{min:.01,max:100000,showIf:v=>v.mode==='nonuniform'}),
-    {key:'scaleStrokes',label:'Scale strokes & effects',type:'checkbox',value:defaults.scaleStrokes??true,description:'Scales stroke widths and dash lengths. Effect rendering is planned for a later phase.'},
+    {key:'scaleStrokes',label:'Scale strokes & effects',type:'checkbox',value:defaults.scaleStrokes??true,description:'Scale stroke widths, dash lengths and effect sizes with objects.'},
   ]:tool==='reflect'?[
     {key:'axis',label:'Reflection axis',type:'select',value:defaults.axis??'vertical',options:[{value:'horizontal',label:'Horizontal'},{value:'vertical',label:'Vertical'},{value:'angle',label:'Custom angle'}]},
     numeric('angle','Axis angle (°, counterclockwise)',defaults.angle??0,{min:-36000,max:36000,showIf:v=>v.axis==='angle'}),

@@ -22,6 +22,22 @@ function setup(t, children = [], options = {}) {
 }
 const rect = b => [b.x, b.y, b.width, b.height].map(n => Math.round(n * 1e6) / 1e6);
 
+test('grid and rulers follow the view without changing artwork, exports or history', t => {
+  const node=rectangle(),{state,scope,renderer}=setup(t,[node]);
+  state.ui={tool:'select'};
+  const model=JSON.stringify(state.snapshot()),exported=renderer.exportArtwork().exportJSON({asString:true});
+  state.ui.grid=true;state.ui.rulers=true;renderer.updateView();
+  const grid=scope.project.getItem({name:'View grid'}),rulers=scope.project.getItem({name:'View rulers'});
+  assert.ok(grid.children.length>0);assert.ok(rulers.children.length>0);
+  scope.view.zoom=2;scope.view.center=[140,80];scope.view.rotation=30;renderer.updateView();
+  const corner=new scope.Point(0,0).transform(rulers.globalMatrix).transform(scope.view.matrix);
+  assert.ok(corner.length<1e-8,'Ruler corner stays at the screen origin after pan, zoom and rotation');
+  assert.equal(JSON.stringify(state.snapshot()),model);assert.equal(state.history.canUndo,false);
+  assert.equal(renderer.exportArtwork().exportJSON({asString:true}),exported);
+  state.ui.grid=false;state.ui.rulers=false;renderer.updateView();
+  assert.equal(grid.parent,null);assert.equal(rulers.visible,false);
+});
+
 test('Direct Selection inspects transformed live shapes without mutating their model or view',t=>{
   const shape=rectangle({params:{x:10,y:5,width:20,height:10},transform:[1.2,.3,0,.8,4,2]}),parent=createNode('group',{transform:[0,1,-1,0,60,10],children:[shape]});
   const {state,scope,renderer}=setup(t,[parent]);state.ui={tool:'direct-selection'};const saved=JSON.stringify(state.snapshot()),item=renderer.items.get(shape.id);
@@ -230,4 +246,24 @@ test('live ellipse pie angles retain curved sector geometry and undo restores th
   assert.ok(Math.abs(Math.abs(item.area)-full/2)<.001);
   assert.deepEqual(rect(renderer.bounds(node.id)),[10,30,40,10]);
   state.history.undo();assert.ok(Math.abs(Math.abs(renderer.items.get(node.id).area)-full)<.001);
+});
+
+test('trace preview keeps stacking, clipping, opacity and source hit testing while exports retain the original', t => {
+  const original=rectangle({opacity:.4}),above=rectangle({params:{x:80,y:80,width:10,height:10}});
+  const clip=rectangle({params:{x:0,y:0,width:30,height:30}});
+  const parent=createNode('group',{clip:true,transform:[2,0,0,2,20,30],children:[original,above,clip]});
+  const {state,scope,renderer}=setup(t,[parent]);
+  const exported=()=>{const item=renderer.exportArtwork();try{return item.exportJSON({asString:true});}finally{item.remove();}};
+  const before=exported(),snapshot=JSON.stringify(state.snapshot());
+  const path=createNode('path',{subpaths:[{closed:true,segments:[[0,0],[10,0],[10,10],[0,10]].map(p=>({p,in:[0,0],out:[0,0]}))}],appearance:appearance('#000000',null)});
+  renderer.previewTrace(original.id,[path]);
+  const preview=scope.project.getItem({name:'Image Trace preview'}),source=renderer.items.get(original.id);
+  assert.equal(source.visible,false);assert.equal(preview.parent,source.parent);
+  assert.equal(preview.index,source.index+1);assert.equal(preview.opacity,.4);
+  assert.equal(preview.parent.clipped,true);
+  assert.equal(renderer.hit(new scope.Point(30,40)),original.id,'Clicking the preview keeps the source selected');
+  renderer.render();assert.equal(preview.index,source.index+1,'Reconciliation keeps the original stack position');
+  assert.equal(exported(),before);assert.equal(JSON.stringify(state.snapshot()),snapshot);assert.equal(state.history.canUndo,false);
+  renderer.previewTrace();assert.equal(source.visible,true);assert.equal(preview.parent,null);
+  assert.equal(exported(),before);
 });

@@ -14,7 +14,7 @@ import { createFontService } from './font-service.mjs';
 import { registerExportFiles } from './export-files.mjs';
 import { createGoogleFonts } from './google-fonts.mjs';
 import { createMcpHost } from './mcp-host.mjs';
-import { localizeMenuTemplate, resolveLanguage, translator } from '../renderer/i18n.mjs';
+import { localizeMenuTemplate, translator } from '../renderer/i18n.mjs';
 
 app.name = "modCut"; // makes the macOS app menu read "modCut", not "Electron"
 
@@ -94,7 +94,7 @@ function requestQuit() {
 const send = createWindowCommandRouter({ getWindow: () => win, createWindow });
 
 let menuMode = "cut", menuLaserPreview = false;
-// The renderer reports the language it shows (Preferences > Language); until then, the system's.
+// Start in English; the renderer then reports the saved Preferences > Language choice.
 let language = "en";
 // Edit > Cut is "Klipp ut" in a menu; elsewhere "Cut" is the laser operation.
 const MENU_WORDS = { nb: { Cut: "Klipp ut" } };
@@ -258,6 +258,7 @@ function buildMenu(mode = "cut") {
       { label:"Laser processes…",click:()=>send("laser-processes") },
       { label: "Outline / Preview", accelerator: acceleratorFor("outline", { isMac }), click: () => send("outline") },
       { label: "Reset Rotate View", click: () => send("reset-rotate-view") },
+      editItem("Show Rulers","rulers"), editItem("Show Grid","grid"),
       { label: "Control Bar", click: () => send("toggle-control-bar") },
       { role: "togglefullscreen", label: "Full screen" },
       { role: "toggleDevTools", label: "Developer Tools" }];
@@ -311,7 +312,6 @@ function buildMenu(mode = "cut") {
 }
 
 app.whenReady().then(async () => {
-  if (!isE2E) language = resolveLanguage("system", app.getPreferredSystemLanguages?.() ?? [app.getLocale()]);
   googleFonts=createGoogleFonts({directory:join(app.getPath('userData'),'google-fonts')});
   fonts=createFontService({google:googleFonts});
   recoveryStore = createRecoveryStore(app.getPath("userData"));

@@ -82,6 +82,71 @@
   --shadow-2: 0 6px 20px rgba(0,0,0,.4), 0 2px 6px rgba(0,0,0,.25);
 }
 
+/* Fixed neutral backgrounds override the green theme. Controls share the same
+   semantic tokens, including contrast-safe accents, focus and feedback colours. */
+:root[data-background]:where(:not([data-background="green"])) {
+  --text: #191919;
+  --text-muted: #454545;
+  --brand-deep: #005B4E;
+  --brand: #007A4B;
+  --brand-mid: #007D6B;
+  --on-accent: #FFFFFF;
+  --danger: #A52B1A;
+  --warning: #704506;
+  --lime: var(--surface-2);
+  --lime-bright: var(--surface);
+  --bed: #FFFFFF;
+  --grid-major: #C4C4C4;
+  --grid-minor: #E2E2E2;
+  --shadow-1: 0 1px 3px rgba(0,0,0,.12);
+  --shadow-2: 0 6px 20px rgba(0,0,0,.18);
+}
+
+:root[data-background="white"] {
+  --bg: #FFFFFF;
+  --surface: #FFFFFF;
+  --surface-2: #EEEEEE;
+  --border: #B8B8B8;
+}
+
+:root[data-background="light-gray"] {
+  --bg: #EEEEEE;
+  --surface: #E5E5E5;
+  --surface-2: #D7D7D7;
+  --border: #A0A0A0;
+}
+
+:root[data-background="gray"],
+:root[data-background="dark-gray"] {
+  --text: #F5F5F5;
+  --text-muted: #E0E0E0;
+  --brand-deep: #9BF4DF;
+  --brand: #73DCC1;
+  --brand-mid: #73DCC1;
+  --on-accent: #071411;
+  --danger: #FFD6CE;
+  --warning: #FFE0A0;
+  --bed: #AAAAAA;
+  --grid-major: #858585;
+  --grid-minor: #9C9C9C;
+  --shadow-1: 0 1px 3px rgba(0,0,0,.28);
+  --shadow-2: 0 6px 20px rgba(0,0,0,.4);
+}
+
+:root[data-background="gray"] {
+  --bg: #606060;
+  --surface: #555555;
+  --surface-2: #484848;
+  --border: #858585;
+}
+
+:root[data-background="dark-gray"] {
+  --bg: #303030;
+  --surface: #282828;
+  --surface-2: #202020;
+  --border: #666666;
+}
+
 /* ============================================================================
    Base
    ========================================================================== */

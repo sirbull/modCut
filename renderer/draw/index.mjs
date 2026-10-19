@@ -1,13 +1,14 @@
 import { createProjectDraw } from './io/project.mjs';
 import { createDrawRenderer } from './render.mjs';
 import { createPanels } from './panels/ui.mjs';
-import { rememberColor } from './doc/swatches.mjs';
+import { recentColors, rememberRecentColor } from './doc/recent-colors.mjs';
+import { colorPickerDialog } from './ui/dialogs.mjs';
 import { copyNodes, drawClipboard, invert as invertMatrix, pasteCommands } from './doc/clipboard.mjs';
 import { multiply as multiplyMatrix } from './doc/arrange.mjs';
 import { stackingOrder as objectOrder } from './doc/arrange.mjs';
 import { arrangeCommands, groupCommands, hideCommands, lockCommands, showAllCommands, ungroupCommands, unlockAllCommands } from './doc/arrange.mjs';
 import { PATHFINDER_LABELS, runPathfinder, toSubpaths } from './geom/pathfinder.mjs';
-import { TRACE_PRESETS, traceScale, quantize, removeNoise, contours, ringArea, simplifyRing, ringCorners } from './geom/trace.mjs';
+import { traceScale, ringCorners } from './geom/trace.mjs';
 import { transformEachMatrix, gridCells, distortSubpaths, boxCorners, cropImage } from './geom/transform-each.mjs';
 import { pickRegions, mergeRegions, knifeCut, erase as eraseRegion, areaOf } from './geom/region-ops.mjs';
 import { fillHex, pathfinderCommands, stackingOrder } from './doc/pathfinder-commands.mjs';
@@ -16,8 +17,10 @@ import { PANEL_DEFINITIONS } from './panels/registry.mjs';
 import { TOOL_DEFINITIONS, toolRegistry } from './tools/registry.mjs';
 import { setKeyOverrides, shortcutLabel } from './keymap.mjs';
 import { commandEntries, openCommandSearch } from './ui/command-search.mjs';
+import { createContextMenu } from './ui/context-menu.mjs';
 import { createToolbar } from './tools/toolbar.mjs';
 import { createInteractions } from './tools/interactions.mjs';
+import { createRulerInteractions } from './tools/rulers.mjs';
 import { createPathInteractions, PATH_TOOLS } from './tools/paths.mjs';
 import { createArtboardController } from './tools/artboards.mjs';
 import { createTransformController } from './tools/transforms.mjs';
@@ -55,7 +58,7 @@ import { bakeCorners } from './geom/corners.mjs';
 import { addAnchorPoints, removeAnchorPoints, reverseSubpaths, averagePoints, joinSubpaths, closeSubpath, cleanUpTargets, mapSubpath } from './geom/path-commands.mjs';
 import { toolCursor } from './tools/cursors.mjs';
 import { alignReference, alignOffsets, distributeOffsets, spacingOffsets } from './geom/align.mjs';
-import { pointText, pathText, textValues, textProperties, textToOutlines, DEFAULT_CHARACTER, PT_TO_MM, characterAt, styleRange, textContent } from './doc/text.mjs';
+import { pointText, pathText, textValues, textProperties, textToOutlines, textDefaults, textStyleValues, DEFAULT_CHARACTER, PT_TO_MM, characterAt, styleRange, textContent } from './doc/text.mjs';
 import { hasTextLayout } from './doc/text-layout.mjs';
 import { textDialog } from './ui/dialogs.mjs';
 
@@ -65,7 +68,7 @@ export function getDrawWorkspace(root) {return workspaces.get(root) || null;}
 const shortcutsReady=globalThis.window?.modcut?.getDrawShortcuts?.().then(map=>{try{setKeyOverrides(map??{});}catch{/* unreadable: defaults */}}).catch(()=>{});
 const implementedTools=new Set(['path-eraser','smooth','vertical-type','touch-type','rotate-view','select','group-selection','magic-wand','lasso','shape-builder','knife','eraser','width','blend','paintbrush','blob-brush','free-transform','pencil','hand','zoom','artboard','gradient','eyedropper','measure','scissors','type','area-type','type-on-path',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
 const commands=new Set(['undo','redo','delete','select-all','select-artboard','deselect','cancel','fit-artboard','fit-all','actual-size','zoom-in','zoom-out','outline','laser-preview','laser-preview-help','laser-processes',
-  'cut','copy','paste','paste-front','paste-back','paste-place','paste-all-artboards',
+  'cut','copy','paste','paste-front','paste-back','paste-place','paste-all-artboards','rulers','grid',
   'edit-text','create-outlines','join','average','offset-path','outline-stroke','expand','expand-appearance','transform-each','split-into-grid','crop-image','effect-last','effect-options',...Object.keys(EFFECTS).map(t=>`effect-${t}`),...Object.keys(WARP_STYLES).map(t=>`warp-${t}`),...Object.keys(LIVE_LABELS).map(t=>`live-${t}`),'simplify','reverse-path','add-anchors','remove-anchors','clean-up','compound-make','compound-release','clip-make','clip-release','reset-rotate-view','package','keyboard-shortcuts','workspace-new','workspace-reset','workspace-manage','blend-make','blend-release','blend-expand','blend-options','blend-reverse','blend-replace-spine','blend-reverse-spine','envelope-make','envelope-warp','envelope-release','envelope-expand','mask-make','mask-release','mask-clip','mask-invert','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
   'paint-focus','paint-swap','paint-none','paint-solid','paint-gradient','default-paint','smart-guides','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','shear-dialog','toggle-panels','toggle-panels-except-tools','command-search','draw-mode','draw-normal','draw-behind','draw-inside','reselect','select-inverse','select-next-above','select-next-below','save-selection','edit-selection',
   ...Object.keys(SAME_MODES).map(m=>`select-same-${m}`),...Object.keys(OBJECT_KINDS).map(k=>`select-object-${k}`),'select-object-direction-handles',
@@ -78,6 +81,14 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   // The control bar's visibility is a per-user view preference, like Illustrator's Window > Control.
   const CONTROL_BAR_KEY='modcut.draw.controlBar';
   try{state.ui.controlBar??=globalThis.localStorage?.getItem(CONTROL_BAR_KEY)!=='hidden';}catch{state.ui.controlBar??=true;}
+  const SCALE_STROKES_KEY='modcut.draw.scaleStrokes';
+  try{state.ui.scaleStrokes??=globalThis.localStorage?.getItem(SCALE_STROKES_KEY)!=='false';}catch{state.ui.scaleStrokes??=true;}
+  function syncScaleStrokes(event){state.ui.scaleStrokes=event.detail;panels?.render();}
+  function setScaleStrokes(value){
+    try{globalThis.localStorage?.setItem(SCALE_STROKES_KEY,String(!!value));}catch{}
+    window.dispatchEvent(new CustomEvent('modcut-scale-strokes-change',{detail:!!value}));
+  }
+  window.addEventListener('modcut-scale-strokes-change',syncScaleStrokes);
   const element=(tag,className,parent)=>{const el=document.createElement(tag);el.className=className;parent?.append(el);return el;};
   const shell=element('div','draw-shell',root),tools=element('nav','draw-tool-rail',shell);tools.setAttribute('aria-label','Draw tools');
   const stage=element('div','draw-stage',shell),canvas=element('canvas','draw-canvas',stage);canvas.setAttribute('aria-label','Draw canvas');canvas.tabIndex=0;
@@ -98,7 +109,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   const scope=new paper.PaperScope();try {scope.setup(canvas);} finally {paper.activate();}scope.view.autoUpdate=false;
   function withScope(fn) {try {scope.activate();return fn();} finally {paper.activate();}}
   function run(fn) {try {return withScope(fn);}catch(error){onError(error.message);}}
-  let panels,toolbar,interactions,paths,artboards,temporary=null,destroyed=false,fitted=false,lastPoint=null,ownedTransformModal=null,ownedTextModal=null,textBusy=false,fontCatalog;
+  let panels,toolbar,interactions,paths,artboards,temporary=null,destroyed=false,fitted=false,lastPoint=null,ownedTransformModal=null,ownedTextModal=null,ownedColorModal=null,textBusy=false,fontCatalog;
   // A late thumbnail (big layers and groups) goes straight into the Layers rows that show it.
   const renderer=withScope(()=>createDrawRenderer(scope,state,{withScope,onImageLoad:()=>panels?.render(),
     getLaserProcesses,onThumbnail:(id,url)=>{if(!destroyed)for(const img of shell.querySelectorAll(`[data-draw-thumb="${CSS.escape(id)}"]`)){img.src=url;img.classList.remove('is-empty');}}}));
@@ -205,7 +216,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     interactions.cancel();paths.finish();const before=state.document.data,ids=selectedIds(),box=renderer.selectionBounds(),previousOrigin=state.ui.transformOrigin&&[...state.ui.transformOrigin];
     if(!box)return;
     try{
-      const pending=openTransformDialog(tool,transforms.origin(),state.ui.transformDefaults?.[tool],preview=>run(()=>{
+      const pending=openTransformDialog(tool,transforms.origin(),{...state.ui.transformDefaults?.[tool],scaleStrokes:state.ui.scaleStrokes!==false},preview=>run(()=>{
         renderer.clearTransformPreview();state.ui.transformPreviewBox=null;state.ui.transformOrigin=preview?.origin??previousOrigin;
         if(preview&&state.document.data===before){const matrix=operationMatrix(preview.operation,preview.origin);state.ui.transformPreviewBox=transformedBox(box,matrix);renderer.previewTransform(ids,matrix,{scaleStrokes:preview.scaleStrokes});}
         else renderer.updateView();
@@ -216,6 +227,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
         if(!values||destroyed||state.document.readOnly)return;
         if(state.document.data!==before)throw new Error('The artwork changed while the dialog was open. Open the dialog again.');
         const origin=[values.originX,values.originY];transforms.setOrigin(origin);state.ui.transformDefaults={...state.ui.transformDefaults,[tool]:values};
+        if(tool==='scale')setScaleStrokes(values.scaleStrokes);
         transform(operationMatrix(dialogOperation(tool,values),origin),tool[0].toUpperCase()+tool.slice(1),{ids,copy:values.copy,scaleStrokes:tool==='scale'?values.scaleStrokes:null});
       });
     }catch(error){ownedTransformModal=null;onError(error.message);}
@@ -241,10 +253,25 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     // Remember the last solid color per kind for the Color button / Comma shortcut.
     if(kind!=='width'&&value)state.ui.lastSolid={...state.ui.lastSolid,[kind]:value};
     // Recent Colors records committed colors, not every step of a live slider drag.
-    if(kind!=='width'&&value&&!mergeKey)state.ui.recentColors=rememberColor(state.ui.recentColors,value);
+    if(kind!=='width'&&value&&!mergeKey)state.ui.recentColors=rememberRecentColor(value,state.ui.recentColors);
     const ids=paintIds();
     if(ids.length)state.history.transaction('Appearance',()=>{for(const id of ids)state.history.execute(updateNode(id,{appearance:changePaint(state.document.getNode(id).appearance,kind,value,state.ui,swatch)}));},{mergeKey});
     else {panels?.render();toolbar?.update();}
+  }
+  async function editPaint(kind) {
+    if (destroyed || state.document.readOnly || document.querySelector('.modal-overlay')) return;
+    const before = state.document.data, ids = paintIds();
+    state.ui.paintFocus = kind; toolbar?.update();
+    try {
+      const pending = colorPickerDialog(state.ui[kind], recentColors(state.ui.recentColors));
+      ownedColorModal = document.querySelector('.draw-color-dialog');
+      const choice = await pending; ownedColorModal = null;
+      if (!choice || destroyed) return;
+      run(() => {
+        if (state.document.data !== before || JSON.stringify(paintIds()) !== JSON.stringify(ids)) throw new Error('The artwork changed while the dialog was open. Open the dialog again.');
+        paint(kind,choice.value);
+      });
+    } catch (error) { ownedColorModal = null; if (!destroyed) onError(error.message); }
   }
   function layerId() {
     if(state.document.isEditable(state.ui.layerId))return state.ui.layerId;
@@ -629,9 +656,9 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
    * colour, in a group above the image, which is hidden (one undo step). Returns paths, anchors and colours.
    */
   /** One traced ring as a closed subpath: corners stay sharp, the runs between them get fitted curves. Call inside withScope. */
-  function traceSubpath(ring,toWorld,tolerance){
+  function traceSubpath(ring,toWorld,tolerance,cornerAmount=80){
     const segs=path=>{const out=path.segments.map(s=>({p:[s.point.x,s.point.y],in:[s.handleIn.x,s.handleIn.y],out:[s.handleOut.x,s.handleOut.y]}));path.remove();return out;};
-    const corners=ringCorners(ring);
+    const corners=ringCorners(ring,120-Math.max(0,Math.min(100,cornerAmount))*.75);
     if(!corners.length)return {closed:true,segments:segs(fitCurve(ring.map(toWorld),true,tolerance))};
     const segments=[];
     corners.forEach((c,k)=>{const next=corners[(k+1)%corners.length],run=[];for(let i=c;;i=(i+1)%ring.length){run.push(ring[i]);if(i===next&&run.length>1)break;}
@@ -641,31 +668,83 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     // The last anchor is the first corner again: its incoming handle goes to the first anchor.
     const end=segments.pop();segments[0].in=end.in;return {closed:true,segments};
   }
-  async function traceImage(id,options){
-    const doc=state.document,node=doc.getNode(id);if(node?.type!=='image'||!doc.isEditable(id))throw new Error('Select an image to trace.');
-    const asset=doc.data.assets[node.assetId],img=new Image();img.src=`data:${asset.mimeType??'image/png'};base64,${asset.data}`;await img.decode();if(destroyed)return null;
+  let tracePreview=null;const traceWorkers=new Set();
+  function showTracePreview(){
+    const result=tracePreview?.result;if(!result)return;
+    const view=state.ui.traceView??'result';
+    withScope(()=>renderer.previewTrace(view==='source'?null:tracePreview.id,result.parts,{outlines:view==='outlines'}));
+  }
+  const traceValid=job=>!destroyed&&!job.cancelled&&state.document.data===job.source;
+  function clearTracePreview(keepView=false){
+    const job=tracePreview;if(!job)return;
+    tracePreview=null;job.cancelled=true;clearTimeout(job.timer);job.stop?.();job.resolve?.(null);
+    if(!destroyed&&!keepView)withScope(()=>renderer.previewTrace());
+  }
+  async function buildTrace(id,options,job){
+    const doc=state.document,node=doc.getNode(id);if(doc.readOnly||node?.type!=='image'||!doc.isEditable(id))throw new Error('Select an image to trace.');
+    const asset=doc.data.assets[node.assetId],img=new Image();img.src=`data:${asset.mimeType??'image/png'};base64,${asset.data}`;await img.decode();if(!traceValid(job))return null;
     const crop=node.crop??{x:0,y:0,width:1,height:1},sw=img.naturalWidth*crop.width,sh=img.naturalHeight*crop.height,k=traceScale(sw,sh,options.maxPixels??1_000_000);
     const width=Math.max(1,Math.round(sw*k)),height=Math.max(1,Math.round(sh*k)),canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
     const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.drawImage(img,img.naturalWidth*crop.x,img.naturalHeight*crop.y,sw,sh,0,0,width,height);
-    const pixels=ctx.getImageData(0,0,width,height),{palette,labels:raw}=quantize(pixels,options);
-    const mmPerPx=node.width/width,labels=removeNoise(raw,width,height,Math.round((options.noise??0)*k*k));
+    const pixels=ctx.getImageData(0,0,width,height),mmPerPx=node.width/width;
+    const regions=await new Promise((resolve,reject)=>{
+      const worker=new Worker(new URL('./geom/trace-worker.mjs',import.meta.url),{type:'module'});
+      const finish=(value,error)=>{worker.terminate();traceWorkers.delete(stop);job.stop=null;error?reject(new Error(error)):resolve(value);};
+      const stop=()=>finish(null);traceWorkers.add(stop);job.stop=stop;worker.onmessage=({data})=>finish(data.regions,data.error);
+      worker.onerror=event=>{event.preventDefault();finish(null,event.message||'Image tracing failed.');};
+      worker.postMessage({image:{width,height,data:pixels.data},options:{...options,noise:Math.round((options.noise??4)*k*k),minArea:options.minDetailMm?(options.minDetailMm/mmPerPx)**2:0}},[pixels.data.buffer]);
+    });
+    if(!regions||!traceValid(job))return null;
     const world=renderer.worldMatrix(id),toWorld=([x,y])=>{const u=x*node.width/width,v=y*node.height/height;return [world[0]*u+world[2]*v+world[4],world[1]*u+world[3]*v+world[5]];};
-    const {parentId,index}=doc.locate(id),tolerance=mmPerPx*(.35+(100-(options.fidelity??70))/30),minArea=options.minDetailMm?(options.minDetailMm/mmPerPx)**2:0;
+    const {parentId,index}=doc.locate(id),tolerance=mmPerPx*(.35+(100-(options.fidelity??70))/30);
     const parts=[];let anchors=0;
-    for(const [j,colour] of palette.entries()){
-      let rings=contours(labels,width,height,j).filter(r=>Math.abs(ringArea(r))>=Math.max(1,minArea));
-      if(options.outerOnly&&rings.length){const sign=Math.sign(ringArea(rings.reduce((a,b)=>Math.abs(ringArea(b))>Math.abs(ringArea(a))?b:a)));rings=rings.filter(r=>Math.sign(ringArea(r))===sign);}
-      if(!rings.length)continue;
-      const subpaths=withScope(()=>rings.map(r=>traceSubpath(simplifyRing(r,.6),toWorld,tolerance)));
+    for(const {color:colour,rings} of regions){
+      const subpaths=[];
+      for(let first=0;first<rings.length;first+=64){
+        subpaths.push(...withScope(()=>rings.slice(first,first+64).map(r=>traceSubpath(r,toWorld,tolerance,options.corners??80))));
+        await new Promise(r=>setTimeout(r));if(!traceValid(job))return null;
+      }
       anchors+=subpaths.reduce((n,s)=>n+s.segments.length,0);
       const hex='#'+colour.map(v=>Math.round(v).toString(16).padStart(2,'0')).join('').toUpperCase();
-      parts.push(toParentSpace(parentId,createNode('path',{name:hex,subpaths,fillRule:'evenodd',appearance:appearance(hex,null)})));
-      await new Promise(r=>setTimeout(r));if(destroyed)return null;
+      const look=appearance(options.fills===false?null:hex,options.strokes?hex:null,options.strokeWidth??.2);
+      parts.push(toParentSpace(parentId,createNode('path',{name:hex,subpaths,fillRule:'evenodd',appearance:look})));
+      await new Promise(r=>setTimeout(r));if(!traceValid(job))return null;
     }
+    return {parts,parentId,index,stats:{paths:parts.length,anchors,colors:parts.length}};
+  }
+  function previewTrace(id,options,listener){
+    const key=JSON.stringify(options),source=state.document.data;
+    if(tracePreview?.id===id&&tracePreview.key===key&&tracePreview.source===source){tracePreview.listener=listener;listener(tracePreview.status);return;}
+    const previous=tracePreview?.id===id&&tracePreview.source===source?tracePreview.result:null;
+    clearTracePreview(!!previous);
+    const job=tracePreview={id,key,source,result:previous,status:{pending:true},listener,cancelled:false};
+    job.promise=new Promise(resolve=>{job.resolve=resolve;});listener(job.status);
+    job.start=async()=>{
+      if(job.started||!traceValid(job))return;job.started=true;clearTimeout(job.timer);
+      try{
+        const result=await buildTrace(id,{...options},job);if(!result||!traceValid(job))return;
+        job.result=result;job.status={stats:result.stats};
+        showTracePreview();job.listener(job.status);job.resolve(result);
+      }catch(error){
+        if(!traceValid(job))return;
+        withScope(()=>renderer.previewTrace());job.status={error:error.message};job.listener(job.status);job.resolve(null);
+      }
+    };
+    job.timer=setTimeout(job.start,140);
+  }
+  async function traceImage(id,options){
+    if(state.document.readOnly)return null;
+    const source=state.document.data,key=JSON.stringify(options),job=tracePreview;
+    let result;
+    if(job?.id===id&&job.key===key&&job.source===source){void job.start();result=await job.promise;}
+    else result=await buildTrace(id,options,{source,cancelled:false});
+    if(!result||destroyed||state.document.data!==source)return null;
+    const {parts,parentId,index,stats}=result;
     if(!parts.length)throw new Error('Nothing to trace with these settings. Try another threshold or preset.');
-    const group=createNode('group',{name:'Image Trace',children:parts});
+    clearTracePreview();state.ui.traceStats=stats;
+    const original=state.document.getNode(id),group=createNode('group',{name:'Image Trace',children:parts,opacity:original.opacity,blendMode:original.blendMode});
     run(()=>{state.history.transaction('Image Trace',()=>{state.history.execute(insertNode(parentId,group,index+1));state.history.execute(updateNode(id,{visible:false},{label:'Image Trace'}));});select([group.id]);});
-    return {paths:parts.length,anchors,colors:palette.length};
+    return stats;
   }
   /** Filled closed paths and shapes a Knife or Eraser stroke works on: the selection, or every one. */
   function cutTargets(){
@@ -876,26 +955,31 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     fontFamilyList=[];listFonts().then(fonts=>{fontFamilyList=[...new Set(fonts.map(f=>f.family))].sort((a,b)=>a.localeCompare(b));if(!destroyed)panels?.render();}).catch(()=>{fontFamilyList=null;});
     return fontFamilyList;
   }
-  /** Character and Paragraph changes: every selected text is shaped again with the font, then committed as one undo step. */
+  function rememberTextSettings(patch) {
+    state.ui.character=patch.character;state.ui.paragraph=patch.paragraph;state.ui.textAlignment=patch.paragraph.alignment;
+    if(patch.layout)state.ui.fontMetadata=patch.layout.font;
+  }
+  /** Without selected text, edit the next text's formatting. Selected text is reshaped in one undo step. */
   async function textStyle(changes,label='Character') {
     if(destroyed||state.document.readOnly)return;
+    const texts=selectedIds().filter(id=>state.document.getNode(id)?.type==='text');
+    if(!texts.length){
+      const values=textStyleValues(textDefaults(state.ui),changes),patch=textProperties({text:'Text',...values});
+      if(['fontFamily','fontSource','fontWeight','fontStyle'].some(key=>key in changes))delete state.ui.fontMetadata;
+      rememberTextSettings(patch);panels?.render();return;
+    }
     if(textBusy)throw new Error('Text is still being updated. Try again in a moment.');
-    const ids=selectedIds().filter(id=>state.document.getNode(id)?.type==='text'&&state.document.isEditable(id));
+    const ids=texts.filter(id=>state.document.isEditable(id));
     if(!ids.length)throw new Error('Select text first.');
     textBusy=true;statusLine.textContent='Updating text…';const before=state.document.data;
     try {
       const patches=await Promise.all(ids.map(async id=>{
-        const node=state.document.getNode(id),values={...textValues(node),...changes};
-        // A change for the whole object replaces the same setting in its styled runs.
-        values.runs=values.runs.map(run=>run.character?{...run,character:Object.fromEntries(Object.entries(run.character).filter(([key])=>!(key in changes)))}:run);
-        // A new family or source drops the saved face, Google reference and variable axes of the old font.
-        if(changes.fontFamily!==undefined&&(changes.fontFamily!==node.character?.fontFamily||changes.fontSource!==(node.character?.fontSource??'system'))){delete values.fontPostscriptName;delete values.googleFont;delete values.fontAxes;}
-        if(changes.fontWeight!==undefined||changes.fontStyle!==undefined)delete values.fontPostscriptName;
+        const node=state.document.getNode(id),values=textStyleValues(textValues(node),changes);
         return [id,await resolveText(node,textProperties(values))];
       }));
       if(destroyed)return;if(state.document.data!==before)throw new Error('The artwork changed while updating text. Try again.');
       run(()=>{state.history.transaction(label,()=>{for(const [id,patch] of patches)state.history.execute(updateNode(id,patch));});
-        const last=patches.at(-1)[1];state.ui.character=last.character;state.ui.textAlignment=last.paragraph.alignment;state.ui.fontMetadata=last.layout.font;});
+        rememberTextSettings(patches.at(-1)[1]);});
     }finally{textBusy=false;if(!destroyed){status();panels?.render();}}
   }
   /**
@@ -964,8 +1048,8 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     let subpath=null;
     try{if(pathFrom)subpath=textPathFrom(pathFrom);}catch(error){onError(error.message);return;}
     const parent=id?state.document.locate(id).parentId:pathFrom?state.document.locate(pathFrom).parentId:insertionParent();
-    let defaults=original?textValues(original):{text:'Text',...DEFAULT_CHARACTER,...state.ui.character,alignment:state.ui.textAlignment??'left',
-      kind:pathFrom?'onPath':frame?'area':'point',...(orientation==='vertical'&&!frame&&!pathFrom?{orientation}:{}),...(frame?{frameWidth:frame.width,frameHeight:frame.height}:{}),...(pathFrom?{pathSubpath:subpath,pathOffset:0,pathFlip:false}:{})};
+    let defaults=original?textValues(original):{text:'Text',...textDefaults(state.ui),
+      kind:pathFrom?'onPath':frame?'area':'point',orientation:orientation==='vertical'&&!frame&&!pathFrom?'vertical':'horizontal',...(frame?{frameWidth:frame.width,frameHeight:frame.height}:{}),...(pathFrom?{pathSubpath:subpath,pathOffset:0,pathFlip:false}:{})};
     const before=state.document.data;
     textBusy=true;statusLine.textContent='Loading installed fonts…';
     try {
@@ -982,7 +1066,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
         renderer.previewText(null);
         if(!patch)return;
         if(state.document.data!==before)throw new Error('The artwork changed while editing text. Open the editor again.');
-        state.ui.character=patch.character;state.ui.fontMetadata=patch.layout.font;state.ui.textAlignment=patch.paragraph.alignment;
+        rememberTextSettings(patch);
         // Type on a Path turns the clicked path into the text's path, as in Illustrator.
         state.history.transaction(original?'Edit Text':pathFrom?'Type on a Path':frame?'Area Text':'Point Text',()=>{
           if(original)return state.history.execute(updateNode(id,patch));
@@ -1012,7 +1096,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   }
   function openPanel(id) {toolbar?.close();panels.open(id);}
   artboards=createArtboardController(state,{refresh,fit,bounds:id=>renderer.bounds(id),localMatrix:(id,m)=>renderer.localMatrix(id,m)});
-  panels=createPanels(shell,state,{run,select,selectedIds,paintIds,paint,bounds:()=>renderer.selectionBounds(),fit,artboards,navigatorImage,navigatorView,navigateTo,
+  panels=createPanels(shell,state,{run,select,selectedIds,paintIds,paint,editPaint,bounds:()=>renderer.selectionBounds(),fit,artboards,navigatorImage,navigatorView,navigateTo,
     // Glyphs panel: into the open text editor at the cursor; else open the editor for the selected text first.
     insertGlyph(ch){
       const put=()=>{const area=document.querySelector('.draw-text-dialog textarea[name=text]');if(!area)return false;
@@ -1031,11 +1115,12 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     thumbnail:id=>withScope(()=>renderer.thumbnail(id)),
     gradient:(kind,edit,options)=>gradient(kind,edit,options),
     textStyle:(changes,label)=>textStyle(changes,label).catch(error=>{if(!destroyed)onError(error.message);}),
-    fontFamilies,
+    fontFamilies,setScaleStrokes,
     command:id=>handle(id),
     addEffect:type=>addEffect(type).catch(error=>{if(!destroyed)onError(error.message);}),editEffect:(id,i)=>editEffect(id,i).catch(error=>{if(!destroyed)onError(error.message);}),
     pointer:()=>lastPoint,
     traceImage:(id,options)=>traceImage(id,options).catch(error=>{if(!destroyed)onError(error.message);return null;}),
+    previewTrace,clearTracePreview,showTracePreview,
     // Links > Replace: a new image file in the same place, at the same width (height follows the new proportions).
     replaceImage:id=>run(()=>{const input=document.createElement('input');input.type='file';input.accept='image/*';
       input.addEventListener('change',async()=>{const file=input.files?.[0];if(!file||destroyed)return;
@@ -1428,7 +1513,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     if(command==='effect-last'||command==='effect-options'){const last=state.ui.lastEffect;if(!last)throw new Error('No effect has been applied yet.');
       return void addEffect(last.type,{ask:command==='effect-options'}).catch(error=>{if(!destroyed)onError(error.message);});}
     if(command==='command-search')return void openCommandSearch(commandEntries({commands:[...commands],tools:TOOL_DEFINITIONS.filter(t=>implementedTools.has(t.id)),panels:PANEL_DEFINITIONS}),{run:id=>handle(id),shortcut:id=>shortcutLabel(id,{isMac:/Mac/.test(navigator.platform)})});
-    if(command==='cancel'&&(cancelActiveScrub()||panels.close()))return;
+    if(command==='cancel'&&(contextMenu.close({focus:true})||rulerInteractions.cancel()||cancelActiveScrub()||panels.close()))return;
     if(paths?.handle(command)){if(command==='cancel')toolbar.close(true);return;}
     // Escape cancels a gesture in progress; otherwise it leaves isolation mode.
     if(command==='cancel'){const busy=interactions.busy();interactions.cancel();toolbar.close(true);if(!busy)exitIsolation();return;}
@@ -1436,6 +1521,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     if(command==='fit-artboard')return fit();if(command==='fit-all')return fit(null);
     if(command==='zoom-in'||command==='zoom-out')return zoomAt(scope.view.center,command==='zoom-in'?1.25:.8);
     if(command==='actual-size')return zoomAt(scope.view.center,(96/25.4)/scope.view.zoom);
+    if(command==='rulers'||command==='grid'){state.ui[command]=!state.ui[command];renderer.updateView();return;}
     if(command==='laser-preview')return void toggleLaserPreview().catch(error=>onError(error.message));
     if(command==='laser-processes')return void editLaserProcesses().catch(error=>onError(error.message));
     if(command==='laser-preview-help'){if(!document.querySelector('.modal-overlay')){void cutPreviewIntroDialog().then(result=>{if(result?.hide)setPreferences({hideLaserPreviewIntro:true});});}return;}
@@ -1510,9 +1596,28 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       if(selectedIds().length)transform([1,0,0,1,x,y],'Nudge',{copy:kind==='duplicate',mergeKey:'nudge'});
     }
   });}
-  toolbar=createToolbar(tools,state,{available:id=>implementedTools.has(id),setTool,command:handle,openPanel,run});
+  toolbar=createToolbar(tools,state,{available:id=>implementedTools.has(id),setTool,command:handle,openPanel,editPaint,paintFocus:kind=>{state.ui.paintFocus=kind;panels.render();},run});
+  const contextMenu=createContextMenu(shell,{canvas,command:handle,isMac:/Mac/.test(navigator.platform),
+    checked:id=>!!state.ui[id],enabled:id=>{
+      if(id==='rulers'||id==='grid')return true;
+      const doc=state.document,ids=selectedIds().filter(id=>doc.getNode(id)?.type!=='layer');
+      if(doc.readOnly)return false;
+      if(id==='undo'||id==='redo')return id==='undo'?state.history.canUndo:state.history.canRedo;
+      if(id.startsWith('paste')){
+        let fromCut;try{paper.activate();fromCut=cutClipboard();}finally{scope.activate();}
+        return fromCut&&fromCut.time>drawClipboard.time()?!!fromCut.svg:!!drawClipboard.get()?.nodes?.length;
+      }
+      if(id==='group')return ids.length>1;
+      if(id==='ungroup')return ids.some(id=>doc.getNode(id)?.type==='group');
+      const how={'bring-front':'front','bring-forward':'forward','send-backward':'backward','send-back':'back'}[id];
+      if(how)return arrangeCommands(doc,ids,how).length>0;
+      return ids.length>0;
+    }});
+  const rulerInteractions=createRulerInteractions(canvas,state,{scope,renderer,withScope,status,cursor,
+    busy:()=>interactions?.busy()??false,tool:()=>temporary?.id||state.ui.tool,
+    contextMenu:(x,y,options)=>contextMenu.open(x,y,options),closeMenus:()=>{contextMenu.close();toolbar.close();}});
   paths=createPathInteractions(canvas,state,{scope,renderer,withScope,run,select,selectionChanged,layerId:insertionParent,insertNew,status,
-    tool:()=>temporary?.id || state.ui.tool,closeMenus:()=>toolbar.close()});
+    tool:()=>temporary?.id || state.ui.tool,closeMenus:()=>{contextMenu.close();toolbar.close();}});
   interactions=createInteractions(canvas,state,{scope,renderer,withScope,run,select,selectedIds,transform,artboards,status,shapeOptions,insertShape,shapeDialog,zoomAt,isolate,exitIsolation,
     transforms,transformDialog:transformToolDialog,editText,paintIds,command:id=>handle(id),
     eyedropper,scissors,setMeasure,pencil,
@@ -1535,11 +1640,11 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     gradientVector(from,to,mergeKey){const kind=state.ui.paintFocus==='stroke'?'stroke':'fill',last=state.ui.lastGradient;
       gradient(kind,(current,box,node)=>{const a=renderer.pointToLocal(node.id,from),b=renderer.pointToLocal(node.id,to);
         return vectorGradient(current??defaultGradient(box,last?{type:last.type,stops:last.stops}:{}),[a.x,a.y],[b.x,b.y]);},{label:'Gradient',mergeKey});},
-typeOnPath:id=>editText(undefined,null,null,{pathFrom:id}),cursor,
-    tool:()=>temporary?.id || state.ui.tool,zoomOut:()=>!!temporary?.zoomOut,preferences:getPreferences,closeMenus:()=>toolbar.close(),notify:message=>onError(message)});
+typeOnPath:id=>editText(undefined,null,null,{pathFrom:id}),cursor,contextMenu:(x,y)=>contextMenu.open(x,y),
+    tool:()=>temporary?.id || state.ui.tool,zoomOut:()=>!!temporary?.zoomOut,preferences:getPreferences,closeMenus:()=>{contextMenu.close();toolbar.close();},notify:message=>onError(message)});
   // Offset Path effects draw once the polygon library is loaded; until then they are skipped.
   loadGeometry().then(()=>{if(!destroyed)refresh();}).catch(()=>{});
-  const unsubscribe=state.subscribe(()=>{interactions.cancel();paths.documentChanged();refresh();if(state.ui.isolation&&!isolation())isolationChanged();else renderIsolationBar();});
+  const unsubscribe=state.subscribe(()=>{contextMenu.close();rulerInteractions.cancel();interactions.cancel();paths.documentChanged();refresh();if(state.ui.isolation&&!isolation())isolationChanged();else renderIsolationBar();});
   function resize(){const {width,height}=stage.getBoundingClientRect();if(width<=0||height<=0)return;
     withScope(()=>{scope.view.viewSize=new scope.Size(width,height);if(!fitted){renderer.fit();fitted=true;}renderer.updateView();});status();}
   const observer=new ResizeObserver(resize);observer.observe(stage);
@@ -1549,7 +1654,7 @@ typeOnPath:id=>editText(undefined,null,null,{pathFrom:id}),cursor,
   zoomInput.addEventListener('change',()=>{if(Number.isFinite(zoomInput.valueAsNumber)&&zoomInput.valueAsNumber>=.0001&&zoomInput.valueAsNumber<=10000)zoomAt(scope.view.center,zoomInput.valueAsNumber/100*(96/25.4)/scope.view.zoom);else status();});
   laserButton.addEventListener('click',()=>handle('laser-preview'));processesButton.addEventListener('click',()=>handle('laser-processes'));
   outlineButton.addEventListener('click',()=>handle('outline'));fitButton.addEventListener('click',()=>fit());
-  const workspace={state,scope,renderer,syncLaserMenu,refreshLaserPreview:updateLaserView,isolate,cutSvg,exportBoard,exporter,exportAs:()=>exportAs().catch(error=>onError(error.message)),exportScreens:()=>exportScreens().catch(error=>onError(error.message)),sendToCut:boardId=>sendToCut(boardId).catch(error=>onError(error.message)),exitIsolation,statusElement:controls,artboards,transforms,resize,select,setTool,handle,availableTool:id=>implementedTools.has(id),canHandle:command=>commands.has(command),commandNames:()=>[...commands].sort(),withScope,layerId,fit,
+  const workspace={state,scope,renderer,closeContextMenu:()=>contextMenu.close({focus:true}),syncLaserMenu,refreshLaserPreview:updateLaserView,isolate,cutSvg,exportBoard,exporter,exportAs:()=>exportAs().catch(error=>onError(error.message)),exportScreens:()=>exportScreens().catch(error=>onError(error.message)),sendToCut:boardId=>sendToCut(boardId).catch(error=>onError(error.message)),exitIsolation,statusElement:controls,artboards,transforms,resize,select,setTool,handle,availableTool:id=>implementedTools.has(id),canHandle:command=>commands.has(command),commandNames:()=>[...commands].sort(),withScope,layerId,fit,
     setTemporaryTool(value){temporary=value;canvas.dataset.tool=temporary?.id || state.ui.tool;canvas.style.cursor=cursor();status();},
     /** Cut > Edit in Draw: the copied Cut objects on a new bed-sized artboard, where they were on the bed. */
     async editFromCut({svg,warning},{width,height}){
@@ -1560,7 +1665,7 @@ typeOnPath:id=>editText(undefined,null,null,{pathFrom:id}),cursor,
       if(warning||result.warning)onNotice([warning,result.warning].filter(Boolean).join(' '));
     },
     async import(prepared,name,options={}){const result=await importArtwork(scope,state,prepared,name,layerId(),{...options,alive:()=>!destroyed});select(options.template?[]:result.ids);if(options.fitArtboard)fit();return result;},
-    destroy(){destroyed=true;laserDialog?.querySelector('[data-x=cancel]')?.click();ownedTextModal?.querySelector('[data-x=cancel]').click();ownedTransformModal?.querySelector('[data-x=cancel]').click();paths.destroy();interactions.destroy();toolbar.destroy();unsubscribe();observer.disconnect();window.removeEventListener('modcut-theme-change',syncTheme);workspaces.delete(root);withScope(()=>{renderer.destroy();scope.remove();});controls.remove();root.replaceChildren();},
+    destroy(){clearTracePreview();for(const stop of traceWorkers)stop();destroyed=true;contextMenu.destroy();rulerInteractions.destroy();laserDialog?.querySelector('[data-x=cancel]')?.click();ownedColorModal?.querySelector('[data-x=cancel]').click();ownedTextModal?.querySelector('[data-x=cancel]').click();ownedTransformModal?.querySelector('[data-x=cancel]').click();paths.destroy();interactions.destroy();toolbar.destroy();unsubscribe();observer.disconnect();window.removeEventListener('modcut-theme-change',syncTheme);window.removeEventListener('modcut-scale-strokes-change',syncScaleStrokes);workspaces.delete(root);withScope(()=>{renderer.destroy();scope.remove();});controls.remove();root.replaceChildren();},
   };
   workspaces.set(root,workspace);refresh();syncTheme();setTool(state.ui.tool);resize();return workspace;
 }

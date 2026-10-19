@@ -1,4 +1,4 @@
-export const DEFAULT_PREFERENCES = Object.freeze({ showGrid: true, invertZoom: false, tooltips: true, tooltipDelay: 1000, language: "system", laserPreviewEnabled: false, hideLaserPreviewIntro: false });
+export const DEFAULT_PREFERENCES = Object.freeze({ showGrid: true, invertZoom: false, tooltips: true, tooltipDelay: 1000, language: "en", laserPreviewEnabled: false, hideLaserPreviewIntro: false });
 export const PREFERENCES_KEY = "modcut_preferences";
 
 export function normalizePreferences(value, defaults = DEFAULT_PREFERENCES) {

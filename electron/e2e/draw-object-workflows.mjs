@@ -31,11 +31,11 @@ export async function runDrawObjectWorkflows(client) {
   assert.deepEqual(await order(), [a, b, c], 'Mod+Shift+G ungroups in place'); assert.deepEqual((await selection()).sort(), [a, b].sort());
   await command('undo'); await command('undo'); assert.deepEqual(await order(), [a, b, c]);
 
-  // Arrange with Mod+] family and the Object menu.
-  await select([a]); await shortcut(']', 'BracketRight', { shiftKey: true });
+  // Arrange with Mod+PageUp/PageDown family and the Object menu.
+  await select([a]); await shortcut('PageUp', 'PageUp', { shiftKey: true });
   assert.deepEqual(await order(), [b, c, a], 'Bring to Front');
-  await shortcut('[', 'BracketLeft'); assert.deepEqual(await order(), [b, a, c], 'Send Backward');
-  await shortcut('{', 'BracketLeft', { shiftKey: true });
+  await shortcut('PageDown', 'PageDown'); assert.deepEqual(await order(), [b, a, c], 'Send Backward');
+  await shortcut('PageDown', 'PageDown', { shiftKey: true });
   assert.deepEqual(await order(), [a, b, c], 'Send to Back');
 
   // Lock and Hide: locked objects cannot be clicked; Unlock All and Show All bring them back selected.

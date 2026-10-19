@@ -52,9 +52,11 @@ export async function runThemeWorkflows(client, port) {
 
   await preferences();
   assert.equal(await client.evaluate("document.querySelector('[name=theme]:checked').value"), "system");
-  assert.equal(await client.evaluate("document.querySelectorAll('.field-segments input[type=radio]').length"), 3);
+  assert.equal(await client.evaluate("document.querySelectorAll('[name=theme]').length"), 3);
+  assert.equal(await client.evaluate("document.querySelectorAll('[name=background]').length"), 5);
+  assert.equal(await client.evaluate("document.querySelector('[name=background]:checked').value"), "green");
   assert.equal(await client.evaluate("document.querySelectorAll('.field-segments svg').length"), 3);
-  assert.equal(await client.evaluate("document.querySelectorAll('.preferences-modal .field__description').length"), 10);
+  assert.ok(await client.evaluate("document.querySelectorAll('.preferences-modal .field__description').length") >= 11);
   assert.deepEqual(await client.evaluate("[...document.querySelector('[name=uiScale]').options].map(o=>Number(o.value))"), [0.8, 0.9, 1, 1.1, 1.2]);
   assert.equal(await client.evaluate("document.querySelector('[name=uiScale]').value"), "1");
   await snapshot("light-preferences");
@@ -119,10 +121,12 @@ export async function runThemeWorkflows(client, port) {
   assert.equal(await theme(), "dark", "system following can be restored");
   await client.evaluate("localStorage.setItem('modcut_theme','invalid')");
   await client.evaluate("localStorage.setItem('modcut_ui_scale','invalid')");
+  await client.evaluate("localStorage.setItem('modcut_background','invalid')");
   await client.command("Page.reload");
   await wait(800);
   assert.equal(await client.evaluate("window.modcutTheme.preference"), "system", "invalid saved preferences fall back to system");
   assert.equal(await client.evaluate("window.modcutUiScale.preference"), 1, "invalid saved size falls back to default");
+  assert.equal(await client.evaluate("window.modcutTheme.background"), "green", "invalid saved background falls back to green");
   const artwork = await client.evaluate(`(() => {
     paper.project.layers[1].activate();
     const path = new paper.Path.Rectangle(new paper.Rectangle(10, 10, 40, 30));

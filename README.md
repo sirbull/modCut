@@ -136,6 +136,13 @@ shows vector hairlines and image frames without changing the saved artwork.
 The remaining drawing and editing tools are being built in stages; see the
 [Draw implementation plan](docs/DRAW_WORKSPACE.md).
 
+Double-click the Fill or Stroke chip to open the compact color picker. Its hue
+slider sits beside the color square. **Recent Colors** keeps the ten latest
+applied colors across documents and restarts. The screen pipette hides the dialog
+while you sample a pixel from the artboard, interface or another visible window
+on supported platforms. Escape returns to the dialog; OK applies the chosen color
+as one undo step.
+
 Type (T) places point text on click and rectangular area text on drag. Area Type in
 the same tool group also opens a default frame on click. Edit Text offers frame width
 and height in mm, with live wrapping. Text that does not fit remains editable and is
@@ -233,6 +240,10 @@ Open **Settings** in the toolbar or **Preferences…** in the application menu.
 **Appearance** offers three options with icons: **System**, **Light** and **Dark**.
 System is the default and follows operating-system changes automatically. Choose
 a fixed theme with Light or Dark. Appearance changes apply and save immediately.
+**Background colour** keeps the original **Green** palette or selects **White**,
+**Light gray**, **Gray** or **Dark gray**. The fixed gray tones set their own light
+or dark appearance, with matching text, icons, controls and focus indicators.
+Selecting Green restores the System/Light/Dark choice.
 The choice persists across restarts and also applies
 to Draw and Advanced Editing for Engraving. Appearance is included when exporting
 preferences. The material preview is dimmed in dark mode; artwork colours and
@@ -244,6 +255,28 @@ Reverse zoom affects Cmd/Ctrl + scroll and trackpad pinch in Cut; ordinary
 scrolling still pans. Tooltips default to a one-second hover delay and can be
 shown sooner, later or disabled. Unit and grid-spacing edits use **Save**.
 Exported preferences include these options and grid spacing.
+
+## Right-click menu in Draw
+
+Right-click the canvas for Cut, Copy, Paste, Paste in Place, Undo/Redo,
+Group/Ungroup, Arrange, rulers and grid. Right-clicking an unselected object selects
+it; an existing multi-selection is preserved when clicking one of its members.
+Arrange keeps objects within their current layer or group and supports undo.
+
+| Action | Windows/Linux shortcut |
+|---|---|
+| Bring Forward / Send Backward | Ctrl+PageUp / Ctrl+PageDown |
+| Bring to Front / Send to Back | Ctrl+Shift+PageUp / Ctrl+Shift+PageDown |
+| Paste in Place | Ctrl+Shift+V |
+| Group / Ungroup | Ctrl+G / Ctrl+Shift+G |
+| Show/hide rulers / grid | Ctrl+R / Ctrl+Shift+R |
+
+These shortcuts work on Norwegian keyboards without punctuation combinations.
+On macOS, use Cmd in place of Ctrl. The menu shows your current shortcuts;
+change them in Edit > Keyboard Shortcuts. Rulers show millimetres relative to the
+active artboard. Rulers and grid affect the view only.
+
+Run `node electron/e2e/run.mjs --draw-context` for the focused interaction checks.
 
 ## Laser Preview in Draw
 
@@ -281,6 +314,7 @@ from Help or reset it in Preferences. Toggling the view keeps the original artwo
 | `npm run build:icons` | Rebuild the Draw tool SVG sprite |
 | `npm run test:e2e` | Real Electron workflows, native close and crash recovery |
 | `npm run test:e2e:theme` | System appearance, Settings, persistence and editor theme synchronization |
+| `npm run test:e2e:background` | Background palettes, rendered contrast, keyboard, persistence and editor synchronization |
 | `npm run check:contrast` | WCAG AA palette guardrail |
 | `npm start` | Build the sidecar and start Electron |
 | `npm run pack` | Build and verify an unpacked native application |

@@ -6,6 +6,20 @@ import { validGoogleReference,validFontAxes } from './font-reference.mjs';
 
 export const PT_TO_MM = 25.4 / 72;
 export const DEFAULT_CHARACTER = Object.freeze({ fontFamily: 'Arial', fontSize: 24, leading: 28.8, fontWeight: 'normal', fontStyle: 'normal' });
+/** Per-workspace formatting for the next text object; its frame, content and orientation come from the tool. */
+export function textDefaults(ui = {}) {
+  return { ...DEFAULT_CHARACTER, ...ui.character, ...ui.paragraph, alignment: ui.paragraph?.alignment ?? ui.textAlignment ?? 'left', orientation: 'horizontal' };
+}
+/** Whole-object style changes also replace matching run overrides and invalidate an old font face. */
+export function textStyleValues(values, changes) {
+  const next = { ...values, ...changes };
+  if (values.runs) next.runs = values.runs.map(run => run.character ? { ...run, character: Object.fromEntries(Object.entries(run.character).filter(([key]) => !(key in changes))) } : run);
+  if (next.fontFamily !== values.fontFamily || (next.fontSource ?? 'system') !== (values.fontSource ?? 'system')) {
+    delete next.fontPostscriptName; delete next.googleFont; delete next.fontAxes;
+  }
+  if (changes.fontWeight !== undefined || changes.fontStyle !== undefined) delete next.fontPostscriptName;
+  return next;
+}
 export function textContent(node) { return node.content.runs.map(run => run.text).join(''); }
 /** Character settings a styled run may override (mixed styles in one text object). */
 export const RUN_KEYS = Object.freeze(['fontFamily', 'fontWeight', 'fontStyle', 'fontSize', 'tracking', 'baselineShift', 'horizontalScale', 'verticalScale', 'rotation', 'xShift']);

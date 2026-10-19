@@ -4,7 +4,8 @@ import { createDrawWorkspace } from "./draw/index.mjs";
 import { drawClipboard } from "./draw/doc/clipboard.mjs";
 import { PROJECT_VERSION, validateProject, createProjectDraw } from "./draw/io/project.mjs";
 import { newDrawDocument } from "./draw/doc/artboards.mjs";
-import { newDocumentDialog, placeOptionsDialog, saveTemplateDialog } from "./draw/ui/dialogs.mjs";
+import { newDocumentDialog, documentSettingsDialog, placeOptionsDialog, saveTemplateDialog } from "./draw/ui/dialogs.mjs";
+import { updateDocument, updateArtboard } from "./draw/doc/commands.mjs";
 import { saveTemplate, setupFromDocument, loadStoredList, storeList, TEMPLATES_KEY } from "./draw/doc/presets.mjs";
 import { createBed } from "./bed.js";
 import { prepareSVG } from "./svgimport.js";
@@ -322,7 +323,13 @@ function attachDrawState(tab, drawState) {
   tab.draw = null; tab.drawRoot = null;
   tab.drawState = drawState;
   tab.drawWarningShown = false;
+  let documentName=drawState.document.data.name;
   tab.unsubscribeDraw = drawState.subscribe(() => {
+    if(drawState.document.data.name!==documentName){
+      documentName=drawState.document.data.name;tab.title=documentName;
+      if(tab===activeTab())$("filename").value=documentName;
+      if(tab.session){tab.session.title=documentName;tab.session.filename=documentName;}
+    }
     if (tab === activeTab()) setFileLabel(tab.title);
     else { tab.dirty = !!(tab.session?.cutDirty ?? tab.session?.dirty) || drawState.dirty; renderTabs(); }
     scheduleRecovery(2000);
@@ -347,6 +354,7 @@ function setWorkspace(mode) {
   drawKeymap.reset();
   tab.workspace = mode;
   for (const item of documentTabs) if (item.drawRoot) {
+    item.draw?.closeContextMenu();
     item.drawRoot.style.display = item === tab && mode === "draw" ? "block" : "none";
     if (item.draw) item.draw.statusElement.hidden = item !== tab || mode !== "draw";
   }
@@ -445,6 +453,7 @@ function renderTabs() {
     button.setAttribute("role", "tab");
     button.setAttribute("aria-selected", String(tab.id === activeTabId));
     button.title = tab.title || "Untitled";
+    button.dataset.tooltip = 'Double-click to edit document settings';
     if (tab.dirty) {
       const dot = document.createElement("span");
       dot.className = "doc-tab__dirty";
@@ -464,8 +473,10 @@ function renderTabs() {
     button.append(title, close);
     button.addEventListener("click", (event) => {
       if (event.target.closest("[data-close-tab]")) closeDocumentTab(tab.id);
-      else switchDocumentTab(tab.id);
+      else {switchDocumentTab(tab.id);if(event.detail===2)void editDocumentSettings(tab.id);}
     });
+    button.addEventListener('dblclick',event=>{if(!event.target.closest('[data-close-tab]'))void editDocumentSettings(tab.id);});
+    button.addEventListener('keydown',event=>{if(event.key==='F2'){event.preventDefault();void editDocumentSettings(tab.id);}});
     host.append(button);
   }
   host.querySelector(".doc-tab.is-active")?.scrollIntoView({ block: "nearest", inline: "nearest" });
@@ -1248,6 +1259,36 @@ function initFileDrop() {
 }
 
 let creatingDrawDocument = false;
+async function editDocumentSettings(id=activeTabId) {
+  if(creatingDrawDocument||document.querySelector('.modal-overlay'))return;
+  switchDocumentTab(id);
+  const tab=activeTab();if(!tab||tab.id!==id)return;
+  try{
+    const draw=tab.drawState;
+    if(draw&&!draw.blank){
+      if(draw.document.readOnly)return;
+      const before=draw.document.data;
+      const values=await documentSettingsDialog(before,draw.ui.artboardId,{machines:machines.map(m=>({name:m.name,width:m.bedW,height:m.bedH}))});
+      if(!values||!documentTabs.includes(tab)||tab.drawState!==draw)return;
+      if(draw.document.data!==before)throw new Error('The artwork changed while the dialog was open. Open the dialog again.');
+      const patch=Object.fromEntries(Object.entries(values.properties).filter(([key,value])=>JSON.stringify(value)!==JSON.stringify(before[key])));
+      const {artboards,...properties}=patch,commands=[];
+      if(Object.keys(properties).length)commands.push(updateDocument(properties));
+      for(const board of artboards??[]){const original=draw.document.getArtboard(board.id);
+        if(board.width!==original.width||board.height!==original.height)commands.push(updateArtboard(board.id,{width:board.width,height:board.height}));
+      }
+      if(commands.length)draw.history.transaction('Document Settings',()=>commands.forEach(command=>draw.history.execute(command)));
+      tab.draw?.artboards.choose(values.artboardId,true);
+    }else{
+      const values=await openModal({title:'Document settings',submitLabel:'Apply',className:'document-name-dialog',fields:[{key:'name',label:'Name',value:tab.title||'Untitled',required:true}]});
+      if(!values||tab!==activeTab())return;
+      const name=values.name.trim();if(!name||name===tab.title)return;
+      $("filename").value=name;markDirty();setFileLabel(name);
+    }
+    if(tab===activeTab()){captureActiveTab();document.querySelector(`.doc-tab[data-tab-id="${tab.id}"]`)?.focus();}
+    scheduleRecovery();
+  }catch(error){toast(error.message,'err');}
+}
 function openNewDrawDialog() {
   const m=machine();
   return newDocumentDialog({name:m.name,width:m.bedW || 600,height:m.bedH || 400},
@@ -2146,7 +2187,7 @@ async function exportSettings() {
   if (v.machines) payload.machines = machines;
   if (v.materials) payload.materials = materials;
   if (v.profiles) payload.processProfiles = processProfiles;
-  if (v.prefs) payload.prefs = { ...preferences, units: state.units, theme: window.modcutTheme.preference, gridUnit: state.gridUnit, gridXmm: state.gridXmm, gridYmm: state.gridYmm };
+  if (v.prefs) payload.prefs = { ...preferences, units: state.units, theme: window.modcutTheme.preference, background: window.modcutTheme.background, gridUnit: state.gridUnit, gridXmm: state.gridXmm, gridYmm: state.gridYmm };
   try {
     const path = await window.modcut.exportSettings(JSON.stringify(payload, null, 2), "modcut-settings.json");
     if (path) toast("Settings exported → " + path, "ok");
@@ -2163,6 +2204,7 @@ async function importSettings() {
     if (Array.isArray(p.processProfiles)) { processProfiles = p.processProfiles.map(normalizeProcessProfile).filter((profile) => profile.id); saveProcessProfiles(); renderLayers(); n++; }
     if (p.prefs && p.prefs.units) { setUnits(p.prefs.units); n++; }
     if (["system", "light", "dark"].includes(p.prefs?.theme)) { window.modcutTheme.setPreference(p.prefs.theme); n++; }
+    if (window.modcutTheme.backgrounds.includes(p.prefs?.background)) { window.modcutTheme.setBackground(p.prefs.background); n++; }
     if (p.prefs && typeof p.prefs === "object") {
       updatePreferences(p.prefs);
       if (["mm", "cm", "in"].includes(p.prefs.gridUnit)) state.gridUnit = p.prefs.gridUnit;
@@ -2185,9 +2227,16 @@ async function openSettings() {
     title: "Preferences", submitLabel: "Save", className: "preferences-modal",
     fields: [
       { key: "theme", section: "Appearance", label: "Theme", type: "segmented", value: window.modcutTheme.preference,
+        showIf: (values) => values.background === "green",
         onChange: (value) => window.modcutTheme.setPreference(value),
         description: "System follows your device’s appearance automatically. Light and Dark keep a fixed theme. Changes apply and save immediately.",
         options: [{ value: "system", label: "System", icon: "system" }, { value: "light", label: "Light", icon: "light" }, { value: "dark", label: "Dark", icon: "dark" }] },
+      { key: "background", label: "Background colour", type: "segmented", value: window.modcutTheme.background,
+        onChange: (value) => window.modcutTheme.setBackground(value),
+        description: "Choose green or a fixed gray tone. Text and buttons adapt automatically. Changes apply and save immediately.",
+        options: [{ value: "green", label: "Green", swatch: "#007A4B" }, { value: "white", label: "White", swatch: "#FFFFFF" },
+          { value: "light-gray", label: "Light gray", swatch: "#E5E5E5" }, { value: "gray", label: "Gray", swatch: "#555555" },
+          { value: "dark-gray", label: "Dark gray", swatch: "#282828" }] },
       { key: "language", label: "Language", type: "select", value: preferences.language, description: "The language of menus, panels and messages. Applies immediately.",
         options: LANGUAGES.map(({ id, label }) => ({ value: id, label })), onChange: (value) => updatePreferences({ language: value }) },
       { key: "uiScale", label: "Interface size", type: "select", value: window.modcutUiScale.preference,
@@ -2352,6 +2401,10 @@ const drawKeyContext = (event) => ({ workspace: "draw",
 window.addEventListener("keydown", (event) => {
   if (document.body.dataset.workspace !== "draw") return;
   if (document.querySelector('.modal-overlay')) {drawKeymap.reset();return;}
+  if (event.target.closest?.('.draw-context-menu')) {
+    if (['ArrowDown','ArrowUp','Home','End','ArrowRight','ArrowLeft','Escape','Tab','Enter',' '].includes(event.key) && !event.ctrlKey && !event.metaKey && !event.altKey) return;
+    activeTab()?.draw?.closeContextMenu();
+  }
   // Number fields with scrubby titles step their own value with the arrow keys.
   if ((event.key === "ArrowUp" || event.key === "ArrowDown") && event.target.closest?.("[data-draw-scrub-input]")) return;
   event.stopImmediatePropagation();

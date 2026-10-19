@@ -8,7 +8,7 @@ import { DRAW_MODE_LABELS, insideTarget } from '../doc/draw-mode.mjs';
 export const TOOL_GROUPS = Object.freeze([...new Set(toolRegistry.tools.map(t => t.group))]
   .map(id => Object.freeze({ id, tools: Object.freeze(toolRegistry.group(id).map(t => t.id)) })));
 
-export function createToolbar(host, state, { available, setTool, command, openPanel, run }) {
+export function createToolbar(host, state, { available, setTool, command, openPanel, editPaint, paintFocus, run }) {
   const grid = document.createElement('div'); grid.className = 'draw-tool-grid'; host.append(grid);
   const buttons = new Map(), variants = new Map();
   const isMac = /Mac/.test(navigator.platform);
@@ -70,14 +70,22 @@ export function createToolbar(host, state, { available, setTool, command, openPa
     const button = document.createElement('button'); button.type = 'button'; button.className = `draw-paint-swatch draw-paint-swatch--${kind}`;
     button.setAttribute('aria-label',kind === 'fill' ? 'Edit fill color' : 'Edit stroke color'); button.dataset.paint = kind;
     button.dataset.tooltip = `${kind === 'fill' ? 'Fill' : 'Stroke'} (${shortcutLabel('paint-focus',{isMac})} toggles)`;
-    // Fill and stroke colors are both edited in the Color panel, as in Illustrator.
-    button.addEventListener('click',() => { state.ui.paintFocus = kind; openPanel('color'); update(); }); paint.append(button);
+    button.dataset.tooltip = kind === 'fill' ? 'Fill: click to select, double-click to edit' : 'Stroke: click to select, double-click to edit';
+    button.addEventListener('click',() => { paintFocus(kind); update(); });
+    button.addEventListener('dblclick',() => { void editPaint(kind); }); paint.append(button);
   }
   const actions = document.createElement('div'); actions.className = 'draw-paint-actions'; paint.append(actions);
   const modes = document.createElement('div'); modes.className = 'draw-paint-actions draw-paint-modes'; paint.append(modes);
   for (const [id,label,glyph,host,later] of [['paint-swap','Swap fill and stroke','⇄',actions],['default-paint','Default fill and stroke','◩',actions],
     ['paint-solid','Color','■',modes],['paint-gradient','Gradient','▤',modes],['paint-none','None','∅',modes]]) {
     const button = document.createElement('button'); button.type = 'button'; button.textContent = glyph; button.setAttribute('aria-label',label); button.dataset.paintAction = id;
+    if (id === 'paint-swap') {
+      const svg = document.createElementNS('http://www.w3.org/2000/svg','svg'); svg.setAttribute('viewBox','0 0 24 24'); svg.setAttribute('aria-hidden','true');
+      svg.innerHTML = '<path d="M4 8h9a5 5 0 0 1 5 5v7M4 8l4-4M4 8l4 4M18 20l-4-4M18 20l4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>';
+      button.replaceChildren(svg);
+    } else if (host === modes) {
+      const chip = document.createElement('span'); chip.className = `draw-paint-mode-chip draw-paint-mode-chip--${id}`; button.replaceChildren(chip);
+    }
     button.dataset.tooltip = later ? `${label} · ${later}` : `${label} (${shortcutLabel(id,{isMac})})`; button.disabled = state.document.readOnly || !!later;
     button.addEventListener('click',() => run(() => command(id))); host.append(button);
   }
@@ -95,6 +103,11 @@ export function createToolbar(host, state, { available, setTool, command, openPa
     for (const button of paint.querySelectorAll('[data-paint]')) {
       const value = state.ui[button.dataset.paint]; button.style.setProperty('--paint-color',value || 'transparent');
       button.classList.toggle('is-none',!value); button.setAttribute('aria-pressed',String((state.ui.paintFocus || 'fill') === button.dataset.paint));
+      button.disabled = state.document.readOnly;
+    }
+    for (const button of paint.querySelectorAll('[data-paint-action]')) {
+      button.disabled = state.document.readOnly;
+      if (button.dataset.paintAction === 'paint-none') button.setAttribute('aria-pressed',String(state.ui[state.ui.paintFocus || 'fill'] === null));
     }
     const mode = state.ui.drawMode ?? 'normal';
     let canInside = mode === 'inside'; if (!canInside) try { insideTarget(state.document,state.selection.ids); canInside = true; } catch { /* no single path or shape selected */ }

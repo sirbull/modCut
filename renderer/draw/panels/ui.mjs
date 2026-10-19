@@ -1,14 +1,15 @@
 import { DOCK_PANELS, PANEL_DEFINITIONS, PANEL_GROUPS, clampDockSplit, groupForPanel, panelAvailable, panelName, panelSpriteHref } from './registry.mjs';
 import { insertNode, updateDocument, updateNode } from '../doc/commands.mjs';
 import { createId } from '../doc/schema.mjs';
-import { DEFAULT_CHARACTER, textValues } from '../doc/text.mjs';
+import { textDefaults, textValues } from '../doc/text.mjs';
 import { addStop, colorHex, defaultGradient, gradientCss, isGradient, removeStop, reverseGradient, setGradientAngle, setGradientType, updateStop } from '../doc/gradient.mjs';
 import { EFFECTS, effectLabel } from '../doc/effects.mjs';
 import { documentInfo } from '../doc/document-info.mjs';
 import { TRACE_PRESETS } from '../geom/trace.mjs';
 import { WIDTH_PROFILES, flipAcross, flipAlong, profileName } from '../geom/width-profile.mjs';
 import { addStyleCommand, applyStyleCommands, graphicStyles, removeStyleCommand, styleFrom } from '../doc/graphic-styles.mjs';
-import { addSwatch, documentSwatches, editSwatch, groupSwatches, linkedPaints, rememberColor, removeSwatch } from '../doc/swatches.mjs';
+import { addSwatch, documentSwatches, editSwatch, groupSwatches, linkedPaints, removeSwatch } from '../doc/swatches.mjs';
+import { recentColors as savedRecentColors, rememberRecentColor } from '../doc/recent-colors.mjs';
 import { ROOT_CONTEXT, collectCommands, deleteLayerCommands, deleteRowCommands, duplicateCommands, filterLayerTree, flattenCommands, layerContext, mergeLayersCommands, moveCommand, moveToLayerCommands, newLayer, othersUpdates, releaseCommands, soloUpdates } from '../doc/layers.mjs';
 import { shortcutLabel } from '../keymap.mjs';
 import { REFERENCE_POINTS } from '../geom/transforms.mjs';
@@ -18,6 +19,7 @@ import { pathfinderIcon } from './pathfinder-icons.mjs';
 import { addEntry, appearanceRows, clearAppearance, duplicateEntry, moveEntry, patchEntry, removeEntry, toggleEntry } from '../doc/appearance.mjs';
 import { COLOR_MODES, colorFromValues, colorValues, normalizeHex } from '../doc/color.mjs';
 import { ARROW_TYPES, paintHex } from '../doc/paint.mjs';
+import { createColorSurface } from '../ui/color-surface.mjs';
 
 export function icon(href) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
@@ -52,6 +54,10 @@ export function createPanels(shell, state, api) {
   splitter.dataset.tooltip = 'Drag to resize · Double-click: reset';
   panels.append(dock.properties.section,splitter,dock.layers.section);
   const primary = dock.properties.body;
+  const propertiesFooter = document.createElement('div'); propertiesFooter.className = 'draw-properties-footer';
+  const scaleStrokes = check(propertiesFooter,'Scale strokes & effects','properties-scale-strokes',state.ui.scaleStrokes !== false,value => api.setScaleStrokes(value));
+  propertiesFooter.dataset.tooltip = 'Scale stroke widths, dash lengths and effect sizes with objects.';
+  dock.properties.section.append(propertiesFooter);
   // Panel groups open as a flyout beside the rail, one tab per panel.
   const flyout = document.createElement('section'); flyout.className = 'draw-flyout'; flyout.hidden = true; flyout.setAttribute('role','dialog');
   const flyoutTabs = document.createElement('div'); flyoutTabs.className = 'draw-flyout__tabs'; flyoutTabs.setAttribute('role','tablist');
@@ -415,7 +421,7 @@ export function createPanels(shell, state, api) {
       angles.append(flips); return;
     }
     field(angles,'Shear by (°)',0,value => api.transformPanel('shear',value),{ disabled, min:-89.99, max:89.99, key:'shear' });
-    check(host,'Scale strokes & effects','scale-strokes',state.ui.scaleStrokes !== false,value => { state.ui.scaleStrokes = value; });
+    check(host,'Scale strokes & effects','scale-strokes',state.ui.scaleStrokes !== false,value => api.setScaleStrokes(value));
     check(host,'Scale corners','scale-corners',state.ui.scaleCorners !== false,value => { state.ui.scaleCorners = value; });
     text(host,box ? 'X and Y show the reference point. Rotate and Shear apply relative to the reference point; positive angles turn counterclockwise.' : 'Select an object to edit its position and size.');
   }
@@ -470,7 +476,7 @@ export function createPanels(shell, state, api) {
     if (!node) return state.ui[kind];
     return paintHex(kind === 'fill' ? node.appearance.fills[0] : node.appearance.strokes[0]);
   }
-  function remember(target) { const hex = currentPaint(target); if (hex) state.ui.recentColors = rememberColor(state.ui.recentColors,hex); }
+  function remember(target) { const hex = currentPaint(target); if (hex) state.ui.recentColors = rememberRecentColor(hex,state.ui.recentColors); }
   function paintTargets(host, target) {
     const targets = document.createElement('div'); targets.className = 'draw-segmented'; targets.setAttribute('role','group'); targets.setAttribute('aria-label','Color target');
     for (const kind of ['fill','stroke']) {
@@ -487,7 +493,7 @@ export function createPanels(shell, state, api) {
     b.addEventListener('click',event => api.run(() => onPick(event))); return b;
   }
   function recentColors(host, target) {
-    const recent = state.ui.recentColors ?? [];
+    const recent = savedRecentColors(state.ui.recentColors);
     const title = document.createElement('h3'); title.className = 'draw-panel__section'; title.textContent = 'Recent Colors'; host.append(title);
     const row = document.createElement('div'); row.className = 'draw-swatch-row'; row.dataset.drawRecent = '';
     if (!recent.length) { const p = document.createElement('span'); p.className = 'draw-panel__hint'; p.textContent = 'Colors you apply appear here.'; row.append(p); }
@@ -684,24 +690,41 @@ export function createPanels(shell, state, api) {
     bar.append(addEffect,actions); host.append(bar);
     text(host,'The top row draws on top. Drag rows to reorder fills or strokes. Click a row name to choose it for Duplicate and Delete.');
   }
+  let colorGesture = 0;
   function colorPanel(host) {
-    const target = state.ui.paintFocus === 'stroke' ? 'stroke' : 'fill', mode = state.ui.colorMode ?? 'rgb', hex = currentPaint(target);
+    const target = state.ui.paintFocus === 'stroke' ? 'stroke' : 'fill', mode = state.ui.colorMode ?? 'hsb', hex = currentPaint(target);
     const disabled = state.document.readOnly, shown = hex || '#FFFFFF', live = `color-${target}`;
     paintTargets(host,target);
     const top = document.createElement('div'); top.className = 'draw-color-top'; host.append(top);
-    const swatch = document.createElement('input'); swatch.type = 'color'; swatch.className = 'draw-color-swatch'; swatch.value = shown.toLowerCase();
-    swatch.setAttribute('aria-label',`${target === 'fill' ? 'Fill' : 'Stroke'} color picker`); swatch.dataset.drawField = 'color-picker'; swatch.dataset.live = 'true'; swatch.disabled = disabled;
+    const swatch = document.createElement('button'); swatch.type = 'button'; swatch.className = 'draw-color-swatch'; swatch.style.backgroundColor = shown;
+    swatch.setAttribute('aria-label',`${target === 'fill' ? 'Fill' : 'Stroke'} color picker`); swatch.dataset.drawField = 'color-picker'; swatch.disabled = disabled; swatch.setAttribute('aria-haspopup','dialog');
+    swatch.dataset.tooltip = 'Double-click to edit';
     swatch.classList.toggle('is-none',!hex);
-    swatch.addEventListener('input',() => { liveEdit = true; }); swatch.addEventListener('input',() => api.run(() => api.paint(target,swatch.value.toUpperCase(),{ mergeKey: live })));
-    swatch.addEventListener('change',() => { liveEdit = false; remember(target); render(); });
+    swatch.addEventListener('dblclick',() => { void api.editPaint(target); });
     const none = button('None',() => api.paint(target,null)); none.dataset.drawField = 'color-none'; none.disabled = disabled; none.setAttribute('aria-pressed',String(!hex));
     const modeSelect = document.createElement('select'); modeSelect.className = 'draw-select'; modeSelect.dataset.drawField = 'color-mode'; modeSelect.setAttribute('aria-label','Color mode');
     for (const [value,spec] of Object.entries(COLOR_MODES)) modeSelect.append(new Option(spec.name,value,false,value === mode));
     modeSelect.addEventListener('change',() => { state.ui.colorMode = modeSelect.value; render(); });
     top.append(swatch,modeSelect,none);
+    let surfaceKey;
+    const surface = createColorSurface(shown,{disabled,hsb:state.ui.colorHsb?.[target],
+      onStart() { liveEdit = true; surfaceKey = `color-surface-${++colorGesture}`; },
+      onInput(value,hsb) {
+        state.ui.colorHsb = {...state.ui.colorHsb,[target]:hsb};
+        swatch.style.backgroundColor = value; swatch.classList.remove('is-none'); none.setAttribute('aria-pressed','false'); hexInput.value = value.slice(1);
+        (mode === 'hsb' ? hsb : colorValues(mode,value)).forEach((v,i) => { inputs[i].number.value = v; inputs[i].range.value = v; });
+        api.run(() => api.paint(target,value,{mergeKey:surfaceKey}));
+      },
+      onCommit() { liveEdit = false; remember(target); render(); },
+    }); host.append(surface.element);
     recentColors(host,target);
-    const values = colorValues(mode,shown), inputs = [];
-    const apply = (mergeKey) => api.run(() => api.paint(target,colorFromValues(mode,inputs.map(i => i.number.valueAsNumber)),{ mergeKey }));
+    const cached = state.ui.colorHsb?.[target];
+    const values = mode === 'hsb' && cached && colorFromValues('hsb',cached) === shown.toUpperCase() ? cached : colorValues(mode,shown), inputs = [];
+    const apply = (mergeKey) => api.run(() => { const value = colorFromValues(mode,inputs.map(i => i.number.valueAsNumber));
+      if (mode === 'hsb') { const hsb = inputs.map(i => i.number.valueAsNumber); surface.setHsb(hsb); state.ui.colorHsb = {...state.ui.colorHsb,[target]:hsb}; }
+      else surface.setHex(value);
+      swatch.style.backgroundColor = value; swatch.classList.remove('is-none'); hexInput.value = value.slice(1);
+      api.paint(target,value,{ mergeKey }); });
     COLOR_MODES[mode].channels.forEach(([label,max],i) => {
       const row = document.createElement('label'); row.className = 'draw-color-channel';
       const name = document.createElement('span'); name.textContent = label;
@@ -835,7 +858,10 @@ export function createPanels(shell, state, api) {
   function propertiesPanel(host) {
     const ids = api.selectedIds(), title = document.createElement('div'); title.className = 'draw-appearance-head'; title.dataset.drawSelectionTitle = '';
     title.textContent = selectionTitle(ids); host.append(title);
-    if (!ids.length) return documentProperties(host);
+    if (!ids.length) {
+      if (textToolActive()) { section(host,'Character'); characterPanel(host,{ compact:true, prefix:'prop-' }); section(host,'Paragraph'); paragraphPanel(host,{ prefix:'prop-' }); return; }
+      return documentProperties(host);
+    }
     const node = state.document.getNode(ids[0]);
     if (ids.length === 1) field(host,'Name',node.name,value => state.history.execute(updateNode(node.id,{name:value})),{type:'text'});
     if (node.type === 'text') { section(host,'Character'); characterPanel(host,{ compact: true, prefix: 'prop-' }); section(host,'Paragraph'); paragraphPanel(host,{ prefix: 'prop-' }); }
@@ -917,12 +943,13 @@ export function createPanels(shell, state, api) {
     ]);
   }
   const WEIGHTS = ['normal','bold',100,200,300,400,500,600,700,800,900];
+  const textToolActive = () => ['type','area-type','vertical-type','type-on-path'].includes(state.ui.tool);
   const selectedText = () => api.selectedIds().map(id => state.document.getNode(id)).filter(n => n?.type === 'text');
-  /** Character: font, weight, style, size, leading, tracking and All Caps for the selected text. Each change is one undo step. */
+  /** Character edits selected text, or the formatting for the next text object when none is selected. */
   function characterPanel(host, { compact = false, prefix = '' } = {}) {
     const nodes = selectedText(), node = nodes[0];
-    if (!node) { text(host,'Select text to change its character settings. New text uses the last settings you applied.'); return; }
-    const v = textValues(node), ro = state.document.readOnly || nodes.some(n => !state.document.isEditable(n.id)), set = (changes,label) => api.textStyle(changes,label);
+    const v = node ? textValues(node) : textDefaults(state.ui), ro = state.document.readOnly || nodes.some(n => !state.document.isEditable(n.id)), set = (changes,label) => api.textStyle(changes,label);
+    if (!node && !compact) text(host,'These settings apply to new text.');
     const families = api.fontFamilies(), listId = 'draw-font-families';
     let list = document.getElementById(listId);
     if (!list) { list = document.createElement('datalist'); list.id = listId; document.body.append(list); }
@@ -956,11 +983,12 @@ export function createPanels(shell, state, api) {
     const caps = check(host,'All Caps',`${prefix}all-caps`,!!v.allCaps,value => set({ allCaps: value },'All Caps')); caps.disabled = ro;
     if (!compact) text(host,'Sizes and leading are in points. Tracking is in thousandths of an em. Changes are shaped again with the font, so export, outlines and Send to Cut follow.');
   }
-  /** Paragraph: alignment of the selected text (lines in point and area text, the run along a path). */
+  /** Paragraph formatting follows the same selection/defaults behavior as Character. */
   function paragraphPanel(host, { prefix = '' } = {}) {
     const nodes = selectedText(), node = nodes[0];
-    if (!node) { text(host,'Select text to change its paragraph settings.'); return; }
-    const ro = state.document.readOnly || nodes.some(n => !state.document.isEditable(n.id)), current = node.paragraph.alignment ?? 'left';
+    const p = node ? node.paragraph : textDefaults(state.ui);
+    const ro = state.document.readOnly || nodes.some(n => !state.document.isEditable(n.id)), current = p.alignment ?? 'left';
+    if (!node && !prefix) text(host,'These settings apply to new text.');
     const row = document.createElement('div'); row.className = 'draw-align-row'; row.setAttribute('role','group'); row.setAttribute('aria-label','Paragraph alignment');
     for (const [label,iconId,value] of [['Align left','align-left','left'],['Align center','align-center','center'],['Align right','align-right','right'],['Justify with last line aligned left','align-justified','justify']]) {
       const b = iconButton(label,iconId,() => api.textStyle({ alignment: value },'Paragraph Alignment'),'draw-layer-action draw-align-button');
@@ -968,12 +996,12 @@ export function createPanels(shell, state, api) {
     }
     host.append(row);
     // Indents and paragraph spacing in points, as in Illustrator's Paragraph panel.
-    const p = node.paragraph, spacing = document.createElement('div'); spacing.className = 'draw-fields'; host.append(spacing);
+    const spacing = document.createElement('div'); spacing.className = 'draw-fields'; host.append(spacing);
     for (const [key,label,name] of [['leftIndent','Left indent (pt)','Left Indent'],['rightIndent','Right indent (pt)','Right Indent'],['firstLineIndent','First-line indent (pt)','First-Line Indent'],
       ['spaceBefore','Space before (pt)','Space Before Paragraph'],['spaceAfter','Space after (pt)','Space After Paragraph']])
       field(spacing,label,p[key] ?? 0,value => api.textStyle({ [key]: value },name),{ min:-10000, max:10000, key:`${prefix}${key.replace(/[A-Z]/g,c => `-${c.toLowerCase()}`)}`, disabled: ro, scrubbable: false });
-    if (current === 'justify' && node.kind !== 'area') text(host,'Justified lines need area text; point text and text on a path align left.');
-    if (node.kind === 'onPath') text(host,'On a path, alignment places the text between the start offset and the end of the path.');
+    if (current === 'justify' && node?.kind !== 'area') text(host,'Justified lines need area text; point text and text on a path align left.');
+    if (node?.kind === 'onPath') text(host,'On a path, alignment places the text between the start offset and the end of the path.');
   }
   /** Gradient: type, angle, stops (colour, location, opacity), add, delete and reverse, on the focused fill or stroke. */
   function gradientPanel(host) {
@@ -1090,23 +1118,65 @@ export function createPanels(shell, state, api) {
     section('Images',info.images,i => `${i.name}: ${i.pixels} px, ${i.ppi} ppi${i.cropped ? ', cropped' : ''}${i.reference ? ', reference' : ''}`);
     if (info.openPaths || info.emptyText) text(host,'Before Send to Cut: open paths are cut as lines, and empty text is left out.');
   }
-  /** Image Trace: a preset and its settings; Trace makes paths per colour above the image and hides the image. */
+  /** Live tracing is a view overlay until Expand commits one undoable edit. */
   function imageTracePanel(host) {
-    const id = api.selectedIds().find(i => state.document.getNode(i)?.type === 'image'), o = state.ui.traceOptions ??= { preset: 'bw-logo', ...TRACE_PRESETS['bw-logo'] };
-    const fields = document.createElement('div'); fields.className = 'draw-fields'; host.append(fields);
-    const select = (label, key, value, options, change) => { const row = document.createElement('label'); row.className = 'draw-field'; const name = document.createElement('span'); name.textContent = label;
+    const ids = api.selectedIds(), id = ids.length === 1 && state.document.getNode(ids[0])?.type === 'image' ? ids[0] : null;
+    const o = state.ui.traceOptions ??= { preset: 'bw-logo', ...TRACE_PRESETS['bw-logo'] };
+    const disabled = state.document.readOnly || !id || !state.document.isEditable(id), fields = document.createElement('fieldset');
+    fields.className = 'draw-trace'; fields.disabled = disabled; host.append(fields);
+    const select = (label, key, value, options, change) => { const row = document.createElement('label'); row.className = 'draw-trace__select'; const name = document.createElement('span'); name.textContent = label; name.title = label;
       const input = document.createElement('select'); input.className = 'select'; input.dataset.drawField = key; for (const [v,l] of options) input.append(new Option(l,v)); input.value = value;
-      input.addEventListener('change',() => { change(input.value); render(); }); row.append(name,input); fields.append(row); };
-    select('Preset','trace-preset',o.preset,Object.entries(TRACE_PRESETS).map(([k,p]) => [k,p.label]),value => { state.ui.traceOptions = { preset: value, ...TRACE_PRESETS[value] }; });
-    select('Mode','trace-mode',o.mode,[['bw','Black and White'],['gray','Grayscale'],['color','Color']],value => { o.mode = value; });
-    const num = (label, key, min, max) => field(fields,label,o[key] ?? 0,value => { o[key] = value; render(); },{ min, max, key:`trace-${key}`, scrubbable: false });
-    if (o.mode === 'bw') num('Threshold (0–255)','threshold',0,255); else num(o.mode === 'gray' ? 'Grays' : 'Colors','colors',2,256);
-    num('Noise (px)','noise',0,10000); num('Paths (fidelity %)','fidelity',0,100);
-    for (const [label,key] of [['Ignore White','ignoreWhite'],['Outer contours only','outerOnly']]) { const box = check(host,label,`trace-${key}`,!!o[key],value => { o[key] = value; }); box.disabled = state.document.readOnly; }
-    const go = button('Trace',async () => { go.disabled = true; go.textContent = 'Tracing…'; const stats = await api.traceImage(id,{ ...o }); state.ui.traceStats = stats; render(); });
-    go.className = 'btn btn--primary btn--sm'; go.dataset.drawTrace = ''; go.disabled = state.document.readOnly || !id; host.append(go);
-    const s = state.ui.traceStats; if (s) { const p = document.createElement('p'); p.className = 'draw-panel__hint'; p.dataset.drawTraceStats = ''; p.textContent = `Paths: ${s.paths} · Anchors: ${s.anchors} · Colors: ${s.colors}`; host.append(p); }
-    text(host,id ? 'Trace makes filled paths per colour above the image and hides the image; undo brings it back.' : 'Select a placed image to trace it.');
+      input.addEventListener('change',() => change(input.value)); row.append(name,input); fields.append(row); return input; };
+    const preset = select('Preset','trace-preset',o.preset,[...Object.entries(TRACE_PRESETS).map(([k,p]) => [k,p.label]),['custom','Custom']],value => {
+      if (value === 'custom') { o.preset = value; return; }
+      state.ui.traceOptions = { preset:value, corners:80, fills:true, strokes:false, ...TRACE_PRESETS[value] }; render();
+    });
+    select('View','trace-view',state.ui.traceView ?? 'result',[['result','Tracing Result'],['outlines','Outlines'],['source','Source Image']],value => { state.ui.traceView = value; api.showTracePreview(); });
+    select('Mode','trace-mode',o.mode,[['bw','Black and White'],['gray','Grayscale'],['color','Color']],value => { o.mode = value; o.colors ??= 6; o.preset = 'custom'; render(); });
+    const changed = () => { o.preset = 'custom'; preset.value = 'custom'; strokeControls.querySelectorAll('input').forEach(input => { input.disabled = !o.strokes; }); request(); };
+    const slider = (parent,label,key,min,max,fallback,unit='',step=1) => {
+      const row = document.createElement('label'); row.className = 'draw-trace__slider';
+      const name = document.createElement('span'); name.textContent = label; name.title = label;
+      const range = document.createElement('input'); range.type = 'range'; range.min = min; range.max = max; range.step = step; range.value = o[key] ?? fallback; range.dataset.drawField = `trace-${key}-slider`; range.setAttribute('aria-label',label);
+      const value = document.createElement('input'); value.type = 'number'; value.min = min; value.max = max; value.step = step; value.value = range.value; value.dataset.drawField = `trace-${key}`; value.setAttribute('aria-label',label);
+      const number = document.createElement('span'); number.className = 'draw-trace__number'; number.append(value);
+      if (unit) { const suffix = document.createElement('span'); suffix.textContent = unit; number.append(suffix); }
+      for (const input of [range,value]) for (const event of ['input','change']) input.addEventListener(event,() => {
+        const next = input.valueAsNumber;
+        if (!Number.isFinite(next) || next < min || next > max) { if (event === 'change') value.value = range.value; return; }
+        range.value = value.value = String(next); o[key] = next; changed();
+      });
+      row.append(name,range,number); parent.append(row); return row;
+    };
+    if (o.mode === 'bw') slider(fields,'Threshold','threshold',0,255,128);
+    else slider(fields,o.mode === 'gray' ? 'Grays' : 'Colors','colors',2,256,6);
+    const advanced = document.createElement('details'); advanced.className = 'draw-trace__advanced'; advanced.open = !!state.ui.traceAdvanced;
+    const summary = document.createElement('summary'); summary.textContent = 'Advanced'; advanced.append(summary);
+    advanced.addEventListener('toggle',() => { state.ui.traceAdvanced = advanced.open; placeFlyout(); }); fields.append(advanced);
+    slider(advanced,'Paths','fidelity',0,100,70,'%'); slider(advanced,'Corners','corners',0,100,80,'%'); slider(advanced,'Noise','noise',0,100,4,'px²');
+    const create = document.createElement('div'); create.className = 'draw-trace__create'; advanced.append(create);
+    const fills = check(create,'Fills','trace-fills',o.fills !== false,value => { o.fills = value; if (!value && !o.strokes) { o.strokes = true; strokes.checked = true; } changed(); });
+    const strokes = check(create,'Strokes','trace-strokes',!!o.strokes,value => { o.strokes = value; if (!value && o.fills === false) { o.fills = true; fills.checked = true; } strokeControls.querySelectorAll('input').forEach(input => { input.disabled = !value; }); changed(); });
+    const strokeControls = slider(advanced,'Stroke width','strokeWidth',.05,5,.2,'mm',.05);
+    strokeControls.querySelectorAll('input').forEach(input => { input.disabled = !o.strokes; });
+    slider(advanced,'Min detail','minDetailMm',0,5,0,'mm',.05);
+    for (const [label,key] of [['Ignore White','ignoreWhite'],['Outer contours only','outerOnly']]) check(advanced,label,`trace-${key}`,!!o[key],value => { o[key] = value; changed(); });
+    const stats = document.createElement('p'); stats.className = 'draw-panel__hint draw-trace__stats'; stats.dataset.drawTraceStats = ''; stats.setAttribute('role','status'); host.append(stats);
+    const actions = document.createElement('div'); actions.className = 'draw-trace__actions'; host.append(actions);
+    check(actions,'Preview','trace-preview',state.ui.traceLive !== false,value => { state.ui.traceLive = value; request(); });
+    const go = button('Expand',async () => { go.disabled = true; const result = await api.traceImage(id,{ ...o }); if (result) state.ui.traceStats = result; render(); });
+    go.className = 'btn btn--primary btn--sm'; go.dataset.drawTrace = ''; actions.append(go);
+    const update = status => {
+      stats.textContent = status.pending ? 'Tracing…' : status.error ? status.error : status.stats ? `Paths: ${status.stats.paths} · Anchors: ${status.stats.anchors} · Colors: ${status.stats.colors}` : '';
+      stats.dataset.tracePending = String(!!status.pending); go.disabled = disabled || !!status.pending || !!status.error || status.stats?.paths === 0;
+      if (status.stats?.paths === 0) stats.textContent = 'Nothing to trace with these settings. Try another threshold or preset.';
+    };
+    function request() {
+      if (!disabled && state.ui.traceLive !== false) api.previewTrace(id,{...o},update);
+      else { api.clearTracePreview(); update({stats:!id ? state.ui.traceStats : null}); }
+    }
+    request();
+    text(host,!id ? 'Select a placed image to trace it.' : 'Adjust settings to preview. Expand creates editable paths.');
   }
   /**
    * Glyphs (D5): every character of the selected text's font (or the default font). A click puts it in the
@@ -1116,10 +1186,10 @@ export function createPanels(shell, state, api) {
   function glyphsPanel(host) {
     const node = state.document.getNode(api.selectedIds()[0]), textNode = node?.type === 'text' ? node : null;
     // Without a text object the default font is shown, or the first installed one when it is missing.
-    const families = textNode ? null : api.fontFamilies?.() ?? [];
+    const defaults = textDefaults(state.ui), families = textNode || defaults.fontSource === 'google' ? null : api.fontFamilies?.() ?? [];
     if (families && !families.length) { text(host,'Reading the fonts…'); return; }
-    const family = families && !families.includes(DEFAULT_CHARACTER.fontFamily) ? families[0] : DEFAULT_CHARACTER.fontFamily;
-    const values = textNode ? textValues(textNode) : { ...DEFAULT_CHARACTER, fontFamily: family, text: '' }, key = JSON.stringify([values.fontFamily, values.fontWeight, values.fontStyle, values.fontPostscriptName ?? null, values.fontSource ?? null]);
+    const family = families && !families.includes(defaults.fontFamily) ? families[0] : defaults.fontFamily;
+    const values = textNode ? textValues(textNode) : { ...defaults, fontFamily: family, text: '' }, key = JSON.stringify([values.fontFamily, values.fontWeight, values.fontStyle, values.fontPostscriptName ?? null, values.fontSource ?? null]);
     const entry = glyphCache.get(key);
     if (!entry) {
       glyphCache.set(key, { loading: true });
@@ -1226,6 +1296,7 @@ export function createPanels(shell, state, api) {
   const PANEL_CONTENT = { gradient: gradientPanel, character: host => characterPanel(host), paragraph: host => paragraphPanel(host), swatches: swatchesPanel, color: colorPanel, stroke: strokePanel, transparency: transparencyPanel, pathfinder: pathfinderPanel, appearance: appearancePanel, transform: host => transform(host), align: alignPanel, artboards: artboardPanel, history: historyPanel, info: infoPanel, 'document-info': documentInfoPanel, links: linksPanel, 'image-trace': imageTracePanel, 'graphic-styles': graphicStylesPanel, navigator: navigatorPanel, 'asset-export': assetExportPanel, glyphs: glyphsPanel };
   function renderFlyout() {
     const group = PANEL_GROUPS.find(g => g.id === state.ui.flyout);
+    if (group?.id !== 'image-trace') api.clearTracePreview();
     flyout.hidden = !group; if (!group) { flyoutTabs.replaceChildren(); flyoutBody.replaceChildren(); return; }
     const remembered = state.ui.groupTabs[group.id];
     const active = group.tabs.includes(remembered) && panelAvailable(remembered) ? remembered : group.tabs.find(panelAvailable);
@@ -1244,6 +1315,7 @@ export function createPanels(shell, state, api) {
     placeFlyout();
   }
   function render() {
+    scaleStrokes.checked = state.ui.scaleStrokes !== false;
     // A slider drag or color-picker session updates the canvas live; rebuilding would interrupt it.
     if (liveEdit && [flyoutBody,primary,controlBar].some(host => host.contains(document.activeElement))) return;
     liveEdit = false;
@@ -1275,6 +1347,10 @@ export function createPanels(shell, state, api) {
       return;
     }
     title(selectionTitle(ids));
+    if (ids.length === 1 && state.document.getNode(ids[0])?.type === 'image') {
+      const trace = button('Image Trace',() => open('image-trace')); trace.dataset.drawCb = 'image-trace'; trace.disabled = ro || !state.document.isEditable(ids[0]); trace.setAttribute('aria-haspopup','dialog');
+      group('Image Trace').append(trace);
+    }
     // Fill, stroke and weight: the selection's first fill and stroke, or the paint for new objects.
     const painted = state.document.getNode(api.paintIds()[0]);
     const fill = painted ? paintHex(painted.appearance.fills[0]) : state.ui.fill, stroke = painted ? paintHex(painted.appearance.strokes[0]) : state.ui.stroke;
@@ -1289,6 +1365,19 @@ export function createPanels(shell, state, api) {
       wrap.append(name,picker); paint.append(wrap);
     }
     num(paint,'Weight',weight,v => { api.paint('width',v); render(); },{ key:'cb-stroke-weight', min:0, step:.05, disabled: painted ? !stroke : false });
+    const texts = selectedText();
+    if (texts.length || textToolActive()) {
+      // Character and Paragraph, as Illustrator's Control panel shows them for type.
+      const v = texts.length ? textValues(texts[0]) : textDefaults(state.ui), typeGroup = group('Character'), tro = ro || texts.some(n => !state.document.isEditable(n.id));
+      const font = field(typeGroup,'Font',v.fontFamily,value => api.textStyle({ fontFamily: value, fontSource: 'system' },'Font'),{ type:'text', key:'cb-font-family', disabled: tro });
+      font.setAttribute('list','draw-font-families'); font.closest('label').classList.add('draw-cb-field','draw-cb-field--text');
+      num(typeGroup,'Size',v.fontSize,value => api.textStyle({ fontSize: value },'Font Size'),{ key:'cb-font-size', min:.1, max:10000, step:1, disabled: tro, scrubbable: false });
+      const para = group('Paragraph');
+      for (const [label,iconId,value] of [['Align left','align-left','left'],['Align center','align-center','center'],['Align right','align-right','right']]) {
+        const b = iconButton(label,iconId,() => api.textStyle({ alignment: value },'Paragraph Alignment'),'draw-layer-action'); b.dataset.drawCbParagraph = value;
+        b.setAttribute('aria-pressed',String((v.alignment ?? 'left') === value)); b.disabled = tro; para.append(b);
+      }
+    }
     if (!ids.length) {
       const doc = group('Document');
       for (const [label,panel] of [['Artboards…','artboards'],['Swatches…','swatches']]) { const b = button(label,() => open(panel)); b.dataset.drawCb = panel; doc.append(b); }
@@ -1312,19 +1401,6 @@ export function createPanels(shell, state, api) {
     const size = button('Position and size…',() => open('transform'));
     size.dataset.drawCb = 'transform'; size.setAttribute('aria-haspopup','dialog');
     group('Position and size').append(size);
-    const texts = selectedText();
-    if (texts.length) {
-      // Character and Paragraph, as Illustrator's Control panel shows them for type.
-      const v = textValues(texts[0]), typeGroup = group('Character'), tro = ro || texts.some(n => !state.document.isEditable(n.id));
-      const font = field(typeGroup,'Font',v.fontFamily,value => api.textStyle({ fontFamily: value, fontSource: 'system' },'Font'),{ type:'text', key:'cb-font-family', disabled: tro });
-      font.setAttribute('list','draw-font-families'); font.closest('label').classList.add('draw-cb-field','draw-cb-field--text');
-      num(typeGroup,'Size',v.fontSize,value => api.textStyle({ fontSize: value },'Font Size'),{ key:'cb-font-size', min:.1, max:10000, step:1, disabled: tro, scrubbable: false });
-      const para = group('Paragraph');
-      for (const [label,iconId,value] of [['Align left','align-left','left'],['Align center','align-center','center'],['Align right','align-right','right']]) {
-        const b = iconButton(label,iconId,() => api.textStyle({ alignment: value },'Paragraph Alignment'),'draw-layer-action'); b.dataset.drawCbParagraph = value;
-        b.setAttribute('aria-pressed',String((texts[0].paragraph.alignment ?? 'left') === value)); b.disabled = tro; para.append(b);
-      }
-    }
     const shapes = ids.filter(id => state.document.getNode(id)?.type === 'shape' && state.document.isEditable(id));
     const images = ids.filter(id => state.document.getNode(id)?.type === 'image');
     const actions = group('Quick actions');

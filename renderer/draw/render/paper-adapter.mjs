@@ -1,12 +1,13 @@
 import { laserPreviewIntent, withLaserAppearance } from '../view/laser-preview.mjs';
 /** Retained model -> Paper view. Culling and Outline never change document data. */
 import { createSelectionOverlay } from './overlays.mjs';
+import { createViewGuides } from './view-guides.mjs';
 import { activeArtboard } from '../doc/artboards.mjs';
 import { createAnchorOverlay } from './anchors.mjs';
 import { transformProperties } from '../geometry.mjs';
 import { editablePath,cornerGeometry,roundCorners } from '../geom/corners.mjs';
 import { shapeSelectionKey } from '../doc/selection.mjs';
-import { scaledStrokeProperties } from '../geom/transforms.mjs';
+import { scaledStrokeProperties, strokeScalingPolicy } from '../geom/transforms.mjs';
 import { isOutputNode, layerContext, ROOT_CONTEXT } from '../doc/layers.mjs';
 import { arrowShapes } from '../geom/arrows.mjs';
 import { normalizeProfile, variableStrokeRings } from '../geom/width-profile.mjs';
@@ -29,11 +30,12 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
   const items = new Map(), records = new Map(), boardItems = new Map(), thumbnails = new Map();
   const worldBounds = new Map(), paintedBounds = new Map();
   const editPreviews=new Map(),pathPreviewHidden=new Set();
-  let pathPreview=null,measureLine=null;
-  const transformPreviewIds=new Set();let transformPreview=null,transformPreviewOptions=null;
+  let pathPreview=null,measureLine=null,imageTracePreview=null,imageTraceId=null;
+  const transformPreviewIds=new Set();let transformPreview=null;
   let destroyed = false, outline = !!state.ui?.outline, laserPreview = false;
   let textPreview = null, textPreviewFrame=null;
   let labelColor='#435A50',labelBackground='#E7F5EF';
+  const viewGuides = createViewGuides(scope, state, boards, overlay);
   const selection = createSelectionOverlay(scope, overlay, state, id => bounds(id), id => records.get(id)?.context.color);
   const drawArtwork=artwork.draw;
   artwork.draw=function(ctx,...args){
@@ -753,6 +755,8 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
     return group;
   }
   function updateView({ viewOnly = false } = {}) {
+    const traceSource=imageTraceId&&items.get(imageTraceId);
+    if(imageTracePreview&&traceSource?.parent)imageTracePreview.insertAbove(traceSource);
     const viewport = scope.view.bounds.expand(16 / scope.view.zoom), dimmed = isolationDimmed();
     textFrames.removeChildren();
     for (const [id, record] of records) {
@@ -761,7 +765,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
       const b = paintedBounds.get(id);
       const visible = node.visible && (!!node.children || !!b?.intersects(viewport));
       const asOutline = outlineFor(id);
-      item.visible = visible && !(asOutline && node.type === 'image') && !editPreviews.has(id) && !transformPreviewIds.has(id) && !pathPreviewHidden.has(id) && !(coveredIds.has(id) && !asOutline);
+      item.visible = visible && id!==imageTraceId && !(asOutline && node.type === 'image') && !editPreviews.has(id) && !transformPreviewIds.has(id) && !pathPreviewHidden.has(id) && !(coveredIds.has(id) && !asOutline);
       // A rasterized object shows its pixels; Outline view shows its paths.
       if (record.raster) { record.raster.visible = item.visible && !asOutline && !editPreviews.has(id); if (!asOutline) item.visible = false; }
       if (asOutline && !node.children && node.type !== 'image') item.strokeWidth = 1 / scope.view.zoom;
@@ -785,12 +789,12 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
     }
     if(transformPreview)transformPreview.getItems({match:item=>!!item.data.nodeId}).forEach(item=>{
       const record=records.get(item.data.nodeId);if(!record)return;
-      const {matrix,scaleStrokes}=transformPreviewOptions,properties=scaleStrokes===null?{}:scaledStrokeProperties(record.node,record.worldMatrix.values,matrix,scaleStrokes);
-      if(properties.appearance||record.node.strokeScaling===false)style(item,{...record.node,...properties});
+      const proposed=item.data.transformPreviewNode;
+      if(proposed&&!item.data.stack&&!item.data.arrows&&!item.data.rasterEffect)style(item,proposed,outlineFor(record.node.id),true);
     });
     // One draw per frame, however many updates an action makes (D4.6). Paper's own requestUpdate only
     // draws with autoUpdate on, which this view does not use.
-    selection.update(); anchors.update(); requestDraw(viewOnly);
+    selection.update(); anchors.update(); viewGuides.update({foreground:labelColor,background:labelBackground}); requestDraw(viewOnly);
   }
   /**
    * Drawing (D4.6). Updates are drawn once per frame. When a full draw is slow (a big document) its frame is
@@ -904,7 +908,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
         const children = [...(copy.children ?? [])];
         (original.children ?? []).forEach((child, i) => {
           const childId = child.data?.nodeId;
-          if (isTextFrame(child) || childId && !isOutputNode(state.document, childId)) children[i].remove(); else fix(child, children[i]);
+          if (child.data?.tracePreview || isTextFrame(child) || childId && !isOutputNode(state.document, childId)) children[i].remove(); else fix(child, children[i]);
         });
         if (rasterMasks && id && records.get(id)?.maskView && copy.parent) {
           const box = copy.strokeBounds, resolution = Math.min(rasterMasks / 25.4 * 72, 6000 / Math.max(box.width, box.height, 1e-6) * 72);
@@ -913,7 +917,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
       };
       const group = new scope.Group({ insert: false });
       for (const child of artwork.children) {
-        const id = child.data?.nodeId; if (isTextFrame(child) || id && !isOutputNode(state.document, id)) continue;
+        const id = child.data?.nodeId; if (child.data?.tracePreview || isTextFrame(child) || id && !isOutputNode(state.document, id)) continue;
         const copy = child.clone({ insert: false, deep: true }); fix(child, copy); group.addChild(copy);
       }
       return resolveClips ? resolveClipping(group) : group;
@@ -966,16 +970,27 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
     const {shape,params,...base}=structuredClone(node),result={...base,type:'path',subpaths,fillRule:'nonzero',transform:[1,0,0,1,0,0]};
     return {...result,...transformProperties(result,node.transform)};
   }
-  function clearTransformPreview(){transformPreview?.remove();transformPreview=null;transformPreviewOptions=null;transformPreviewIds.clear();}
+  function clearTransformPreview(){transformPreview?.remove();transformPreview=null;transformPreviewIds.clear();}
   /** `matrix` is one matrix for all, or a function giving each object its own (Transform Each). */
-  function previewTransform(ids,matrixOf,{scaleStrokes=null}={}){
-    clearTransformPreview();transformPreviewOptions={matrix:typeof matrixOf==='function'?[1,0,0,1,0,0]:matrixOf,scaleStrokes:typeof matrixOf==='function'?null:scaleStrokes};transformPreview=new scope.Group({insert:false});overlay.addChild(transformPreview);
-    for(const id of ids){const original=items.get(id);if(!original)continue;const clone=original.clone({insert:false}),matrix=typeof matrixOf==='function'?matrixOf(id):matrixOf;
-      const prepare=item=>{const record=records.get(item.data.nodeId);if(record){item.visible=record.node.visible;
-        if(scaleStrokes!==null&&!outlineFor(item.data.nodeId)){const properties=scaledStrokeProperties(record.node,record.worldMatrix.values,matrix,scaleStrokes);if(properties.appearance)style(item,{...record.node,...properties},false);}}
-        item.children?.forEach(prepare);
-      };prepare(clone);clone.applyMatrix=false;clone.matrix=new scope.Matrix(...matrix).append(records.get(id).worldMatrix);transformPreview.addChild(clone);transformPreviewIds.add(id);
-      const stack=records.get(id)?.stack;if(stack){const copy=stack.clone({insert:false});copy.matrix=clone.matrix.clone();copy.visible=true;transformPreview.addChild(copy);}
+  function previewTransform(ids,matrixOf,{scaleStrokes}={}){
+    clearTransformPreview();transformPreview=new scope.Group({insert:false});overlay.addChild(transformPreview);
+    for(const id of ids){const original=items.get(id);if(!original)continue;let clone=original.clone({insert:false});const matrix=typeof matrixOf==='function'?matrixOf(id):matrixOf,policy=scaleStrokes===undefined?strokeScalingPolicy(state.ui??{},matrix):scaleStrokes;
+      const prepare=(item,root=false)=>{
+        const record=records.get(item.data.nodeId);if(record){item.visible=record.node.visible;
+          if(policy!==null&&!outlineFor(item.data.nodeId)&&!item.data.rasterEffect){
+            const properties=scaledStrokeProperties(record.node,record.worldMatrix.values,matrix,policy,{baked:false,descendant:!root}),proposed={...record.node,...properties};
+            if((hasVectorEffects(proposed)&&['path','shape'].includes(proposed.type))||item.data.stack||item.data.arrows){
+              const geometry=make(proposed),next=item.data.stack?paintStack(geometry,proposed):item.data.arrows?arrowGroup(geometry,proposed):geometry;
+              if(next){next.applyMatrix=false;next.matrix=item.matrix.clone();next.data={...item.data};if(item.parent)item.replaceWith(next);else item.remove();item=next;}
+              if(next!==geometry)geometry.remove();
+            }
+            item.data.transformPreviewNode=proposed;if(!item.data.stack&&!item.data.arrows)style(item,proposed,false,true);
+          }
+        }
+        for(const child of [...(item.children??[])])prepare(child);
+        return item;
+      };clone=prepare(clone,true);clone.applyMatrix=false;clone.matrix=new scope.Matrix(...matrix).append(records.get(id).worldMatrix);transformPreview.addChild(clone);transformPreviewIds.add(id);
+      const stack=records.get(id)?.stack;if(stack){const copy=prepare(stack.clone({insert:false}),true);copy.matrix=clone.matrix.clone();copy.visible=true;transformPreview.addChild(copy);}
     }updateView();
   }
   // Layers panel thumbnails: a clone in world space with model visibility (ignoring viewport culling),
@@ -1092,6 +1107,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
       }
       scope.view.update();
     },
+    viewGuides,
     setTheme({muted,background=labelBackground}) {labelColor=muted;labelBackground=background;for(const {label,labelRect} of boardItems.values()){label.fillColor=muted;labelRect.fillColor=background;}updateView();},
     shapePreview(node,sourceId=null) { const item=make(node);item.applyMatrix=false;style(item,node,false);item.opacity=.6;
       if(sourceId)item.matrix=records.get(sourceId).worldMatrix.clone();overlay.addChild(item);return item; },
@@ -1106,6 +1122,22 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
       measureLine=new scope.Group({insert:false,children:[new scope.Path.Line({from:a,to:b,strokeColor:'#FFFFFF',strokeWidth:3*w}),new scope.Path.Line({from:a,to:b,strokeColor:'#C0392B',strokeWidth:w}),
         ...[a,b].map(center=>new scope.Path.Circle({center,radius:3*w,fillColor:'#FFFFFF',strokeColor:'#C0392B',strokeWidth:w}))]});
       overlay.addChild(measureLine);scope.view.update();},
+    /** Trace in the source's stack and clipping context; exports still use the original image. */
+    previewTrace(id=null,nodes=[],{outlines=false}={}){
+      imageTracePreview?.remove();imageTracePreview=null;imageTraceId=null;
+      const source=items.get(id),original=state.document.getNode(id);
+      if(source?.parent&&original){
+        imageTraceId=id;imageTracePreview=new scope.Group({insert:false,name:'Image Trace preview',opacity:original.opacity,blendMode:original.blendMode});
+        imageTracePreview.data={nodeId:id,tracePreview:true};
+        for(const node of nodes){
+          const item=make(node);item.applyMatrix=false;item.matrix=new scope.Matrix(...node.transform);style(item,node,false,true);
+          if(outlines){item.fillColor=null;item.strokeColor='#007D6B';item.strokeWidth=1/scope.view.zoom;item.strokeScaling=false;}
+          imageTracePreview.addChild(item);
+        }
+        imageTracePreview.insertAbove(source);
+      }
+      updateView();scope.view.update();
+    },
     /** Proposed paths for Offset Path and Simplify: drawn with their paint over the artwork; `hide` lists originals to hide meanwhile. */
     previewPaths(entries=[],hide=[]){
       pathPreview?.remove();pathPreview=null;pathPreviewHidden.clear();for(const id of hide)pathPreviewHidden.add(id);
@@ -1166,7 +1198,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
     destroy() {
       destroyed = true; textPreview?.remove();textPreviewFrame?.remove();textFrames.remove(); selection.destroy();anchors.destroy();clearTransformPreview();
       for (const record of records.values()) if (record.node.type === 'image') items.get(record.node.id).onLoad = null;
-      boards.remove(); artwork.remove(); overlay.remove();
+      viewGuides.destroy(); boards.remove(); artwork.remove(); overlay.remove();
       items.clear(); records.clear(); boardItems.clear(); thumbnails.clear(); worldBounds.clear(); paintedBounds.clear();
     },
   };

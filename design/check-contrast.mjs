@@ -55,9 +55,27 @@ const commonPairs = [
   ["on-danger", "danger-fill", 4.5, "destructive button"],
   ["on-accent", "brand", 4.5, "score tag"],
 ];
+// Follow the CSS cascade for every fixed background and resolve token aliases.
+const neutralPalettes = ["white", "light-gray", "gray", "dark-gray"].map((background) => {
+  const values = { ...tokens, ...(["gray", "dark-gray"].includes(background) ? darkTokens : {}) };
+  for (const block of css.matchAll(/([^{}]+)\{([^{}]+)\}/g)) {
+    const selector = block[1].replace(/\/\*[\s\S]*?\*\//g, "").trim();
+    if (!selector.includes(`:root[data-background="${background}"]`) && selector !== ':root[data-background]:where(:not([data-background="green"]))') continue;
+    for (const m of block[2].matchAll(/--([\w-]+):\s*(#[0-9a-fA-F]{6}|var\(--[\w-]+\));/g)) values[m[1]] = m[2];
+  }
+  const resolve = (value) => value.startsWith("var(") ? resolve(values[value.slice(6, -1)]) : value;
+  return [background, Object.fromEntries(Object.entries(values).map(([key, value]) => [key, resolve(value)])), [
+    ...commonPairs,
+    ...["bg", "surface", "surface-2"].flatMap((bg) => [
+      ["brand-mid", bg, 3, `focus indicator on ${bg}`],
+      ["brand", bg, 3, `secondary button outline on ${bg}`],
+    ]),
+    ["text", "lime", 4.5, "mark tag"],
+  ]];
+});
 let failed = 0;
 console.log("modCut WCAG contrast check\n" + "=".repeat(52));
-for (const [theme, values, pairs] of [["light", tokens, [...PAIRS, ...commonPairs]], ["dark", darkTokens, commonPairs]]) {
+for (const [theme, values, pairs] of [["light", tokens, [...PAIRS, ...commonPairs]], ["dark", darkTokens, commonPairs], ...neutralPalettes]) {
   console.log(`\n${theme} theme`);
   for (const [fg, bg, min, label] of pairs) {
     const cfg = values[fg], cbg = values[bg];

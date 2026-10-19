@@ -22,6 +22,7 @@
     "test:e2e": "npm run build:sidecar && node electron/e2e/run.mjs && node electron/e2e/run.mjs --draw",
     "test:e2e:draw": "npm run build:sidecar && node electron/e2e/run.mjs --draw",
     "test:e2e:theme": "npm run build:sidecar && node electron/e2e/run.mjs --theme",
+    "test:e2e:background": "npm run build:sidecar && node electron/e2e/run.mjs --background",
     "check:contrast": "node design/check-contrast.mjs",
     "test": "npm run test:sidecar && npm run test:bridge && npm run test:main && npm run test:renderer && npm run test:draw && npm run check:contrast && npm run test:e2e",
     "pack": "npm run bundle && electron-builder --dir && node scripts/verify-package.mjs && node scripts/verify-font-package.mjs",

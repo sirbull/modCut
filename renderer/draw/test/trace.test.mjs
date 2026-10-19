@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { quantize, removeNoise, contours, ringArea, simplifyRing, traceScale, ringCorners } from '../geom/trace.mjs';
+import { quantize, removeNoise, contours, ringArea, simplifyRing, traceScale, ringCorners, traceRegions } from '../geom/trace.mjs';
 
 function image(width, height, paint) {
   const data = new Uint8ClampedArray(width * height * 4);
@@ -38,4 +38,39 @@ test('corners are the sharp turns, not the gentle ones', () => {
   assert.deepEqual(ringCorners([[0, 0], [20, 0], [20, 20], [0, 20]]), [0, 1, 2, 3]);
   const circle = Array.from({ length: 24 }, (_, i) => [Math.cos(i * Math.PI / 12) * 10, Math.sin(i * Math.PI / 12) * 10]);
   assert.deepEqual(ringCorners(circle), []);
+});
+
+test('black and white retains white regions only when requested, and always ignores transparency', () => {
+  const img = image(12, 6, x => x < 6 ? K : W);
+  img.data[3] = 0;
+  const result = quantize(img, { mode:'bw', ignoreWhite:false });
+  assert.deepEqual(result.palette, [K, W]);
+  assert.equal(result.labels[0], -1);
+  assert.equal(result.labels[1], 0);
+  assert.equal(result.labels[6], 1);
+  assert.equal(traceRegions(img, {mode:'bw',ignoreWhite:false,noise:0}).length, 2);
+  assert.equal(traceRegions(img, {mode:'bw',ignoreWhite:true,noise:0}).length, 1);
+});
+
+test('worker trace regions preserve holes, remove inner contours on request and filter physical details', () => {
+  const img = image(20, 20, (x,y) => x >= 2 && x < 18 && y >= 2 && y < 18 && !(x >= 7 && x < 13 && y >= 7 && y < 13) ? K : W);
+  const options = {mode:'bw',ignoreWhite:true,noise:0};
+  const full = traceRegions(img, options);
+  assert.equal(full[0].rings.length, 2);
+  assert.ok(full[0].rings.some(r => ringArea(r) < 0));
+  const outer = traceRegions(img, {...options,outerOnly:true});
+  assert.equal(outer[0].rings.length, 1);
+  assert.equal(ringArea(outer[0].rings[0]), 256);
+  assert.deepEqual(traceRegions(img, {...options,minArea:300}), []);
+  assert.deepEqual(traceRegions(img, {...options,threshold:0}), []);
+});
+
+test('path fidelity retains more boundary detail and corner sensitivity changes which turns are sharp', () => {
+  const img = image(60, 60, (x,y) => Math.hypot(x-30,y-30) < 22 ? K : W);
+  const low = traceRegions(img, {fidelity:0,noise:0})[0].rings[0];
+  const high = traceRegions(img, {fidelity:100,noise:0})[0].rings[0];
+  assert.ok(high.length > low.length, `${high.length} detailed anchors versus ${low.length}`);
+  const square = [[0,0],[20,0],[20,20],[0,20]];
+  assert.deepEqual(ringCorners(square,120), []);
+  assert.deepEqual(ringCorners(square,45), [0,1,2,3]);
 });

@@ -331,7 +331,7 @@ export async function runDrawPanelWorkflows(client) {
   await evaluate(`(async()=>(${active}.select(['${rect.id}'])))()`);
   const fillBefore = await fillHex(rect.id);
   await evaluate(`document.querySelector('${root} [data-paint=fill]').click()`);
-  assert.equal(await evaluate(`document.querySelector('${root} [data-draw-panel=color]').getAttribute('aria-pressed')`), 'true', 'Fill swatch opens Color');
+  assert.equal(await evaluate(`document.querySelector('${root} [data-paint=fill]').getAttribute('aria-pressed')`), 'true', 'Single click selects the fill target');
   assert.equal(await evaluate(`document.querySelector('${root} [data-paint-action=paint-gradient]').disabled`), false, 'Gradients are built (D2.3)');
   await evaluate(`document.querySelector('${root} [data-paint-action=paint-none]').click()`);
   assert.equal(await fillHex(rect.id), null, 'None removes the focused fill');
