@@ -4,7 +4,7 @@
 > Detaljer: [hovedplanen](../DRAW_WORKSPACE.md) (spesifikasjon og byggeplan),
 > [RIGHT_PANELS.md](RIGHT_PANELS.md) (høyresiden), [WORK_LOG.md](WORK_LOG.md) (hva som er gjort, dag for dag)
 > og [HANDOFF.md](HANDOFF.md) (overlevering til neste agent).
-> Sist oppdatert: 2026-10-18 (Laser Preview). Arbeidsgren: `feat/vector-draw` (Claude og Codex
+> Sist oppdatert: 2026-10-19 (Laser Preview). Arbeidsgren: `feat/vector-draw` (Claude og Codex
 > jobber begge der; hent alltid før du starter, og kjør `npm ci` ved endrede avhengigheter).
 
 ## D5.1 Laser Preview — første versjon implementert (2026-10-18)
@@ -20,6 +20,9 @@ og rasterdithering kan fortsatt kreve kontroll i Cut. «Engrave as seen», maski
 materialresultat er ikke implementert som simulering. Se [kontrakt og restliste](cut-optimized.md).
 Stiplede enkeltstreker og pilspisser ved gravering følger nå faktisk Cut-output;
 affine foreldres strekbredde er også kontrollert. Se siste utvidelse nederst.
+Breddeprofiler og flere malingslag på vanlige baner/former følger nå første synlige
+fyll/strek og konstant bredde som standard Cut-overføring. Klippede stacker, avansert
+tekstutseende og lagrede Outline Stroke-valg forblir uavklart.
 Plan/status/arbeidslogg er oppdatert ved hvert trinn; hver ferdige leveranse er committet på
 `feat/vector-draw`. GitHub-tilgangen er rettet; alle tidligere leveransecommits er pushet og kontrollert på origin.
 
@@ -1082,3 +1085,20 @@ Rasterets én-pikselrand og anti-aliasing utelates fra pikselsammenligningen. Ul
 skalering av graveringsstreker følger nå Cuts breddeberegning i stedet for å deformere
 strekflaten. `--draw-recovery` passerer på siste kode, med både gammel og ny preview-test.
 Full Draw/npm test er ikke gjentatt i dette trinnet.
+
+
+## Siste preview-utvidelse: breddeprofiler og malingslag (2026-10-19)
+
+Ferdig for vanlige baner/former uten klipping: første synlige fyll/strek og konstant bredde
+i samsvar med standard centerline-overføring. Ekstra fyll/streker og profiler beholdes i
+normal visning og eksport. Help/intro forklarer forskjellen.
+
+346 Draw-tester, i18n og kontrast passerer. Samlet `--draw-recovery` passerer med IO/autosave,
+krasj/gjenoppretting, opprinnelig preview, strekesammenligning og ny malingsstack-test. Den
+nye Cut-raster-/canvas-sammenligningen gir 0 avvik ved 66 912 punkter (kantpiksler utelatt).
+Normal blå visning, modell/historikk/SVG og objektlistens Outline Stroke-råd er verifisert.
+
+Neste støttede tilfeller må avgrenses: klippede malingsstacker, avansert tekstutseende,
+effekter/kompositter og rasterdithering. Outline Stroke-overføringer må få egen preview;
+foreløpig er strokede graveringer uavklart når dokumentet har en slik Cut-lenke.
+Full Draw/npm test er ikke gjentatt, og «Engrave as seen» er fortsatt ikke implementert.

@@ -252,6 +252,8 @@ Solid red lines show Cut, dashed red lines distinguish Score, black shapes show 
 engraving, and supported images show in grayscale. Score dashes are a visual key; they do
 not create gaps in the machine path. Vector engraving shows solid strokes without arrowheads,
 as transferred by Send to Cut; normal Draw view keeps your original dashes and arrows.
+Standard transfer uses the first visible fill and stroke with constant width on paths and
+shapes, including artwork with width profiles or multiple paint layers. Extra paint stays in Draw.
 Normal colour view is the default; your last choice is remembered.
 
 **Laser processes** configures this tab's actual Cut/Score/Engrave/Ignore choices. Amber dotted

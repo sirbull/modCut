@@ -668,6 +668,7 @@ export function cutPreviewIntroDialog() {
   for(const text of ['Solid red lines show Cut. Dashed red lines show Score. Black areas show vector engraving; images show in grayscale.',
     'Score dashes are a display key, not gaps in the machine path.',
     'Vector dashes and arrowheads are not sent to Cut. Preview shows solid strokes without arrowheads.',
+    'For paths and shapes, the standard Send to Cut transfer uses the first visible fill and stroke with constant width. Extra paint layers and width profiles remain in Draw.',
     'Dotted amber outlines or faded images mean the process or appearance is unresolved. Choose Laser processes to configure this tab’s Cut settings.',
     'Effects, advanced composites and image dithering may need checking in Cut. This view does not simulate travel order, burn depth or the exact material result.',
     'Only the view changes. Original artwork, exports and undo history stay unchanged. You can keep drawing.',

@@ -2,6 +2,7 @@
 import { resolveCutPreviewProcess } from './cut-process.mjs';
 import { nodeContext } from '../doc/layers.mjs';
 import { hasTextLayout } from '../doc/text-layout.mjs';
+import { cutPaint } from '../io/cut-paint.mjs';
 
 export const LASER_COLORS = Object.freeze({Cut:'#C5221F',Score:'#C5221F',Engrave:'#000000',unresolved:'#965300'});
 
@@ -20,7 +21,18 @@ export function laserPreviewIntent(doc, id, snapshot) {
     node.appearance?.effects?.some(e=>!e.hidden))return {...process,status:'unresolved',reason:'expand-appearance'};
   if(node.type==='text'&&(!hasTextLayout(node)||node.layout.overflow))return {...process,status:'unresolved',reason:'text-layout'};
   const fills=(node.appearance?.fills??[]).filter(e=>!e.hidden),strokes=(node.appearance?.strokes??[]).filter(e=>!e.hidden);
-  if(process.operation==='Engrave'&&node.type!=='image'&&(fills.length>1||strokes.length>1||strokes.some(s=>s.widthProfile?.length||(s.align&&s.align!=='center'))))return {...process,status:'unresolved',reason:'expand-stroke'};
+  if(process.operation==='Engrave'&&node.type!=='image'){
+    if(strokes.length&&doc.data.cutLinks?.some(link=>link.options?.strokes==='outline'))return {...process,status:'unresolved',reason:'outline-transfer'};
+    const stackedPaint=fills.length>1||strokes.length>1||strokes.some(s=>s.widthProfile?.length);
+    if(strokes.some(s=>s.align&&s.align!=='center')||
+      (stackedPaint&&(!['path','shape'].includes(node.type)||ancestors.some(a=>a.clip))))return {...process,status:'unresolved',reason:'expand-stroke'};
+    if(stackedPaint){
+      // Match canonical Send to Cut: only the first visible fill/stroke is sent,
+      // without the view-only width-profile outline or extra paint-stack items.
+      const paint=cutPaint(node);
+      return {...process,vectorPaint:{fill:!!paint.fill,stroke:!!paint.stroke,width:strokes[0]?.width??0,strokeScaling:node.strokeScaling!==false}};
+    }
+  }
   if(node.type==='image' && process.layer.dither && process.layer.dither!=='Grayscale')return {...process,status:'unresolved',reason:'raster-dither'};
   return process;
 }
@@ -39,7 +51,7 @@ export function withLaserAppearance(root, {resolve,roles=new Map(),zoom=1}, draw
     if(intent?.status==='reference'){patch(item,{opacity:.18});return;}
     const op=intent?.status==='resolved'?intent.operation:null;
     if((op==='Cut'||op==='Score')&&['stack','arrows','shadow','raster'].includes(role)){patch(item,{visible:false});return;}
-    if(op==='Engrave'&&role==='arrows'){patch(item,{visible:false});return;}
+    if(op==='Engrave'&&(role==='arrows'||(role==='stack'&&intent.vectorPaint))){patch(item,{visible:false});return;}
     if(intent?.status==='unresolved'&&role==='shadow'){patch(item,{visible:false});return;}
     if(item.className==='Raster') {
       if(intent?.status==='unresolved'){patch(item,{opacity:.25});return;}
@@ -66,8 +78,9 @@ export function withLaserAppearance(root, {resolve,roles=new Map(),zoom=1}, draw
       // Cut bakes the path transform and scales width by sqrt(abs(det(world))).
       // Use a screen-space width so anisotropic parents cannot deform the stroke.
       const m=item.globalMatrix,scale=m?Math.sqrt(Math.abs(m.a*m.d-m.b*m.c)):1;
-      const width=item.strokeScaling===false?item.strokeWidth:item.strokeWidth*scale*zoom;
-      patch(item,{fillColor:item.fillColor?LASER_COLORS.Engrave:null,strokeColor:item.strokeColor?LASER_COLORS.Engrave:null,strokeWidth:width,strokeScaling:false,strokeCap:'butt',strokeJoin:'miter',miterLimit:4,dashArray:[],dashOffset:0,opacity:1,blendMode:'normal'});
+      const paint=intent.vectorPaint;
+      const width=paint?paint.width*(paint.strokeScaling?scale:1)*zoom:item.strokeScaling===false?item.strokeWidth:item.strokeWidth*scale*zoom;
+      patch(item,{fillColor:(paint?paint.fill:item.fillColor)?LASER_COLORS.Engrave:null,strokeColor:(paint?paint.stroke:item.strokeColor)?LASER_COLORS.Engrave:null,strokeWidth:width,strokeScaling:false,strokeCap:'butt',strokeJoin:'miter',miterLimit:4,dashArray:[],dashOffset:0,opacity:1,blendMode:'normal'});
     }
   }
   try{walk(root);return draw();}finally{for(let i=restore.length-1;i>=0;i--)restore[i]();}

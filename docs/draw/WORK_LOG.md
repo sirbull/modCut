@@ -2111,3 +2111,43 @@ dette var en testforutsetning som ble rettet etter første prøve, ikke en appfe
 er visuelt kontrollert. Full Draw/npm test er ikke gjentatt; målrettede tester er kjørt
 etter siste kodeendring. Plan, STATUS, HANDOFF, README og kontrakt er oppdatert. Trinnet
 committes/pushes før neste utvidelse.
+
+## 2026-10-19: Preview-utvidelse — breddeprofiler og malingslag
+
+Brukeren ber om videre arbeid. Grenen er ren og synkronisert med origin før start.
+Neste avgrensning er vanlige baner/former med breddeprofil eller flere fyll/streker.
+Send to Cut velger første synlige fyll/strek og sender konstant strekbredde i vanlig
+centerline-overføring. Preview skal bruke samme maling på basegeometrien og skjule
+Draws visningsstack midlertidig, med full gjenoppretting etter draw/feil.
+
+Kontroll før ferdigmerking: flere typer malingsstack og breddeprofiler, faktiske Cut-importer,
+raster-/canvas-sammenligning, originaldokument/historikk/SVG og normal visning. Effekter,
+kompositter, avansert tekstutseende og rasterdithering forblir egne oppgaver. Plan og status
+oppdateres i ferdig commit, og trinnet pushes til feat/vector-draw.
+
+Gjennomført: ren preview-policy henter første synlige fyll/strek via `cutPaint`. Bare den
+midlertidige visningen gir basepathen denne malingen og skjuler stacken; alle stiler/
+synlighetsvalg gjenopprettes i finally. Profilen sendes derfor som konstant bredde, og
+ekstra malingslag påvirker ikke preview-flaten. Ingen Cut-output eller dokumentdata endres
+av selve preview. Help/intro og bokmålstekst forklarer standardoverføringen.
+
+Klippede malingsstacker og avansert tekstutseende er fortsatt uavklart. En dokumentlenke
+med tidligere Outline Stroke-overføring gjør graveringsstreker uavklart og får eget råd
+i objektlisten; dette hindrer at vanlig centerline-preview loves for en annen overføring.
+Regelen er konservativ for hele dokumentet inntil per-artboard-overføringsvalg støttes.
+
+Verifisert på siste kode: 346 Draw-tester, fire i18n-tester og kontrast passerer. Samlet
+Electron `--draw-recovery` passerer med prosjekt-IO/autosave, krasjgjenoppretting, opprinnelig
+preview, tidligere streketest og ny malingsstack-test. Sistnevnte sender fire reelle objekter
+til Cut og måler 66 912 punkter mot Cut-rasterets alfaflate: 14 465 svarte, null avvik.
+Kantpiksler/anti-aliasing utelates som i tidligere sammenligning. Testen dekker profilert
+bane, skjulte første malingsoppføringer, flere fyll/streker på rektangel og ellipse, affine
+foreldre og fast mm-strekbredde. Normal blå profilvisning og originale basepath-stiler
+gjenopprettes, artwork/SVG og preview-historikk bevares. En virkelig Send legger som før
+til én forventet Cut-lenke og ett historikksteg. Outline Stroke-rådet er også UI-testet.
+
+Under testoppsett ble formtypen rettet fra «rectangle» til modellens «rect». Malingsstack-
+advarselen åpner med hensikt Send-dialogen; testen bekrefter og velger uendret standard
+centerline-overføring. Ingen appvalidering/assertions er svekket. Skjermbildet er visuelt
+kontrollert. README, ROADMAP, hovedplan, STATUS, HANDOFF og kontrakt er oppdatert. Full
+Draw/npm test er ikke kjørt på nytt. Ferdig trinn committes og pushes før videre arbeid.

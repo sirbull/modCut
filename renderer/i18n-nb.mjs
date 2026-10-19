@@ -2,6 +2,8 @@
 // value that is carried over. Product and workspace names (modCut, Cut, Draw) stay as they are.
 export const NB = Object.freeze({
   // Laser Preview
+  "An earlier transfer used Outline Stroke. Review that output in Cut before updating.": "En tidligere overføring brukte Outline Stroke. Kontroller resultatet i Cut før du oppdaterer.",
+  "For paths and shapes, the standard Send to Cut transfer uses the first visible fill and stroke with constant width. Extra paint layers and width profiles remain in Draw.": "For baner og former bruker vanlig Send to Cut-overføring første synlige fyll og strek med konstant bredde. Ekstra malingslag og breddeprofiler beholdes i Draw.",
   "Vector dashes and arrowheads are not sent to Cut. Preview shows solid strokes without arrowheads.": "Stipling og pilspisser på vektorer sendes ikke til Cut. Forhåndsvisningen viser heltrukne streker uten pilspisser.",
   "Unresolved Laser Preview objects": "Uavklarte objekter i laserforhåndsvisningen",
   "Show unresolved objects": "Vis uavklarte objekter",

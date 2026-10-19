@@ -54,6 +54,9 @@ the same commit that completes an item.
   English/Bokmål, model-neutral Electron checks and app restart.
 - [x] Laser Preview for dashed single strokes and arrowheads during vector engraving:
   match the solid strokes actually sent to Cut, with 67,306 output comparison samples.
+- [x] Laser Preview for width profiles and multiple fills/strokes on plain paths/shapes:
+  first visible paint and constant width match standard Cut transfer (66,912 samples).
+  Clipped stacks and remembered Outline Stroke transfers remain unresolved.
 - [x] Resolve the final full-Draw E2E connection close: cancel the old process shutdown
   timeout and target the captured process; verified with `--draw-recovery`.
 

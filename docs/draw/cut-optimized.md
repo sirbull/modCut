@@ -58,9 +58,11 @@ tekst og oversettes ikke. Å åpne/lukke oversikten endrer ingen prosessvalg ell
 ## Eksplisitte begrensninger
 
 - Dotted/ravfarget kontur eller dempet bilde betyr uavklart prosess eller utseende. Avanserte
-  kompositter (blend/envelope/masks), uekspanderte effekter, graveringsstreker med breddeprofiler/flere malingslag og
-  rasterdithering krever ekspandering eller kontroll i Cut. Å velge en operasjon gjør ikke en
+  kompositter (blend/envelope/masks), uekspanderte effekter, klippede malingsstacker, avansert
+  tekstutseende, ikke-sentrerte streker og rasterdithering krever ekspandering eller kontroll i Cut. Å velge en operasjon gjør ikke en
   uverifisert effekt til en støttet simulering.
+- En lagret Cut-lenke med Outline Stroke gjør graveringsstreker uavklart. Dette er en
+  konservativ dokumentregel inntil egne overføringsvalg kan forhåndsvises per artboard.
 - «Engrave as seen» (flate ut transparens og blending til output-raster) er ikke implementert.
 - Ingen simulering av kjørerekkefølge, raske forflytninger, DPI-scanlinjer, brenndybde eller
   materialresultat. Forhåndsvisningen erstatter ikke sluttkontroll av maskin, materiale og jobb i Cut.
@@ -107,3 +109,21 @@ er en kontroll av overført silhuett, ingen simulering av eksakt DPI, scanlinjer
 
 `--draw-recovery` passerer også etter denne utvidelsen, inkludert de eksisterende Laser
 Preview-kontrollene og den nye Cut-sammenligningen. Full Draw/npm test er ikke gjentatt.
+
+## Verifisert utvidelse 2026-10-19: breddeprofiler og flere malingslag
+
+Baner og former uten klippemasker kan forhåndsvises med breddeprofiler og flere fyll/streker.
+Visningen bruker første synlige fyll og strek med konstant bredde, som vanlig centerline-
+overføring til Cut. Draws ekstra malingsstack skjules bare under draw; basegeometrien får
+midlertidig kanonisk maling fra samme `cutPaint` som Send to Cut. Normal visning og eksport
+beholder hele utseendet. Selv en basepath uten egen maling blir derfor korrekt vist.
+
+`--draw-laser-paints` og samlet `--draw-recovery` passerer. Fire faktiske Cut-importer dekker
+profilert bane, flere streker med skjult første oppføring, rektangel/ellipse med flere fyll
+og streker, affine foreldre og fast mm-strekbredde. Mot Cut-rasterets alfaflate: 66 912
+sammenlignede punkter, 14 465 svarte, null avvik. Samme kant-/anti-aliasing-avgrensning som
+strekekontrollen gjelder. Testen sjekker også gjenopprettet normalvisning med blå piksler,
+modell/historikk/SVG og Outline Stroke-varsel i objektlisten.
+
+346 Draw-enhetstester, i18n og kontrast passerer. Full Draw/npm test er ikke gjentatt.
+Klippede malingsstacker og avansert tekstutseende krever egne sammenligninger.

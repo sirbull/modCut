@@ -78,7 +78,7 @@ test('policy uses actual process settings and keeps advanced output unresolved',
   const hidden=fixture({visible:false});assert.equal(laserPreviewIntent(hidden.doc,'p',hidden.snapshot).reason,'hidden');
   const template=fixture({},{template:true});assert.equal(laserPreviewIntent(template.doc,'p',template.snapshot).status,'reference');
 });
-test('single dashed engraving strokes with arrowheads resolve; width profiles and paint stacks stay unresolved',()=>{
+test('engraving profiles and paint stacks resolve to canonical first visible fill and stroke',()=>{
   const look=appearance(null,'#00FF00',2);
   Object.assign(look.strokes[0],{dash:{array:[4,3],offset:1},startArrow:{type:'triangle',scale:1},endArrow:{type:'circle',scale:1}});
   const {doc,snapshot}=fixture({appearance:look});snapshot.layers[0].op='Engrave';
@@ -88,6 +88,38 @@ test('single dashed engraving strokes with arrowheads resolve; width profiles an
     {...look,strokes:[...look.strokes,...look.strokes]},
   ]){
     const f=fixture({appearance});f.snapshot.layers[0].op='Engrave';
-    assert.equal(laserPreviewIntent(f.doc,'p',f.snapshot).reason,'expand-stroke');
+    assert.deepEqual(laserPreviewIntent(f.doc,'p',f.snapshot).vectorPaint,{fill:false,stroke:true,width:2,strokeScaling:true});
+  }
+  const stacked=fixture({strokeScaling:false,appearance:{...look,fills:[{...appearance('#FF0000',null).fills[0],hidden:true},...appearance('#00FF00',null).fills],strokes:[{...look.strokes[0],hidden:true},{...look.strokes[0],width:3},look.strokes[0]]}});
+  stacked.snapshot.layers[0].op='Engrave';
+  assert.deepEqual(laserPreviewIntent(stacked.doc,'p',stacked.snapshot).vectorPaint,{fill:true,stroke:true,width:3,strokeScaling:false});
+});
+test('engraving paints bare base geometry, hides its stack and restores everything on draw errors',()=>{
+  const base={...path(),fillColor:null,strokeColor:null,strokeWidth:0,globalMatrix:{a:2,b:0,c:0,d:2}};
+  const stack={className:'Group',visible:true,children:[path()]},root={className:'Group',children:[base,stack]},roles=new Map([[stack,{id:'p',role:'stack'}]]);
+  const intent={...resolved('Engrave'),vectorPaint:{fill:true,stroke:true,width:3,strokeScaling:true}};
+  assert.throws(()=>withLaserAppearance(root,{roles,resolve:()=>intent,zoom:2},()=>{
+    assert.equal(stack.visible,false);assert.equal(base.fillColor,'#000000');assert.equal(base.strokeColor,'#000000');assert.equal(base.strokeWidth,12);throw Error('draw failed');
+  }),/draw failed/);
+  assert.equal(stack.visible,true);assert.equal(base.fillColor,null);assert.equal(base.strokeColor,null);assert.equal(base.strokeWidth,0);
+});
+test('clipped paint stacks remain unresolved while ordinary clipped strokes keep their existing projection',()=>{
+  for(const stacked of [false,true]){
+    const look=appearance(null,'#00FF00',2);if(stacked)look.strokes.push({...look.strokes[0],width:4});
+    const p=createNode('path',{id:'p',subpaths:square,appearance:look}),group=createNode('group',{clip:true,children:[p]});
+    const doc=new DrawDocument(createDocument({layers:[createNode('layer',{children:[group]})]}));
+    const snapshot={mappingMode:'color',layers:[{color:'#00ff00',key:'vector:#00ff00',op:'Engrave',output:true,raster:false}]};
+    const intent=laserPreviewIntent(doc,'p',snapshot);
+    assert.equal(intent.status,stacked?'unresolved':'resolved');
+    assert.equal(intent.vectorPaint,undefined);
+  }
+});
+test('a remembered Outline Stroke transfer stays unresolved instead of promising standard stroke output',()=>{
+  for(const strokes of ['outline','centerline']){
+    const node=createNode('path',{id:'p',subpaths:square,appearance:appearance(null,'#00FF00',2)});
+    const doc=new DrawDocument(createDocument({layers:[createNode('layer',{children:[node]})],cutLinks:[{artboardId:'previous',options:{strokes}}]}));
+    const intent=laserPreviewIntent(doc,'p',{mappingMode:'color',layers:[{color:'#00ff00',key:'vector:#00ff00',op:'Engrave',output:true,raster:false}]});
+    assert.equal(intent.status,strokes==='outline'?'unresolved':'resolved');
+    if(strokes==='outline')assert.equal(intent.reason,'outline-transfer');
   }
 });

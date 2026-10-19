@@ -30,8 +30,11 @@ hele IO/recovery→preview-overgangen. Ingen full omkjøring etter rettingen. Ne
 er å utvide støttede preview-tilfeller med faktisk Send to Cut-sammenligning.
 Stiplede enkeltstreker/pilspisser ved vektorgravering er nå en slik verifisert utvidelse:
 de vises heltrukket uten pilspisser, i samsvar med Cut-import. `--draw-laser-strokes` måler
-67 306 prøvepunkter uten avvik; 343 Draw-tester passerer. Breddeprofiler og flere malingslag
-forblir uavklart. Behold sammenligningen når flere preview-tilfeller støttes.
+67 306 prøvepunkter uten avvik. Utvidelsen 2026-10-19 støtter også breddeprofiler og flere
+malingslag på vanlige baner/former, med første synlige fyll/strek og konstant bredde.
+`--draw-laser-paints` sammenligner 66 912 punkter uten avvik; samlet `--draw-recovery`,
+346 Draw-tester, i18n og kontrast passerer. Klippede stacker, avansert tekst og lagret
+Outline Stroke-overføring forblir uavklart. Behold sammenligningene ved videre utvidelse.
 
 Ferdige trinn committes og pushes på `feat/vector-draw`. GitHub-tilgangen er rettet;
 `b194897` er pushet og kontrollert på origin. Hent før du fortsetter og bevar parallelle commits.

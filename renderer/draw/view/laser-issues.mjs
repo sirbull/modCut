@@ -6,6 +6,8 @@ export function laserIssueAdvice(reason) {
     return 'Expand the appearance on a copy, or review this effect in Cut.';
   if (reason === 'expand-stroke')
     return 'Expand the stroke on a copy, or review its engraving in Cut.';
+  if (reason === 'outline-transfer')
+    return 'An earlier transfer used Outline Stroke. Review that output in Cut before updating.';
   if (reason === 'text-layout')
     return 'Resolve missing fonts or text overflow before sending to Cut.';
   if (reason === 'raster-dither')

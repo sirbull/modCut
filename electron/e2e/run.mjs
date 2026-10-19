@@ -191,9 +191,9 @@ try {
   } else if (process.argv.includes('--draw-place')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawPlaceWorkflows(first);first.socket.close();
-  } else if (process.argv.includes('--draw-laser-strokes')) {
+  } else if (process.argv.includes('--draw-laser-strokes') || process.argv.includes('--draw-laser-paints')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
-    await runDrawLaserStrokeWorkflows(first);first.socket.close();
+    await runDrawLaserStrokeWorkflows(first,{paintStacks:process.argv.includes('--draw-laser-paints')});first.socket.close();
   } else if (process.argv.includes('--draw-laser-preview')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawLaserPreviewWorkflows(first);
@@ -312,6 +312,7 @@ try {
       await verifyProjectRecovery(recovered, expected);
       await runDrawLaserPreviewWorkflows(recovered);
       await runDrawLaserStrokeWorkflows(recovered);
+      await runDrawLaserStrokeWorkflows(recovered,{paintStacks:true});
       recovered.socket.close();
       break;
     }

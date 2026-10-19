@@ -351,7 +351,7 @@ for kontrakt, verifisering og eksplisitte grenser.
   Eksplisitte Draw-prosessvalg beholdes også når Cut er tom, ved fanebytte og ved filåpning.
 * Uavklarte prosesser eller utseender vises med ravfarget prikkontur eller dempet bilde og
   teller i tegnforklaringen. Første versjon merker avanserte kompositter, uekspanderte effekter,
-  graveringsstreker med breddeprofiler/flere malingslag og rasterdithering uavklart. Ikke vis dette som en eksakt simulering.
+  klippede malingsstacker, avansert tekstutseende og rasterdithering uavklart. Ikke vis dette som en eksakt simulering.
 * Skjult, ikke-utskrivbart og Ignore blir ikke presentert som output. Template-lag er dempet
   referanse. Tegning, redigering, markører og håndtak fortsetter å virke med visningen aktiv.
 * Selve av/på-valget endrer bare visning: modell, originalfarger, Cut-design, eksport,
@@ -377,6 +377,9 @@ Preview explanation** lar brukeren tilbakestille den. Nye tekster finnes på eng
   67 306 canvas-/Cut-rasterpunkter uten avvik (kantpiksler utelatt), inkludert affine foreldre og fast mm-strekbredde.
 * [x] Enhetstester og målrettet Electron med ekte piksler, musegest, uendret SVG/modell/historikk,
   prosessvalg, filåpning/fanebytte og ekte normal appomstart.
+* [x] Breddeprofiler og flere fyll/streker på vanlige baner/former: første synlige maling
+  og konstant bredde som standard Cut-overføring, 66 912 sammenlignede punkter uten avvik.
+  Klippede stacker og lagret Outline Stroke-overføring markeres fortsatt uavklart.
 * [ ] Full støtte for de utseendene som nå vises uavklart; spesifiseres som egne deloppgaver.
 * [ ] «Engrave as seen» som output-valg, full rasterprosess/DPI-simulering og bevegelsesrekkefølge.
 
