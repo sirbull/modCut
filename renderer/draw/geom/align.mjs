@@ -65,7 +65,7 @@ export function spacingOffsets(boxes, axis, reference, spacing = null) {
     start = reference.box[pos]; gap = (reference.box[size] - total) / (sorted.length - 1);
   } else {
     if (sorted.length < 3) return boxes.map((b) => ({ id: b.id, offset: [0, 0] }));
-    start = sorted[0][pos]; gap = (Math.max(...sorted.map((b) => b[pos] + b[size])) - start - total) / (sorted.length - 1);
+    start = sorted[0][pos]; gap = (sorted.at(-1)[pos] + sorted.at(-1)[size] - start - total) / (sorted.length - 1);
   }
   const result = new Map();
   let cursor = start;

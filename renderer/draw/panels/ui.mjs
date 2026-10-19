@@ -1297,17 +1297,21 @@ export function createPanels(shell, state, api) {
     const opacity = state.document.getNode(ids[0])?.opacity ?? 1;
     num(group('Opacity'),'Opacity',opacity*100,value => state.history.transaction('Opacity',() => { for (const id of api.selectedIds()) state.history.execute(updateNode(id,{opacity:value/100})); }),
       { key:'cb-opacity', min:0, max:100, step:1, disabled: ro });
-    const box = api.bounds(), ref = state.ui.referencePoint ?? [.5,.5], disabled = !box || ro, point = box ? [box.x+box.width*ref[0],box.y+box.height*ref[1]] : [0,0];
-    const size = group('Position and size');
-    num(size,'X',point[0],v => api.transformPanel('x',v),{ key:'cb-x', disabled });
-    num(size,'Y',point[1],v => api.transformPanel('y',v),{ key:'cb-y', disabled });
-    num(size,'W',box?.width ?? 0,v => api.transformPanel('width',v),{ key:'cb-width', min:.001, disabled: disabled || box.width < 1e-9 });
-    num(size,'H',box?.height ?? 0,v => api.transformPanel('height',v),{ key:'cb-height', min:.001, disabled: disabled || box.height < 1e-9 });
     const align = group('Align');
     for (const [label,iconId,mode] of [['Horizontal align left','layout-align-left','left'],['Horizontal align center','layout-align-center','centerX'],['Horizontal align right','layout-align-right','right'],
       ['Vertical align top','layout-align-top','top'],['Vertical align center','layout-align-middle','centerY'],['Vertical align bottom','layout-align-bottom','bottom']]) {
       const b = iconButton(label,iconId,() => api.alignPanel('align',mode),'draw-layer-action'); b.dataset.drawCbAlign = mode; b.disabled = ro; align.append(b);
     }
+    const distribute = group('Distribute Spacing'), editable = ids.filter(id => state.document.isEditable(id));
+    for (const [label,iconId,axis] of [['Horizontal distribute space','spacing-horizontal','x'],['Vertical distribute space','spacing-vertical','y']]) {
+      // Toolbar distribution always uses the outer selected objects, regardless of Align To in the panel.
+      const b = iconButton(label,iconId,() => api.alignPanel('spacing',axis,{ alignTo:'selection' }),'draw-layer-action');
+      b.dataset.drawCbDistribute = axis; b.dataset.tooltip = axis === 'x' ? 'Equal horizontal gaps; first and last objects stay in place.' : 'Equal vertical gaps; first and last objects stay in place.';
+      b.disabled = ro || editable.length < 3; distribute.append(b);
+    }
+    const size = button('Position and size…',() => open('transform'));
+    size.dataset.drawCb = 'transform'; size.setAttribute('aria-haspopup','dialog');
+    group('Position and size').append(size);
     const texts = selectedText();
     if (texts.length) {
       // Character and Paragraph, as Illustrator's Control panel shows them for type.
@@ -1324,9 +1328,8 @@ export function createPanels(shell, state, api) {
     const shapes = ids.filter(id => state.document.getNode(id)?.type === 'shape' && state.document.isEditable(id));
     const images = ids.filter(id => state.document.getNode(id)?.type === 'image');
     const actions = group('Quick actions');
-    for (const [label,action,key,show] of [['Expand Shape',() => api.expandShapes(shapes),'expand-shape',shapes.length],['Use as Template',() => api.command('use-as-template'),'use-as-template',images.length],
-      ['Transform…',() => open('transform'),'transform',true]]) {
-      if (!show) continue; const b = button(label,action); b.dataset.drawCb = key; b.disabled = ro && key !== 'transform'; actions.append(b);
+    for (const [label,action,key,show] of [['Expand Shape',() => api.expandShapes(shapes),'expand-shape',shapes.length],['Use as Template',() => api.command('use-as-template'),'use-as-template',images.length]]) {
+      if (!show) continue; const b = button(label,action); b.dataset.drawCb = key; b.disabled = ro; actions.append(b);
     }
   }
   render(); return { render, open, close, updateInfo };

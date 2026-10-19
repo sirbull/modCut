@@ -1077,9 +1077,9 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     },
     flip(axis){const b=renderer.selectionBounds();if(!b)return;const ref=state.ui.referencePoint??[.5,.5];
       transform(operationMatrix({tool:'reflect',angle:axis==='horizontal'?90:0},[b.x+b.width*ref[0],b.y+b.height*ref[1]]),axis==='horizontal'?'Flip Horizontal':'Flip Vertical');},
-    alignPanel(kind,mode){
+    alignPanel(kind,mode,{alignTo=state.ui.alignTo??'selection'}={}){
       const ids=selectedIds().filter(id=>state.document.isEditable(id)),boxes=ids.map(id=>{const b=renderer.bounds(id);return b&&{id,x:b.x,y:b.y,width:b.width,height:b.height};}).filter(Boolean);
-      if(!boxes.length)return;const a=activeArtboard(state),alignTo=state.ui.alignTo??'selection';
+      if(!boxes.length)return;const a=activeArtboard(state);
       const keyId=alignTo==='key'?(ids.includes(state.ui.keyObject)?state.ui.keyObject:ids.at(-1)):null;
       const reference=alignReference(boxes,alignTo,{artboard:{x:a.x,y:a.y,width:a.width,height:a.height},keyId});
       const offsets=kind==='align'?alignOffsets(boxes,mode,reference):kind==='distribute'?distributeOffsets(boxes,mode,reference):spacingOffsets(boxes,mode,reference,alignTo==='key'?state.ui.alignSpacing??null:null);

@@ -52,3 +52,23 @@ test('Distribute Spacing keeps outer objects or an exact key gap', () => {
   assert.throws(() => spacingOffsets(boxes, 'x', key, NaN), /valid spacing/);
   assert.throws(() => spacingOffsets(boxes, 'z', key), /Unknown/);
 });
+
+test('selection spacing preserves spatial order and endpoints with unequal and overlapping sizes', () => {
+  // Selection order is deliberately different from the order on the canvas.
+  for (const axis of ['x', 'y']) {
+    const size = axis === 'x' ? 'width' : 'height';
+    for (const middleSize of [20, 90]) {
+      const items = [
+        { id: 'last', x: 90, y: 90, width: 10, height: 10 },
+        { id: 'first', x: 0, y: 0, width: 10, height: 10 },
+        { id: 'middle', x: 30, y: 30, width: middleSize, height: middleSize },
+      ];
+      const offsets = map(spacingOffsets(items, axis, alignReference(items, 'selection')));
+      assert.deepEqual(offsets.first, [0, 0]);
+      assert.deepEqual(offsets.last, [0, 0]);
+      const placed = items.map(b => ({ ...b, [axis]: b[axis] + offsets[b.id][axis === 'x' ? 0 : 1] })).sort((a,b) => a[axis] - b[axis]);
+      assert.deepEqual(placed.map(b => b.id), ['first', 'middle', 'last']);
+      assert.equal(placed[1][axis] - placed[0][axis] - placed[0][size], placed[2][axis] - placed[1][axis] - placed[1][size]);
+    }
+  }
+});

@@ -405,7 +405,7 @@ body[data-workspace="draw"] #sendToCut { display: inline-flex; }
 .draw-control-bar { grid-column: 2; grid-row: 1; display: flex; align-items: center; gap: 6px; min-height: 36px; padding: 3px 10px; background: var(--surface); border-bottom: 1px solid var(--border); overflow-x: auto; overflow-y: hidden; scrollbar-width: none; white-space: nowrap; font-size: var(--fs-xs); }
 .draw-control-bar[hidden] { display: none; }
 .draw-cb-title { font-weight: 600; color: var(--text); padding-right: 4px; }
-.draw-cb-group { display: flex; align-items: center; gap: 5px; padding-left: 6px; border-left: 1px solid var(--border); }
+.draw-cb-group { display: flex; flex: 0 0 auto; align-items: center; gap: 5px; padding-left: 6px; border-left: 1px solid var(--border); }
 .draw-control-bar .draw-field.draw-cb-field { display: inline-flex; flex-direction: row; align-items: center; gap: 4px; margin: 0; }
 .draw-control-bar .draw-cb-field > span { color: var(--text-muted); font-size: var(--fs-xs); }
 .draw-control-bar .draw-cb-field input { width: 50px; height: 24px; padding: 0 5px; font-size: var(--fs-xs); }
