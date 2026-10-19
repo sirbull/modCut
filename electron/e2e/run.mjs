@@ -195,9 +195,9 @@ try {
   } else if (process.argv.includes('--draw-laser-clipping')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawLaserClippingWorkflows(first);first.socket.close();
-  } else if (process.argv.includes('--draw-laser-strokes') || process.argv.includes('--draw-laser-paints')) {
+  } else if (process.argv.includes('--draw-laser-strokes') || process.argv.includes('--draw-laser-paints') || process.argv.includes('--draw-laser-effects')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
-    await runDrawLaserStrokeWorkflows(first,{paintStacks:process.argv.includes('--draw-laser-paints')});first.socket.close();
+    await runDrawLaserStrokeWorkflows(first,{paintStacks:process.argv.includes('--draw-laser-paints'),liveEffects:process.argv.includes('--draw-laser-effects')});first.socket.close();
   } else if (process.argv.includes('--draw-laser-preview')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawLaserPreviewWorkflows(first);
@@ -317,6 +317,7 @@ try {
       await runDrawLaserPreviewWorkflows(recovered);
       await runDrawLaserStrokeWorkflows(recovered);
       await runDrawLaserStrokeWorkflows(recovered,{paintStacks:true});
+      await runDrawLaserStrokeWorkflows(recovered,{liveEffects:true});
       await runDrawLaserClippingWorkflows(recovered);
       recovered.socket.close();
       break;

@@ -2198,3 +2198,36 @@ skiller nå ferdig førsteversjon fra disse restpunktene, og eldre feilede fullk
 beholdes som historikk. Ekstra `--draw-laser-preview` passerer også på siste appkode, inkludert ekte normal
 appomstart med husket visningsvalg og «Ikke vis dette igjen». Sluttstatus committes og
 pushes som eget dokumentasjonstrinn; appkoden fra den grønne fullkjøringen er uendret.
+
+## 2026-10-19: Videre arbeid — fire vektoreffekter
+
+Brukeren ber om restliste og neste steg. Grenen er ren og synkronisert mot origin.
+Restområder: avanserte effekter/kompositter, rasterdithering, egne overføringsvalg og
+Engrave as seen. Neste avgrensede oppgave er Round Corners, Zig Zag, Offset Path og
+Transform på enkeltstående path/shape-objekter. Renderer og Send to Cut bruker allerede
+samme effektgeometri; preview-policy skal tillate bare de verifiserte typene. Gruppe-
+effekter, pixel-effekter og øvrige effektfamilier forblir uavklart.
+
+Før ferdigmerking sammenlignes faktisk Draw-canvas med rasterflaten fra virkelig Cut-import.
+Originale effektparametre, modell, historikk, eksport og normalvisning skal beholdes.
+Ferdig del loggføres, committes og pushes til feat/vector-draw.
+
+Gjennomført: preview-policyen tillater de fire navngitte geometrieffektene bare på
+enkeltstående baner/former. Ingen renderer-geometri, Cut-output eller effektparametre
+er endret. Gruppeeffekter, ukjente typer, pixeleffekter og blandede støttede/ustøttede
+effekter beholder uavklart-status. Skjulte effekter påvirker ikke prosessstatus.
+
+Verifisert på siste kode: 349 Draw-tester, fire i18n-tester og kontrast passerer.
+Samlet `--draw-recovery` passerer med IO/autosave, faktisk krasjgjenoppretting, opprinnelig
+preview, streker, malingsstacker, nye effekter og klipping. Ny `--draw-laser-effects`
+bruker samme output-sammenligningsløp og er også koblet inn i full Draw. E2E verifiserer
+Round Corners med ekte kurvehåndtak, flere Zig Zag-ankre, voksende Offset-geometri og
+to Transform-kopier. Reell Cut/Score-prosessvalg gir røde piksler på canvas; Engrave
+sammenlignes mot rasterflaten fra virkelig Cut-import: 66 587 punkter, 18 414 svarte,
+0 avvik (kantpiksler/anti-aliasing utelatt som i de tidligere sammenligningene).
+
+Affine foreldre, fast mm-bredde, uendret modell/historikk/SVG og normalstiler er verifisert.
+Skjermbildet er visuelt kontrollert. Full npm test er ikke gjentatt etter utvidelsen;
+basisversjonens grønne fullkjøring er dokumentert på 5a03cca. Restliste, hovedplan,
+README, ROADMAP, STATUS og HANDOFF er oppdatert før commit/push. De øvrige avanserte
+områdene og Engrave as seen er fortsatt åpne, ikke ferdigmerket.

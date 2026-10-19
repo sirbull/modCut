@@ -43,6 +43,12 @@ Tidligere fullkjøringsfeil over er historikk. Se siste STATUS/WORK_LOG for slut
 Videre utvidelser (avanserte effekter/kompositter, dithering, overføringsvalg og Engrave
 as seen) og øvrige Draw-hull er fortsatt åpne; ikke bland dem med ferdig førsteversjon.
 
+Ny utvidelse etter basisversjonen: fire vektoreffekter på enkeltobjekter (Round Corners,
+Zig Zag, Offset Path, Transform) er målrettet verifisert. `--draw-laser-effects` og samlet
+`--draw-recovery` passerer; 349 Draw-tester, i18n og kontrast er grønne. Full npm test er
+ikke gjentatt etter denne utvidelsen. 66 587 output-prøvepunkter gir null avvik.
+Gruppe-/pixeleffekter og øvrige vektoreffekter er fortsatt uavklart. Se siste STATUS.
+
 Ferdige trinn committes og pushes på `feat/vector-draw`. GitHub-tilgangen er rettet;
 `b194897` er pushet og kontrollert på origin. Hent før du fortsetter og bevar parallelle commits.
 

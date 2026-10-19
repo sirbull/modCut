@@ -4,6 +4,7 @@ import { withLaserAppearance, laserPreviewIntent } from '../view/laser-preview.m
 import { DrawDocument } from '../doc/document.mjs';
 import { createNode,createDocument } from '../doc/schema.mjs';
 import { appearance } from '../geometry.mjs';
+import { effect } from '../doc/effects.mjs';
 const path=()=>({className:'Path',data:{nodeId:'p'},fillColor:'#00ff00',strokeColor:'#0000ff',strokeWidth:2,strokeScaling:true,dashArray:[4,2],opacity:.5,blendMode:'multiply',visible:true});
 const resolved=operation=>({status:'resolved',operation});
 test('Cut and Score use distinct red centre lines at every zoom and restore original view state',()=>{
@@ -135,4 +136,23 @@ test('clipped filled vectors resolve for engraving; Cut/Score boundaries and who
     if(type==='image')assert.equal(intent.reason,'clipped-image-transfer');
     if(type==='path'&&op!=='Engrave')assert.equal(intent.reason,'clipped-vector-transfer');
   }
+});
+test('verified leaf vector effects resolve without changing parameters for Cut, Score and Engrave',()=>{
+  for(const op of ['Cut','Score','Engrave'])for(const type of ['round-corners','zig-zag','offset-path','transform']){
+    const look=appearance('#00FF00',null);look.effects=[effect(type)];
+    const {doc,snapshot}=fixture({appearance:look});snapshot.layers[0].op=op;const before=doc.serialize();
+    assert.equal(laserPreviewIntent(doc,'p',snapshot).status,'resolved',`${op}: ${type}`);
+    assert.equal(doc.serialize(),before);
+  }
+});
+test('pixel effects, unsupported vector effects and group effects remain unresolved',()=>{
+  for(const effects of [[effect('gaussian-blur')],[effect('round-corners'),effect('drop-shadow')],[effect('scribble')],[effect('warp')]]){
+    const f=fixture({appearance:{...appearance('#00FF00',null),effects}});
+    assert.equal(laserPreviewIntent(f.doc,'p',f.snapshot).reason,'expand-appearance');
+  }
+  const hidden=fixture({appearance:{...appearance('#00FF00',null),effects:[effect('gaussian-blur',{hidden:true})]}});
+  assert.equal(laserPreviewIntent(hidden.doc,'p',hidden.snapshot).status,'resolved');
+  const p=createNode('path',{id:'p',subpaths:square,appearance:appearance('#00FF00',null)}),group=createNode('group',{children:[p],appearance:{...appearance(null,null),effects:[effect('round-corners')]}});
+  const doc=new DrawDocument(createDocument({layers:[createNode('layer',{children:[group]})]}));
+  assert.equal(laserPreviewIntent(doc,'p',hidden.snapshot).reason,'expand-appearance');
 });

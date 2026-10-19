@@ -31,6 +31,10 @@ tekstutseende og lagrede Outline Stroke-valg forblir uavklart.
 Plan/status/arbeidslogg er oppdatert ved hvert trinn; hver ferdige leveranse er committet på
 `feat/vector-draw`. GitHub-tilgangen er rettet; alle tidligere leveransecommits er pushet og kontrollert på origin.
 
+**Siste utvidelse etter basisversjonen:** Round Corners, Zig Zag, Offset Path og Transform
+på enkeltobjekter er støttet, med 349 Draw-tester og grønn målrettet recovery/output-
+sammenligning. Full npm test er ikke gjentatt etter utvidelsen. Se siste oppføring nederst.
+
 ## 1. Kort oppsummert
 
 Draw kan i dag brukes til å tegne enkle logoer og former: artboards, utvalg, Pen og ankerredigering,
@@ -1139,3 +1143,20 @@ på alle operativsystemer eller fysisk materialresultat.
 
 Ekstra målrettet `--draw-laser-preview` passerer på samme appkode, inkludert faktisk normal
 appomstart med husket visning og undertrykt forklaring. Sluttcommit endrer bare dokumentasjon.
+
+
+## Siste utvidelse: fire vektoreffekter (2026-10-19)
+
+Ferdig: Round Corners, Zig Zag, Offset Path og Transform på enkeltstående path/shape,
+for Cut/Score/Engrave. Renderer/Send to Cut bruker samme effektgeometri. Ren policy
+tillater disse typene; gruppeeffekter, pixel-effekter og andre typer er fortsatt uavklart.
+
+349 Draw-tester, i18n, kontrast og samlet `--draw-recovery` passerer. E2E bekrefter reell
+rød Cut/Score-visning, endret effektgeometri og 66 587 sammenlignede punkter mot ekte
+Cut-import (0 avvik, kantpiksler utelatt). Modell/historikk/SVG og normalstiler beholdes.
+Full npm test er ikke gjentatt etter denne utvidelsen; tidligere grønn fullkjøring
+gjelder 5a03cca.
+
+Restlisten er nå: øvrige vektor-/gruppe-/kompositteffekter, pixel-effekter/rasterdithering,
+eksplisitte overførings-/klippe-/teksttilfeller og Engrave as seen som egen output-oppgave.
+Øvrige Draw-funksjonshull i kapittel 2 er ikke ferdigmerket av denne preview-utvidelsen.

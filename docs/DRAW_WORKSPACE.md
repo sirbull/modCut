@@ -2,7 +2,7 @@
 
 **Ny agent:** Start med [overleveringen](draw/HANDOFF.md) for gjeldende stoppunkt, teststatus og lokale kjøreinstruksjoner.
 
-> Status: Fase 0–5 er gjennomført i grunnform. Laser Preview-førsteversjonen er ferdigstilt og samlet npm test passerer 2026-10-19; avanserte begrensninger og øvrige funksjonshull føres separat. Oppdatert oversikt og rekkefølge: [draw/STATUS.md](draw/STATUS.md).
+> Status: Fase 0–5 er gjennomført i grunnform. Laser Preview-basisversjonen er ferdigstilt med grønn npm test på 5a03cca; senere utvidelser har egen teststatus; avanserte begrensninger og øvrige funksjonshull føres separat. Oppdatert oversikt og rekkefølge: [draw/STATUS.md](draw/STATUS.md).
 > Sist oppdatert: 2026-10-15.
 > Målgruppe: utviklere og kodeagenter (Claude Code og Codex) som skal bygge løsningen.
 
@@ -384,6 +384,9 @@ Preview explanation** lar brukeren tilbakestille den. Nye tekster finnes på eng
   hele bilder, Cut/Score-grenser og klippet tekst får eksplisitt uavklart-status og råd.
 * [x] Samlet `npm test` på endelig appkode: Java/bridge/main/renderer/Draw/kontrast og
   hele Cut-/Draw-E2E inkludert krasjgjenoppretting og alle preview-sammenligninger.
+* [x] Round Corners, Zig Zag, Offset Path og Transform på enkeltstående baner/former:
+  Cut/Score-visning og 66 587 sammenlignede gravering-/Cut-rasterpunkter uten avvik.
+  349 Draw-tester og målrettet recovery passerer; full npm test er ikke gjentatt etter utvidelsen.
 * [ ] Full støtte for de utseendene som nå vises uavklart; spesifiseres som egne deloppgaver.
 * [ ] «Engrave as seen» som output-valg, full rasterprosess/DPI-simulering og bevegelsesrekkefølge.
 

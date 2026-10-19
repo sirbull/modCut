@@ -254,6 +254,7 @@ not create gaps in the machine path. Vector engraving shows solid strokes withou
 as transferred by Send to Cut; normal Draw view keeps your original dashes and arrows.
 Standard transfer uses the first visible fill and stroke with constant width on paths and
 shapes, including artwork with width profiles or multiple paint layers. Extra paint stays in Draw.
+Round Corners, Zig Zag, Offset Path and Transform on individual paths/shapes are supported.
 Normal colour view is the default; your last choice is remembered.
 
 **Laser processes** configures this tab's actual Cut/Score/Engrave/Ignore choices. Amber dotted

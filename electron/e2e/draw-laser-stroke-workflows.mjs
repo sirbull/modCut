@@ -4,15 +4,23 @@ import {wait} from './cdp.mjs';
 import {activeDraw as active,enterDraw,submitNewDrawDialog,rememberTabs} from './draw-test-helpers.mjs';
 
 /** Compare preview pixels with the alpha silhouette Cut actually rasterizes after Send to Cut. */
-export async function runDrawLaserStrokeWorkflows(client,{paintStacks=false}={}){
+export async function runDrawLaserStrokeWorkflows(client,{paintStacks=false,liveEffects=false}={}){
   const {evaluate}=client,restore=await rememberTabs(evaluate);
   const until=async(expr,label)=>{for(let i=0;i<100;i++){if(await evaluate(expr))return;await wait(50);}assert.fail(label);};
   await enterDraw(evaluate);await evaluate("document.querySelector('#newDoc').click()");
   await submitNewDrawDialog(evaluate,{preset:'custom',width:80,height:75,name:'Laser stroke output proof'});
   const tab=await evaluate("document.querySelector('.doc-tab.is-active').dataset.tabId");
-  await evaluate(`(async()=>{const w=${active},{createNode}=await import('./draw/doc/schema.mjs'),{insertNodes}=await import('./draw/doc/commands.mjs'),{appearance}=await import('./draw/geometry.mjs'),paintStacks=${paintStacks};
+  await evaluate(`(async()=>{const w=${active},{createNode}=await import('./draw/doc/schema.mjs'),{insertNodes}=await import('./draw/doc/commands.mjs'),{appearance}=await import('./draw/geometry.mjs'),{effect}=await import('./draw/doc/effects.mjs'),paintStacks=${paintStacks},liveEffects=${liveEffects};
     const b=w.state.document.data.artboards[0],line=(id,end,strokeScaling=true)=>{
       const look=appearance(null,'#3366CC',2);Object.assign(look.strokes[0],{cap:'round',join:'round',dash:{array:[4,4],offset:2},startArrow:{type:'triangle',scale:1},endArrow:{type:'circle',scale:1}});
+      if(liveEffects){
+        look.effects=[id==='stroke-plain'?effect('round-corners',{radius:2}):id==='stroke-scaled'?effect('zig-zag',{size:.6,ridges:4}):id==='stroke-world'?effect('offset-path',{distance:1}):effect('transform',{moveX:3,moveY:1,copies:1})];
+        if(id==='stroke-world'||id==='stroke-affine'){
+          look.fills=appearance('#33AA66',null).fills;
+          return createNode('shape',{id,shape:id==='stroke-world'?'rect':'ellipse',params:{x:0,y:-3,width:end,height:6},strokeScaling,appearance:look});
+        }
+        return createNode('path',{id,strokeScaling,subpaths:[{closed:false,segments:[[0,0],[end/2,-4],[end,0]].map(p=>({p,in:[0,0],out:[0,0]}))}],appearance:look});
+      }
       if(paintStacks){
         look.strokes[0].widthProfile=[{t:0,left:0,right:0},{t:.5,left:2,right:1},{t:1,left:0,right:0}];
         if(id!=='stroke-plain')look.strokes=[{...look.strokes[0],hidden:true,width:9},look.strokes[0],{...look.strokes[0],width:8}];
@@ -38,6 +46,18 @@ export async function runDrawLaserStrokeWorkflows(client,{paintStacks=false}={})
     if(await evaluate("!!document.querySelector('.draw-cut-preview-dialog')"))await evaluate("document.querySelector('.draw-cut-preview-dialog form').requestSubmit()");
   }
   await until(`(async()=>${active}.renderer.laserPreview)()`,'stroke preview');
+  if(liveEffects){
+    for(const op of ['Cut','Score','Engrave']){
+      await evaluate(`(async()=>${active}.handle('laser-processes'))()`);
+      await until("!!document.querySelector('.draw-laser-processes-dialog')",'effect operation setup');
+      await evaluate(`(()=>{const f=document.querySelector('.draw-laser-processes-dialog form');for(const s of f.querySelectorAll('select'))s.value=${JSON.stringify(op)};f.requestSubmit();})()`);
+      assert.equal(await evaluate(`(async()=>${active}.renderer.laserIntent('stroke-plain').operation)()`),op);
+      if(op!=='Engrave'){
+        const red=await evaluate(`(async()=>{const w=${active};w.withScope(()=>{w.scope.view._needsUpdate=true;w.scope.view.update();});const c=w.scope.view.element,d=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let n=0;for(let i=0;i<d.length;i+=4)if(d[i]>120&&d[i+1]<90&&d[i+2]<90)n++;return n;})()`);
+        assert.ok(red>100,op+' displays real red effect geometry');
+      }
+    }
+  }
   const captured=await evaluate(`(async()=>{const w=${active},ids=['stroke-plain','stroke-scaled','stroke-world','stroke-affine'],b=w.state.document.data.artboards[0];
     w.withScope(()=>{w.scope.view._needsUpdate=true;w.scope.view.update();});
     const c=w.scope.view.element,ctx=c.getContext('2d'),ratio=w.scope.view.pixelRatio,points=[];
@@ -46,14 +66,17 @@ export async function runDrawLaserStrokeWorkflows(client,{paintStacks=false}={})
       points.push([x,y,rgb[0],rgb[1],rgb[2]]);
     }
     window.__strokeProof={points,density:w.scope.view.zoom*ratio,document:w.state.document.serialize(),history:JSON.stringify(w.state.history.entries),svg:w.cutSvg(b.id).svg};
-    return {neutral:w.state.document.serialize()===window.__strokeSource.document&&JSON.stringify(w.state.history.entries)===window.__strokeSource.history,statuses:ids.map(id=>w.renderer.laserIntent(id).status),source:ids.map(id=>{const i=w.renderer.items.get(id);return {dash:i.dashArray,color:i.strokeColor?.toCSS(true)??null,fill:i.fillColor?.toCSS(true)??null,cap:i.strokeCap,width:i.strokeWidth};}),svg:window.__strokeProof.svg};
+    const liveEffects=${liveEffects},effective=id=>w.renderer.effectiveSubpaths(id),offset=liveEffects?effective('stroke-world').flatMap(p=>p.segments.map(s=>s.p[0])):[];
+    const effectGeometry=liveEffects?{round:effective('stroke-plain').some(p=>p.segments.some(s=>[...s.in,...s.out].some(v=>Math.abs(v)>1e-5))),zig:effective('stroke-scaled').reduce((n,p)=>n+p.segments.length,0),offsetWidth:Math.max(...offset)-Math.min(...offset),copies:effective('stroke-affine').length}:null;
+    return {effectGeometry,neutral:w.state.document.serialize()===window.__strokeSource.document&&JSON.stringify(w.state.history.entries)===window.__strokeSource.history,statuses:ids.map(id=>w.renderer.laserIntent(id).status),source:ids.map(id=>{const i=w.renderer.items.get(id);return {dash:i.dashArray,color:i.strokeColor?.toCSS(true)??null,fill:i.fillColor?.toCSS(true)??null,cap:i.strokeCap,width:i.strokeWidth};}),svg:window.__strokeProof.svg};
   })()`);
   assert.deepEqual(captured.statuses,['resolved','resolved','resolved','resolved']);
   assert.equal(captured.neutral,true,'preview and process setup preserve Draw document/history');
+  if(liveEffects){assert.equal(captured.effectGeometry.round,true);assert.ok(captured.effectGeometry.zig>3);assert.ok(captured.effectGeometry.offsetWidth>31.9);assert.equal(captured.effectGeometry.copies,2);}
   if(paintStacks)assert.ok(captured.source.every(s=>s.color===null&&s.fill===null&&s.width===0),'stack-owned base paths have no normal paint');
   else for(const source of captured.source){assert.ok(source.dash.length);assert.equal(source.color,'#3366cc');assert.equal(source.cap,'round');}
   assert.doesNotMatch(captured.svg,/stroke-dash|marker-|stroke-linecap/,'canonical output uses solid butt strokes');
-  const screenshot=await client.command('Page.captureScreenshot',{format:'png'});await writeFile(paintStacks?'/tmp/modcut-laser-paints.png':'/tmp/modcut-laser-strokes.png',Buffer.from(screenshot.data,'base64'));
+  const screenshot=await client.command('Page.captureScreenshot',{format:'png'});await writeFile(liveEffects?'/tmp/modcut-laser-effects.png':paintStacks?'/tmp/modcut-laser-paints.png':'/tmp/modcut-laser-strokes.png',Buffer.from(screenshot.data,'base64'));
   await evaluate("document.querySelector('#sendToCut').click()");
   await until("document.body.dataset.workspace==='cut' || !!document.querySelector('.draw-send-dialog form')",'Cut or transfer options');
   if(await evaluate("!!document.querySelector('.draw-send-dialog form')")){
@@ -116,5 +139,5 @@ export async function runDrawLaserStrokeWorkflows(client,{paintStacks=false}={})
   assert.equal(await evaluate("document.querySelector('.doc-tab.is-active').dataset.tabId"),tab);
   delete comparison.styles;
   await evaluate('delete window.__strokeProof;delete window.__strokeSource');await restore();
-  process.stdout.write('PASS Laser Preview '+(paintStacks?'paint stacks: profiles, hidden entries, multiple fills/strokes on paths and shapes':'strokes: dashed/arrow strokes')+', affine parents and world-mm widths match actual Cut raster silhouettes; preview is document/history neutral, Send adds one link, artwork/SVG preserved '+JSON.stringify(comparison)+'\n');
+  process.stdout.write('PASS Laser Preview '+(liveEffects?'vector effects: Round Corners, Zig Zag, Offset Path and Transform':paintStacks?'paint stacks: profiles, hidden entries, multiple fills/strokes on paths and shapes':'strokes: dashed/arrow strokes')+', affine parents and world-mm widths match actual Cut raster silhouettes; preview is document/history neutral, Send adds one link, artwork/SVG preserved '+JSON.stringify(comparison)+'\n');
 }

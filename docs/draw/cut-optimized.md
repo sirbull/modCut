@@ -58,7 +58,7 @@ tekst og oversettes ikke. Å åpne/lukke oversikten endrer ingen prosessvalg ell
 ## Eksplisitte begrensninger
 
 - Dotted/ravfarget kontur eller dempet bilde betyr uavklart prosess eller utseende. Avanserte
-  kompositter (blend/envelope/masks), uekspanderte effekter, klippede streker/bilder, klippede
+  kompositter (blend/envelope/masks), øvrige vektor-/pixeleffekter og gruppeeffekter, klippede streker/bilder, klippede
   malingsstacker, avansert tekstutseende, ikke-sentrerte streker og rasterdithering krever ekspandering eller kontroll i Cut. Å velge en operasjon gjør ikke en
   uverifisert effekt til en støttet simulering.
 - En lagret Cut-lenke med Outline Stroke gjør graveringsstreker uavklart. Dette er en
@@ -151,3 +151,27 @@ Førsteversjonen er ferdigstilt; den utvider ikke støtten til de eksplisitt uts
 
 Ekstra målrettet kontroll av normal appomstart passerer også: visningsvalget og «Ikke vis
 dette igjen» beholdes etter at appen faktisk avsluttes og startes på nytt.
+
+## Utvidelse etter førsteversjon: fire vektoreffekter (2026-10-19)
+
+Round Corners, Zig Zag, Offset Path og Transform er nå støttet på enkeltstående baner og
+former, for Cut/Score/Engrave. Samme effektgeometri brukes allerede av renderer og Send to
+Cut. Policyen tillater bare disse typene; gruppeeffekter, rastereffekter, andre vektoreffekter
+og blandinger med en ustøttet effekt forblir uavklart. Eksisterende klippe-/overføringsgrenser
+gjelder fortsatt. Ingen effektparametre, dokumentdata eller Cut-output endres av preview.
+
+`--draw-laser-effects` inngår også i `--draw-recovery` og full Draw. E2E bekrefter virkelig
+rød Cut/Score-visning, faktiske kurvehåndtak, flere Zig Zag-ankre, større Offset-geometri
+og to Transform-kopier. Graveringscanvas sammenlignes med rasterflaten fra ekte Cut-import:
+66 587 punkter, 18 414 svarte, null avvik, med samme kant-/anti-aliasing-avgrensning som før.
+Affine foreldre, fast mm-bredde, modell-/historikk-/SVG-nøytralitet og normalstiler er med.
+349 Draw-enhetstester, i18n, kontrast og samlet målrettet recovery passerer. Skjermbildet er
+visuelt kontrollert. Full npm test er ikke gjentatt etter denne utvidelsen; den grønne
+fullkjøringen over gjelder appkoden i 5a03cca.
+
+Gjenværende områder:
+
+- Flere vektoreffekter og gruppe-/kompositteffekter (bl.a. Blend, Warp og masker).
+- Pixeleffekter og rasterdithering i preview.
+- Overføringsvalg som Outline Stroke per artboard, avansert tekst og flere klippetilfeller.
+- Engrave as seen, som endrer output og krever egen implementering/test.

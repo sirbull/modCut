@@ -62,6 +62,9 @@ the same commit that completes an item.
 - [x] Complete Laser Preview first-version regression (2026-10-19): full `npm test`
   passes, including Java/bridge/main/renderer/Draw/contrast and all Cut/Draw E2E.
   Advanced appearance/output simulation remains separate follow-up work.
+- [x] Extend Laser Preview to leaf Round Corners, Zig Zag, Offset Path and Transform:
+  real Cut/Score display and 66,587 actual Cut raster samples match; 349 Draw tests
+  and targeted recovery pass (full npm test not repeated after this extension).
 - [x] Resolve the final full-Draw E2E connection close: cancel the old process shutdown
   timeout and target the captured process; verified with `--draw-recovery`.
 
