@@ -2231,3 +2231,25 @@ Skjermbildet er visuelt kontrollert. Full npm test er ikke gjentatt etter utvide
 basisversjonens grønne fullkjøring er dokumentert på 5a03cca. Restliste, hovedplan,
 README, ROADMAP, STATUS og HANDOFF er oppdatert før commit/push. De øvrige avanserte
 områdene og Engrave as seen er fortsatt åpne, ikke ferdigmerket.
+
+## 2026-10-19: Neste trinn — resterende vektordeformasjoner
+
+Grenen er ren og oppdatert fra origin. Brukeren ber om neste steg. Først kontrolleres
+Pucker & Bloat, Roughen, Twist, Free Distort og Warp på enkeltstående baner/former mot
+virkelig Cut-import. Gruppeeffekter, kompositter og pixel-effekter inngår ikke i dette
+trinnet. Deretter behandles Scribble separat, siden fyll overføres som en linje.
+Resultat, begrensninger og faktisk testutfall føres før hver commit/push.
+
+Gjennomført: fem typer lagt til i den eksplisitte preview-listen for path/shape. Gruppe-/
+pixeleffekter og Scribble er fortsatt uavklart i dette trinnet. Ingen Cut-output, renderer-
+geometri eller dokumentdata er endret. Testhjelperen bruker nå navngitte scenarier i stedet
+for kombinerbare flagg; tidligere sammenligninger er kjørt i samme recovery-løp.
+
+349 Draw-tester, fire i18n-tester, kontrast og samlet `--draw-recovery` passerer. Nytt
+`--draw-laser-distortions` inngår også i full Draw. Geometrikontroller bekrefter Pucker-
+håndtak, flere Roughen-ankre, reell Twist-deformasjon og Free Distort→Warp i kombinasjon.
+Cut/Score gir faktiske røde piksler. Engrave mot Cut-raster: 66 798 punkter, 14 419 svarte,
+0 avvik (kantpiksler utelatt). Affine foreldre, fast mm-bredde og uendret modell/historikk/
+SVG/normalstiler er kontrollert. Skjermbildet er visuelt kontrollert. Full npm test er
+ikke gjentatt etter utvidelsen. Plan/status/kontrakt/README/HANDOFF er oppdatert, og
+dette trinnet committes/pushes før Scribble-arbeidet begynner.

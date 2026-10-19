@@ -1160,3 +1160,12 @@ gjelder 5a03cca.
 Restlisten er nå: øvrige vektor-/gruppe-/kompositteffekter, pixel-effekter/rasterdithering,
 eksplisitte overførings-/klippe-/teksttilfeller og Engrave as seen som egen output-oppgave.
 Øvrige Draw-funksjonshull i kapittel 2 er ikke ferdigmerket av denne preview-utvidelsen.
+
+
+## Neste fem vektoreffekter ferdige (2026-10-19)
+
+Pucker & Bloat, Roughen, Twist, Free Distort og Warp støttes nå på enkeltstående baner
+og former. Samme Cut/Score/Engrave-regler og avgrensninger som for de fire første
+vektoreffektene. E2E kontrollerer også Free Distort→Warp i kombinasjon. 66 798 punkter
+mot virkelig Cut-raster gir null avvik. Samlet recovery, 349 Draw-tester, i18n og
+kontrast passerer. Full npm test er ikke gjentatt. Neste avgrensede trinn er Scribble.

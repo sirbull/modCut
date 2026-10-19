@@ -138,7 +138,7 @@ test('clipped filled vectors resolve for engraving; Cut/Score boundaries and who
   }
 });
 test('verified leaf vector effects resolve without changing parameters for Cut, Score and Engrave',()=>{
-  for(const op of ['Cut','Score','Engrave'])for(const type of ['round-corners','zig-zag','offset-path','transform']){
+  for(const op of ['Cut','Score','Engrave'])for(const type of ['round-corners','zig-zag','offset-path','transform','pucker-bloat','roughen','twist','free-distort','warp']){
     const look=appearance('#00FF00',null);look.effects=[effect(type)];
     const {doc,snapshot}=fixture({appearance:look});snapshot.layers[0].op=op;const before=doc.serialize();
     assert.equal(laserPreviewIntent(doc,'p',snapshot).status,'resolved',`${op}: ${type}`);
@@ -146,7 +146,7 @@ test('verified leaf vector effects resolve without changing parameters for Cut, 
   }
 });
 test('pixel effects, unsupported vector effects and group effects remain unresolved',()=>{
-  for(const effects of [[effect('gaussian-blur')],[effect('round-corners'),effect('drop-shadow')],[effect('scribble')],[effect('warp')]]){
+  for(const effects of [[effect('gaussian-blur')],[effect('round-corners'),effect('drop-shadow')],[effect('scribble')],[effect('warp'),effect('feather')]]){
     const f=fixture({appearance:{...appearance('#00FF00',null),effects}});
     assert.equal(laserPreviewIntent(f.doc,'p',f.snapshot).reason,'expand-appearance');
   }

@@ -49,6 +49,10 @@ Zig Zag, Offset Path, Transform) er målrettet verifisert. `--draw-laser-effects
 ikke gjentatt etter denne utvidelsen. 66 587 output-prøvepunkter gir null avvik.
 Gruppe-/pixeleffekter og øvrige vektoreffekter er fortsatt uavklart. Se siste STATUS.
 
+Ytterligere fem blad-/objekteffekter er verifisert: Pucker & Bloat, Roughen, Twist,
+Free Distort og Warp. `--draw-laser-distortions` inngår i recovery/full Draw; 349 Draw-
+tester og målrettet recovery er grønne. Full npm test er ikke gjentatt. Scribble tas separat.
+
 Ferdige trinn committes og pushes på `feat/vector-draw`. GitHub-tilgangen er rettet;
 `b194897` er pushet og kontrollert på origin. Hent før du fortsetter og bevar parallelle commits.
 

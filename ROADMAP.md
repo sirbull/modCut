@@ -65,6 +65,8 @@ the same commit that completes an item.
 - [x] Extend Laser Preview to leaf Round Corners, Zig Zag, Offset Path and Transform:
   real Cut/Score display and 66,587 actual Cut raster samples match; 349 Draw tests
   and targeted recovery pass (full npm test not repeated after this extension).
+- [x] Verify leaf Pucker & Bloat, Roughen, Twist, Free Distort and Warp in Laser Preview:
+  66,798 actual Cut raster comparison samples match; targeted recovery passes.
 - [x] Resolve the final full-Draw E2E connection close: cancel the old process shutdown
   timeout and target the captured process; verified with `--draw-recovery`.
 

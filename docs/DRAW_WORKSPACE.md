@@ -387,6 +387,8 @@ Preview explanation** lar brukeren tilbakestille den. Nye tekster finnes på eng
 * [x] Round Corners, Zig Zag, Offset Path og Transform på enkeltstående baner/former:
   Cut/Score-visning og 66 587 sammenlignede gravering-/Cut-rasterpunkter uten avvik.
   349 Draw-tester og målrettet recovery passerer; full npm test er ikke gjentatt etter utvidelsen.
+* [x] Pucker & Bloat, Roughen, Twist, Free Distort og Warp på enkeltobjekter;
+  66 798 Cut-raster-/canvaspunkter uten avvik og målrettet recovery passerer.
 * [ ] Full støtte for de utseendene som nå vises uavklart; spesifiseres som egne deloppgaver.
 * [ ] «Engrave as seen» som output-valg, full rasterprosess/DPI-simulering og bevegelsesrekkefølge.
 

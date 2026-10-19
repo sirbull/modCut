@@ -171,7 +171,17 @@ fullkjøringen over gjelder appkoden i 5a03cca.
 
 Gjenværende områder:
 
-- Flere vektoreffekter og gruppe-/kompositteffekter (bl.a. Blend, Warp og masker).
+- Scribble på enkeltobjekter samt gruppe-/kompositteffekter (bl.a. Blend og masker).
 - Pixeleffekter og rasterdithering i preview.
 - Overføringsvalg som Outline Stroke per artboard, avansert tekst og flere klippetilfeller.
 - Engrave as seen, som endrer output og krever egen implementering/test.
+
+## Resterende vektordeformasjoner på enkeltobjekter (2026-10-19)
+
+Pucker & Bloat, Roughen, Twist, Free Distort og Warp er støttet for Cut/Score/Engrave
+på path/shape, med tidligere klippe-/overføringsgrenser. Gruppeeffekter er fortsatt uavklart.
+`--draw-laser-distortions` og samlet `--draw-recovery` passerer. E2E kontrollerer
+endret geometri, kombinasjonen Free Distort→Warp, rød Cut/Score-visning og ekte Cut-import:
+66 798 sammenlignede punkter, 14 419 svarte, null avvik (kantpiksler utelatt).
+Normalvisning, modell, historikk og SVG beholdes. 349 Draw-tester, i18n og kontrast
+passerer. Full npm test er ikke gjentatt etter utvidelsen. Scribble tas som eget trinn.
