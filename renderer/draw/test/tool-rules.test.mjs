@@ -6,6 +6,7 @@ import { createNode, createDocument } from '../doc/schema.mjs';
 import { DrawDocument } from '../doc/document.mjs';
 import { History } from '../doc/history.mjs';
 import { appearance } from '../geometry.mjs';
+import { measurementValue } from '../ui/measure-label.mjs';
 
 const seg = (p, i = [0, 0], o = [0, 0]) => ({ p, in: i, out: o });
 function setup() {
@@ -26,6 +27,11 @@ test('the Eyedropper copies fills, strokes, opacity and blending, also into grou
 test('Measure gives distance, offsets and a counterclockwise angle', () => {
   assert.deepEqual(measure([0, 0], [3, -4]), { distance: 5, dx: 3, dy: -4, angle: 53.130102 });
   assert.equal(measure([0, 0], [-1, 0]).angle, 180); assert.equal(measure([1, 1], [1, 1]).distance, 0);
+});
+
+test('Measure formats distances in every supported document unit',()=>{
+  for(const [mm,unit,expected] of [[25.4,'mm','25.40'],[25.4,'cm','2.54'],[25.4,'in','1.00'],[25.4,'px','96.00'],[25.4,'pt','72.00'],[25.4,'pc','6.00'],[0,'cm','0.00'],[-25.4,'in','-1.00']])
+    assert.equal(measurementValue(mm,unit),expected);
 });
 
 test('Group Selection climbs one group level per click', () => {

@@ -15,7 +15,7 @@ export function createPathInteractions(canvas,state,api) {
   let gesture=null,session=null,previews=[];
   const point=e=>{const b=canvas.getBoundingClientRect();return scope.view.viewToProject(new scope.Point(e.clientX-b.left,e.clientY-b.top));};
   function clear(){for(const item of previews)item.remove();previews=[];renderer.setEditPreview();}
-  function cancelDrag(){gesture=null;withScope(()=>{clear();renderer.requestDraw();});}
+  function cancelDrag(){const previous=gesture;gesture=null;if(previous?.mode==='direct')canvas.style.cursor=CURSORS.direct;withScope(()=>{clear();renderer.requestDraw();});}
   function finish(){cancelDrag();session=null;}
   function selectAnchors(anchors){state.selection.setAnchors(anchors);api.selectionChanged();}
   const spaceId=node=>state.document.getNode(node.id)?renderer.editSpaceId(node.id):api.layerId();
@@ -158,6 +158,7 @@ export function createPathInteractions(canvas,state,api) {
         g.radius=Math.max(0,c.radius+(delta.x*c.bisector[0]+delta.y*c.bisector[1])*c.sin);
         g.result=roundedNodes(g.anchors,g.radius);preview(g.result);
       }else if(g.mode==='direct') {
+        canvas.style.cursor=CURSORS['direct-move'];
         let delta=p.subtract(g.start);if(e.shiftKey&&g.hit.kind==='point'){if(Math.abs(delta.x)>Math.abs(delta.y))delta.y=0;else delta.x=0;}
         g.result=g.nodes.map(original=>{const node=structuredClone(original),local=renderer.editPointToLocal(node.id,g.start.add(delta)).subtract(renderer.editPointToLocal(node.id,g.start));
           if(g.hit.kind==='point')node.subpaths=moveAnchors(node.subpaths,g.anchors.filter(a=>a.nodeId===node.id),xy(local));

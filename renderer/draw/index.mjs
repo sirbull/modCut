@@ -20,6 +20,7 @@ import { commandEntries, openCommandSearch } from './ui/command-search.mjs';
 import { createContextMenu } from './ui/context-menu.mjs';
 import { createToolbar } from './tools/toolbar.mjs';
 import { createInteractions } from './tools/interactions.mjs';
+import { createMeasureLabel, measurementValue } from './ui/measure-label.mjs';
 import { createRulerInteractions } from './tools/rulers.mjs';
 import { createPathInteractions, PATH_TOOLS } from './tools/paths.mjs';
 import { createArtboardController } from './tools/artboards.mjs';
@@ -111,6 +112,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   // A late thumbnail (big layers and groups) goes straight into the Layers rows that show it.
   const renderer=withScope(()=>createDrawRenderer(scope,state,{withScope,onImageLoad:()=>panels?.render(),
     getLaserProcesses,onThumbnail:(id,url)=>{if(!destroyed)for(const img of shell.querySelectorAll(`[data-draw-thumb="${CSS.escape(id)}"]`)){img.src=url;img.classList.remove('is-empty');}}}));
+  const measureLabel=createMeasureLabel(stage,{toView:p=>scope.view.projectToView(new scope.Point(...p)),unit:()=>state.document.data.units});
   let laserDialog=null;
   let lastLaserMenu=null;
   function syncLaserMenu(force=false){const value=!!state.ui.laserPreview;if(root.style.display==='none'||(!force&&lastLaserMenu===value))return;lastLaserMenu=value;void window.modcut?.setLaserPreviewState?.(value);}
@@ -166,6 +168,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     state.ui.fill=paintHex(node.appearance.fills[0]);state.ui.stroke=paintHex(node.appearance.strokes[0]);state.ui.strokeWidth=node.appearance.strokes[0]?.width ?? state.ui.strokeWidth;
   }
   function status(point) {
+    measureLabel.refresh();
     if(point)lastPoint=point;
     const tool=toolRegistry.get(temporary?.id || state.ui.tool),a=activeArtboard(state);
     positionLabel.textContent=lastPoint ? `X ${lastPoint.x.toFixed(1)}  Y ${lastPoint.y.toFixed(1)} mm` : `${a.width.toFixed(1)} × ${a.height.toFixed(1)} mm`;
@@ -495,7 +498,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     const layout=await window.modcut.shapeText(textValues({...node,...patch}));
     return {...patch,character:{...patch.character,fontPostscriptName:layout.font.postscriptName,...(layout.font.reference?{googleFont:layout.font.reference}:{})},layout};
   }
-  const measurementText=m=>`D ${m.distance.toFixed(2)} mm · W ${m.dx.toFixed(2)} · H ${(-m.dy).toFixed(2)} · ∠ ${m.angle.toFixed(1)}°`;
+  const measurementText=m=>{const unit=state.document.data.units,value=n=>measurementValue(n,unit);return `D ${value(m.distance)} ${unit} · W ${value(m.dx)} · H ${value(-m.dy)} · ∠ ${m.angle.toFixed(1)}°`;};
   /**
    * Bézier fit through points (Paper.js simplify). Paper can fit a closed curve with one looping anchor,
    * so the tolerance halves until a closed path keeps three anchors and an open one two. Call inside withScope.
@@ -908,7 +911,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   const knife=points=>cutWith('Knife',world=>knifeCut(scope,world,points));
   const eraser=points=>cutWith('Eraser',world=>eraseRegion(scope,world,points,state.ui.eraserSize??3));
   /** Measure: a line on the canvas and the distance, offsets and angle in the status bar. */
-  function setMeasure(from,to=null){state.ui.measurement=from&&to?measure(from,to):null;withScope(()=>renderer.setMeasure(from&&to?[from,to]:null));status();}
+  function setMeasure(from,to=null){const points=from&&to?[from,to]:null;state.ui.measurement=points?measure(from,to):null;withScope(()=>renderer.setMeasure(points));measureLabel.set(points);status();}
   /** Eyedropper: `sample` copies the clicked object's look, `apply` gives it the selection's look, `pixel` takes a colour. */
   function eyedropper({mode,hitId=null,hex=null}) {
     if(state.document.readOnly)return;
@@ -1663,7 +1666,7 @@ typeOnPath:id=>editText(undefined,null,null,{pathFrom:id}),cursor,contextMenu:(x
       if(warning||result.warning)onNotice([warning,result.warning].filter(Boolean).join(' '));
     },
     async import(prepared,name,options={}){const result=await importArtwork(scope,state,prepared,name,layerId(),{...options,alive:()=>!destroyed});select(options.template?[]:result.ids);if(options.fitArtboard)fit();return result;},
-    destroy(){clearTracePreview();for(const stop of traceWorkers)stop();destroyed=true;contextMenu.destroy();rulerInteractions.destroy();laserDialog?.querySelector('[data-x=cancel]')?.click();ownedColorModal?.querySelector('[data-x=cancel]').click();ownedTextModal?.querySelector('[data-x=cancel]').click();ownedTransformModal?.querySelector('[data-x=cancel]').click();paths.destroy();interactions.destroy();toolbar.destroy();unsubscribe();observer.disconnect();window.removeEventListener('modcut-theme-change',syncTheme);window.removeEventListener('modcut-scale-strokes-change',syncScaleStrokes);workspaces.delete(root);withScope(()=>{renderer.destroy();scope.remove();});controls.remove();root.replaceChildren();},
+    destroy(){clearTracePreview();for(const stop of traceWorkers)stop();destroyed=true;contextMenu.destroy();rulerInteractions.destroy();laserDialog?.querySelector('[data-x=cancel]')?.click();ownedColorModal?.querySelector('[data-x=cancel]').click();ownedTextModal?.querySelector('[data-x=cancel]').click();ownedTransformModal?.querySelector('[data-x=cancel]').click();paths.destroy();interactions.destroy();measureLabel.destroy();toolbar.destroy();unsubscribe();observer.disconnect();window.removeEventListener('modcut-theme-change',syncTheme);window.removeEventListener('modcut-scale-strokes-change',syncScaleStrokes);workspaces.delete(root);withScope(()=>{renderer.destroy();scope.remove();});controls.remove();root.replaceChildren();},
   };
   workspaces.set(root,workspace);refresh();syncTheme();setTool(state.ui.tool);resize();return workspace;
 }

@@ -12,13 +12,13 @@ export async function runDrawFeedbackWorkflows(client) {
   await enterDraw(evaluate); await evaluate("document.querySelector('#newDoc').click()");
   await submitNewDrawDialog(evaluate, { preset: 'custom', width: 120, height: 80, name: 'Feedback proof' });
   const scratch = await evaluate("document.querySelector('.doc-tab.is-active').dataset.tabId");
-  const tool = id => evaluate(`(async()=>(${active}.setTool('${id}')))()`);
+  const tool = async id => { await evaluate(`(async()=>(${active}.setTool('${id}')))()`); await wait(100); };
   const screen = p => evaluate(`(async()=>{const w=${active},p=w.scope.view.projectToView(new w.scope.Point(${p})),b=w.scope.view.element.getBoundingClientRect();return{x:p.x+b.x,y:p.y+b.y}})()`);
   const cursor = () => evaluate(`(async()=>{const c=(await import('./draw/tools/cursors.mjs')).CURSORS,v=${active}.scope.view.element.style.cursor;return Object.keys(c).find(k=>c[k].replace(/\\s+/g,'')===v.replace(/\\s+/g,''))||v})()`);
   const shot = async name => { const s = await client.command('Page.captureScreenshot', { format: 'png' }); await writeFile(join(tmpdir(), name), Buffer.from(s.data, 'base64')); };
-  // Count non-white canvas pixels in a small square around a world point (the artboard is white).
+  // Sample a square in CSS pixels so the ring of a hollow handle is included on HiDPI displays.
   const ink = p => evaluate(`(async()=>{const w=${active},v=w.scope.view,c=v.element,r=c.width/v.viewSize.width,q=v.projectToView(new w.scope.Point(${p}));
-    const d=c.getContext('2d').getImageData(Math.round(q.x*r)-3,Math.round(q.y*r)-3,7,7).data;let n=0;for(let i=0;i<d.length;i+=4)if(d[i]+d[i+1]+d[i+2]<600)n++;return n;})()`);
+    const radius=Math.ceil(4*r),d=c.getContext('2d').getImageData(Math.round(q.x*r)-radius,Math.round(q.y*r)-radius,2*radius+1,2*radius+1).data;let n=0;for(let i=0;i<d.length;i+=4)if(d[i]+d[i+1]+d[i+2]<600)n++;return n;})()`);
 
   // Draw with no fill and no stroke: the path must still be visible while drawing.
   await evaluate(`(async()=>{const w=${active};w.state.ui.fill=null;w.state.ui.stroke=null;})()`);
@@ -51,13 +51,32 @@ export async function runDrawFeedbackWorkflows(client) {
   await tool('direct-selection'); await mouse('mouseMoved', await screen([100, 70]));
   assert.equal(await cursor(), 'direct');
   await mouse('mouseMoved', a); assert.equal(await cursor(), 'direct-anchor', 'Direct Selection over an anchor');
+  await mouse('mousePressed', a, { buttons: 1 });
+  await mouse('mouseMoved', await screen([22, 40]), { buttons: 1 });
+  assert.equal(await cursor(), 'direct-move', 'Direct Selection uses the redrawn move cursor during a drag');
+  await mouse('mouseReleased', await screen([22, 40]));
   await tool('hand'); await mouse('mouseMoved', await screen([100, 70])); assert.equal(await cursor(), 'hand');
+  const panPoint = await screen([100, 70]);
+  await mouse('mousePressed', panPoint, { buttons: 1 });
+  assert.equal(await cursor(), 'hand-active', 'Panning uses the closed hand');
+  await mouse('mouseReleased', panPoint);
   await tool('zoom'); assert.equal(await cursor(), 'zoom-in');
   await tool('rectangle'); assert.equal(await cursor(), 'shape');
   await evaluate(`(async()=>{const w=${active};w.state.ui.fill='#FFCC00';w.state.ui.stroke='#071411';})()`);
   await drag(await screen([80, 50]), await screen([100, 70]));
   await tool('select'); await mouse('mouseMoved', await screen([90, 60]));
   assert.equal(await cursor(), 'select-anchor', 'Selection over an object');
+  await mouse('mousePressed', await screen([90, 60]), { buttons: 1 });
+  await mouse('mouseMoved', await screen([91, 60]), { buttons: 1 });
+  assert.equal(await cursor(), 'select-move');
+  await mouse('mouseMoved', await screen([92, 60]), { buttons: 1, modifiers: 1 });
+  assert.equal(await cursor(), 'select-copy', 'Alt drag uses the redrawn copy cursor');
+  await mouse('mouseReleased', await screen([92, 60]));
+
+  // Decode every image in Electron, under the app's actual CSP. A syntactically valid
+  // CSS cursor can otherwise silently fall back when its SVG fails to load.
+  const decoded = await evaluate(`(async()=>{const {CURSORS}=await import('./draw/tools/cursors.mjs');return Promise.all(Object.entries(CURSORS).filter(([,v])=>v.startsWith('url(')).map(async([name,value])=>{if(!CSS.supports('cursor',value))throw new Error('Invalid cursor CSS: '+name);const img=new Image();img.src=value.match(/url\\("([^\"]+)"\\)/)[1];await img.decode();if(img.naturalWidth!==32||img.naturalHeight!==32)throw new Error('Invalid cursor dimensions: '+name);return name;}));})()`);
+  assert.ok(decoded.includes('pen-new') && decoded.includes('resize-nwse'));
 
   // Gallery of every cursor on light and dark backgrounds for visual review.
   await evaluate(`(async()=>{const c=(await import('./draw/tools/cursors.mjs')).CURSORS,g=document.createElement('div');g.id='cursor-gallery';g.style.cssText='position:fixed;inset:0;z-index:99999;display:flex;flex-wrap:wrap;gap:6px;padding:12px;background:#fff';

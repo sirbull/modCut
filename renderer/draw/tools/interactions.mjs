@@ -14,7 +14,7 @@ export function createInteractions(canvas, state, api) {
   // A screen movement in project units, turned back through Rotate View.
   const screenDelta=(dx,dy)=>new scope.Point(dx,dy).rotate(-scope.view.rotation).divide(scope.view.zoom);
   function clearPreview() {preview?.remove();preview=null;renderer.clearTransformPreview();state.ui.transformPreviewBox=null;}
-  function cancel() {const previous=gesture;gesture=null;if(previous?.mode==='free-transform')api.freeDistortPreview(null);withScope(()=>{clearPreview();if(TRANSFORM_TOOLS.includes(previous?.tool))api.transforms.setOrigin(previous.originBefore);renderer.updateView();});api.status();}
+  function cancel() {const previous=gesture;gesture=null;if(previous)canvas.style.cursor=api.cursor();if(previous?.mode==='free-transform')api.freeDistortPreview(null);withScope(()=>{clearPreview();if(TRANSFORM_TOOLS.includes(previous?.tool))api.transforms.setOrigin(previous.originBefore);renderer.updateView();});api.status();}
   // Clicks select the outermost group around a hit, or, in isolation mode, the outermost group inside the isolated one.
   function targetId(id) {
     let chain=state.document.ancestors(id);const iso=state.ui.isolation;
@@ -97,6 +97,8 @@ export function createInteractions(canvas, state, api) {
     if(SHAPE_TOOLS.includes(gesture.tool) && api.tool()==='hand')gesture.start=gesture.start.add(p.subtract(gesture.end));
     gesture.end=p;gesture.modifiers={shift:event.shiftKey,alt:event.altKey,mod:event.ctrlKey||event.metaKey};
     gesture.event=event;
+    if(gesture.tool==='select' && gesture.box && !gesture.handle && gesture.mode!=='marquee')
+      canvas.style.cursor=CURSORS[event.altKey?'select-copy':'select-move'];
     if (gesture.tool==='hand') {
       scope.view.center=gesture.center.subtract(screenDelta(event.clientX-gesture.screen[0],event.clientY-gesture.screen[1]));
       withScope(()=>renderer.updateView({viewOnly:true}));api.status(p);return;

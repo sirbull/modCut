@@ -2,10 +2,12 @@ import assert from 'node:assert/strict';
 import { inputHelpers,wait } from './cdp.mjs';
 import { activeDraw as active,enterDraw,rememberTabs,submitNewDrawDialog } from './draw-test-helpers.mjs';
 import { runDrawEyedropperWorkflows } from './draw-eyedropper-workflows.mjs';
+import { runDrawMeasureWorkflows } from './draw-measure-workflows.mjs';
 
 /** D2.8 part A: Eyedropper, Measure, Group Selection and Scissors. */
 export async function runDrawToolsTwoWorkflows(client) {
   await runDrawEyedropperWorkflows(client);
+  await runDrawMeasureWorkflows(client);
   const {evaluate}=client,{click,drag,key}=inputHelpers(client),restore=await rememberTabs(evaluate);
   await enterDraw(evaluate);await evaluate("document.querySelector('#newDoc').click()");
   await submitNewDrawDialog(evaluate,{preset:'custom',width:140,height:90,name:'Tools proof'});
