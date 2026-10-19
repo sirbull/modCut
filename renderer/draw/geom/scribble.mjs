@@ -15,6 +15,33 @@ export function scribble(polygons, { angle = 30, spacing = 1, overlap = 0, varia
   // Work in a frame where the scan lines are horizontal.
   const turn = ([x, y]) => [x * c + y * s, -x * s + y * c], back = ([u, v]) => [u * c - v * s, u * s + v * c];
   const local = rings.map((r) => r.map(turn)), ys = local.flat().map((p) => p[1]);
+  const cross=(a,b)=>a[0]*b[1]-a[1]*b[0];
+  const inside=([x,y])=>{
+    let odd=false;
+    for(const ring of local)for(let i=0;i<ring.length;i++){
+      const p=ring[i],q=ring[(i+1)%ring.length],edge=[q[0]-p[0],q[1]-p[1]],to=[x-p[0],y-p[1]];
+      if(Math.abs(cross(edge,to))<1e-8&&x>=Math.min(p[0],q[0])-1e-8&&x<=Math.max(p[0],q[0])+1e-8&&y>=Math.min(p[1],q[1])-1e-8&&y<=Math.max(p[1],q[1])+1e-8)return true;
+      if((p[1]>y)!==(q[1]>y)&&x<(q[0]-p[0])*(y-p[1])/(q[1]-p[1])+p[0])odd=!odd;
+    }
+    return odd;
+  };
+  // Test every interval separated by an edge crossing. A midpoint alone can
+  // miss a small hole near the end of a long connector.
+  const canBridge=(from,to)=>{
+    const delta=[to[0]-from[0],to[1]-from[1]],cuts=[0,1];
+    for(const ring of local)for(let i=0;i<ring.length;i++){
+      const p=ring[i],q=ring[(i+1)%ring.length],edge=[q[0]-p[0],q[1]-p[1]],den=cross(delta,edge);
+      if(Math.abs(den)<1e-12)continue;
+      const offset=[p[0]-from[0],p[1]-from[1]],t=cross(offset,edge)/den,u=cross(offset,delta)/den;
+      if(t>0&&t<1&&u>=0&&u<=1)cuts.push(t);
+    }
+    cuts.sort((a,b)=>a-b);
+    for(let i=1;i<cuts.length;i++){
+      const t=(cuts[i-1]+cuts[i])/2;
+      if(!inside([from[0]+delta[0]*t,from[1]+delta[1]*t]))return false;
+    }
+    return true;
+  };
   const top = Math.min(...ys), bottom = Math.max(...ys), rnd = random(seed), rows = [];
   for (let y = top + spacing / 2; y < bottom; y += spacing) {
     const xs = [];
@@ -40,7 +67,10 @@ export function scribble(polygons, { angle = 30, spacing = 1, overlap = 0, varia
       forward = !forward; r++;
       if (r >= rows.length) break;
       const end = points.at(-1);
-      k = rows[r].spans.findIndex((span, i) => !used[r][i] && end[0] >= span[0] - spacing * 2 && end[0] <= span[1] + spacing * 2);
+      // Check the unjittered interior connector; overlap and variation deliberately
+      // allow the actual turning points to extend beyond the shape.
+      k = rows[r].spans.findIndex((span, i) => !used[r][i] && end[0] >= span[0] - spacing * 2 && end[0] <= span[1] + spacing * 2
+        && canBridge([forward?x0+overlap:x1-overlap,y],[span[forward?0:1]+(forward?overlap:-overlap),rows[r].y]));
     }
     if (points.length >= 2) lines.push(points.map(back));
   }

@@ -2253,3 +2253,18 @@ Cut/Score gir faktiske røde piksler. Engrave mot Cut-raster: 66 798 punkter, 14
 SVG/normalstiler er kontrollert. Skjermbildet er visuelt kontrollert. Full npm test er
 ikke gjentatt etter utvidelsen. Plan/status/kontrakt/README/HANDOFF er oppdatert, og
 dette trinnet committes/pushes før Scribble-arbeidet begynner.
+
+## 2026-10-19: Scribble-forbindelser gjennom hull rettet
+
+Etter 24a34c0 avdekket den nye output-testen en eksisterende geometrifeil: forbindelsen
+mellom to Scribble-rader kunne krysse et hull selv om radendepunktene lå innenfor fyllet.
+Forbindelser kontrolleres nå mot alle polygonkantkryssinger; et nytt delstrekk begynner
+når en forbindelse ville gått utenfor fyllet. Overlap og seedet variasjon beholder sine
+bevisste utslag utenfor konturen. Dette endrer effektgeometrien både i Draw og Cut;
+det er en egen feilretting, ikke bare en endring i forhåndsvisningen.
+
+Fem Scribble-enhetstester passerer, inkludert prøver langs hver forbindelse ved et hull
+og regresjon for sammenhengende linje med overlap/variasjon. Normal Electron
+`--draw-window` passerer, inkludert Scribble-dialog, utseende og Cut-SVG. Samlet lokal
+Draw-enhetstestkjøring er også grønn (353 tester, inklusive pågående preview-tester).
+Preview-utvidelsen og kontroll av strekhjørner følger i separat commit.

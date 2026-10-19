@@ -27,3 +27,19 @@ test('the Scribble effect replaces the outline and asks for stroke painting', ()
   assert.equal(scribbleOf({ appearance: { effects: [e] } }).spacing, 4);
   assert.throws(() => effect('scribble', { spacing: 0 }), /Invalid Scribble/);
 });
+test('connectors between rows cannot cut diagonally across a hole',()=>{
+  const outer=[[0,-3],[30,-3],[30,3],[0,3]],hole=[[12,-1.2],[12,1.2],[18,1.2],[18,-1.2]];
+  const lines=scribble([outer,hole],{angle:0,spacing:2,variation:0,curviness:0});
+  assert.ok(lines.length>1,'unreachable spans start separate lines');
+  for(const line of lines)for(let i=1;i<line.segments.length;i++)for(let j=1;j<100;j++){
+    const a=line.segments[i-1].p,b=line.segments[i].p,t=j/100,x=a[0]+(b[0]-a[0])*t,y=a[1]+(b[1]-a[1])*t;
+    assert.ok(!(x>12+1e-8&&x<18-1e-8&&y>-1.2+1e-8&&y<1.2-1e-8),`connector crosses hole at ${x}, ${y}`);
+  }
+});
+
+test('overlap and seeded variation keep a square connected',()=>{
+  const square=[[[0,0],[10,0],[10,10],[0,10]]];
+  const result=scribble(square,{angle:0,spacing:2,overlap:1,variation:.2,curviness:0});
+  assert.equal(result.length,1);
+  assert.equal(result[0].segments.length,10);
+});
