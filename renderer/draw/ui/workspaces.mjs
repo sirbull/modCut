@@ -1,18 +1,21 @@
 /**
- * Workspaces (D4.5): the panel layout (open panel group, chosen tabs, dock split and collapsed panels,
- * Control Bar) saved under a name in local storage, as Illustrator's Window > Workspace. Pure apart from
+ * Workspaces (D4.5): rail order, floating windows, chosen tabs, dock split/collapse and Control Bar
+ * saved under a name in local storage, as Illustrator's Window > Workspace. Pure apart from
  * the storage passed in.
  */
+import { defaultPanelLayout, normalizePanelLayout, savePanelLayout } from '../panels/layout.mjs';
 const KEY = 'modcut.draw.workspaces';
 export const ESSENTIALS = Object.freeze({ name: 'Essentials', flyout: null, groupTabs: {}, dockSplit: null, dockCollapsed: {}, controlBar: true });
 export function captureWorkspace(ui, name) {
   const n = String(name ?? '').trim();
   if (!n) throw new Error('Name the workspace.');
   if (n.toLowerCase() === ESSENTIALS.name.toLowerCase()) throw new Error('Essentials is built in; choose another name.');
-  return { name: n, flyout: ui.flyout ?? null, groupTabs: { ...(ui.groupTabs ?? {}) }, dockSplit: ui.dockSplit ?? null, dockCollapsed: { ...(ui.dockCollapsed ?? {}) }, controlBar: ui.controlBar !== false };
+  return { name: n, flyout: ui.flyout ?? null, groupTabs: { ...(ui.groupTabs ?? {}) }, dockSplit: ui.dockSplit ?? null, dockCollapsed: { ...(ui.dockCollapsed ?? {}) }, controlBar: ui.controlBar !== false, panelLayout: normalizePanelLayout(ui.panelLayout) };
 }
-export function applyWorkspace(ui, ws) {
+export function applyWorkspace(ui, ws, storage = globalThis.localStorage) {
   Object.assign(ui, { flyout: ws.flyout ?? null, groupTabs: { ...(ws.groupTabs ?? {}) }, dockSplit: ws.dockSplit ?? null, dockCollapsed: { ...(ws.dockCollapsed ?? {}) }, controlBar: ws.controlBar !== false, workspace: ws.name });
+  ui.panelLayout = ws.panelLayout ? normalizePanelLayout(ws.panelLayout) : defaultPanelLayout();
+  savePanelLayout(ui.panelLayout, storage);
   return ui;
 }
 export function loadWorkspaces(storage = globalThis.localStorage) {

@@ -47,6 +47,12 @@ export function createArtboardController(state, api) {
   }
   return {active,choose,members,add,edit,
     duplicate() { const a=active(); return edit(a.id,{x:a.x+a.width+20},{copy:true}); },
+    duplicateAdjacent(id, direction) {
+      const board=state.document.getArtboard(id); if(!board) return;
+      const offset={top:[0,-board.height-20],right:[board.width+20,0],bottom:[0,board.height+20],left:[-board.width-20,0]}[direction];
+      if(!offset) throw new Error('Choose a side of the artboard.');
+      return edit(id,{x:board.x+offset[0],y:board.y+offset[1]},{copy:true});
+    },
     remove() { if (boards().length <= 1) throw new Error('Keep at least one artboard.'); state.history.execute(removeArtboard(active().id)); choose(active().id); },
     order(offset) { const index=boards().findIndex(b=>b.id===active().id), to=index+offset; if (to>=0 && to<boards().length) state.history.execute(reorderArtboard(active().id,to)); },
     rearrange(options) {

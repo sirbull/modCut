@@ -69,12 +69,11 @@ export async function runDrawSwatchWorkflows(client) {
   assert.ok(await evaluate(`!!document.querySelector('${root} .draw-swatch-list [data-draw-swatch] code')`), 'List view shows names and hex values');
   await click('[data-draw-panel=color]');
   assert.ok(await evaluate(`document.querySelectorAll('${root} [data-draw-recent-color]').length >= 2`), 'Color shares Recent Colors');
-  // Transparency tab in the Stroke group: blending mode and opacity on the selection, one undo step each.
+  // Transparency and Gradient open independently from the visual Stroke rail group.
   await command('panel.transparency');
-  assert.deepEqual(await evaluate(`[...document.querySelectorAll('${root} .draw-flyout [data-draw-panel-tab]')].map(t=>t.dataset.drawPanelTab+(t.disabled?':off':''))`), ['stroke', 'gradient', 'transparency'], 'Stroke | Gradient | Transparency');
-  assert.equal(await evaluate(`document.querySelector('${root} .draw-flyout [aria-selected=true]').dataset.drawPanelTab`), 'transparency');
+  assert.equal(await evaluate(`document.querySelector('${root} .draw-floating-panel[data-draw-group=transparency] [aria-selected=true]').dataset.drawPanelTab`), 'transparency');
   await command('panel.gradient');
-  assert.equal(await evaluate(`document.querySelector('${root} .draw-flyout [aria-selected=true]').dataset.drawPanelTab`), 'gradient', 'Mod+F9 opens the Gradient tab');
+  assert.equal(await evaluate(`document.querySelector('${root} .draw-floating-panel[data-draw-group=gradient] [aria-selected=true]').dataset.drawPanelTab`), 'gradient', 'Mod+F9 opens Gradient independently');
   await command('panel.transparency');
   await evaluate(`(()=>{const s=document.querySelector('${root} [data-draw-field=blend-mode]');s.value='multiply';s.dispatchEvent(new Event('change',{bubbles:true}))})()`);
   assert.equal((await model()).layers[0].children[0].blendMode, 'multiply');

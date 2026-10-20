@@ -57,9 +57,11 @@ import { runDrawPerfWorkflows } from './draw-perf-workflows.mjs';
 import { runDrawTextOutlineWorkflows } from './draw-text-outline-workflows.mjs';
 import { runDrawFeedbackWorkflows } from './draw-feedback-workflows.mjs';
 import { runDrawPenAltWorkflows } from './draw-pen-alt-workflows.mjs';
+import { runDrawArtboardUIWorkflows } from './draw-artboard-ui-workflows.mjs';
 import { runWorkflows, verifyRecoveredSession } from "./workflows.mjs";
 import { runThemeWorkflows } from "./theme-workflows.mjs";
 import { runBackgroundWorkflows } from "./background-workflows.mjs";
+import { runDrawPanelLayoutWorkflows } from './draw-panel-layout-workflows.mjs';
 import { runWorkspaceLayoutWorkflows } from './workspace-layout-workflows.mjs';
 
 const port = 9400 + (process.pid % 200);
@@ -106,7 +108,10 @@ async function stop(signal = "SIGTERM") {
 try {
   launch();
   const first = await connectToApp(port);
-  if (process.argv.includes('--workspace-layout')) {
+  if (process.argv.includes('--draw-panel-layout')) {
+    for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
+    await runDrawPanelLayoutWorkflows(first); first.socket.close();
+  } else if (process.argv.includes('--workspace-layout')) {
     await runWorkspaceLayoutWorkflows(first);
     first.socket.close();
   } else if (process.argv.includes("--background")) {
@@ -115,6 +120,9 @@ try {
   } else if (process.argv.includes("--theme")) {
     await runThemeWorkflows(first, port);
     first.socket.close();
+  } else if (process.argv.includes('--draw-artboard-ui')) {
+    for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
+    await runDrawArtboardUIWorkflows(first);first.socket.close();
   } else if (process.argv.includes('--draw-pen-alt')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawPenAltWorkflows(first);first.socket.close();
@@ -251,6 +259,9 @@ try {
   } else if (process.argv.includes('--draw-scrub')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawScrubWorkflows(first);first.socket.close();
+  } else if (process.argv.includes('--draw-ui')) {
+    for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
+    await runDrawUIWorkflows(first);first.socket.close();
   } else if (process.argv.includes('--draw-panels')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawPanelWorkflows(first);first.socket.close();
@@ -289,6 +300,7 @@ try {
       })()`);
       await runDrawWorkflows(first);
       await runDrawUIWorkflows(first);
+      await runDrawArtboardUIWorkflows(first);
       await runDrawPhaseOneWorkflows(first);
       await runDrawPathWorkflows(first);
       await runDrawPenAltWorkflows(first);
@@ -329,6 +341,7 @@ try {
       await runDrawWarpMaskWorkflows(first);
       await runDrawBrushWorkflows(first);
       await runDrawWindowWorkflows(first);
+      await runDrawPanelLayoutWorkflows(first);
       await runDrawMcpWorkflows(first);
       await runDrawLanguageWorkflows(first);
       await runDrawPerfWorkflows(first);
@@ -391,5 +404,5 @@ try {
   throw error;
 } finally {
   await stop();
-  await rm(profile, { recursive: true, force: true });
+  await rm(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
 }

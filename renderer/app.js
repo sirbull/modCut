@@ -669,6 +669,7 @@ function documentPayload() {
 
 async function saveDocument(saveAs = false) {
   if (savingDocument) return false;
+  await activeTab()?.draw?.flushText?.();
   bed.finishDrawing();
   const base = ($("filename").value.trim() || "untitled").replace(/\.[^.]+$/, "") + ".modcut";
   const json = JSON.stringify(documentPayload(), null, 2);
@@ -2404,6 +2405,18 @@ window.addEventListener("keydown", (event) => {
   if (document.body.dataset.workspace !== "draw") return;
   activeTab()?.draw?.eyedropperModifiers(event);
   if (document.querySelector('.modal-overlay')) {drawKeymap.reset();return;}
+  if(event.target.closest?.('.draw-font-browser'))return;
+  if(event.target.closest?.('.draw-inline-text')){
+    if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='s'){event.preventDefault();event.stopImmediatePropagation();void saveDocument(event.shiftKey);}
+    return;
+  }
+  if (event.target.closest?.('.draw-artboard-rename, .draw-stroke-choices')) return;
+  // Panel chrome handles its own activation, removal and keyboard reordering.
+  const panelButton = event.target.closest?.('.draw-panel-rail [data-draw-panel]');
+  if (panelButton && !event.ctrlKey && !event.metaKey && !event.shiftKey &&
+      (event.altKey && ['ArrowUp','ArrowDown'].includes(event.key) || !event.altKey && ['Delete','Backspace'].includes(event.key))) return;
+  if (!event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && ['Enter',' '].includes(event.key) &&
+      event.target.closest?.('.draw-panel-rail button, .draw-panel-window button')) return;
   if (event.target.closest?.('.draw-context-menu')) {
     if (['ArrowDown','ArrowUp','Home','End','ArrowRight','ArrowLeft','Escape','Tab','Enter',' '].includes(event.key) && !event.ctrlKey && !event.metaKey && !event.altKey) return;
     activeTab()?.draw?.closeContextMenu();

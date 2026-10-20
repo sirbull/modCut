@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld("modcut", {
   listGoogleFonts: options => ipcRenderer.invoke('listGoogleFonts',options),
   googleFontFamily: name => ipcRenderer.invoke('googleFontFamily',name),
   shapeText: values => ipcRenderer.invoke('shapeText', values),
+  fontData: values => ipcRenderer.invoke('fontData', values),
   openImport: (options) => ipcRenderer.invoke("importFile", options),
   getPathForFile: (file) => webUtils.getPathForFile(file),
   saveDocument: (json, path, saveAs, name) => ipcRenderer.invoke("saveDocument", { json, path, saveAs, name }),

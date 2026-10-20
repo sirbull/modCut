@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join, extname, basename } from "node:path";
 import { gunzip } from "node:zlib";
 import { promisify } from "node:util";
+import { PANEL_DEFINITIONS } from '../renderer/draw/panels/registry.mjs';
 import { acceleratorFor, keyOverrides, setKeyOverrides } from "../renderer/draw/keymap.mjs";
 import { createSidecar } from "./sidecar-bridge.mjs";
 import { createWindowCommandRouter } from "./window-lifecycle.mjs";
@@ -229,6 +230,7 @@ function buildMenu(mode = "cut") {
         { label: "Export for Screens…", accelerator: acceleratorFor("export-screens", { isMac }), click: () => send("export-screens") },
         { label: "Export As…", accelerator: acceleratorFor("export-as", { isMac }), click: () => send("export-as") },
       ] },
+      { label: "Asset Export…", click: () => send("panel.asset-export") },
       { label: "Package…", click: () => send("package") },
       { label: "Send Artboard to Cut…", click: () => send("send-to-cut") });
     const sharedCommands = { "New": "new", "Import…": "import", "Add…": "add", "Close Tab": "close-tab",
@@ -284,8 +286,8 @@ function buildMenu(mode = "cut") {
     // Window menu (D4.5): workspaces and the panels, as in Illustrator; the window roles stay.
     const windowMenu=template.find(item=>item.label==='Window');
     if(windowMenu){delete windowMenu.role;windowMenu.submenu=[{label:'Workspace',submenu:[objectItem('Essentials','workspace-reset'),{type:'separator'},objectItem('New Workspace…','workspace-new'),objectItem('Manage Workspaces…','workspace-manage')]},{type:'separator'},
-      ...[['Appearance','appearance'],['Artboards','artboards'],['Asset Export','asset-export'],['Color','color'],['Document Info','document-info'],['Graphic Styles','graphic-styles'],['History','history'],['Image Trace','image-trace'],
-        ['Info','info'],['Links','links'],['Navigator','navigator'],['Stroke','stroke'],['Swatches','swatches'],['Transparency','transparency']].map(([label,id])=>({label,click:()=>send(`panel.${id}`)})),
+      // Artboards uses the drawing tool and Properties; Asset Export belongs to File.
+      ...PANEL_DEFINITIONS.filter(panel=>!['artboards','asset-export'].includes(panel.id)).sort((a,b)=>a.name.localeCompare(b.name)).map(panel=>objectItem(panel.name,`panel.${panel.id}`)),
       {type:'separator'},{role:'minimize'},...(isMac?[{role:'zoom'}]:[])];}
     template.find(item=>item.label==='Type').submenu=[objectItem('Edit Text…','edit-text'),objectItem('Create Outlines','create-outlines')];
     // Select menu (D3.5): Same compares every painted object; Object picks kinds of objects.
@@ -351,6 +353,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('listGoogleFonts', (event,options) => {if(event.sender!==win?.webContents)throw new Error('Unavailable font session.');return googleFonts.list({refresh:options?.refresh===true});});
   ipcMain.handle('googleFontFamily', (event,name) => {if(event.sender!==win?.webContents)throw new Error('Unavailable font session.');return googleFonts.details(name);});
   ipcMain.handle('shapeText', (event, values) => {if(event.sender!==win?.webContents)throw new Error('Unavailable font session.');return fonts.shape(values);});
+  ipcMain.handle('fontData', (event, values) => {if(event.sender!==win?.webContents)throw new Error('Unavailable font session.');return fonts.data(values);});
   ipcMain.handle('fontCharacters', (event, values) => {if(event.sender!==win?.webContents)throw new Error('Unavailable font session.');return fonts.characters(values);});
   ipcMain.handle("setTheme", (event, preference) => {
     if (!BrowserWindow.fromWebContents(event.sender) || !["system", "light", "dark"].includes(preference)) return false;

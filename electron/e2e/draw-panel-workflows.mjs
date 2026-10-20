@@ -200,7 +200,7 @@ export async function runDrawPanelWorkflows(client) {
   const chooseSelect = (key, value) => evaluate(`(()=>{const s=document.querySelector('${root} [data-draw-field=${key}]');s.value='${value}';s.dispatchEvent(new Event('change',{bubbles:true}))})()`);
   await evaluate(`(async()=>(${active}.select(['${rect.id}','${ellipse.id}'])))()`);
   await command('panel.align');
-  assert.equal(await evaluate(`document.querySelectorAll('${root} .draw-flyout [data-draw-align]').length`), 14);
+  assert.equal(await evaluate(`document.querySelectorAll('${root} .draw-panel-window [data-draw-align]').length`), 14);
   const alignShot = await client.command('Page.captureScreenshot', { format: 'png' });
   await writeFile(join(tmpdir(), 'modcut-draw-align-panel.png'), Buffer.from(alignShot.data, 'base64'));
   const r0 = await boxOf(rect.id), e0 = await boxOf(ellipse.id);
@@ -230,32 +230,35 @@ export async function runDrawPanelWorkflows(client) {
   const centers = (await Promise.all([rect.id, image.id, ellipse.id].map(boxOf))).map(b => b.x + b.width / 2).sort((a, b) => a - b);
   assert.ok(Math.abs((centers[1] - centers[0]) - (centers[2] - centers[1])) < 1e-3, 'Distribute centers evenly');
   await command('undo'); near(await boxOf(image.id), before[1], 'Undo distribute');
-  // Right dock and panel groups: Properties above Layers, rail groups open as tabbed flyouts.
+  // Default dock still resizes; commands now open independent floating panel groups.
+  await command('workspace-reset'); await showPanel('transform');
   const dock = () => evaluate(`(()=>{const r=document.querySelector('${root}'),p=r.querySelector('[data-draw-dock=properties]').getBoundingClientRect(),l=r.querySelector('[data-draw-dock=layers]').getBoundingClientRect(),f=r.querySelector('.draw-flyout');
-    return{properties:p.height,layers:l.height,stacked:p.bottom<=l.top+1,flyout:f.hidden?null:f.dataset.drawGroup,tab:f.querySelector('[aria-selected=true]')?.dataset.drawPanelTab??null}})()`);
+    return{properties:p.height,layers:l.height,stacked:p.bottom<=l.top+1,flyout:f.hidden?null:f.dataset.drawGroup}})()`);
+  const floating = id => `${root} .draw-floating-panel[data-draw-group="${id}"]`;
   let layout = await dock();
-  assert.ok(layout.stacked && layout.properties > 100 && layout.layers > 100, `Properties and Layers are both visible: ${JSON.stringify(layout)}`);
+  assert.ok(layout.stacked && layout.properties > 100 && layout.layers > 100);
   assert.equal(layout.flyout, 'transform');
-  await command('panel.align'); layout = await dock();
-  assert.deepEqual([layout.flyout, layout.tab], ['transform', 'align'], 'Shift+F7 opens the Align tab of the Transform group');
-  await evaluate(`document.querySelector('${root} [data-draw-panel-tab=transform]').click()`);
-  assert.equal((await dock()).tab, 'transform');
-  await command('panel.stroke'); assert.equal((await dock()).flyout, 'stroke', 'Only one group is open at a time');
+  await command('panel.align');
+  assert.equal(await evaluate(`document.querySelector('${floating('align')} [aria-selected=true]').dataset.drawPanelTab`), 'align');
+  await command('panel.transform');
+  await command('panel.stroke');
+  assert.equal(await evaluate(`document.querySelectorAll('${root} .draw-floating-panel').length`), 3, 'Opening Stroke keeps Align and Transform open');
   await evaluate("window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',code:'Escape',bubbles:true,cancelable:true}))");
-  assert.equal((await dock()).flyout, null, 'Escape closes the flyout');
-  assert.ok((await model()).layers.length > 0 && (await evaluate(`(async()=>(${active}.state.selection.ids.length))()`)) > 0, 'Closing the flyout keeps the selection');
-  await evaluate(`document.querySelector('${root} [data-draw-panel=color]').click()`); assert.equal((await dock()).flyout, 'color');
-  await evaluate(`document.querySelector('${root} [data-draw-panel=color]').click()`); assert.equal((await dock()).flyout, null, 'Clicking the rail button again closes');
+  assert.equal((await dock()).flyout, null);
+  assert.ok((await model()).layers.length > 0 && (await evaluate(`(async()=>(${active}.state.selection.ids.length))()`)) > 0);
+  await showPanel('color'); assert.equal((await dock()).flyout, 'color');
+  await evaluate(`document.querySelector('${root} [data-draw-panel=color]').click()`); assert.equal((await dock()).flyout, null);
   const split = await center(`${root} .draw-dock-splitter`), docked = await dock();
   await drag(split, { x: split.x, y: split.y - 80 });
   let after = await dock();
-  assert.ok(after.properties < docked.properties - 60 && after.layers > docked.layers + 60, `Splitter resizes the dock: ${JSON.stringify([docked, after])}`);
+  assert.ok(after.properties < docked.properties - 60 && after.layers > docked.layers + 60);
   await evaluate(`document.querySelector('${root} .draw-dock-splitter').dispatchEvent(new MouseEvent('dblclick',{bubbles:true}))`);
-  after = await dock(); assert.ok(Math.abs(after.properties - after.layers) < 12, 'Double-click resets the split');
+  after = await dock(); assert.ok(Math.abs(after.properties - after.layers) < 12);
   await evaluate(`document.querySelector('${root} [data-draw-dock-toggle=layers]').click()`);
-  after = await dock(); assert.ok(after.layers < 50 && after.properties > docked.properties, 'Collapsing Layers gives Properties the height');
-  await evaluate(`document.querySelector('${root} [data-draw-dock-toggle=layers]').click()`);
-  await command('panel.layers'); assert.ok((await dock()).layers > 100, 'F7 shows Layers');
+  after = await dock(); assert.ok(after.layers < 50 && after.properties > docked.properties);
+  await command('panel.layers');
+  assert.ok(await evaluate(`!!document.querySelector('${floating('layers')} [role=tree]')`), 'F7 opens the existing Layers tree in a window');
+  await command('workspace-reset');
 
   // Color panel: Fill/Stroke target, RGB/HSB/CMYK/Grayscale/Hex, live slider (one undo step) and None.
   const fillHex = id => evaluate(`(async()=>{const n=${active}.state.document.getNode('${id}'),c=n.appearance.fills[0]?.paint.color.values;return c?c.map(v=>Math.round(v*255)):null})()`);
@@ -263,6 +266,7 @@ export async function runDrawPanelWorkflows(client) {
   const applied = () => evaluate(`(async()=>(${active}.state.history.entries.filter(e=>e.applied).length))()`);
   await evaluate(`(async()=>(${active}.select(['${rect.id}'])))()`);
   const fill0 = await fillHex(rect.id), stroke0 = await strokeHex(rect.id);
+  const paintDepth = await applied();
   await showPanel('color');
   await evaluate(`document.querySelector('${root} [data-draw-paint-target=fill]').click()`);
   await chooseSelect('color-mode', 'rgb');
@@ -287,7 +291,7 @@ export async function runDrawPanelWorkflows(client) {
   assert.deepEqual(await strokeHex(rect.id), [0, 0, 255], 'Hex sets the stroke');
   await evaluate(`document.querySelector('${root} [data-draw-field=color-none]').click()`);
   assert.equal(await strokeHex(rect.id), null, 'None removes the stroke');
-  for (let i = 0; i < 12 && JSON.stringify([await fillHex(rect.id), await strokeHex(rect.id)]) !== JSON.stringify([fill0, stroke0]); i++) await command('undo');
+  while (await applied() > paintDepth) await command('undo');
   assert.deepEqual([await fillHex(rect.id), await strokeHex(rect.id)], [fill0, stroke0], 'Undo restores the original paint');
   await evaluate(`document.querySelector('${root} [data-draw-paint-target=fill]').click()`);
 
@@ -295,6 +299,7 @@ export async function runDrawPanelWorkflows(client) {
   const strokeOf = id => evaluate(`(async()=>(${active}.state.document.getNode('${id}').appearance.strokes[0]))()`);
   const strokeButton = id => evaluate(`document.querySelector('${root} [data-draw-stroke="${id}"]').click()`);
   const strokeBefore = await strokeOf(rect.id);
+  const strokeDepth = await applied();
   await evaluate(`(async()=>(${active}.select(['${rect.id}'])))()`);
   await showPanel('stroke');
   await setField('stroke-weight', 2); await strokeButton('cap-square'); await strokeButton('join-bevel');
@@ -307,7 +312,7 @@ export async function runDrawPanelWorkflows(client) {
   await setField('dash-2', 3);
   assert.deepEqual((await strokeOf(rect.id)).dash.array, [2, 1, 3]);
   assert.deepEqual(await evaluate(`(async()=>{const it=${active}.renderer.items.get('${rect.id}');return [...it.dashArray].map(v=>Math.round(v*1000)/1000)})()`), [2, 1, 3], 'Dashes render');
-  for (let i = 0; i < 12 && JSON.stringify(await strokeOf(rect.id)) !== JSON.stringify(strokeBefore); i++) await command('undo');
+  while (await applied() > strokeDepth) await command('undo');
   assert.deepEqual(await strokeOf(rect.id), strokeBefore, 'Undo restores the stroke');
   await tool('line'); await drag(await screen([20, 60]), await screen([60, 60]));
   const flat = nodes => nodes.flatMap(n => [n, ...flat(n.children ?? [])]);
@@ -354,5 +359,6 @@ export async function runDrawPanelWorkflows(client) {
   await evaluate(`document.querySelector('[data-tab-id="${original.id}"]').click()`);
   if (await evaluate("document.body.dataset.workspace") === 'draw') await evaluate("document.querySelector('#workspaceToggle').click()");
   assert.equal(await evaluate("paper.project.layers[1].exportJSON({asString:true})"), original.cut, 'Draw panels preserve the Cut document');
+  await command('workspace-reset');
   process.stdout.write('PASS Draw panels: Layers tree, Layer Options, template layers, solo/outline, drag, collect/release, delete, rename, Transform, Align, Color and Stroke panels, Fill/Stroke box, Properties, dock, panel groups, Layers rows (thumbnail, color bar, rename, delete, search) and Layer Options\n');
 }

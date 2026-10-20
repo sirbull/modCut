@@ -9,12 +9,36 @@ import { createEyedropperPreview } from './eyedropper-preview.mjs';
 export function createInteractions(canvas, state, api) {
   const {scope,renderer,withScope,run}=api, controller=new AbortController(), events={signal:controller.signal};
   let gesture=null,preview=null;
+  let nameEditor=null;
   const point=event=>{const b=canvas.getBoundingClientRect();return scope.view.viewToProject(new scope.Point(event.clientX-b.left,event.clientY-b.top));};
   const eyedropperPreview=createEyedropperPreview(canvas,{active:()=>api.tool()==='eyedropper',current:()=>state.ui[state.ui.paintFocus==='stroke'?'stroke':'fill']});
   // A screen movement in project units, turned back through Rotate View.
   const screenDelta=(dx,dy)=>new scope.Point(dx,dy).rotate(-scope.view.rotation).divide(scope.view.zoom);
   function clearPreview() {preview?.remove();preview=null;renderer.clearTransformPreview();state.ui.transformPreviewBox=null;}
-  function cancel() {const previous=gesture;gesture=null;if(previous)canvas.style.cursor=api.cursor();if(previous?.mode==='free-transform')api.freeDistortPreview(null);withScope(()=>{clearPreview();if(TRANSFORM_TOOLS.includes(previous?.tool))api.transforms.setOrigin(previous.originBefore);renderer.updateView();});api.status();}
+  function cancel() {const editor=nameEditor;nameEditor=null;editor?.remove();const previous=gesture;gesture=null;if(previous)canvas.style.cursor=api.cursor();if(previous?.mode==='free-transform')api.freeDistortPreview(null);withScope(()=>{clearPreview();if(TRANSFORM_TOOLS.includes(previous?.tool))api.transforms.setOrigin(previous.originBefore);renderer.updateView();});api.status();}
+  function artboardEdge(p) {
+    const tolerance=6/scope.view.zoom;
+    const active=activeArtboard(state), boards=[active,...state.document.data.artboards.filter(a=>a.id!==active.id).toReversed()];
+    for(const board of boards) {
+      const {x,y,width:w,height:h}=board;
+      if(p.x<x-tolerance||p.x>x+w+tolerance||p.y<y-tolerance||p.y>y+h+tolerance)continue;
+      const edge=(Math.abs(p.y-y)<=tolerance?'n':Math.abs(p.y-y-h)<=tolerance?'s':'')+(Math.abs(p.x-x)<=tolerance?'w':Math.abs(p.x-x-w)<=tolerance?'e':'');
+      if(edge)return {board,handle:edge};
+    }
+    return null;
+  }
+  function renameArtboard(id) {
+    if(state.document.readOnly)return;
+    cancel(); api.artboards.choose(id);
+    const board=state.document.getArtboard(id), bounds=renderer.artboardLabelBounds(id); if(!board||!bounds)return;
+    const position=scope.view.projectToView(bounds.topLeft),rect=canvas.getBoundingClientRect();
+    const input=document.createElement('input'); input.className='draw-artboard-rename'; input.value=board.name; input.setAttribute('aria-label','Artboard name');
+    input.style.left=`${Math.max(rect.left,Math.min(rect.right-140,rect.left+position.x))}px`;input.style.top=`${Math.max(rect.top,rect.top+position.y-3)}px`;
+    nameEditor=input; canvas.parentElement.append(input);
+    const finish=commit=>{if(nameEditor!==input)return;nameEditor=null;input.remove();if(commit&&input.value.trim()&&input.value.trim()!==board.name)run(()=>api.artboards.edit(id,{name:input.value.trim()},{artwork:false}));canvas.focus();};
+    input.addEventListener('keydown',event=>{event.stopPropagation();if(event.key==='Enter'||event.key==='Escape'){event.preventDefault();finish(event.key==='Enter');}});
+    input.addEventListener('blur',()=>finish(true));input.focus();input.select();
+  }
   // Clicks select the outermost group around a hit, or, in isolation mode, the outermost group inside the isolated one.
   function targetId(id) {
     let chain=state.document.ancestors(id);const iso=state.ui.isolation;
@@ -84,9 +108,11 @@ export function createInteractions(canvas, state, api) {
   function update(event) {
     const p=point(event);api.status(p);
     if (!gesture) {
-      const tool=api.tool(),handle=['select','artboard'].includes(tool) ? renderer.selectionHandle(p) : null;
+      const tool=api.tool(),handle=tool==='artboard' ? artboardEdge(p)?.handle : tool==='select' ? renderer.selectionHandle(p) : null;
       // Illustrator-style feedback: handles, object under Selection, Alt copy and Alt zoom-out.
-      canvas.style.cursor=handle==='rotate' ? CURSORS.rotate : handle ? CURSORS[RESIZE_CURSORS[handle]]
+      canvas.style.cursor=tool==='artboard' && renderer.artboardAddHit(p) ? 'pointer'
+        : tool==='artboard' && renderer.artboardLabelHit(p) ? 'text'
+        : handle==='rotate' ? CURSORS.rotate : handle ? CURSORS[RESIZE_CURSORS[handle]]
         : tool==='select' && renderer.hit(p) ? CURSORS[event.altKey ? 'select-copy' : 'select-anchor']
         : tool==='zoom' && event.altKey ? CURSORS['zoom-out'] : api.cursor();
       if(tool==='width')withScope(()=>{clearPreview();preview=widthMarkers(api.widthHandles([p.x,p.y]));scope.view.update();});
@@ -295,8 +321,11 @@ export function createInteractions(canvas, state, api) {
       const originBefore=state.ui.transformOrigin&&[...state.ui.transformOrigin];
       gesture={...base,origin,originBefore,originDrag:p.getDistance(new scope.Point(...origin))<=8/scope.view.zoom,ids:api.selectedIds(),box};
     }else if (tool==='artboard') {
-      const handle=renderer.selectionHandle(p);
-      const board=handle ? activeArtboard(state) : [...state.document.data.artboards].reverse().find(a=>p.x>=a.x && p.x<=a.x+a.width && p.y>=a.y && p.y<=a.y+a.height);
+      const plus=renderer.artboardAddHit(p);
+      if(plus){run(()=>api.artboards.duplicateAdjacent(plus.boardId,plus.direction));return;}
+      const label=renderer.artboardLabelHit(p);if(label){api.artboards.choose(label);return;}
+      const edge=artboardEdge(p),handle=edge?.handle;
+      const board=edge?.board ?? [...state.document.data.artboards].reverse().find(a=>p.x>=a.x && p.x<=a.x+a.width && p.y>=a.y && p.y<=a.y+a.height);
       if (board) {api.artboards.choose(board.id);gesture={...base,handle,boardId:board.id,box:{x:board.x,y:board.y,width:board.width,height:board.height}};}
       else gesture={...base,mode:'new-artboard'};
     } else if (tool==='select') {
@@ -366,13 +395,15 @@ export function createInteractions(canvas, state, api) {
         const ids=pool.filter(n=>state.document.isEditable(n.id) && renderer.bounds(n.id)?.intersects(drag.rectangle)).map(n=>n.id);
         api.select([...drag.initial,...ids]);
       } else if (moved && drag.matrix) {
-        if(drag.tool==='artboard')api.artboards.edit(drag.boardId,transformedBox(drag.box,drag.matrix),{copy:drag.modifiers.alt && !drag.handle});
+        if(drag.tool==='artboard')api.artboards.edit(drag.boardId,transformedBox(drag.box,drag.matrix),{copy:drag.modifiers.alt && !drag.handle,artwork:!drag.handle&&state.ui.moveArtwork!==false});
         else api.transform(drag.matrix,drag.handle==='rotate' ? 'Rotate' : drag.handle ? 'Resize' : 'Move',{copy:drag.modifiers.alt && !drag.handle});
       }
     });
   },events);
-  canvas.addEventListener('pointercancel',cancel,events);canvas.addEventListener('lostpointercapture',cancel,events);
+  canvas.addEventListener('pointercancel',cancel,events);canvas.addEventListener('lostpointercapture',()=>{if(gesture)cancel();},events);
   canvas.addEventListener('dblclick',event=>{
+    const label=renderer.artboardLabelHit(point(event));
+    if(label){event.preventDefault();renameArtboard(label);return;}
     if(TRANSFORM_TOOLS.includes(api.tool())){event.preventDefault();cancel();void api.transformDialog(api.tool());return;}
     if(api.tool()==='width'){event.preventDefault();cancel();const p=point(event);void api.widthPointEdit([p.x,p.y]);return;}
     // Selection tool: double-click a group to isolate it; double-click empty canvas to leave isolation.

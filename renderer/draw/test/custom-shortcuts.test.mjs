@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { KEYMAP, acceleratorFor, keyFromEvent, matchShortcut, setKeyOverrides, shortcutLabel, toolTooltip, validateOverrides } from '../keymap.mjs';
+import { PANEL_DEFINITIONS } from '../panels/registry.mjs';
 
 const press = (key, extra = {}) => ({ key, code: /^[a-z]$/i.test(key) ? `Key${key.toUpperCase()}` : key, ctrlKey: false, metaKey: false, shiftKey: false, altKey: false, ...extra });
 test('custom shortcuts replace defaults everywhere and are reset', () => {
@@ -26,4 +27,13 @@ test('a key press becomes a shortcut string', () => {
   assert.equal(keyFromEvent(press('k', { ctrlKey: true, shiftKey: true })), 'Mod+Shift+K');
   assert.equal(keyFromEvent(press('Shift', { shiftKey: true })), null);
   assert.equal(keyFromEvent(press('k', { metaKey: true }), { isMac: true }), 'Mod+K');
+});
+
+test('every panel supports custom shortcuts, including panels without a default', () => {
+  for (const panel of PANEL_DEFINITIONS) assert.ok(KEYMAP.some(entry => entry.id === `panel.${panel.id}`));
+  try {
+    setKeyOverrides({ 'panel.navigator': ['Mod+Alt+Shift+N'] });
+    assert.equal(matchShortcut(press('n', { ctrlKey: true, altKey: true, shiftKey: true }))?.command, 'panel.navigator');
+    assert.equal(acceleratorFor('panel.navigator'), 'Ctrl+Shift+Alt+N');
+  } finally { setKeyOverrides({}); }
 });

@@ -67,6 +67,23 @@ test('artboard order, rearrange, remove and undo retain artwork and valid active
   controller.remove();assert.notEqual(activeArtboard(state).id,first);assert.equal(state.document.getNode(node.id).id,node.id);
   controller.remove();assert.throws(()=>controller.remove(),/at least one/);
 });
+
+test('side buttons duplicate the referenced artboard and artwork in all four directions with one undo',t=>{
+  const {state,controller,renderer,node}=setup(t),board=controller.active(),before=state.document.serialize();
+  for(const [side,dx,dy] of [['top',0,-100],['right',120,0],['bottom',0,100],['left',-120,0]]) {
+    // The source is explicit, even when a different board was active.
+    controller.choose(state.document.data.artboards[1].id);
+    const id=controller.duplicateAdjacent(board.id,side),copy=state.document.getArtboard(id);
+    assert.equal(copy.x,board.x+dx);assert.equal(copy.y,board.y+dy);
+    assert.equal(copy.width,board.width);assert.equal(copy.height,board.height);assert.notEqual(copy.id,board.id);
+    assert.equal(controller.active().id,id);
+    const clone=state.document.data.layers[0].children[2];
+    assert.equal(renderer.bounds(clone.id).x,renderer.bounds(node.id).x+dx);
+    assert.equal(renderer.bounds(clone.id).y,renderer.bounds(node.id).y+dy);
+    assert.equal(state.history.entries.filter(e=>e.applied).length,1);
+    state.history.undo();assert.equal(state.document.serialize(),before);
+  }
+});
 test('moving a board without artwork leaves geometry unchanged and invalid edits roll back atomically',t=>{
   const {state,renderer,controller,node}=setup(t),a=controller.active();
   state.ui.moveArtwork=false;controller.edit(a.id,{x:40});assert.equal(renderer.bounds(node.id).x,10);

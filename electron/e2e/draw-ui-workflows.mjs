@@ -47,10 +47,11 @@ export async function runDrawUIWorkflows(client) {
   assert.ok(await evaluate(`(async()=>(${active}.renderer.items.get(${JSON.stringify(image.id)}).getPixel(0,0).red>.99))()`),'Draw preserves original raster colors');
 
   const layout = await evaluate("(()=>{const root=document.querySelector('.draw-project[style*=block]'),tool=root.querySelector('.draw-tool-rail').getBoundingClientRect(),canvas=root.querySelector('.draw-canvas').getBoundingClientRect(),rail=root.querySelector('.draw-panel-rail').getBoundingClientRect(),panel=root.querySelector('.draw-panels').getBoundingClientRect();return{left:tool.right<=canvas.left,right:canvas.right<=rail.left,options:rail.right<=panel.left,icons:root.querySelectorAll('[data-draw-panel]').length,dock:[...root.querySelectorAll('.draw-panels [data-draw-dock]')].map(s=>s.dataset.drawDock)}})()");
-  const groups = await evaluate("import('./draw/panels/registry.mjs').then(m=>m.PANEL_GROUPS.length)");
+  const groups = await evaluate("import('./draw/panels/registry.mjs').then(m=>m.PANEL_GROUPS.flatMap(g=>g.tabs).length)");
   assert.deepEqual(layout,{left:true,right:true,options:true,icons:groups,dock:['properties','layers']},'Properties and Layers share the dock; other panels are rail groups');
-  await evaluate("document.querySelector('.draw-project[style*=block] [data-draw-panel=artboards]').click()");
+  await evaluate(`(async()=>(${active}.handle('panel.artboards')))()`);
   assert.ok(await evaluate("!!document.querySelector('.draw-project[style*=block] [data-draw-field=artboard-width]')"));
+  await evaluate(`(async()=>(${active}.setTool('select')))()`);
   await evaluate(`document.querySelector('.draw-project[style*=block] [data-draw-node="${path.id}"] .draw-layer-name').click()`);
   await evaluate("document.querySelector('.draw-project[style*=block] [data-draw-panel=transform]').click()");
   await evaluate("(()=>{const i=document.querySelector('.draw-project[style*=block] [data-draw-field=width]');i.value='20';i.dispatchEvent(new Event('change',{bubbles:true}))})()");

@@ -1,3 +1,4 @@
+import {inlineReady,inlineSet,finishInline} from './draw-inline-helpers.mjs';
 import assert from 'node:assert/strict';
 import { inputHelpers, wait } from './cdp.mjs';
 import { activeDraw as active, enterDraw, rememberTabs, submitNewDrawDialog } from './draw-test-helpers.mjs';
@@ -70,6 +71,8 @@ export async function runDrawWindowWorkflows(client) {
   await evaluate(`(()=>{const z=document.querySelector('${root} [data-draw-field=navigator-zoom]');z.value='200';z.dispatchEvent(new Event('change',{bubbles:true}));})()`); await wait(50);
   assert.equal(await evaluate(`(async()=>Math.round(${active}.scope.view.zoom/(96/25.4)*100))()`), 200);
 
+  // Clear the floating panels before testing a canvas gesture underneath their position.
+  await evaluate("document.querySelectorAll('.draw-project[style*=block] .draw-floating-panel [aria-label=\"Close panel\"]').forEach(b=>b.click())");
   // Rotate View (Shift+H): dragging turns the view, Shift snaps to 15°; View > Reset Rotate View undoes it.
   await evaluate("window.dispatchEvent(new KeyboardEvent('keydown',{key:'H',code:'KeyH',shiftKey:true,bubbles:true,cancelable:true}))");
   assert.equal(await evaluate(`(async()=>(${active}.state.ui.tool))()`), 'rotate-view');
@@ -101,7 +104,7 @@ export async function runDrawWindowWorkflows(client) {
   assert.equal(await evaluate("window.modcut.clickE2EMenuItem('Window','Manage Workspaces…')"), true);
   await until("!!document.querySelector('.draw-workspaces-dialog form')", 'Manage Workspaces');
   await evaluate("(()=>{const f=document.querySelector('.draw-workspaces-dialog form');f.elements.name.value='Overview';f.requestSubmit();})()"); await wait(80);
-  assert.equal(await evaluate(`(async()=>(${active}.state.ui.flyout))()`), 'navigator');
+  assert.ok(await evaluate(`(async()=>(${active}.state.ui.panelLayout.floating.navigator))()`));
   await evaluate("localStorage.removeItem('modcut.draw.workspaces')");
 
   // Edit > Keyboard Shortcuts: record Shift+P for the Pen; P then does nothing, Shift+P picks the Pen; Reset All undoes it.
@@ -126,22 +129,23 @@ export async function runDrawWindowWorkflows(client) {
   await evaluate(`(async()=>{const w=${active};w.select([]);w.handle('panel.glyphs')})()`);
   await until(`document.querySelectorAll('${root} [data-draw-glyph]').length>95`, 'glyph grid');
   await evaluate(`(async()=>{const w=${active};w.handle('tool.type');w.handle('tool-dialog')})()`);
-  await until("document.querySelector('.draw-text-dialog form')?.dataset.textReady==='true'", 'text editor');
-  await evaluate("(()=>{const a=document.querySelector('.draw-text-dialog textarea[name=text]');a.value='Ha';a.setSelectionRange(2,2);})()");
+  await until("document.querySelector('.draw-inline-text')?.dataset.textReady==='true'", 'text editor');
+  await inlineSet(evaluate,{text:'Ha'});
   await evaluate(`document.querySelector('${root} [data-draw-glyph="${'Å'.codePointAt(0)}"]').click()`);
-  assert.equal(await evaluate("document.querySelector('.draw-text-dialog textarea[name=text]').value"), 'HaÅ');
-  await evaluate("document.querySelector('.draw-text-dialog [data-x=cancel]')?.click()"); await wait(50);
+  assert.equal(await evaluate("document.querySelector('.draw-inline-text').textContent"), 'HaÅ');
+  await inlineReady(evaluate);await finishInline(evaluate);await evaluate(`(async()=>${active}.handle('undo'))()`); await wait(50);
   await evaluate(`(async()=>{${active}.handle('tool.select')})()`);
   // Touch Type (Shift+T): new text "HIH"; click the I, turn it a quarter with the top handle, then drag it to the right.
+  await evaluate(`(async()=>(${active}.handle('workspace-reset')))()`);
   await evaluate(`(async()=>{const w=${active};w.select([]);w.handle('tool.type');w.handle('tool-dialog')})()`);
-  await until("document.querySelector('.draw-text-dialog form')?.dataset.textReady==='true'", 'text editor for Touch Type');
+  await until("document.querySelector('.draw-inline-text')?.dataset.textReady==='true'", 'text editor for Touch Type');
   // An installed regular face (Arial is not on every test machine).
   const family = await evaluate("(async()=>{const fonts=await window.modcut.listSystemFonts();return (fonts.find(f=>/DejaVu Sans|Liberation Sans|Arial/.test(f.family)&&f.fontWeight==='normal'&&f.fontStyle==='normal')??fonts.find(f=>f.fontWeight==='normal'&&f.fontStyle==='normal'))?.family})()");
-  await evaluate(`(()=>{const f=document.querySelector('.draw-text-dialog form');f.elements.fontFamily.value=${JSON.stringify(family)};f.elements.fontFamily.dispatchEvent(new Event('input',{bubbles:true}));f.elements.fontFamily.dispatchEvent(new Event('change',{bubbles:true}));})()`);
-  await until("document.querySelector('.draw-text-dialog form')?.dataset.textReady==='true'", 'font chosen');
-  await evaluate("(()=>{const f=document.querySelector('.draw-text-dialog form');f.elements.text.value='HIH';f.elements.text.dispatchEvent(new Event('input',{bubbles:true}));})()");
-  await wait(100); await until("document.querySelector('.draw-text-dialog form')?.dataset.textReady==='true'", 'preview ready');
-  await evaluate("document.querySelector('.draw-text-dialog form').requestSubmit()");
+  await inlineSet(evaluate,{fontFamily:family});
+  await until("document.querySelector('.draw-inline-text')?.dataset.textReady==='true'", 'font chosen');
+  await inlineSet(evaluate,{text:'HIH'});
+  await wait(100); await until("document.querySelector('.draw-inline-text')?.dataset.textReady==='true'", 'preview ready');
+  await finishInline(evaluate);
   await until(`(async()=>{const w=${active},n=w.state.document.getNode(w.state.selection.ids[0]);return n?.type==='text'&&!!n.layout})()`, 'text created');
   const textId = await evaluate(`(async()=>(${active}.state.selection.ids[0]))()`);
   const glyphScreen = () => evaluate(`(async()=>{const w=${active},n=w.state.document.getNode('${textId}'),g=n.layout.glyphs.find(x=>x.index===1),pts=g.subpaths.flatMap(s=>s.segments.map(x=>x.p)),xs=pts.map(p=>p[0]),ys=pts.map(p=>p[1]);
@@ -164,10 +168,10 @@ export async function runDrawWindowWorkflows(client) {
 
   // Vertical Type: "AB" as a column, B under A.
   await evaluate(`(async()=>{const w=${active};w.select([]);w.handle('tool.vertical-type');w.handle('tool-dialog')})()`);
-  await until("document.querySelector('.draw-text-dialog form')?.dataset.textReady==='true'", 'vertical text editor');
-  await evaluate(`(()=>{const f=document.querySelector('.draw-text-dialog form');f.elements.fontFamily.value=${JSON.stringify(family)};f.elements.fontFamily.dispatchEvent(new Event('input',{bubbles:true}));f.elements.fontFamily.dispatchEvent(new Event('change',{bubbles:true}));f.elements.text.value='AB';f.elements.text.dispatchEvent(new Event('input',{bubbles:true}));})()`);
-  await wait(100); await until("document.querySelector('.draw-text-dialog form')?.dataset.textReady==='true'", 'vertical preview');
-  await evaluate("document.querySelector('.draw-text-dialog form').requestSubmit()");
+  await until("document.querySelector('.draw-inline-text')?.dataset.textReady==='true'", 'vertical text editor');
+  await inlineSet(evaluate,{fontFamily:family,text:'AB'});
+  await wait(100); await until("document.querySelector('.draw-inline-text')?.dataset.textReady==='true'", 'vertical preview');
+  await finishInline(evaluate);
   await until(`(async()=>{const w=${active},n=w.state.document.getNode(w.state.selection.ids[0]);return n?.type==='text'&&n.paragraph.orientation==='vertical'&&!!n.layout})()`, 'vertical text');
   const column = await evaluate(`(async()=>{const w=${active},n=w.state.document.getNode(w.state.selection.ids[0]),c=g=>{const p=g.subpaths.flatMap(s=>s.segments.map(x=>x.p)),xs=p.map(q=>q[0]),ys=p.map(q=>q[1]);return [(Math.min(...xs)+Math.max(...xs))/2,(Math.min(...ys)+Math.max(...ys))/2]};const [a,b]=n.layout.glyphs.map(c);return {dx:Math.abs(a[0]-b[0]),dy:b[1]-a[1]}})()`);
   assert.ok(column.dx < 2 && column.dy > 4, `B under A: ${JSON.stringify(column)}`);
@@ -182,6 +186,7 @@ export async function runDrawWindowWorkflows(client) {
     const cut=w.cutSvg(w.state.document.data.artboards[0].id).svg.match(/<path [^>]*stroke="#ff0000"[^>]*>/i)?.[0]??'';
     return {fill:item.fillColor?.toCSS(true)??null,stroke:item.strokeColor?.toCSS(true)??null,open:parts.every(p=>!p.closed),cut:/fill="none"/.test(cut)}})()`);
   assert.deepEqual(scribbled, { fill: null, stroke: "#ff0000", open: true, cut: true });
+  await evaluate(`(async()=>(${active}.handle('workspace-reset')))()`);
   await restore();
   console.log('PASS Draw window: Touch Type (pick, turn, move one character), Vertical Type, Scribble effect, TIFF, GIF and PLT export, Package, Graphic Styles (new from selection, apply in one step), Navigator (click to move, zoom), Rotate View with 15° snapping and reset, Asset Export at 2x, workspaces saved, reset and switched, custom keyboard shortcuts, Glyphs into the text editor');
 }

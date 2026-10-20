@@ -1,4 +1,4 @@
-/** Deterministic sprite from vendored Tabler outline SVGs. No bundler or network. */
+/** Deterministic sprite from vendored Tabler and original modCut SVGs. No bundler or network. */
 import { readFileSync, readdirSync, writeFileSync, existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
@@ -7,12 +7,12 @@ import { PANEL_DEFINITIONS } from '../renderer/draw/panels/registry.mjs';
 function build(directory, definitions) {
 const names = readdirSync(directory).filter((name) => name.endsWith('.svg') && name !== 'sprite.svg').sort();
 const manifest = JSON.parse(readFileSync(new URL('sources.json', directory), 'utf8'));
-if (JSON.stringify(Object.keys(manifest.icons).sort()) !== JSON.stringify(names.map((name) => name.slice(0, -4)).sort())) throw new Error('Draw icon sources do not match the Tabler manifest.');
+if (JSON.stringify(Object.keys(manifest.icons).sort()) !== JSON.stringify(names.map((name) => name.slice(0, -4)).sort())) throw new Error('Draw icon sources do not match the source manifest.');
 const symbols = names.map((name) => {
   // Git's Windows checkout may use CRLF. Verify canonical source text, not platform line endings.
   const bytes = Buffer.from(readFileSync(new URL(name, directory), 'utf8').replace(/\r\n/g, '\n'));
   const provenance = manifest.icons[name.slice(0, -4)];
-  if (createHash('sha256').update(bytes).digest('hex') !== provenance.sha256) throw new Error(`Modified Tabler source: ${name}`);
+  if (createHash('sha256').update(bytes).digest('hex') !== provenance.sha256) throw new Error(`Modified icon source: ${name}`);
   const source = bytes.toString('utf8').trim();
   const match = source.match(/^<svg\s+([^>]+)>([\s\S]*)<\/svg>$/);
   if (!match || !match[1].includes('viewBox="0 0 24 24"') || !match[1].includes('stroke="currentColor"')) throw new Error(`Invalid Draw icon: ${name}`);

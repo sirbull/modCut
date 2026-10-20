@@ -365,6 +365,78 @@
       "name": "x",
       "path": "icons/outline/x.svg",
       "sha256": "445e1b53563ad7e089f94dee923c2ef3444c63d45294a733687471a76a3c3b8d"
+    },
+    "stroke-weight": {
+      "name": "stroke-weight",
+      "author": "modCut",
+      "path": "stroke-weight.svg",
+      "sha256": "75769fd7262711c4b714ecc81ad4a28990e6479e89813827b489dccfbded94d6"
+    },
+    "stroke-flip-along": {
+      "name": "stroke-flip-along",
+      "author": "modCut",
+      "path": "stroke-flip-along.svg",
+      "sha256": "3b8cebc75c60b33e7b1be62d55e4a2a185b18e895210a83dd08b363e06db8693"
+    },
+    "stroke-flip-across": {
+      "name": "stroke-flip-across",
+      "author": "modCut",
+      "path": "stroke-flip-across.svg",
+      "sha256": "fe211db4d11fe5881380696f32ca780788905fbcf2761c2e4c0a94712dad348a"
+    },
+    "stroke-cap-butt": {
+      "name": "stroke-cap-butt",
+      "author": "modCut",
+      "path": "stroke-cap-butt.svg",
+      "sha256": "c7ddfba1f5bd3c40a753e1fe52bf1018913602137e53c32c1b27986a5738eb3b"
+    },
+    "stroke-cap-round": {
+      "name": "stroke-cap-round",
+      "author": "modCut",
+      "path": "stroke-cap-round.svg",
+      "sha256": "4ce4fed6041303c46ba32d27f8384e26fe2dbe998fd0bc99e68f9d385371ab2c"
+    },
+    "stroke-cap-square": {
+      "name": "stroke-cap-square",
+      "author": "modCut",
+      "path": "stroke-cap-square.svg",
+      "sha256": "83fce86191a2b72844944578e81db9062b22838322faadc313b8dc1d96860e66"
+    },
+    "stroke-join-miter": {
+      "name": "stroke-join-miter",
+      "author": "modCut",
+      "path": "stroke-join-miter.svg",
+      "sha256": "381c36e5fb222fe262f58822507475f8936931b33f76dcce31c5d7c9f4063099"
+    },
+    "stroke-join-round": {
+      "name": "stroke-join-round",
+      "author": "modCut",
+      "path": "stroke-join-round.svg",
+      "sha256": "16fcef6e31585ec9249a6599d17b27d31a9d8891ec5189adf43323f9f55a41f0"
+    },
+    "stroke-join-bevel": {
+      "name": "stroke-join-bevel",
+      "author": "modCut",
+      "path": "stroke-join-bevel.svg",
+      "sha256": "7fe452b48fd2a8d16725fa1f1c61507d80603a40a4fbe29f3900bc3a614a248b"
+    },
+    "stroke-align-center": {
+      "name": "stroke-align-center",
+      "author": "modCut",
+      "path": "stroke-align-center.svg",
+      "sha256": "54ba47211511c65c448622e5b2b2618b9e94869eebda1df4e1441439cde15583"
+    },
+    "stroke-align-inside": {
+      "name": "stroke-align-inside",
+      "author": "modCut",
+      "path": "stroke-align-inside.svg",
+      "sha256": "934d5268446374be24a9fb36e3adb5849a6bc11c78f22b55e87b68d3dac380fb"
+    },
+    "stroke-align-outside": {
+      "name": "stroke-align-outside",
+      "author": "modCut",
+      "path": "stroke-align-outside.svg",
+      "sha256": "2bb3c472ad4d9cfe2ee473948111bf0c4232aac85651a1080e8f8ee02fc2df9b"
     }
   }
 }

@@ -1,12 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DOCK_PANELS, PANEL_DEFINITIONS, PANEL_GROUPS, clampDockSplit, groupForPanel, panelAvailable } from '../panels/registry.mjs';
+import { defaultPanelLayout, windowGroup } from '../panels/layout.mjs';
 
-test('every non-dock panel belongs to exactly one rail group', () => {
+test('Artboards stays in Properties and Asset Export opens from File', () => {
+  assert.equal(windowGroup('artboards'),null);
+  assert.equal(windowGroup('asset-export')?.id,'asset-export');
+  assert.ok(!defaultPanelLayout().rail.includes('artboards'));
+  assert.ok(!defaultPanelLayout().rail.includes('asset-export'));
+});
+
+test('panels have a rail group except dock, artboard properties and File export', () => {
   const grouped = PANEL_GROUPS.flatMap(group => group.tabs);
   assert.equal(new Set(grouped).size, grouped.length, 'no panel appears twice');
   for (const panel of PANEL_DEFINITIONS) {
-    if (DOCK_PANELS.includes(panel.id)) assert.equal(groupForPanel(panel.id), null, `${panel.id} is docked, not in the rail`);
+    if ([...DOCK_PANELS,'artboards','asset-export'].includes(panel.id)) assert.equal(groupForPanel(panel.id), null, `${panel.id} opens outside the rail`);
     else assert.ok(groupForPanel(panel.id), `${panel.id} has a rail group`);
   }
   assert.equal(groupForPanel('align').id, 'transform');

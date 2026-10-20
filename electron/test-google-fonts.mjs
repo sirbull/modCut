@@ -46,6 +46,10 @@ test('Google family download is shared, licensed, reusable offline and portable 
   const values={...DEFAULT_CHARACTER,text:'AV fi ÆØÅ',fontSource:'google',fontFamily:'Roboto',alignment:'left'};
   const layout=await service.shape(values),node=pointText([10,20],{...values,googleFont:layout.font.reference,fontPostscriptName:layout.font.postscriptName});node.layout=layout;
   assert.equal(hasTextLayout(node),true);const data=createDocument();data.layers[0].children=[node];assert.deepEqual(validateDocument(data),[]);
+  const mixedValues={...values,googleFont:ref,fontPostscriptName:layout.font.postscriptName,text:'AV',runs:[{text:'A',character:{fontFamily:'Lora',fontSource:'google',googleFont:{...ref,family:'Lora'}}},{text:'V'}]};
+  const mixed=pointText([0,0],mixedValues);mixed.layout=await service.shape(mixedValues);
+  data.layers[0].children=[mixed];assert.deepEqual(validateDocument(data),[]);assert.equal(hasTextLayout(mixed),true);
+  assert.equal(mixed.content.runs[0].character.googleFont.family,'Lora','A selected range keeps its own portable Google reference');
   const newDirectory=await mkdtemp(join(tmpdir(),'modcut-google-portable-')),remote=createGoogleFonts({directory:newDirectory,fetcher});
   const portable=await createFontService({directories:[],google:remote}).shape({...values,googleFont:ref});assert.deepEqual(portable.glyphs,layout.glyphs);
   const bad=createGoogleFonts({directory:await mkdtemp(join(tmpdir(),'modcut-google-corrupt-')),fetcher:async()=>new Response('changed')});

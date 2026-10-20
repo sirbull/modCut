@@ -1,5 +1,7 @@
-import { readdir, readFile } from 'node:fs/promises';
-import { join, extname } from 'node:path';
+import { readdir, readFile, realpath } from 'node:fs/promises';
+import { join, extname, win32 } from 'node:path';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { homedir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { setImmediate as yieldEventLoop } from 'node:timers/promises';
@@ -9,6 +11,29 @@ import { glyphSubpaths, textSignature } from '../renderer/draw/doc/text-layout.m
 import { wrapLines } from '../renderer/draw/doc/text-wrap.mjs';
 import { measurePath, reverseSubpath, pathRunStart, glyphFrame } from '../renderer/draw/geom/path-measure.mjs';
 import { variableMetadata } from './font-metadata.mjs';
+const runFile=promisify(execFile);
+
+/** OS catalogs also include fonts activated outside the standard font folders. */
+export async function registeredFontFiles(platform=process.platform,run=runFile) {
+  const options={windowsHide:true,timeout:20000,maxBuffer:32*1024*1024};
+  try {
+    if(platform==='linux')return (await run('fc-list',['--format=%{file}\\n'],options)).stdout.split(/\r?\n/).filter(Boolean);
+    if(platform==='darwin'){
+      const data=JSON.parse((await run('/usr/sbin/system_profiler',['SPFontsDataType','-json'],options)).stdout),paths=[];
+      const visit=value=>{if(!value||typeof value!=='object')return;for(const [key,entry] of Object.entries(value)){if(key==='path'&&typeof entry==='string')paths.push(entry);else if(typeof entry==='object')visit(entry);}};
+      visit(data);return paths;
+    }
+    if(platform==='win32'){
+      const results=await Promise.allSettled(['HKLM','HKCU'].map(hive=>run('reg.exe',['query',`${hive}\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Fonts`],options)));
+      return results.flatMap(result=>result.status==='fulfilled'?result.value.stdout.split(/\r?\n/).flatMap(line=>{
+        const file=line.match(/REG_(?:EXPAND_)?SZ\s+(.+?)\s*$/)?.[1];if(!file)return [];
+        const expanded=file.replace(/%([^%]+)%/g,(_,key)=>process.env[key]??`%${key}%`);
+        return [win32.isAbsolute(expanded)?expanded:win32.join(process.env.WINDIR||'C:/Windows','Fonts',expanded)];
+      }):[]);
+    }
+  }catch{/* Folder scanning remains available without the OS catalog utility. */}
+  return [];
+}
 
 export function systemFontDirectories(platform=process.platform, env=process.env, home=homedir()) {
   if(platform==='win32')return [join(env.WINDIR||'C:/Windows','Fonts'),...(env.LOCALAPPDATA?[join(env.LOCALAPPDATA,'Microsoft','Windows','Fonts')]:[])];
@@ -16,7 +41,8 @@ export function systemFontDirectories(platform=process.platform, env=process.env
   return ['/usr/share/fonts','/usr/local/share/fonts',join(home,'.local','share','fonts'),join(home,'.fonts')];
 }
 /** Paths stay private to main. The renderer can only request an enumerated face, never an arbitrary file. */
-export function createFontService({directories=systemFontDirectories(),google}={}) {
+export function createFontService({directories,google}={}) {
+  const useRegistry=directories===undefined;directories??=systemFontDirectories();
   let catalogPromise; const entries=new Map(), cache=new Map();
   async function *files(directory,depth=0) {
     if(depth>12)return;
@@ -24,13 +50,16 @@ export function createFontService({directories=systemFontDirectories(),google}={
     for(const child of children) {
       const path=join(directory,child.name);
       if(child.isDirectory())yield* files(path,depth+1);
-      else if(child.isFile()&&['.ttf','.otf','.ttc','.otc'].includes(extname(child.name).toLowerCase()))yield path;
+      else if(child.isFile()&&['.ttf','.otf','.ttc','.otc','.dfont'].includes(extname(child.name).toLowerCase()))yield path;
     }
   }
   async function list() {
     catalogPromise??=(async()=>{
-      const faces=new Map();
-      for(const directory of directories)for await(const path of files(directory)) {
+      const faces=new Map(),seen=new Set();
+      async function *sources(){for(const directory of directories)yield* files(directory);if(useRegistry)yield* await registeredFontFiles();}
+      for await(const candidate of sources()) {
+        let path;try{path=await realpath(candidate);}catch{continue;}
+        if(seen.has(path))continue;seen.add(path);
         try {
           const source=create(await readFile(path));
           for(const font of source.fonts??[source]) {
@@ -93,8 +122,8 @@ export function createFontService({directories=systemFontDirectories(),google}={
     };
     const baseStyle=makeStyle(v,base),styles=[];let at=0;
     for(const run of v.runs) {
-      const c=run.character,fontChange=c&&['fontFamily','fontWeight','fontStyle'].some(key=>c[key]!==undefined&&c[key]!==v[key]);
-      const resolved=fontChange?await resolveFont({...v,...c,fontSource:c.fontFamily&&c.fontFamily!==v.fontFamily?'system':v.fontSource,fontPostscriptName:undefined,fontAxes:undefined}):base;
+      const c=run.character,fontChange=c&&['fontFamily','fontWeight','fontStyle','fontSource','fontAxes'].some(key=>c[key]!==undefined&&c[key]!==v[key]);
+      const resolved=fontChange?await resolveFont({...v,...c,fontSource:c.fontSource??(c.fontFamily&&c.fontFamily!==v.fontFamily?'system':v.fontSource),googleFont:c.googleFont??(c.fontFamily&&c.fontFamily!==v.fontFamily?undefined:v.googleFont),fontPostscriptName:c.fontPostscriptName,fontAxes:c.fontAxes}):base;
       styles.push({start:at,end:at+run.text.length,style:c?makeStyle({...v,...c},resolved):baseStyle});at+=run.text.length;
     }
     // The text between `start` and `end`, split where the style changes; tabs are four spaces.
@@ -102,7 +131,7 @@ export function createFontService({directories=systemFontDirectories(),google}={
       .filter(p=>p.text).map(p=>({...p,run:p.style.shapeText(p.text.replace(/\t/g,'    '))}));
     const widthOf=list=>list.reduce((sum,p)=>sum+p.run.positions.reduce((w,pos)=>w+p.style.advance(pos),0),0);
     const glyphs=[],lineWidths=[],area=v.kind==='area';
-    const fontInfo={family:face.family,style:face.style,postscriptName:face.postscriptName,...(face.source==='google'?{source:'google',reference:face.reference}:{}),axes:base.axes,instances:base.instances};
+    const fontInfo={family:face.family,style:face.style,postscriptName:face.postscriptName,ascent:base.font.ascent*baseStyle.scale,descent:base.font.descent*baseStyle.scale,...(face.source==='google'?{source:'google',reference:face.reference}:{}),axes:base.axes,instances:base.instances};
     const outlines=(glyph,style)=>{
       if(glyph.id===0)throw new Error(`The font “${style.face.family}” does not contain every character in the text.`);
       let commands;try{commands=glyph.path.commands;}catch{throw new Error('This font cannot provide vector outlines for the text. Choose a monochrome vector font.');}
@@ -191,5 +220,10 @@ export function createFontService({directories=systemFontDirectories(),google}={
     const set=[...new Set(font.characterSet??[])].filter(printable).sort((a,b)=>a-b);
     return {family:face?.family??font.familyName,style:face?.style??font.subfamilyName,count:set.length,characters:set.slice(0,limit)};
   }
-  return {list,shape,characters};
+  async function data(values) {
+    // Only an enumerated face or a validated Google reference can reach font bytes.
+    const {font}=await resolveFont(values);
+    return new Uint8Array(font.stream.buffer);
+  }
+  return {list,shape,characters,data};
 }

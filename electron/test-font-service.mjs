@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createFontService,systemFontDirectories } from './font-service.mjs';
+import { createFontService,systemFontDirectories,registeredFontFiles } from './font-service.mjs';
 import { DEFAULT_CHARACTER,pointText,pathText,textToOutlines } from '../renderer/draw/doc/text.mjs';
 import { createDocument,validateDocument } from '../renderer/draw/doc/schema.mjs';
 import { hasTextLayout } from '../renderer/draw/doc/text-layout.mjs';
@@ -13,6 +13,16 @@ test('font roots cover system and per-user locations on all three platforms',()=
   assert.equal(systemFontDirectories('darwin',{},'/user').length,3);
   assert.equal(systemFontDirectories('linux',{},'/user').length,4);
   assert.equal(systemFontDirectories('win32',{WINDIR:'C:/Windows',LOCALAPPDATA:'C:/User/AppData'}).length,2);
+});
+test('OS catalogs include activated Font Book, fontconfig and Windows registry fonts',async()=>{
+  assert.deepEqual(await registeredFontFiles('darwin',async()=>({stdout:JSON.stringify({SPFontsDataType:[{path:'/external/Activated.otf',typefaces:[{path:'/external/Collection.ttc'}]}]})})),['/external/Activated.otf','/external/Collection.ttc']);
+  assert.deepEqual(await registeredFontFiles('linux',async()=>({stdout:'/custom/font.ttf\n/custom/font.otf\n'})),['/custom/font.ttf','/custom/font.otf']);
+  const win=await registeredFontFiles('win32',async()=>({stdout:'    External (TrueType)    REG_SZ    D:\\Fonts\\Custom Font.ttf\r\n'}));assert.ok(win.every(path=>path==='D:\\Fonts\\Custom Font.ttf'));
+  assert.deepEqual(await registeredFontFiles('linux',async()=>{throw new Error('not installed');}),[]);
+});
+test('browser previews only expose bytes for a resolved, installed face',{skip:!latin},async()=>{
+  const bytes=await service.data(values(latin));assert.ok(bytes instanceof Uint8Array&&bytes.length>1000);
+  await assert.rejects(service.data({...values(latin),fontFamily:'../../private/file'}),/not installed/);
 });
 test('font catalog exposes metadata without filesystem paths; unknown names never become file reads',async()=>{
   assert.ok(faces.every(f=>!('path'in f)&&f.family&&f.postscriptName));

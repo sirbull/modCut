@@ -1,5 +1,6 @@
 /** Single source for Draw keys, tooltips and native accelerators. No DOM dependency. */
 import { TOOL_DEFINITIONS, toolRegistry } from './tools/registry.mjs';
+import { PANEL_DEFINITIONS } from './panels/registry.mjs';
 const binding = (id, keys, when = 'draw', extra = {}) => ({ id, keys, when, command: id, ...extra });
 const toolKeys = {
   select: ['V'], 'direct-selection': ['A'], 'magic-wand': ['Y'], lasso: ['Q'], artboard: ['Shift+O'],
@@ -33,6 +34,7 @@ const entries = [
     ['hide-edges', 'Mod+H'], ['hide-artboards', 'Mod+Shift+H'], ['bounding-box', 'Mod+Shift+B'], ['transparency-grid', 'Mod+Shift+D'],
     ['panel.layers', 'F7'], ['panel.color', 'F6'], ['panel.transparency', 'Mod+Shift+F10'], ['panel.stroke', 'Mod+F10'], ['panel.gradient', 'Mod+F9'], ['panel.pathfinder', 'Mod+Shift+F9'],
     ['panel.appearance', 'Shift+F6'], ['panel.align', 'Shift+F7'], ['panel.transform', 'Shift+F8'], ['panel.info', 'F8'],
+    ['panel.graphic-styles', 'Shift+F5'], ['panel.swatches', 'Mod+F11'],
     ['default-paint', 'D'], ['paint-focus', 'X'], ['paint-swap', 'Shift+X'], ['paint-solid', 'Comma'], ['paint-gradient', 'Period'], ['paint-none', 'Slash'],
     ['draw-mode', 'Shift+D'], ['screen-mode', 'F'], ['toggle-panels', 'Tab'], ['toggle-panels-except-tools', 'Shift+Tab'],
     ['tool-dialog', 'Enter'], ['cancel', 'Escape'], ['command-search', 'Mod+Shift+K'],
@@ -52,6 +54,8 @@ const entries = [
   binding('temporary.zoom', ['Mod+Space'], 'draw', { temporary: true }),
   binding('temporary.zoom-out', ['Mod+Alt+Space'], 'draw', { temporary: true }),
 ];
+// Panels without a default shortcut can still be assigned one in Keyboard Shortcuts.
+for (const panel of PANEL_DEFINITIONS) if (!entries.some(entry => entry.id === `panel.${panel.id}`)) entries.push(binding(`panel.${panel.id}`, []));
 export const KEYMAP = Object.freeze(entries.map((entry) => Object.freeze({ ...entry, keys: Object.freeze(entry.keys) })));
 
 /**

@@ -5,8 +5,6 @@ import { DOCUMENT_PRESETS, PRESET_CATEGORIES, UNIT_LABELS, RESOLUTIONS, RECENT_K
 import { dialogOperation } from '../geom/transforms.mjs';
 import { NAMED_LAYER_COLORS, layerColorName } from '../doc/layers.mjs';
 import { enhanceNumberFields } from './number-field.mjs';
-import { textProperties } from '../doc/text.mjs';
-import { createFontPicker } from './font-picker.mjs';
 import { WARP_STYLES } from '../geom/warp.mjs';
 import { LIVE_LABELS } from '../doc/effects.mjs';
 import { COLOR_MODES, colorValues, colorFromValues, normalizeHex } from '../doc/color.mjs';
@@ -100,105 +98,6 @@ export function colorPickerDialog(initial, recent = []) {
   return result.then(values => values ? { value: chosen } : null).finally(() => { alive = false; sampling?.abort(); });
 }
 /** Uniform text editor. Preview is detached; Apply is a single document command. */
-export function textDialog(defaults, onPreview = () => {}, {fonts=[],resolve=patch=>patch,...fontOptions}={}) {
-  const choices = values => values.map(value => ({ value, label: value[0].toUpperCase() + value.slice(1) }));
-  const fields = [
-    {key:'text',label:'Text',value:defaults.text,required:true},
-    {key:'fontSource',label:'Font source',type:'select',value:defaults.fontSource??'system',options:[{value:'system',label:'Installed fonts'},{value:'google',label:'Google Fonts'}]},
-    {key:'fontFamily',label:'Font family',value:defaults.fontFamily,required:true,description:'Search the family name. Google fonts download on selection and are kept for offline use.'},
-    {key:'fontSize',label:'Size (pt)',type:'number',value:defaults.fontSize,min:.1,max:10000,step:'any',required:true},
-    {key:'leading',label:'Leading (pt)',type:'number',value:defaults.leading,min:.1,max:10000,step:'any',required:true},
-    {key:'fontWeight',label:'Weight',type:'select',value:String(defaults.fontWeight),options:[...choices(['normal','bold']),...[100,200,300,400,500,600,700,800,900].map(value=>({value:String(value),label:String(value)})),...(typeof defaults.fontWeight==='number'&&defaults.fontWeight%100?[{value:String(defaults.fontWeight),label:String(defaults.fontWeight)}]:[])]},
-    {key:'fontStyle',label:'Style',type:'select',value:defaults.fontStyle,options:choices(['normal','italic'])},
-    {key:'alignment',label:'Paragraph alignment',type:'select',value:defaults.alignment,options:choices(['left','center','right','justify'])},
-  ];
-  if(defaults.kind==='area')fields.push(
-    {key:'frameWidth',label:'Frame width (mm)',type:'number',value:defaults.frameWidth,min:.1,max:100000,step:'any',required:true},
-    {key:'frameHeight',label:'Frame height (mm)',type:'number',value:defaults.frameHeight,min:.1,max:100000,step:'any',required:true});
-  if(defaults.kind==='onPath')fields.push(
-    {key:'pathOffset',label:'Start offset (mm)',type:'number',value:defaults.pathOffset??0,min:0,max:100000,step:'any',required:true},
-    {key:'pathFlip',label:'Flip to the other side',type:'checkbox',value:!!defaults.pathFlip});
-  const title={area:'Area Text',onPath:'Type on a Path'}[defaults.kind]??'Point Text';
-  const result = openDrawModal({title,submitLabel:'Apply',className:'draw-text-dialog',fields});
-  const form = document.querySelector('.draw-text-dialog form'), original = form.elements.text;
-  const picker=createFontPicker(form,defaults,{fonts,...fontOptions});
-  const input = document.createElement('textarea'); input.name = 'text'; input.className = 'input'; input.required = true; input.rows = 3;
-  input.value = defaults.text; original.replaceWith(input);
-  // Mixed styles: one override (or null) per character, kept in step with edits; new text takes the style
-  // before it. The row below styles the selected characters, as selecting text with the Type tool does.
-  const styles = [];
-  for (const run of defaults.runs ?? [{ text: defaults.text }]) for (let k = 0; k < run.text.length; k++) styles.push(run.character ?? null);
-  while (styles.length < input.value.length) styles.push(null); styles.length = input.value.length;
-  let previousText = input.value;
-  input.addEventListener('input', () => {
-    const next = input.value; let a = 0, b = 0;
-    while (a < previousText.length && a < next.length && previousText[a] === next[a]) a++;
-    while (b < previousText.length - a && b < next.length - a && previousText[previousText.length - 1 - b] === next[next.length - 1 - b]) b++;
-    const inherit = styles[a - 1] ?? styles[a] ?? null;
-    styles.splice(a, previousText.length - a - b, ...Array(next.length - a - b).fill(inherit)); previousText = next;
-  });
-  const buildRuns = () => {
-    const runs = [];
-    for (let k = 0; k < input.value.length; k++) {
-      const style = styles[k] && Object.keys(styles[k]).length ? styles[k] : null, last = runs.at(-1);
-      if (last && JSON.stringify(last.character ?? null) === JSON.stringify(style)) last.text += input.value[k];
-      else runs.push({ text: input.value[k], ...(style ? { character: style } : {}) });
-    }
-    return runs;
-  };
-  const styleRow = document.createElement('div'); styleRow.className = 'draw-text-styles'; styleRow.setAttribute('role','group'); styleRow.setAttribute('aria-label','Style of the selected text');
-  const styleNote = document.createElement('span'); styleNote.className = 'draw-text-styles__note';
-  const restyle = (change) => {
-    const from = input.selectionStart, to = input.selectionEnd;
-    if (from === to) { styleNote.textContent = 'Select characters in the text first.'; return; }
-    const patch = typeof change === 'function' ? change(styles.slice(from, to)) : change;
-    for (let k = from; k < to; k++) {
-      const next = { ...(styles[k] ?? {}) };
-      for (const [key, value] of Object.entries(patch)) if (value === undefined) delete next[key]; else next[key] = value;
-      styles[k] = Object.keys(next).length ? next : null;
-    }
-    const count = buildRuns().filter(r => r.character).length;
-    styleNote.textContent = count ? `${count} styled part${count === 1 ? '' : 's'}` : '';
-    input.focus(); input.setSelectionRange(from, to); form.dispatchEvent(new Event('change'));
-  };
-  const styleButton = (label, key, action) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'btn btn--ghost btn--sm'; b.textContent = label; b.dataset.textStyle = key;
-    b.addEventListener('mousedown', event => event.preventDefault()); b.addEventListener('click', () => restyle(action)); styleRow.append(b); return b; };
-  styleButton('Bold', 'bold', chosen => ({ fontWeight: chosen.every(c => c?.fontWeight === 'bold') ? undefined : 'bold' }));
-  styleButton('Italic', 'italic', chosen => ({ fontStyle: chosen.every(c => c?.fontStyle === 'italic') ? undefined : 'italic' }));
-  const sizeInput = document.createElement('input'); sizeInput.type = 'number'; sizeInput.className = 'input'; sizeInput.min = '.1'; sizeInput.max = '10000'; sizeInput.step = 'any';
-  sizeInput.value = String(defaults.fontSize); sizeInput.setAttribute('aria-label','Size of the selection (pt)'); sizeInput.dataset.textStyle = 'size-value';
-  sizeInput.addEventListener('input', event => event.stopPropagation()); sizeInput.addEventListener('change', event => event.stopPropagation());
-  styleRow.append(sizeInput);
-  styleButton('Set size', 'size', () => { const n = sizeInput.valueAsNumber; if (!(n >= .1 && n <= 10000)) { styleNote.textContent = 'Enter a size between 0.1 and 10,000 pt.'; return {}; } return { fontSize: n }; });
-  styleButton('Clear style', 'clear', () => ({ fontWeight: undefined, fontStyle: undefined, fontSize: undefined, fontFamily: undefined, tracking: undefined, baselineShift: undefined, horizontalScale: undefined, verticalScale: undefined }));
-  styleRow.append(styleNote); input.after(styleRow);
-  { const count = buildRuns().filter(r => r.character).length; if (count) styleNote.textContent = `${count} styled part${count === 1 ? '' : 's'}`; }
-  const error = document.createElement('p'); error.setAttribute('role','alert'); form.insertBefore(error,form.querySelector('.modal-actions'));
-  // Character settings edited in the Character panel ride along unchanged.
-  const read = () => ({kind:defaults.kind??'point',tracking:defaults.tracking??0,allCaps:!!defaults.allCaps,
-    horizontalScale:defaults.horizontalScale??100,verticalScale:defaults.verticalScale??100,baselineShift:defaults.baselineShift??0,kerning:defaults.kerning??'metrics',
-    leftIndent:defaults.leftIndent??0,rightIndent:defaults.rightIndent??0,firstLineIndent:defaults.firstLineIndent??0,spaceBefore:defaults.spaceBefore??0,spaceAfter:defaults.spaceAfter??0,...(defaults.orientation==='vertical'?{orientation:'vertical'}:{}),...(defaults.kind==='onPath'?{pathSubpath:defaults.pathSubpath}:{}),...Object.fromEntries(fields.map(f => {const el=form.elements[f.key];return [f.key,f.type==='checkbox'?el.checked:f.type==='number'?el.valueAsNumber:f.key==='fontWeight'&&!['normal','bold'].includes(el.value)?Number(el.value):el.value];})),
-    axisValues:[...form.querySelectorAll('[data-font-axis]')].map(el=>el.value),runs:buildRuns()});
-  const submit=form.querySelector('[type=submit]');let revision=0,alive=true,resolved=null,accepted=null,lastInput=null;
-  const preview = async () => {
-    if(!alive)return;
-    const values=read(),key=JSON.stringify(values);if(key===lastInput)return;lastInput=key;
-    const current=++revision;resolved=null;submit.disabled=true;form.dataset.textReady='false';input.setCustomValidity('Updating text preview…');
-    try {
-      const prepared=await picker.prepare(values);if(!alive||current!==revision)return;
-      const patch=await resolve(textProperties(prepared));
-      if(!alive||current!==revision)return;
-      resolved=patch;onPreview(patch);input.setCustomValidity('');submit.disabled=false;form.dataset.textReady='true';
-      lastInput=JSON.stringify(read());
-      error.textContent=patch.layout?.overflow&&patch.kind==='onPath'?`Text overflow: ${patch.layout.glyphs.length} glyphs fit on the path. Use a smaller size or start offset, or a longer path. Export includes only the glyphs that fit; Create Outlines and Send to Cut require all text to fit.`:
-        patch.layout?.overflow?`Text overflow: ${patch.layout.visibleLines} of ${patch.layout.lineWidths.length} lines fit. Enlarge the frame to show all text. Export includes only visible text; Create Outlines requires all text to fit.`:
-        patch.character.fontSource!=='google'&&fonts.length&&!fonts.some(f=>f.family.toLowerCase()===patch.character.fontFamily.toLowerCase())?'Font unavailable: saved outlines are preserved. Choose an installed font to change the text.':'';
-    } catch (e) {if(alive&&current===revision){error.textContent=e.message;input.setCustomValidity(e.message);onPreview(null);}}
-  };
-  form.addEventListener('submit',event=>{if(!resolved||submit.disabled){event.preventDefault();event.stopImmediatePropagation();return;}accepted=resolved;alive=false;revision++;},true);
-  form.addEventListener('input',preview); form.addEventListener('change',preview); preview(); input.focus(); input.select();
-  return result.then(values=>values?accepted:null).finally(() => {alive=false;revision++;picker.destroy();form.removeEventListener('input',preview);form.removeEventListener('change',preview);});
-}
 function openDrawModal(options) {
   const previous=document.activeElement, result=openModal(options), overlay=document.querySelector('.modal-overlay:last-of-type'),modal=overlay.querySelector('.modal');
   modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');enhanceNumberFields(modal);

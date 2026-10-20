@@ -1,4 +1,6 @@
-import { DOCK_PANELS, PANEL_DEFINITIONS, PANEL_GROUPS, clampDockSplit, groupForPanel, panelAvailable, panelName, panelSpriteHref } from './registry.mjs';
+import { DOCK_PANELS, clampDockSplit, panelName, panelSpriteHref } from './registry.mjs';
+import { createPanelWindows } from './windows.mjs';
+import { strokePreview } from './stroke-icons.mjs';
 import { insertNode, updateDocument, updateNode } from '../doc/commands.mjs';
 import { createId } from '../doc/schema.mjs';
 import { textDefaults, textValues } from '../doc/text.mjs';
@@ -20,6 +22,7 @@ import { addEntry, appearanceRows, clearAppearance, duplicateEntry, moveEntry, p
 import { COLOR_MODES, colorFromValues, colorValues, normalizeHex } from '../doc/color.mjs';
 import { ARROW_TYPES, paintHex } from '../doc/paint.mjs';
 import { createColorSurface } from '../ui/color-surface.mjs';
+import { fontBrowser, fontOptions } from '../ui/font-browser.mjs';
 
 export function icon(href) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
@@ -35,7 +38,6 @@ function storeSplit(value) { try { localStorage.setItem(SPLIT_KEY, String(value)
 export function createPanels(shell, state, api) {
   const isMac = /Mac/.test(navigator.platform);
   state.ui.groupTabs ??= {}; state.ui.dockCollapsed ??= {};
-  if (state.ui.flyout && !PANEL_GROUPS.some(group => group.id === state.ui.flyout)) state.ui.flyout = null;
   const rail = document.createElement('nav'); rail.className = 'draw-panel-rail'; rail.setAttribute('aria-label','Draw panels');
   // Right dock: Properties on top, Layers below, separated by a draggable splitter.
   let liveEdit = false;
@@ -58,46 +60,40 @@ export function createPanels(shell, state, api) {
   const scaleStrokes = check(propertiesFooter,'Scale strokes & effects','properties-scale-strokes',state.ui.scaleStrokes !== false,value => api.setScaleStrokes(value));
   propertiesFooter.dataset.tooltip = 'Scale stroke widths, dash lengths and effect sizes with objects.';
   dock.properties.section.append(propertiesFooter);
-  // Panel groups open as a flyout beside the rail, one tab per panel.
-  const flyout = document.createElement('section'); flyout.className = 'draw-flyout'; flyout.hidden = true; flyout.setAttribute('role','dialog');
-  const flyoutTabs = document.createElement('div'); flyoutTabs.className = 'draw-flyout__tabs'; flyoutTabs.setAttribute('role','tablist');
-  const flyoutBody = document.createElement('div'); flyoutBody.className = 'draw-panel draw-flyout__body'; flyoutBody.setAttribute('role','tabpanel');
-  const closeButton = document.createElement('button'); closeButton.type = 'button'; closeButton.className = 'draw-layer-action draw-flyout__close';
-  closeButton.setAttribute('aria-label','Close panel'); closeButton.dataset.tooltip = 'Close (Esc)'; closeButton.append(icon(panelSpriteHref('x')));
-  closeButton.addEventListener('click',() => close());
-  const flyoutHeader = document.createElement('div'); flyoutHeader.className = 'draw-flyout__header'; flyoutHeader.append(flyoutTabs,closeButton);
-  flyout.append(flyoutHeader,flyoutBody);
-  // Control bar (Illustrator's Control panel): contextual fields above the canvas. View > Control Bar hides it.
+  // Control bar stays above the canvas; the other panels have movable window chrome.
   const controlBar = document.createElement('div'); controlBar.className = 'draw-control-bar'; controlBar.setAttribute('role','toolbar'); controlBar.setAttribute('aria-label','Control bar');
-  shell.append(controlBar,rail,panels,flyout);
-  for (const group of PANEL_GROUPS) {
-    const button = document.createElement('button'); button.type = 'button'; button.className = 'draw-icon-button';
-    const names = group.tabs.map(panelName).join(' · '), shortcut = shortcutLabel(`panel.${group.tabs[0]}`,{isMac});
-    button.dataset.drawPanel = group.id; button.dataset.tooltip = names+(shortcut ? ` (${shortcut})` : ''); button.setAttribute('aria-label',names);
-    button.setAttribute('aria-haspopup','dialog'); button.append(icon(panelSpriteHref(group.icon)));
-    button.addEventListener('click',() => { state.ui.flyout = state.ui.flyout === group.id ? null : group.id; render(); }); rail.append(button);
-  }
-  function close() { if (state.ui.layerMenu) { state.ui.layerMenu = false; render(); return true; } if (!state.ui.flyout) return false; const id = state.ui.flyout; state.ui.flyout = null; render(); rail.querySelector(`[data-draw-panel="${id}"]`)?.focus({ preventScroll: true }); return true; }
-  function open(id) {
-    if (DOCK_PANELS.includes(id)) {
+  shell.append(controlBar,rail,panels);
+  const panelWindows = createPanelWindows({ shell, rail, panels, splitter, dock, state,
+    icon: name => icon(panelSpriteHref(name)), renderContent(id,host) {
+      if (state.document.readOnly) text(host,state.warning || 'Read-only document');
+      PANEL_CONTENT[id](host);
+    }, refresh: () => render(), layoutDock });
+  function close() { if (panelWindows.cancel()) return true; if (state.ui.layerMenu) { state.ui.layerMenu = false; render(); return true; } return panelWindows.close(); }
+  function open(id, { floating = false } = {}) {
+    // Contextual actions can still take the user straight to the Artboard tool and its Properties.
+    if (id === 'artboards') {
+      state.ui.flyout = null; state.ui.dockCollapsed.properties = false;
+      api.setTool('artboard'); render(); return true;
+    }
+    if (DOCK_PANELS.includes(id) && !floating && panelWindows.location(id) === 'dock') {
       state.ui.dockCollapsed[id] = false; layoutDock();
       if (id === 'layers') dock.layers.body.querySelector('.draw-layer-name')?.focus({ preventScroll: true });
       return true;
     }
-    const group = groupForPanel(id); if (!group) return false;
-    state.ui.flyout = group.id; if (panelAvailable(id)) state.ui.groupTabs[group.id] = id; render(); return true;
+    return panelWindows.open(id,{floating});
   }
   // The dock's height comes from a ResizeObserver, so laying out the dock never forces a synchronous layout.
   let dockHeight = 0;
-  if (typeof ResizeObserver === 'function') new ResizeObserver(entries => { const next = entries[0]?.contentRect.height ?? 0; if (Math.abs(next - dockHeight) > .5) { dockHeight = next; layoutDock(); } }).observe(panels);
+  const dockObserver = new ResizeObserver(entries => { const next = entries[0]?.contentRect.height ?? 0; if (Math.abs(next - dockHeight) > .5) { dockHeight = next; layoutDock(); } }); dockObserver.observe(panels);
   function layoutDock() {
     const height = dockHeight || panels.clientHeight, split = clampDockSplit(state.ui.dockSplit ?? storedSplit(),height);
-    const collapsed = id => !!state.ui.dockCollapsed[id];
+    const inDock = id => panelWindows.location(id) === 'dock';
+    const collapsed = id => inDock(id) && !!state.ui.dockCollapsed[id];
     for (const id of DOCK_PANELS) {
       dock[id].section.classList.toggle('is-collapsed',collapsed(id)); dock[id].header.setAttribute('aria-expanded',String(!collapsed(id)));
     }
-    splitter.hidden = collapsed('properties') || collapsed('layers');
-    dock.properties.section.style.flex = collapsed('properties') ? '0 0 auto' : collapsed('layers') ? '1 1 0' : `0 0 ${(split*100).toFixed(3)}%`;
+    splitter.hidden = !inDock('properties') || !inDock('layers') || collapsed('properties') || collapsed('layers');
+    dock.properties.section.style.flex = collapsed('properties') ? '0 0 auto' : !inDock('layers') || collapsed('layers') ? '1 1 0' : `0 0 ${(split*100).toFixed(3)}%`;
     dock.layers.section.style.flex = collapsed('layers') ? '0 0 auto' : '1 1 0';
     splitter.setAttribute('aria-valuenow',String(Math.round(split*100)));
   }
@@ -110,15 +106,7 @@ export function createPanels(shell, state, api) {
     splitter.addEventListener('pointermove',move); splitter.addEventListener('pointerup',end); splitter.addEventListener('pointercancel',end);
   });
   splitter.addEventListener('dblclick',() => setSplit(.5));
-  new ResizeObserver(layoutDock).observe(panels);
-  function placeFlyout() {
-    const button = rail.querySelector(`[data-draw-panel="${state.ui.flyout}"]`); if (!button) return;
-    const box = shell.getBoundingClientRect(), anchor = button.getBoundingClientRect();
-    flyout.style.right = `${Math.round(box.right - rail.getBoundingClientRect().left + 6)}px`;
-    flyout.style.maxHeight = `${Math.max(160,Math.round(box.height - 16))}px`;
-    const top = Math.max(8,Math.min(anchor.top - box.top,box.height - flyout.offsetHeight - 8));
-    flyout.style.top = `${Math.round(top)}px`;
-  }
+
   function text(host, message) { const p = document.createElement('p'); p.className = 'draw-panel__hint'; p.textContent = message; host.append(p); }
   function button(label, action) {
     const b = document.createElement('button'); b.type = 'button'; b.className = 'btn btn--ghost btn--sm'; b.textContent = label;
@@ -150,6 +138,10 @@ export function createPanels(shell, state, api) {
       if (type === 'number' && (!Number.isFinite(next) || (min !== undefined && next < min) || (max !== undefined && next > max))) throw new Error(`Enter a valid ${label.toLowerCase()}.`);
       action(next);
     }));
+    if(type==='number'&&/font-size|leading|tracking|horizontal-scale|vertical-scale|baseline-shift/.test(key)){
+      input.addEventListener('input',()=>{if(input.validity.valid&&Number.isFinite(input.valueAsNumber)){liveEdit=true;input.dispatchEvent(new Event('change'));}});
+      input.addEventListener('blur',()=>{liveEdit=false;queueMicrotask(render);});
+    }
     if (type === 'number' && scrubbable) {
       attachScrub(name,input,{ step, min, max, onScrub: scrubField(key,action) });
       if (scrub?.key === key) { input.value = String(scrub.value); input.classList.add('is-scrubbing'); }
@@ -744,25 +736,48 @@ export function createPanels(shell, state, api) {
     text(host,api.paintIds().length ? 'Changes apply live to the selected artwork; a slider drag is one undo step.' : 'No artwork selected: these colors apply to new shapes.');
   }
   function segmented(host, label, key, options, value, onPick, { disabled = false, unavailable = {} } = {}) {
-    const wrap = document.createElement('div'); wrap.className = 'draw-field';
+    const wrap = document.createElement('div'); wrap.className = `draw-field draw-stroke-setting draw-stroke-setting--${key}`;
     const name = document.createElement('span'); name.textContent = label; wrap.append(name);
     const group = document.createElement('div'); group.className = 'draw-segmented'; group.setAttribute('role','group'); group.setAttribute('aria-label',label);
     for (const [id,text] of options) {
-      const b = document.createElement('button'); b.type = 'button'; b.className = 'draw-segmented__option'; b.textContent = text;
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'draw-segmented__option draw-stroke-option';
+      b.append(icon(panelSpriteHref(`stroke-${key}-${id}`))); b.setAttribute('aria-label',text); b.dataset.tooltip = text;
       b.dataset.drawStroke = `${key}-${id}`; b.setAttribute('aria-pressed',String(id === value)); b.disabled = disabled || !!unavailable[id];
-      if (unavailable[id]) b.dataset.tooltip = unavailable[id];
+      if (unavailable[id]) b.dataset.tooltip = `${text}: ${unavailable[id]}`;
       b.addEventListener('click',() => api.run(() => onPick(id))); group.append(b);
     }
     wrap.append(group); host.append(wrap);
   }
+  function visualSelect(select, preview, label) {
+    select.setAttribute('aria-label',label);
+    const wrap = document.createElement('div'); wrap.className = 'draw-stroke-picker';
+    const sample = document.createElement('span'); sample.className = 'draw-stroke-sample'; sample.append(preview(select.value));
+    const choices = document.createElement('details'); choices.className = 'draw-stroke-choices';
+    const toggle = document.createElement('summary'); toggle.append(sample); toggle.setAttribute('aria-label',select.closest('label')?.textContent || 'Preview options');
+    toggle.dataset.tooltip = 'Preview options';
+    toggle.addEventListener('keydown',event => {
+      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); if (!select.disabled && !event.repeat) choices.open = !choices.open; }
+      if (event.key === 'Escape') { event.preventDefault(); choices.open = false; }
+    });
+    const menu = document.createElement('div'); menu.className = 'draw-stroke-choices__menu';
+    for (const option of select.options) {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'draw-stroke-choice'; b.disabled = select.disabled;
+      b.append(preview(option.value),document.createTextNode(option.textContent)); b.setAttribute('aria-pressed',String(option.selected));
+      b.addEventListener('click',() => { choices.open=false; select.value=option.value; select.dispatchEvent(new Event('change',{bubbles:true})); }); menu.append(b);
+    }
+    if(select.disabled) toggle.addEventListener('click',event=>event.preventDefault());
+    choices.append(toggle,menu); wrap.append(choices,select); return wrap;
+  }
   function strokePanel(host) {
+    const content = document.createElement('div'); content.className = 'draw-stroke-panel'; host.append(content); host = content;
     const node = state.document.getNode(api.paintIds()[0]), stroke = node?.appearance.strokes[0] ?? null, readOnly = state.document.readOnly;
     const s = stroke ?? { width: state.ui.strokeWidth, cap: 'round', join: 'round', miterLimit: 4, align: 'center' }, disabled = readOnly || !node;
     const apply = props => api.strokeProps(props);
     field(host,'Weight (mm)',s.width,value => node ? apply({ width: value }) : api.paint('width',value),{ min:0, max:352.8, key:'stroke-weight', disabled: readOnly });
     segmented(host,'Cap','cap',[['butt','Butt'],['round','Round'],['square','Projecting']],s.cap,cap => apply({ cap }),{ disabled });
-    segmented(host,'Corner','join',[['miter','Miter'],['round','Round'],['bevel','Bevel']],s.join,join => apply({ join }),{ disabled });
-    field(host,'Limit (×)',s.miterLimit ?? 4,value => apply({ miterLimit: value }),{ min:1, max:500, key:'stroke-limit', disabled: disabled || s.join !== 'miter' });
+    const corners = document.createElement('div'); corners.className = 'draw-stroke-corners'; host.append(corners);
+    segmented(corners,'Corner','join',[['miter','Miter'],['round','Round'],['bevel','Bevel']],s.join,join => apply({ join }),{ disabled });
+    field(corners,'Limit (×)',s.miterLimit ?? 4,value => apply({ miterLimit: value }),{ min:1, max:500, key:'stroke-limit', disabled: disabled || s.join !== 'miter' });
     const later = 'Inside and Outside alignment come with Outline Stroke (phase 3).';
     segmented(host,'Align stroke','align',[['center','Center'],['inside','Inside'],['outside','Outside']],s.align ?? 'center',() => {},{ disabled, unavailable: { inside: later, outside: later } });
     check(host,'Dashed line','stroke-dashed',!!s.dash?.array?.length,on => api.run(() => apply({ dash: on ? [2,1] : null }))).disabled = disabled;
@@ -776,35 +791,39 @@ export function createPanels(shell, state, api) {
       }
     }
     // Variable width profile (D4.1): a preset, or the custom profile made with the Width tool, and flips.
-    const profile = document.createElement('div'); profile.className = 'draw-fields'; host.append(profile);
+    const profile = document.createElement('div'); profile.className = 'draw-stroke-profile'; host.append(profile);
     {
-      const row = document.createElement('label'); row.className = 'draw-field'; const name = document.createElement('span'); name.textContent = 'Profile';
+      const row = document.createElement('div'); row.className = 'draw-field'; const name = document.createElement('span'); name.textContent = 'Profile';
       const select = document.createElement('select'); select.className = 'draw-select'; select.dataset.drawField = 'stroke-profile'; select.disabled = disabled;
       const current = profileName(s.widthProfile);
       for (const [id,preset] of Object.entries(WIDTH_PROFILES)) select.append(new Option(preset.label,id,false,id === current));
       if (current === 'custom') select.append(new Option('Custom (Width tool)','custom',false,true));
       select.addEventListener('change',() => { if (select.value !== 'custom') api.run(() => apply({ widthProfile: WIDTH_PROFILES[select.value].points })); });
-      row.append(name,select); profile.append(row);
+      row.append(name,visualSelect(select,id => strokePreview('profile',id === 'custom' ? s.widthProfile : WIDTH_PROFILES[id]?.points),'Profile')); profile.append(row);
       const flips = document.createElement('div'); flips.className = 'draw-flip-row'; flips.setAttribute('role','group'); flips.setAttribute('aria-label','Flip profile');
       for (const [label,flip,key] of [['Flip Along',flipAlong,'along'],['Flip Across',flipAcross,'across']]) {
-        const b = button(label,() => api.run(() => apply({ widthProfile: flip(s.widthProfile) }))); b.className = 'btn btn--sm'; b.dataset.drawStrokeFlip = key;
+        const b = iconButton(label,`stroke-flip-${key}`,() => apply({ widthProfile: flip(s.widthProfile) }),'draw-layer-action'); b.dataset.drawStrokeFlip = key;
         b.disabled = disabled || !s.widthProfile?.length; flips.append(b);
       }
       profile.append(flips);
     }
-    const arrows = document.createElement('div'); arrows.className = 'draw-fields'; host.append(arrows);
+    const arrows = document.createElement('div'); arrows.className = 'draw-stroke-arrows'; host.append(arrows);
+    const arrowLabel = document.createElement('span'); arrowLabel.textContent = 'Arrowheads'; arrows.append(arrowLabel);
     for (const [key,label] of [['startArrow','Start arrowhead'],['endArrow','End arrowhead']]) {
-      const row = document.createElement('label'); row.className = 'draw-field';
+      const row = document.createElement('div'); row.className = 'draw-field';
       const name = document.createElement('span'); name.textContent = label;
       const select = document.createElement('select'); select.className = 'draw-select'; select.dataset.drawField = `stroke-${key}`; select.disabled = disabled;
       select.append(new Option('None','none',false,!s[key]));
       for (const type of ARROW_TYPES) select.append(new Option(type[0].toUpperCase()+type.slice(1),type,false,s[key]?.type === type));
       select.addEventListener('change',() => api.run(() => apply({ [key]: select.value === 'none' ? null : { type: select.value, scale: s[key]?.scale ?? 1 } })));
-      row.append(name,select); arrows.append(row);
+      row.append(name,visualSelect(select,type => strokePreview('arrow',type,key === 'startArrow'),label)); arrows.append(row);
     }
+    const scaleLabel = document.createElement('span'); scaleLabel.textContent = 'Scale (%)'; arrows.append(scaleLabel);
     for (const [key,label] of [['startArrow','Start scale (%)'],['endArrow','End scale (%)']]) {
-      field(arrows,label,(s[key]?.scale ?? 1)*100,value => apply({ [key]: { type: s[key].type, scale: value/100 } }),{ min:1, max:1000, key:`stroke-${key}-scale`, disabled: disabled || !s[key] });
+      const input = field(arrows,label,(s[key]?.scale ?? 1)*100,value => apply({ [key]: { type: s[key].type, scale: value/100 } }),{ min:1, max:1000, key:`stroke-${key}-scale`, disabled: disabled || !s[key] });
+      input.setAttribute('aria-label',label);
     }
+    host.append(profile);
     text(host,node ? (stroke ? 'Stroke color is set in the Color panel.' : 'This artwork has no stroke; editing an option adds one in the current stroke color.') : 'Select artwork to edit stroke options. Weight applies to new shapes.');
   }
   function artboardPanel(host) {
@@ -815,7 +834,7 @@ export function createPanels(shell, state, api) {
       if(sent){const badge=document.createElement('span');badge.className=`draw-cut-status draw-cut-status--${sent}`;badge.dataset.drawCutStatus=sent;
         badge.textContent=sent==='changed'?'Changed since sending':'Sent to Cut';b.append(badge);}
       b.setAttribute('aria-pressed',String(board.id===api.artboards.active().id));
-      b.addEventListener('dblclick',()=>api.artboards.choose(board.id,true));list.append(b);
+      b.addEventListener('dblclick',()=>{ const input=host.querySelector('[data-draw-field=artboard-name]'); input?.focus(); input?.select(); });list.append(b);
     } host.append(list);
     const board=api.artboards.active();
     field(host,'Name',board.name,v=>api.artboards.edit(board.id,{name:v},{artwork:false}),{type:'text',key:'artboard-name'});
@@ -824,7 +843,9 @@ export function createPanels(shell, state, api) {
     const move=document.createElement('label');move.className='draw-check';const check=document.createElement('input');check.type='checkbox';check.checked=state.ui.moveArtwork!==false;
     check.addEventListener('change',()=>{state.ui.moveArtwork=check.checked;});move.append(check,document.createTextNode('Move/copy artwork with artboard'));host.append(move);
     for(const [label,action,disabled] of [['New artboard',()=>api.artboards.add(),false],['Duplicate',()=>api.artboards.duplicate(),false],['Delete',()=>api.artboards.remove(),state.document.data.artboards.length===1],['Move up',()=>api.artboards.order(-1),state.document.data.artboards[0].id===board.id],['Move down',()=>api.artboards.order(1),state.document.data.artboards.at(-1).id===board.id],['Rearrange…',api.rearrange,false]]) {
-      const b=button(label,action);b.disabled=disabled || state.document.readOnly;host.append(b);
+      const b=button(label,action);b.disabled=disabled || state.document.readOnly;
+      if(label==='New artboard'){b.className='btn btn--primary btn--sm draw-new-artboard';b.prepend(icon(panelSpriteHref('plus')));b.dataset.drawNewArtboard='';host.prepend(b);}
+      else host.append(b);
     }
     const send=button('Send to Cut…',()=>api.command('send-to-cut'));send.className='btn btn--primary btn--sm draw-send-button';send.dataset.drawSendToCut='';host.append(send);
     if(api.cutStatus(board.id)){const update=button('Update in Cut',()=>api.updateInCut(board.id));update.className='btn btn--ghost btn--sm draw-send-button';update.dataset.drawUpdateCut='';
@@ -856,6 +877,10 @@ export function createPanels(shell, state, api) {
     text(host,'Fill and Stroke for new shapes are set with the boxes below the drawing tools.');
   }
   function propertiesPanel(host) {
+    if (state.ui.tool === 'artboard') {
+      const settings=document.createElement('div');settings.className='draw-artboard-properties';host.append(settings);
+      section(settings,'Artboards');artboardPanel(settings);return;
+    }
     const ids = api.selectedIds(), title = document.createElement('div'); title.className = 'draw-appearance-head'; title.dataset.drawSelectionTitle = '';
     title.textContent = selectionTitle(ids); host.append(title);
     if (!ids.length) {
@@ -948,18 +973,9 @@ export function createPanels(shell, state, api) {
   /** Character edits selected text, or the formatting for the next text object when none is selected. */
   function characterPanel(host, { compact = false, prefix = '' } = {}) {
     const nodes = selectedText(), node = nodes[0];
-    const v = node ? textValues(node) : textDefaults(state.ui), ro = state.document.readOnly || nodes.some(n => !state.document.isEditable(n.id)), set = (changes,label) => api.textStyle(changes,label);
+    const v = api.textValues?.() ?? (node ? textValues(node) : textDefaults(state.ui)), ro = state.document.readOnly || nodes.some(n => !state.document.isEditable(n.id)), set = (changes,label) => api.textStyle(changes,label);
     if (!node && !compact) text(host,'These settings apply to new text.');
-    const families = api.fontFamilies(), listId = 'draw-font-families';
-    let list = document.getElementById(listId);
-    if (!list) { list = document.createElement('datalist'); list.id = listId; document.body.append(list); }
-    if (list.childElementCount !== families.length) list.replaceChildren(...families.map(f => new Option(f)));
-    const family = field(host,'Font',v.fontFamily,value => {
-      if (!value.trim()) throw new Error('Enter a font family.');
-      if (families.length && !families.includes(value)) throw new Error(`“${value}” is not installed. Choose an installed font, or use Edit Text for Google Fonts.`);
-      set({ fontFamily: value, fontSource: 'system' },'Font');
-    },{ type:'text', key:`${prefix}font-family`, disabled: ro });
-    family.setAttribute('list',listId); family.title = v.fontSource === 'google' ? 'Google font. Choose an installed font here, or another Google font in Edit Text.' : '';
+    fontBrowser(host,v,{choose:next=>set(next,'Font'),sample:api.fontSample,disabled:ro,key:`${prefix}font-family`});
     const styles = document.createElement('div'); styles.className = 'draw-fields'; host.append(styles);
     const select = (parent, label, key, value, options, onChange) => {
       const row = document.createElement('label'); row.className = 'draw-field'; const name = document.createElement('span'); name.textContent = label;
@@ -967,7 +983,7 @@ export function createPanels(shell, state, api) {
       for (const [optionValue,optionLabel] of options) input.append(new Option(optionLabel,String(optionValue)));
       input.value = String(value); input.addEventListener('change',() => api.run(() => onChange(input.value))); row.append(name,input); parent.append(row); return input;
     };
-    select(styles,'Weight',`${prefix}font-weight`,v.fontWeight,WEIGHTS.map(w => [w,typeof w === 'number' ? String(w) : w[0].toUpperCase()+w.slice(1)]),
+    select(styles,'Weight',`${prefix}font-weight`,v.fontWeight,[...new Set([...WEIGHTS,v.fontWeight])].map(w => [w,typeof w === 'number' ? String(w) : w[0].toUpperCase()+w.slice(1)]),
       value => set({ fontWeight: ['normal','bold'].includes(value) ? value : Number(value) },'Font Weight'));
     select(styles,'Style',`${prefix}font-style`,v.fontStyle,[['normal','Normal'],['italic','Italic']],value => set({ fontStyle: value },'Font Style'));
     const sizes = document.createElement('div'); sizes.className = 'draw-fields'; host.append(sizes);
@@ -981,6 +997,17 @@ export function createPanels(shell, state, api) {
     field(shape,compact ? 'Shift' : 'Baseline shift (pt)',v.baselineShift ?? 0,value => set({ baselineShift: value },'Baseline Shift'),{ min:-10000, max:10000, key:`${prefix}baseline-shift`, disabled: ro, scrubbable: false });
     select(shape,'Kerning',`${prefix}kerning`,v.kerning ?? 'metrics',[['metrics','Metrics'],['none','None']],value => set({ kerning: value },'Kerning'));
     const caps = check(host,'All Caps',`${prefix}all-caps`,!!v.allCaps,value => set({ allCaps: value },'All Caps')); caps.disabled = ro;
+    fontOptions(host,v,{change:changes=>set(changes,'Font Options'),disabled:ro,start:()=>{liveEdit=true;},end:()=>{liveEdit=false;queueMicrotask(render);}});
+    if(v.kind==='area'){
+      const frame=document.createElement('div');frame.className='draw-fields';host.append(frame);
+      field(frame,'Frame width (mm)',v.frameWidth,value=>set({frameWidth:value},'Text Frame'),{min:.1,max:100000,key:`${prefix}frame-width`,disabled:ro,scrubbable:false});
+      field(frame,'Frame height (mm)',v.frameHeight,value=>set({frameHeight:value},'Text Frame'),{min:.1,max:100000,key:`${prefix}frame-height`,disabled:ro,scrubbable:false});
+    }
+    if(v.kind==='onPath'){
+      field(host,'Start offset (mm)',v.pathOffset??0,value=>set({pathOffset:value},'Text Offset'),{min:0,max:100000,key:`${prefix}path-offset`,disabled:ro,scrubbable:false});
+      check(host,'Flip to the other side',`${prefix}path-flip`,!!v.pathFlip,value=>set({pathFlip:value},'Flip Text'));
+    }
+    if(node?.layout?.overflow)text(host,'Text overflows its frame. Enlarge the frame or reduce the size to show all text.');
     if (!compact) text(host,'Sizes and leading are in points. Tracking is in thousandths of an em. Changes are shaped again with the font, so export, outlines and Send to Cut follow.');
   }
   /** Paragraph formatting follows the same selection/defaults behavior as Character. */
@@ -1288,43 +1315,26 @@ export function createPanels(shell, state, api) {
   }
   /** Updates the Info panel in place as the pointer moves, without rebuilding the other panels. */
   function updateInfo() {
-    // The Navigator follows panning and zooming without rebuilding its image.
-    if (!flyout.hidden && flyoutBody.dataset.drawPanelBody === 'navigator' && navigatorPlace) { const v = navigatorPlace(), zoom = flyoutBody.querySelector('[data-draw-field=navigator-zoom]'); if (zoom && document.activeElement !== zoom) zoom.value = String(Math.round(v.zoom)); return; }
-    if (flyout.hidden || flyoutBody.dataset.drawPanelBody !== 'info') return;
-    flyoutBody.replaceChildren(); infoPanel(flyoutBody);
+    for (const host of panelWindows.bodies()) {
+      if (host.dataset.drawPanelBody === 'navigator' && navigatorPlace) {
+        const v = navigatorPlace(), zoom = host.querySelector('[data-draw-field=navigator-zoom]');
+        if (zoom && document.activeElement !== zoom) zoom.value = String(Math.round(v.zoom));
+      } else if (host.dataset.drawPanelBody === 'info') { host.replaceChildren(); infoPanel(host); }
+    }
   }
   const PANEL_CONTENT = { gradient: gradientPanel, character: host => characterPanel(host), paragraph: host => paragraphPanel(host), swatches: swatchesPanel, color: colorPanel, stroke: strokePanel, transparency: transparencyPanel, pathfinder: pathfinderPanel, appearance: appearancePanel, transform: host => transform(host), align: alignPanel, artboards: artboardPanel, history: historyPanel, info: infoPanel, 'document-info': documentInfoPanel, links: linksPanel, 'image-trace': imageTracePanel, 'graphic-styles': graphicStylesPanel, navigator: navigatorPanel, 'asset-export': assetExportPanel, glyphs: glyphsPanel };
-  function renderFlyout() {
-    const group = PANEL_GROUPS.find(g => g.id === state.ui.flyout);
-    if (group?.id !== 'image-trace') api.clearTracePreview();
-    flyout.hidden = !group; if (!group) { flyoutTabs.replaceChildren(); flyoutBody.replaceChildren(); return; }
-    const remembered = state.ui.groupTabs[group.id];
-    const active = group.tabs.includes(remembered) && panelAvailable(remembered) ? remembered : group.tabs.find(panelAvailable);
-    flyout.dataset.drawGroup = group.id; flyout.setAttribute('aria-label',group.tabs.map(panelName).join(', '));
-    flyoutTabs.replaceChildren(...group.tabs.map(id => {
-      const tab = document.createElement('button'); tab.type = 'button'; tab.className = 'draw-flyout__tab'; tab.setAttribute('role','tab');
-      tab.dataset.drawPanelTab = id; tab.textContent = panelName(id); tab.setAttribute('aria-selected',String(id === active));
-      const shortcut = shortcutLabel(`panel.${id}`,{isMac}); if (shortcut) tab.dataset.tooltip = `${panelName(id)} (${shortcut})`;
-      const unavailable = PANEL_DEFINITIONS.find(p => p.id === id)?.unavailable;
-      if (unavailable) { tab.disabled = true; tab.dataset.tooltip = `${panelName(id)}: ${unavailable}`; }
-      tab.addEventListener('click',() => { state.ui.groupTabs[group.id] = id; render(); }); return tab;
-    }));
-    flyoutBody.replaceChildren(); flyoutBody.dataset.drawPanelBody = active;
-    if (state.document.readOnly) text(flyoutBody,state.warning || 'Read-only document');
-    PANEL_CONTENT[active](flyoutBody);
-    placeFlyout();
-  }
   function render() {
     scaleStrokes.checked = state.ui.scaleStrokes !== false;
+    propertiesFooter.hidden = state.ui.tool === 'artboard';
     // A slider drag or color-picker session updates the canvas live; rebuilding would interrupt it.
-    if (liveEdit && [flyoutBody,primary,controlBar].some(host => host.contains(document.activeElement))) return;
+    if (liveEdit && [...panelWindows.bodies(),primary,controlBar].some(host => host.contains(document.activeElement))) return;
     liveEdit = false;
-    for (const button of rail.children) button.setAttribute('aria-pressed',String(button.dataset.drawPanel === state.ui.flyout));
     primary.replaceChildren(); dock.layers.body.replaceChildren();
     if (state.document.readOnly) text(primary,state.warning || 'Read-only document');
     propertiesPanel(primary); layerPanel(dock.layers.body);
     controlBar.replaceChildren(); controlBar.hidden = state.ui.controlBar === false; if (!controlBar.hidden) controlBarContent(controlBar);
-    renderFlyout(); layoutDock();
+    panelWindows.render();
+    if (!panelWindows.bodies().some(host => host.dataset.drawPanelBody === 'image-trace')) api.clearTracePreview();
   }
   /** Control bar: compact fields for the selection, the artboard tool, or the paint for new objects. */
   function controlBarContent(host) {
@@ -1368,9 +1378,9 @@ export function createPanels(shell, state, api) {
     const texts = selectedText();
     if (texts.length || textToolActive()) {
       // Character and Paragraph, as Illustrator's Control panel shows them for type.
-      const v = texts.length ? textValues(texts[0]) : textDefaults(state.ui), typeGroup = group('Character'), tro = ro || texts.some(n => !state.document.isEditable(n.id));
-      const font = field(typeGroup,'Font',v.fontFamily,value => api.textStyle({ fontFamily: value, fontSource: 'system' },'Font'),{ type:'text', key:'cb-font-family', disabled: tro });
-      font.setAttribute('list','draw-font-families'); font.closest('label').classList.add('draw-cb-field','draw-cb-field--text');
+      const v = api.textValues?.() ?? (texts.length ? textValues(texts[0]) : textDefaults(state.ui)), typeGroup = group('Character'), tro = ro || texts.some(n => !state.document.isEditable(n.id));
+      const font = fontBrowser(typeGroup,v,{choose:next=>api.textStyle(next,'Font'),sample:api.fontSample,disabled:tro,key:'cb-font-family'});
+      font.closest('label').classList.add('draw-cb-field','draw-cb-field--text');
       num(typeGroup,'Size',v.fontSize,value => api.textStyle({ fontSize: value },'Font Size'),{ key:'cb-font-size', min:.1, max:10000, step:1, disabled: tro, scrubbable: false });
       const para = group('Paragraph');
       for (const [label,iconId,value] of [['Align left','align-left','left'],['Align center','align-center','center'],['Align right','align-right','right']]) {
@@ -1408,5 +1418,5 @@ export function createPanels(shell, state, api) {
       if (!show) continue; const b = button(label,action); b.dataset.drawCb = key; b.disabled = ro; actions.append(b);
     }
   }
-  render(); return { render, open, close, updateInfo };
+  render(); return { render, open, close, updateInfo, destroy() { panelWindows.destroy(); dockObserver.disconnect(); } };
 }

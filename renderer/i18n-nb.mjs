@@ -1,6 +1,7 @@
 // Norwegian bokmål. Keys are the English interface text exactly as written in the code; {name} marks a
 // value that is carried over. Product and workspace names (modCut, Cut, Draw) stay as they are.
 export const NB = Object.freeze({
+  "Dock": "Fest", "Dock panel": "Fest panelet", "Drag to undock": "Dra for å løsne",
   "Cut tools": "Cut-verktøy", "Basic tools": "Grunnleggende verktøy", "View controls": "Visningskontroller",
   "Scale stroke widths, dash lengths and effect sizes with objects.": "Skaler strekbredder, stipling og effektstørrelser sammen med objektene.",
   "Ruler units": "Linjalenheter", "Percentage": "Prosent", "Points (pt)": "Punkter (pt)", "Picas": "Pica",
@@ -297,6 +298,7 @@ export const NB = Object.freeze({
   "Delete Selected Item": "Slett valgt element", "Delete Appearance": "Slett utseende", "Add New Effect": "Legg til ny effekt", "Add Effect…": "Legg til effekt…",
   "The top row draws on top. Drag rows to reorder fills or strokes. Click a row name to choose it for Duplicate and Delete.": "Den øverste raden tegnes øverst. Dra rader for å endre rekkefølgen på fyll eller streker. Klikk et radnavn for å velge det for Dupliser og Slett.",
   "None": "Ingen", "Color mode": "Fargemodus", "Hex": "Hex", "No artwork selected: these colors apply to new shapes.": "Ingen grafikk er merket: disse fargene brukes på nye former.",
+  "Preview options": "Vis alternativer", "Artboard name": "Navn på tegnebrett", "Asset Export…": "Ressurseksport…", "Arrowheads": "Pilhoder",
   "Weight (mm)": "Tykkelse (mm)", "Cap": "Ende", "Butt": "Flat", "Round": "Rund", "Projecting": "Utstikkende", "Corner": "Hjørne", "Miter": "Gjæring",
   "Bevel": "Skrå", "Limit (×)": "Grense (×)", "Inside and Outside alignment come with Outline Stroke (phase 3).": "Justering innenfor og utenfor kommer med Konturer strek (fase 3).",
   "Align stroke": "Juster strek", "Center": "Midten", "Inside": "Innenfor", "Outside": "Utenfor", "Dashed line": "Stiplet linje", "Gap": "Mellomrom",

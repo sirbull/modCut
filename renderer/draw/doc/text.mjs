@@ -13,16 +13,18 @@ export function textDefaults(ui = {}) {
 /** Whole-object style changes also replace matching run overrides and invalidate an old font face. */
 export function textStyleValues(values, changes) {
   const next = { ...values, ...changes };
-  if (values.runs) next.runs = values.runs.map(run => run.character ? { ...run, character: Object.fromEntries(Object.entries(run.character).filter(([key]) => !(key in changes))) } : run);
+  const fontChange=changes.fontFamily!==undefined||changes.fontSource!==undefined;
+  if (values.runs) next.runs = values.runs.map(run => run.character ? { ...run, character: Object.fromEntries(Object.entries(run.character).filter(([key]) => !(key in changes)&&!(fontChange&&['fontPostscriptName','googleFont','fontAxes'].includes(key)))) } : run);
   if (next.fontFamily !== values.fontFamily || (next.fontSource ?? 'system') !== (values.fontSource ?? 'system')) {
     delete next.fontPostscriptName; delete next.googleFont; delete next.fontAxes;
   }
   if (changes.fontWeight !== undefined || changes.fontStyle !== undefined) delete next.fontPostscriptName;
+  if(changes.fontWeight!==undefined&&next.fontAxes?.wght!==undefined)next.fontAxes={...next.fontAxes,wght:changes.fontWeight==='bold'?700:changes.fontWeight==='normal'?400:changes.fontWeight};
   return next;
 }
 export function textContent(node) { return node.content.runs.map(run => run.text).join(''); }
 /** Character settings a styled run may override (mixed styles in one text object). */
-export const RUN_KEYS = Object.freeze(['fontFamily', 'fontWeight', 'fontStyle', 'fontSize', 'tracking', 'baselineShift', 'horizontalScale', 'verticalScale', 'rotation', 'xShift']);
+export const RUN_KEYS = Object.freeze(['fontFamily', 'fontWeight', 'fontStyle', 'fontSource', 'fontPostscriptName', 'googleFont', 'fontAxes', 'fontSize', 'tracking', 'baselineShift', 'horizontalScale', 'verticalScale', 'rotation', 'xShift']);
 /** One run's overrides, validated; the same rules as the object's own character settings. */
 export function runCharacter(c) {
   if (c === undefined || c === null) return null;
@@ -30,7 +32,10 @@ export function runCharacter(c) {
   const out = {};
   for (const [key, value] of Object.entries(c)) {
     if (!RUN_KEYS.includes(key)) throw new Error(`Text runs cannot change ${key}.`);
-    const ok = key === 'fontFamily' ? typeof value === 'string' && !!value.trim()
+    const ok = ['fontFamily','fontPostscriptName'].includes(key) ? typeof value === 'string' && !!value.trim()
+      : key === 'fontSource' ? ['system','google'].includes(value)
+      : key === 'googleFont' ? validGoogleReference(value)
+      : key === 'fontAxes' ? validFontAxes(value)
       : key === 'fontWeight' ? ['normal', 'bold'].includes(value) || Number.isFinite(value) && value >= 1 && value <= 1000
       : key === 'fontStyle' ? ['normal', 'italic'].includes(value)
       : key === 'fontSize' ? Number.isFinite(value) && value >= .1 && value <= 10000
@@ -43,6 +48,7 @@ export function runCharacter(c) {
     if (!ok) throw new Error(`Invalid ${key} in a text run.`);
     out[key] = key === 'fontFamily' ? value.trim() : value;
   }
+  if(out.googleFont&&out.fontFamily&&out.googleFont.family!==out.fontFamily)throw new Error('Invalid saved Google font reference.');
   return Object.keys(out).length ? out : null;
 }
 /** Runs for `text`: empty runs dropped, neighbours with the same style merged, one plain run when nothing is styled. */

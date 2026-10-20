@@ -61,7 +61,8 @@ import { toolCursor } from './tools/cursors.mjs';
 import { alignReference, alignOffsets, distributeOffsets, spacingOffsets } from './geom/align.mjs';
 import { pointText, pathText, textValues, textProperties, textToOutlines, textDefaults, textStyleValues, DEFAULT_CHARACTER, PT_TO_MM, characterAt, styleRange, textContent } from './doc/text.mjs';
 import { hasTextLayout } from './doc/text-layout.mjs';
-import { textDialog } from './ui/dialogs.mjs';
+import { inlineText } from './ui/inline-text.mjs';
+import { installedFonts, prepareFont, closeFontBrowser } from './ui/font-browser.mjs';
 
 const workspaces=new WeakMap();
 export function getDrawWorkspace(root) {return workspaces.get(root) || null;}
@@ -108,7 +109,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   const scope=new paper.PaperScope();try {scope.setup(canvas);} finally {paper.activate();}scope.view.autoUpdate=false;
   function withScope(fn) {try {scope.activate();return fn();} finally {paper.activate();}}
   function run(fn) {try {return withScope(fn);}catch(error){onError(error.message);}}
-  let panels,toolbar,interactions,paths,artboards,temporary=null,destroyed=false,fitted=false,lastPoint=null,ownedTransformModal=null,ownedTextModal=null,ownedColorModal=null,textBusy=false,fontCatalog;
+  let panels,toolbar,interactions,paths,artboards,temporary=null,destroyed=false,fitted=false,lastPoint=null,ownedTransformModal=null,ownedColorModal=null,textBusy=false,activeText=null,textOpening=0;
   // A late thumbnail (big layers and groups) goes straight into the Layers rows that show it.
   const renderer=withScope(()=>createDrawRenderer(scope,state,{withScope,onImageLoad:()=>panels?.render(),
     getLaserProcesses,onThumbnail:(id,url)=>{if(!destroyed)for(const img of shell.querySelectorAll(`[data-draw-thumb="${CSS.escape(id)}"]`)){img.src=url;img.classList.remove('is-empty');}}}));
@@ -362,11 +363,13 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   // onExport is the app's file bridge (save dialog, folder, write); see export-controller.mjs.
   const exporter=createExportController({state,scope,renderer,withScope,exportBoard,bridge:onExport});
   async function exportAs() {
+    await activeText?.flush();
     if(destroyed||document.querySelector('.modal-overlay'))return;
     interactions?.cancel();paths?.finish();
     return exporter.exportAs();
   }
   async function exportScreens() {
+    await activeText?.flush();
     if(destroyed||document.querySelector('.modal-overlay'))return;
     interactions?.cancel();paths?.finish();
     return exporter.exportScreens();
@@ -411,6 +414,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   function cutLink(boardId){return (state.document.data.cutLinks??[]).find(l=>l.artboardId===boardId)??null;}
   function cutStatus(boardId){const link=cutLink(boardId);return link?link.sourceHash===sourceHash(boardId)?'sent':'changed':null;}
   async function sendToCut(boardId=state.ui.artboardId,{update=false}={}) {
+    await activeText?.flush();
     if(cutBusy||textBusy||document.querySelector('.modal-overlay'))return;
     if(!onSendToCut)throw new Error('Send to Cut is not available here.');
     cutBusy=true;
@@ -486,7 +490,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     state.ui.drawMode=mode;toolbar?.update();status();
   }
   function insertShape(node) {insertNew(node);select([node.id]);}
-  const listFonts=()=>fontCatalog??=(window.modcut.listSystemFonts().catch(error=>{fontCatalog=null;throw error;}));
+  const listFonts=installedFonts;
   async function resolveText(node,patch) {
     patch=textProperties(textValues({...node,...patch}));
     const previous=node.character;
@@ -962,9 +966,12 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   /** Without selected text, edit the next text's formatting. Selected text is reshaped in one undo step. */
   async function textStyle(changes,label='Character') {
     if(destroyed||state.document.readOnly)return;
+    if(activeText)return activeText.style(changes);
     const texts=selectedIds().filter(id=>state.document.getNode(id)?.type==='text');
     if(!texts.length){
-      const values=textStyleValues(textDefaults(state.ui),changes),patch=textProperties({text:'Text',...values});
+      let values=textStyleValues(textDefaults(state.ui),changes);
+      if(['fontFamily','fontSource','fontWeight','fontStyle'].some(k=>k in changes))values=await prepareFont(values);
+      const patch=textProperties({text:'Text',...values});
       if(['fontFamily','fontSource','fontWeight','fontStyle'].some(key=>key in changes))delete state.ui.fontMetadata;
       rememberTextSettings(patch);panels?.render();return;
     }
@@ -974,7 +981,8 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     textBusy=true;statusLine.textContent='Updating text…';const before=state.document.data;
     try {
       const patches=await Promise.all(ids.map(async id=>{
-        const node=state.document.getNode(id),values=textStyleValues(textValues(node),changes);
+        const node=state.document.getNode(id);let values=textStyleValues(textValues(node),changes);
+        if(['fontFamily','fontSource','fontWeight','fontStyle'].some(k=>k in changes))values=await prepareFont(values);
         return [id,await resolveText(node,textProperties(values))];
       }));
       if(destroyed)return;if(state.document.data!==before)throw new Error('The artwork changed while updating text. Try again.');
@@ -1022,6 +1030,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     }finally{textBusy=false;}
   }
   async function createTextOutlines() {
+    await activeText?.done();
     if(destroyed||textBusy||state.document.readOnly||document.querySelector('.modal-overlay'))return;
     const previousSelection=selectedIds();
     const ids=[...new Set(previousSelection.flatMap(id=>{const n=state.document.getNode(id);return n.children?state.document.descendants(id).map(n=>n.id):[id];}))].filter(id=>state.document.getNode(id)?.type==='text'&&state.document.isEditable(id));
@@ -1043,39 +1052,60 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   }
   async function editText(point = scope.view.center, id = null, frame = null, {pathFrom = null, orientation = 'horizontal'} = {}) {
     if(destroyed||textBusy||state.document.readOnly||document.querySelector('.modal-overlay'))return;
+    if(activeText){if(id===state.ui.editingTextId){activeText.focus();return;}await activeText.done();}
+    const opening=++textOpening;
     const original=id?state.document.getNode(id):null;
     if(id&&(original?.type!=='text'||!state.document.isEditable(id)))return;
     let subpath=null;
     try{if(pathFrom)subpath=textPathFrom(pathFrom);}catch(error){onError(error.message);return;}
     const parent=id?state.document.locate(id).parentId:pathFrom?state.document.locate(pathFrom).parentId:insertionParent();
-    let defaults=original?textValues(original):{text:'Text',...textDefaults(state.ui),
+    const originalIndex=id?state.document.locate(id).index:pathFrom?state.document.locate(pathFrom).index:undefined;
+    let defaults=original?textValues(original):{text:'',...textDefaults(state.ui),
       kind:pathFrom?'onPath':frame?'area':'point',orientation:orientation==='vertical'&&!frame&&!pathFrom?'vertical':'horizontal',...(frame?{frameWidth:frame.width,frameHeight:frame.height}:{}),...(pathFrom?{pathSubpath:subpath,pathOffset:0,pathFlip:false}:{})};
-    const before=state.document.data;
-    textBusy=true;statusLine.textContent='Loading installed fonts…';
     try {
-      const [fonts,googleCatalog]=await Promise.all([listFonts(),window.modcut.listGoogleFonts()]);if(destroyed)return;
-      status();
-      if(state.document.data!==before)throw new Error('The artwork changed while loading fonts. Try again.');
+      const fonts=await listFonts();if(destroyed||opening!==textOpening)return;
       if(!original&&defaults.fontSource!=='google'&&!fonts.some(f=>f.family===defaults.fontFamily)){const face=['Arial','Helvetica','DejaVu Sans','Liberation Sans','Noto Sans'].map(name=>fonts.find(f=>f.family===name&&f.fontWeight==='normal'&&f.fontStyle==='normal')).find(Boolean)??fonts[0];if(face)defaults={...defaults,fontFamily:face.family,fontWeight:face.fontWeight,fontStyle:face.fontStyle};}
-      const node=original??(pathFrom?pathText(subpath,defaults):toParentSpace(parent,pointText([point.x,point.y],defaults)));
-      const pending=textDialog(defaults,patch=>run(()=>renderer.previewText(patch?{...node,...patch}:null,parent)),{fonts,googleCatalog,fontMetadata:original?.layout?.font??state.ui.fontMetadata,
-        googleFamily:window.modcut.googleFontFamily,refreshGoogle:()=>window.modcut.listGoogleFonts({refresh:true}),resolve:patch=>resolveText(node,patch)});
-      ownedTextModal=document.querySelector('.draw-text-dialog');
-      const patch=await pending;ownedTextModal=null;if(destroyed)return;
-      run(()=>{
-        renderer.previewText(null);
-        if(!patch)return;
-        if(state.document.data!==before)throw new Error('The artwork changed while editing text. Open the editor again.');
-        rememberTextSettings(patch);
-        // Type on a Path turns the clicked path into the text's path, as in Illustrator.
-        state.history.transaction(original?'Edit Text':pathFrom?'Type on a Path':frame?'Area Text':'Point Text',()=>{
-          if(original)return state.history.execute(updateNode(id,patch));
-          if(pathFrom){const {index}=state.document.locate(pathFrom);state.history.execute(removeNode(pathFrom));return state.history.execute(insertNode(parent,{...node,...patch},index));}
-          insertNew({...node,...patch},{space:false});
-        });
-        select([node.id]);
+      if(!original)defaults=await prepareFont(defaults);if(destroyed||opening!==textOpening)return;
+      let node=original??(pathFrom?pathText(subpath,{...defaults,text:'Text'}):toParentSpace(parent,pointText([point.x,point.y],{...defaults,text:'Text'})));
+      let inserted=!!original,sourceReplaced=false;
+      state.ui.editingTextId=node.id;state.ui.dockCollapsed.properties=false;
+      if(original)select([node.id]);else select([]);
+      const session=inlineText(stage,defaults,{
+        onError,
+        selectionChanged:()=>panels?.render(),
+        position(el,values){
+          if(inserted&&!state.document.getNode(node.id))return;
+          const matrix=inserted?renderer.worldMatrix(node.id):multiplyMatrix(parent?renderer.worldMatrix(parent):[1,0,0,1,0,0],node.transform);
+          const origin=scope.view.projectToView(new scope.Point(matrix[4],matrix[5])),x=scope.view.projectToView(new scope.Point(matrix[4]+matrix[0],matrix[5]+matrix[1])),y=scope.view.projectToView(new scope.Point(matrix[4]+matrix[2],matrix[5]+matrix[3]));
+          const font=node.layout?.font,em=values.fontSize*PT_TO_MM,ascent=font?.ascent??em*.8,descent=font?.descent??-em*.2;
+          const top=values.kind==='area'?-(values.leading*PT_TO_MM-ascent+descent)/2:-ascent-(values.leading*PT_TO_MM-ascent+descent)/2;
+          const width=Math.max(0,...(node.layout?.lineWidths??[])),left=values.kind==='point'&&values.orientation!=='vertical'?(values.alignment==='center'?-width/2:values.alignment==='right'?-width:0):0;
+          el.style.left=`${origin.x+(y.x-origin.x)*top+(x.x-origin.x)*left}px`;el.style.top=`${origin.y+(y.y-origin.y)*top+(x.y-origin.y)*left}px`;
+          el.style.transform=`matrix(${x.x-origin.x},${x.y-origin.y},${y.x-origin.x},${y.y-origin.y},0,0)`;
+        },
+        async update(values,mergeKey,current){
+          const execute=command=>{command.nodeIds=[...new Set([...command.nodeIds,parent,...(pathFrom?[pathFrom]:[])].filter(Boolean))];state.history.execute(command);};
+          if(!values.text.trim()){if(inserted&&current()){state.history.transaction('Edit Text',()=>execute(removeNode(node.id)),{mergeKey});inserted=false;select([]);}return;}
+          const patch=await resolveText(node,textProperties(values));if(!current()||destroyed)return;
+          if(inserted&&!state.document.isEditable(node.id))return;
+          run(()=>{
+            state.history.transaction(original?'Edit Text':'Type Text',()=>{
+              if(inserted)execute(updateNode(node.id,patch));
+              else if(pathFrom&&!sourceReplaced){state.history.execute(removeNode(pathFrom));state.history.execute(insertNode(parent,{...node,...patch},originalIndex));inserted=true;sourceReplaced=true;}
+              else if(original||pathFrom){execute(insertNode(parent,{...node,...patch},Math.min(originalIndex,state.document.getNode(parent).children.length)));inserted=true;}
+              else {insertNew({...node,...patch},{space:false});inserted=true;}
+            },{mergeKey});
+            node=state.document.getNode(node.id);rememberTextSettings(patch);if(!state.selection.ids.includes(node.id))select([node.id]);
+          });
+        },
+        finish(values){
+          if(activeText===session)activeText=null;delete state.ui.editingTextId;
+          if(inserted&&!values.text.trim()&&state.document.isEditable(node.id)){state.history.execute(removeNode(node.id));select([]);}
+          panels?.render();canvas.focus();
+        }
       });
-    }catch(error){ownedTextModal=null;if(!destroyed){run(()=>renderer.previewText(null));onError(error.message);}}finally{textBusy=false;if(!destroyed)status();}
+      activeText=session;rememberTextSettings(textProperties({...defaults,text:defaults.text||'Text'}));panels?.render();
+    }catch(error){if(!destroyed)onError(error.message);}
   }
   const shapeOptions=()=>({fill:state.ui.fill,stroke:state.ui.stroke,strokeWidth:state.ui.strokeWidth,points:state.ui.points,cornerRadius:state.ui.cornerRadius ?? 5});
   async function shapeDialog(tool,p=scope.view.center) {
@@ -1088,24 +1118,25 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     });
   }
   function setTool(id) {
+    if(activeText)void activeText.done();
+    textOpening++;
     if(!implementedTools.has(id) || state.document.readOnly && !['select','hand','zoom'].includes(id))return;
     if(id!==state.ui.tool&&['direct-selection','anchor-point','delete-anchor'].some(tool=>tool===id||tool===state.ui.tool))state.selection.set(state.selection.ids);
     if(state.ui.tool==='measure'&&id!=='measure'&&state.ui.measurement)setMeasure(null);
     interactions?.cancel();paths?.finish();toolbar?.close();temporary=null;state.ui.tool=id;canvas.dataset.tool=id;canvas.style.cursor=cursor();
+    if(id==='artboard'){state.ui.dockCollapsed ??= {};state.ui.dockCollapsed.properties=false;state.ui.flyout=null;}
     withScope(()=>renderer.select());toolbar?.update();panels?.render();interactions?.refreshEyedropper();status();
   }
-  function openPanel(id) {toolbar?.close();panels.open(id);}
+  function openPanel(id) {toolbar?.close();panels.open(id,{floating:true});}
   artboards=createArtboardController(state,{refresh,fit,bounds:id=>renderer.bounds(id),localMatrix:(id,m)=>renderer.localMatrix(id,m)});
-  panels=createPanels(shell,state,{run,select,selectedIds,paintIds,paint,editPaint,bounds:()=>renderer.selectionBounds(),fit,artboards,navigatorImage,navigatorView,navigateTo,
+  panels=createPanels(shell,state,{run,select,selectedIds,paintIds,paint,editPaint,bounds:()=>renderer.selectionBounds(),fit,artboards,setTool,navigatorImage,navigatorView,navigateTo,
     // Glyphs panel: into the open text editor at the cursor; else open the editor for the selected text first.
-    insertGlyph(ch){
-      const put=()=>{const area=document.querySelector('.draw-text-dialog textarea[name=text]');if(!area)return false;
-        const start=area.selectionStart??area.value.length,end=area.selectionEnd??start;area.setRangeText(ch,start,end,'end');area.dispatchEvent(new Event('input',{bubbles:true}));area.focus();return true;};
-      if(put())return;
-      const id=selectedIds().find(i=>state.document.getNode(i)?.type==='text');
-      if(!id)throw new Error('Select a text object, or start typing with the Type tool, to insert a glyph.');
-      void editText(undefined,id);setTimeout(()=>{const area=document.querySelector('.draw-text-dialog textarea[name=text]');if(area){area.setSelectionRange(area.value.length,area.value.length);put();}},50);
+    async insertGlyph(ch){
+      if(!activeText){const id=selectedIds().find(i=>state.document.getNode(i)?.type==='text');if(!id)throw new Error('Select a text object, or start typing with the Type tool, to insert a glyph.');await editText(undefined,id);}
+      activeText?.insert(ch);
     },
+    fontSample:()=>activeText?.sample()??'Lorem Ipsum',
+    textValues:()=>activeText?.values()??null,
     addAssets,removeAsset,renameAsset,exportAssets:options=>exportAssets(options).catch(error=>{if(!destroyed)onError(error.message);}),
     cornerInfo:()=>paths?.cornerInfo()??null,setCornerRadius:radius=>paths.setCornerRadius(radius),
     strokeProps(props,{mergeKey=null}={}){const ids=paintIds();if(!ids.length||state.document.readOnly)return;
@@ -1501,6 +1532,8 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     return null;
   }
   function handle(command) {return run(()=>{
+    if(activeText&&command==='cancel'){void activeText.done();return;}
+    if(activeText&&['undo','redo'].includes(command)){activeText.destroy();activeText=null;delete state.ui.editingTextId;}
     if(command.startsWith('tool.'))return setTool(command.slice(5));
     if(command.startsWith('panel.'))return openPanel(command.slice(6));
     if(command==='draw-mode'){const next=nextDrawMode(state.ui.drawMode??'normal');try{return setDrawMode(next);}catch{return setDrawMode('normal');}}
@@ -1655,6 +1688,7 @@ typeOnPath:id=>editText(undefined,null,null,{pathFrom:id}),cursor,contextMenu:(x
   laserButton.addEventListener('click',()=>handle('laser-preview'));processesButton.addEventListener('click',()=>handle('laser-processes'));
   outlineButton.addEventListener('click',()=>handle('outline'));fitButton.addEventListener('click',()=>fit());
   const workspace={state,scope,renderer,closeContextMenu:()=>contextMenu.close({focus:true}),syncLaserMenu,refreshLaserPreview:updateLaserView,isolate,cutSvg,exportBoard,exporter,exportAs:()=>exportAs().catch(error=>onError(error.message)),exportScreens:()=>exportScreens().catch(error=>onError(error.message)),sendToCut:boardId=>sendToCut(boardId).catch(error=>onError(error.message)),exitIsolation,statusElement:controls,artboards,transforms,resize,select,setTool,handle,availableTool:id=>implementedTools.has(id),canHandle:command=>commands.has(command),commandNames:()=>[...commands].sort(),withScope,layerId,fit,
+    flushText:()=>activeText?.flush(),
     eyedropperModifiers:event=>interactions?.eyedropperModifiers(event),
     pathModifiers:event=>paths?.modifiers(event),
     setTemporaryTool(value){temporary=value;canvas.dataset.tool=temporary?.id || state.ui.tool;canvas.style.cursor=cursor();interactions?.refreshEyedropper();status();},
@@ -1667,7 +1701,7 @@ typeOnPath:id=>editText(undefined,null,null,{pathFrom:id}),cursor,contextMenu:(x
       if(warning||result.warning)onNotice([warning,result.warning].filter(Boolean).join(' '));
     },
     async import(prepared,name,options={}){const result=await importArtwork(scope,state,prepared,name,layerId(),{...options,alive:()=>!destroyed});select(options.template?[]:result.ids);if(options.fitArtboard)fit();return result;},
-    destroy(){clearTracePreview();for(const stop of traceWorkers)stop();destroyed=true;contextMenu.destroy();rulerInteractions.destroy();laserDialog?.querySelector('[data-x=cancel]')?.click();ownedColorModal?.querySelector('[data-x=cancel]').click();ownedTextModal?.querySelector('[data-x=cancel]').click();ownedTransformModal?.querySelector('[data-x=cancel]').click();paths.destroy();interactions.destroy();measureLabel.destroy();toolbar.destroy();unsubscribe();observer.disconnect();window.removeEventListener('modcut-theme-change',syncTheme);window.removeEventListener('modcut-scale-strokes-change',syncScaleStrokes);workspaces.delete(root);withScope(()=>{renderer.destroy();scope.remove();});controls.remove();root.replaceChildren();},
+    destroy(){textOpening++;activeText?.destroy();closeFontBrowser();clearTracePreview();for(const stop of traceWorkers)stop();destroyed=true;contextMenu.destroy();rulerInteractions.destroy();laserDialog?.querySelector('[data-x=cancel]')?.click();ownedColorModal?.querySelector('[data-x=cancel]').click();ownedTransformModal?.querySelector('[data-x=cancel]').click();paths.destroy();interactions.destroy();measureLabel.destroy();toolbar.destroy();panels.destroy();unsubscribe();observer.disconnect();window.removeEventListener('modcut-theme-change',syncTheme);window.removeEventListener('modcut-scale-strokes-change',syncScaleStrokes);workspaces.delete(root);withScope(()=>{renderer.destroy();scope.remove();});controls.remove();root.replaceChildren();},
   };
   workspaces.set(root,workspace);refresh();syncTheme();setTool(state.ui.tool);resize();return workspace;
 }

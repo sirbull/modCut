@@ -26,6 +26,8 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
   const overlay = new scope.Layer({ name: 'Selection' });
   const labels = new scope.Group({insert:false}); overlay.addChild(labels);
   const textFrames = new scope.Group({insert:false}); overlay.addChild(textFrames);
+  const artboardControls = new scope.Group({insert:false}); overlay.addChild(artboardControls);
+  let artboardAddPoints = [];
   const ISOLATION_DIM = .35;
   const items = new Map(), records = new Map(), boardItems = new Map(), thumbnails = new Map();
   const worldBounds = new Map(), paintedBounds = new Map();
@@ -787,6 +789,15 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
       label.point=item.bounds.topLeft.add([0,-8/scope.view.zoom]);label.fontSize=12/scope.view.zoom;label.visible=item.visible;
       labelRect.bounds=label.bounds.expand(6/scope.view.zoom,4/scope.view.zoom);labelRect.visible=label.visible;
     }
+    artboardControls.removeChildren(); artboardAddPoints=[];
+    if(state.ui?.tool==='artboard' && !state.document.readOnly) for(const a of state.document.data.artboards) {
+      const z=scope.view.zoom,gap=36/z,r=10/z;
+      for(const [direction,x,y] of [['top',a.x+a.width/2,a.y-gap],['right',a.x+a.width+gap,a.y+a.height/2],['bottom',a.x+a.width/2,a.y+a.height+gap],['left',a.x-gap,a.y+a.height/2]]) {
+        const point=new scope.Point(x,y); artboardAddPoints.push({boardId:a.id,direction,point});
+        artboardControls.addChild(new scope.Path.Circle({center:point,radius:r,fillColor:labelBackground,strokeColor:labelColor,strokeWidth:1.5/z,insert:false}));
+        for(const [from,to] of [[[x-4/z,y],[x+4/z,y]],[[x,y-4/z],[x,y+4/z]]])artboardControls.addChild(new scope.Path.Line({from,to,strokeColor:labelColor,strokeWidth:1.5/z,insert:false}));
+      }
+    }
     if(transformPreview)transformPreview.getItems({match:item=>!!item.data.nodeId}).forEach(item=>{
       const record=records.get(item.data.nodeId);if(!record)return;
       const proposed=item.data.transformPreviewNode;
@@ -1088,6 +1099,10 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
   /** The width-profiled stroke `entry` of node `id` as filled outline subpaths in the node's own space (Outline Stroke). */
   const profiledStroke = (id, entry) => { const item = items.get(id); return item ? variableStrokeSubpaths(item, entry) : null; };
   return { render, select: updateView, updateView, requestDraw, bounds, painted: id => paintedBounds.get(id)?.clone() ?? bounds(id), profiledStroke, blendSteps, liveSteps, envelopeSteps, strokeLocation, widthHandles, selectionBounds, hit, items, setOutline, setLaserPreview(value){const next=!!value,changed=next!==laserPreview;if(!next&&!changed)return;laserPreview=next;lastFrame=null;if(changed)setOutline(outline);scope.view._needsUpdate=true;requestDraw();}, get laserPreview(){return laserPreview;}, laserIntent(id){return laserPreviewIntent(state.document,id,getLaserProcesses());}, thumbnail, exportArtwork, clippedSubpaths, clipToRect, effectiveSubpaths, booleanOperand, selectionHandle:point=>selection.hit(point),
+    artboardAddHandles:()=>artboardAddPoints.map(h=>({...h,point:h.point.clone()})),
+    artboardAddHit:point=>artboardAddPoints.find(h=>h.point.getDistance(point)<=12/scope.view.zoom) ?? null,
+    artboardLabelHit:point=>[...boardItems].reverse().find(([,r])=>r.label.visible&&r.labelRect.bounds.contains(point))?.[0] ?? null,
+    artboardLabelBounds:id=>boardItems.get(id)?.labelRect.bounds.clone() ?? null,
     glyphBounds(id,subpaths) {const item=new scope.CompoundPath({insert:false,children:subpaths.map(path)});try{return item.getBounds(records.get(id).worldMatrix).clone();}finally{item.remove();}},
     previewText(node, parentId = null) {
       textPreview?.remove(); textPreview = null;textPreviewFrame?.remove();textPreviewFrame=null;

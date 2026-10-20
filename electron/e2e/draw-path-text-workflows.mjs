@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os';
 import { inputHelpers,wait } from './cdp.mjs';
 import { activeDraw as active,enterDraw,rememberTabs,submitNewDrawDialog } from './draw-test-helpers.mjs';
 
+import {inlineReady,inlineSet,finishInline} from './draw-inline-helpers.mjs';
+
 /** D2.1d Type on a Path: click a path or shape, type along it, flip, overflow, outlines and Cut. */
 export async function runDrawPathTextWorkflows(client) {
   const {evaluate,command}=client,{click,key}=inputHelpers(client),restore=await rememberTabs(evaluate);
@@ -12,9 +14,7 @@ export async function runDrawPathTextWorkflows(client) {
   await submitNewDrawDialog(evaluate,{preset:'custom',width:160,height:100,name:'Path text proof'});
   const at=(x,y)=>evaluate(`(async()=>{const w=${active},b=w.state.document.data.artboards[0],p=w.scope.view.projectToView(new w.scope.Point(b.x+${x},b.y+${y})),r=w.scope.view.element.getBoundingClientRect();return {x:r.x+p.x,y:r.y+p.y}})()`);
   const snapshot=()=>evaluate(`(async()=>(${active}.state.document.serialize()))()`);
-  const ready=async()=>{for(let i=0;i<200;i++){if(await evaluate("document.querySelector('.draw-text-dialog form')?.dataset.textReady==='true'"))return;await wait(50);}assert.fail(await evaluate("document.querySelector('.draw-text-dialog [role=alert]')?.textContent||'Type on a Path dialog did not become ready'"));};
-  const set=async values=>{await evaluate(`(()=>{const f=document.querySelector('.draw-text-dialog form');for(const [key,value] of Object.entries(${JSON.stringify(values)})){const el=f.elements[key];if(el.type==='checkbox')el.checked=value;else el.value=value;}f.dispatchEvent(new Event('input',{bubbles:true}));})()`);await ready();};
-  const apply=async()=>{await evaluate("document.querySelector('.draw-text-dialog form').requestSubmit()");await wait(80);};
+  const ready=()=>inlineReady(evaluate),set=values=>inlineSet(evaluate,values),apply=()=>finishInline(evaluate);
   const applied=()=>evaluate(`(async()=>(${active}.state.history.entries.filter(e=>e.applied).length))()`);
   // A circle (live ellipse shape) centred at (60, 50) with radius 30, and a short open line.
   const ids=await evaluate(`(async()=>{const w=${active},{shapeFromDrag}=await import('./draw/tools/shapes.mjs'),{createNode}=await import('./draw/doc/schema.mjs'),{insertNode}=await import('./draw/doc/commands.mjs'),{appearance}=await import('./draw/geometry.mjs'),b=w.state.document.data.artboards[0],L=w.state.document.data.layers[0].id;
@@ -25,9 +25,9 @@ export async function runDrawPathTextWorkflows(client) {
   assert.match(await evaluate(`(async()=>(${active}.scope.view.element.style.cursor))()`),/svg/,'Type on a Path has its own cursor');
   const before=await snapshot(),steps=await applied();
   await click(await at(60,20));await ready();
-  assert.match(await evaluate("document.querySelector('.draw-text-dialog').textContent"),/Type on a Path/);
+  assert.equal(await evaluate("!!document.querySelector('.draw-text-dialog')"),false);
   await set({text:'MODCUT LASER',fontSize:18});
-  assert.equal(await snapshot(),before,'The preview does not change the document');
+  assert.notEqual(await snapshot(),before,'Typing updates the document live');
   const proof=await command('Page.captureScreenshot',{format:'png'});await writeFile(join(tmpdir(),'modcut-draw-path-text-preview.png'),Buffer.from(proof.data,'base64'));
   await apply();
   const node=await evaluate(`(async()=>{const w=${active};return w.state.document.getNode(w.state.selection.ids[0])})()`);
@@ -42,7 +42,7 @@ export async function runDrawPathTextWorkflows(client) {
   await evaluate(`(async()=>{const w=${active};w.handle('redo');w.select(['${node.id}'])})()`);
   // Flip moves the text to the inside; a start offset moves it along the path.
   await evaluate(`(async()=>{${active}.handle('edit-text')})()`);await ready();
-  assert.equal(await evaluate("document.querySelector('.draw-text-dialog form').elements.pathFlip.checked"),false);
+  assert.equal(await evaluate("document.querySelector('.draw-project[style*=block] [data-draw-field=prop-path-flip]').checked"),false);
   await set({pathFlip:true,pathOffset:20});await apply();
   const flipped=await evaluate(`(async()=>(${active}.state.document.getNode('${node.id}')))()`);
   assert.equal(flipped.onPath.flip,true);assert.equal(flipped.onPath.offset,20);
@@ -50,7 +50,7 @@ export async function runDrawPathTextWorkflows(client) {
   // A short path: overflow is reported, and outlines and Send to Cut refuse to drop text.
   await click(await at(117.5,90));await ready();
   await set({text:'This sentence is far too long for the line',fontSize:12});
-  assert.match(await evaluate("document.querySelector('.draw-text-dialog [role=alert]').textContent"),/glyphs fit on the path/);
+  assert.ok(await evaluate(`(async()=>{const w=${active};return w.state.document.getNode(w.state.selection.ids[0]).layout.overflow})()`));
   await apply();
   const short=await evaluate(`(async()=>{const w=${active};return w.state.document.getNode(w.state.selection.ids[0])})()`);
   assert.equal(short.layout.overflow,true);

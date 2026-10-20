@@ -250,6 +250,10 @@ export function validateDocument(doc, { trusted = null } = {}) {
             if (!object(run.character)) fail(q, 'Expected character settings');
             else for (const [key, value] of Object.entries(run.character)) {
               if (key === 'fontFamily') string(value, `${q}.fontFamily`);
+              else if (key === 'fontPostscriptName') string(value, `${q}.fontPostscriptName`);
+              else if (key === 'fontSource') enumeration(value, ['system','google'], `${q}.fontSource`);
+              else if (key === 'googleFont') { if (!validGoogleReference(value)) fail(`${q}.googleFont`,'Invalid saved Google font reference'); }
+              else if (key === 'fontAxes') { if (!validFontAxes(value)) fail(`${q}.fontAxes`,'Invalid font axes'); }
               else if (key === 'fontStyle') enumeration(value, ['normal', 'italic'], `${q}.fontStyle`);
               else if (key === 'fontWeight') { if (!['normal', 'bold'].includes(value)) number(value, `${q}.fontWeight`, 1, 1000); }
               else if (key === 'fontSize') number(value, `${q}.fontSize`, .1, 10000);
