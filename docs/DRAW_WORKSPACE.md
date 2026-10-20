@@ -491,6 +491,7 @@ Kolonnen **Ikon** er navnet i `renderer/draw/icons/`. Hurtigtaster er Illustrato
 | Group Selection | (flyout under A) | `group-select` | Hvert klikk velger ett gruppenivå opp. | 2 |
 | Magic Wand | Y | `magic-wand` | Velg objekter med lik fill, stroke, vekt, opacity eller blend mode, med toleranse. | 3 |
 | Lasso | Q | `lasso` | Frihånds utvalg av ankre. | 3 |
+| Polygonal Lasso | Shift+Q | `polygonal-lasso` | Klikk hjørner for å velge ankre. Dobbeltklikk, Enter eller klikk startpunktet lukker. Backspace fjerner siste punkt, Esc avbryter. | 3 |
 | Artboard | Shift+O | `artboard` | Lag, flytt, skaler, dupliser (Alt+dra), slett artboards. Presets i kontrollinjen. | 1 |
 
 ### 6.2 Tegning og paths

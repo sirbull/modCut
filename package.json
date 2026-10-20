@@ -14,7 +14,7 @@
     "start": "electron .",
     "test:sidecar": "node scripts/maven.mjs test",
     "test:bridge": "npm run build:sidecar && node electron/test-bridge.mjs",
-    "test:main": "node --test electron/test-window-lifecycle.mjs electron/test-recovery-store.mjs electron/test-project-store.mjs electron/test-import-formats.mjs electron/test-font-service.mjs electron/test-google-fonts.mjs electron/test-mcp-server.mjs",
+    "test:main": "node --test electron/test-window-lifecycle.mjs electron/test-recovery-store.mjs electron/test-project-store.mjs electron/test-import-formats.mjs electron/test-font-service.mjs electron/test-google-fonts.mjs electron/test-mcp-server.mjs electron/test-workspace-files.mjs",
     "update:google-fonts": "node scripts/update-google-fonts.mjs",
     "test:renderer": "node --test renderer/test-engraving-recipe.mjs renderer/test-epsimport.mjs renderer/test-hpglimport.mjs renderer/test-i18n.mjs renderer/test-job-split.mjs renderer/test-lengthToMm.mjs renderer/test-layer-model.mjs renderer/test-motion-timing.mjs renderer/test-output-quality.mjs renderer/test-pdf-vector.mjs renderer/test-process-profiles.mjs renderer/test-raster-processing.mjs renderer/test-toolpath-policy.mjs",
     "build:icons": "node scripts/build-icons.mjs",

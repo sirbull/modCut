@@ -13,6 +13,8 @@ import { writeProject } from "./project-store.mjs";
 import { IMAGE_FORMATS, PDF_FORMATS, POSTSCRIPT_FORMATS, TEXT_FORMATS, TIFF_FORMATS, importIssueFor } from "./import-formats.mjs";
 import { createFontService } from './font-service.mjs';
 import { registerExportFiles } from './export-files.mjs';
+import { registerWorkspaceFiles } from './workspace-files.mjs';
+import { BUILTIN_WORKSPACES } from '../renderer/draw/ui/workspaces.mjs';
 import { createGoogleFonts } from './google-fonts.mjs';
 import { createMcpHost } from './mcp-host.mjs';
 import { localizeMenuTemplate, translator } from '../renderer/i18n.mjs';
@@ -285,7 +287,10 @@ function buildMenu(mode = "cut") {
         ['flag','Flag'],['wave','Wave'],['fish','Fish'],['rise','Rise'],['fisheye','Fisheye'],['inflate','Inflate'],['squeeze','Squeeze'],['twist','Twist']].map(([id,label])=>objectItem(`${label}…`,`warp-${id}`))}];
     // Window menu (D4.5): workspaces and the panels, as in Illustrator; the window roles stay.
     const windowMenu=template.find(item=>item.label==='Window');
-    if(windowMenu){delete windowMenu.role;windowMenu.submenu=[{label:'Workspace',submenu:[objectItem('Essentials','workspace-reset'),{type:'separator'},objectItem('New Workspace…','workspace-new'),objectItem('Manage Workspaces…','workspace-manage')]},{type:'separator'},
+    if(windowMenu){delete windowMenu.role;windowMenu.submenu=[{label:'Workspaces',submenu:[
+      ...BUILTIN_WORKSPACES.map(ws=>objectItem(ws.name,ws.id==='essentials'?'workspace-reset':`workspace-preset.${ws.id}`)),
+      {type:'separator'},objectItem('Save Current Workspace…','workspace-save'),objectItem('Load Workspace…','workspace-load'),
+      {type:'separator'},objectItem('New Workspace…','workspace-new'),objectItem('Manage Workspaces…','workspace-manage')]},{type:'separator'},
       // Artboards uses the drawing tool and Properties; Asset Export belongs to File.
       ...PANEL_DEFINITIONS.filter(panel=>!['artboards','asset-export'].includes(panel.id)).sort((a,b)=>a.name.localeCompare(b.name)).map(panel=>objectItem(panel.name,`panel.${panel.id}`)),
       {type:'separator'},{role:'minimize'},...(isMac?[{role:'zoom'}]:[])];}
@@ -562,6 +567,7 @@ app.whenReady().then(async () => {
 
   // Draw Export As / Export for Screens. E2E runs keep the files in memory instead of showing dialogs.
   registerExportFiles({ ipcMain, dialog, shell, getWindow: () => win, isE2E, e2eExports });
+  registerWorkspaceFiles({ ipcMain, dialog, getWindow: () => win, isE2E, e2eExports });
 
   // Export/import all settings as one shareable JSON file.
   // ponytail: single JSON file, not a .zip — the payload is just JSON, so a zip

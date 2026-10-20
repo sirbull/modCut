@@ -151,6 +151,12 @@
       "path": "icons/outline/polygon.svg",
       "sha256": "b1a1bcae5673fa257e11d73ba9a041fa17740e4fa8c6cf86c0206951c6d8c317"
     },
+    "polygonal-lasso": {
+      "name": "polygonal-lasso",
+      "author": "modCut",
+      "path": "polygonal-lasso.svg",
+      "sha256": "53ed0802967e4595e71ec9f111a4c77a213e45b61520b5f20f4e3918f6921510"
+    },
     "rect": {
       "name": "rectangle",
       "path": "icons/outline/rectangle.svg",

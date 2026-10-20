@@ -36,11 +36,13 @@ body[data-workspace="draw"] .actionbar {display:none;}
 .draw-context-menu__key { font-size:var(--fs-xs); color:var(--text-muted); white-space:nowrap; }
 .draw-context-menu__separator { height:1px; margin:5px 7px; background:var(--border); }
 .draw-project { position: absolute; inset: 0; }
-.draw-shell { position: relative; display: grid; grid-template-columns: 90px minmax(0, 1fr) 48px 286px; grid-template-rows:auto minmax(0,1fr) 28px; height: 100%; min-height: 0; }
+.draw-shell { position: relative; display: grid; grid-template-columns: 90px minmax(0, 1fr) var(--draw-dock-before-width,0px) 48px var(--draw-dock-width,286px); grid-template-rows:auto minmax(0,1fr) 28px; height: 100%; min-height: 0; }
 .draw-tool-rail { grid-column:1;grid-row:1 / -1; }
 .draw-stage {grid-column:2;grid-row:2;}
-.draw-panel-rail {grid-column:3;grid-row:1 / -1;overflow-y:auto;}
-.draw-panels {grid-column:4;grid-row:1 / -1;}
+.draw-panel-rail {grid-column:4;grid-row:1 / -1;overflow-y:auto;}
+.draw-panels {grid-column:5;grid-row:1 / -1;}
+.draw-panels--before-rail {grid-column:3;}
+.draw-panels--before-rail[hidden] {display:none;}
 .draw-tool-hint {grid-column:2;grid-row:3;display:flex;align-items:center;padding:0 12px;background:var(--surface);border-top:1px solid var(--border);font-size:var(--fs-xs);color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .draw-tool-grid {display:grid;grid-template-columns:repeat(2,34px);gap:3px;flex:0 0 auto;}
 .draw-tool-grid .draw-icon-button {width:34px;height:34px;flex-basis:34px;}
@@ -53,17 +55,33 @@ body[data-workspace="draw"] .actionbar {display:none;}
 .draw-tool-rail { border-right: 1px solid var(--border); overflow-y: auto; overflow-x:hidden;scrollbar-width:thin; }
 .draw-panel-rail { border-left: 1px solid var(--border); border-right: 1px solid var(--border); padding-inline: 0; overflow-x: hidden; scrollbar-width: thin; }
 .draw-panel-rail__separator { width: 28px; height: 1px; flex: 0 0 1px; margin: 5px 0; background: var(--border); }
-.draw-icon-button { width: 38px; height: 38px; flex: 0 0 38px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid transparent; border-radius: var(--rad-2, 6px); background: transparent; color: var(--text-muted); cursor: pointer; }
+.draw-icon-button { width: 38px; height: 38px; flex: 0 0 38px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid transparent; border-radius: 0; background: transparent; color: var(--text-muted); cursor: pointer; }
 .draw-icon-button svg { width: 22px; height: 22px; flex-shrink: 0; }
-.draw-icon-button:hover, .draw-icon-button[aria-pressed="true"] { background: var(--surface-2); color: var(--text); border-color: var(--border); }
-.draw-icon-button[aria-pressed="true"] { color: var(--brand-deep); box-shadow: inset 3px 0 0 var(--brand-fill); }
-.draw-icon-button:focus-visible, .draw-tool-more:focus-visible, .draw-layer-name:focus-visible { outline: 2px solid var(--brand-mid); outline-offset: 2px; }
+.draw-icon-button:hover { background: color-mix(in srgb, var(--surface) 85%, black); color: var(--text); }
+.draw-icon-button[aria-pressed="true"], .draw-icon-button:active { background: color-mix(in srgb, var(--surface) 70%, black); color: var(--text); box-shadow: none; }
+.draw-icon-button:focus-visible { outline: none; border-radius: 0; background: color-mix(in srgb, var(--surface) 70%, black); color: var(--text); }
+.draw-tool-more:focus-visible, .draw-layer-name:focus-visible { outline: 2px solid var(--brand-mid); outline-offset: 2px; }
 .draw-icon-button:disabled { opacity: .35; cursor: default; }
 .draw-tool-group { position: relative; display: flex; }
-.draw-tool-more { position: absolute; right: -3px; bottom: -3px; padding: 0; width: 16px; height: 16px; border: 0; border-radius: 3px; background: var(--surface); color: var(--text-muted); cursor: pointer; }
+/* Keep the group marker outside the SVG, with a transparent click target. */
+.draw-tool-more { position: absolute; right: -2px; bottom: -2px; padding: 0; width: 12px; height: 12px; border: 0; border-radius: 0; background: transparent; color: var(--text-muted); cursor: pointer; }
+.draw-tool-more::after { content: ""; position: absolute; right: 1px; bottom: 1px; width: 5px; height: 5px; background: currentColor; clip-path: polygon(100% 0, 100% 100%, 0 100%); }
+.draw-tool-more:hover { color: var(--text); }
 .draw-tool-flyout { position: fixed; left: 56px; top: 260px; z-index: 20; padding: 6px; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow-2); }
 .draw-tool-flyout .draw-icon-button { width: auto; justify-content: flex-start; gap: 10px; padding: 0 12px; font-size: var(--fs-sm); }
-.draw-panels { background: var(--surface); min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; color: var(--text); }
+.draw-panels { background: var(--surface); min-width: 0; min-height: 0; display: flex; flex-direction: row; overflow-x: auto; overflow-y: hidden; color: var(--text); }
+.draw-dock-column { position: relative; display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; border-left: 1px solid var(--border); box-sizing: border-box; }
+.draw-dock-column-resizer { position: absolute; z-index: 5; left: 0; top: 0; bottom: 0; width: 5px; cursor: col-resize; touch-action: none; }
+.draw-dock-column-resizer:hover, .draw-dock-column-resizer:focus-visible { background: var(--brand-mid); }
+.draw-dock-column > .draw-docked-panel { position: relative; z-index: auto; width: 100%; max-width: none; border: 0; border-radius: 0; box-shadow: none; min-height: 0; }
+.draw-docked-panel .draw-flyout__body { overflow: auto; }
+.draw-docked-panel.is-collapsed .draw-flyout__body { display: none; }
+.draw-dock-heading { display: flex; align-items: center; flex: 0 0 auto; padding-right: 4px; cursor: grab; touch-action: none; }
+.draw-dock-heading .draw-dock-header { flex: 1; min-width: 0; width: auto; cursor: grab; }
+:is(.draw-floating-panel,.draw-flyout) .draw-dock-heading { display: none; }
+.draw-panel-drop-line { position: absolute; z-index: 2000; background: #1473e6; box-shadow: 0 0 0 1px #1473e680, 0 0 7px #1473e6; pointer-events: none; border-radius: 2px; }
+.draw-panel-drop-line[hidden] { display: none; }
+.draw-dock-splitter:focus-visible { outline: 2px solid var(--brand-mid); outline-offset: -2px; }
 .draw-panel { padding: 10px; min-height: 0; overflow: auto; font-size: var(--fs-xs); }
 .draw-panel .select { box-sizing: border-box; min-width: 0; padding: 3px 6px; height: 26px; border-radius: 4px; font: inherit; }
 .draw-panel .btn { min-height: 26px; padding: 3px 9px; border-radius: 4px; font-size: var(--fs-xs); }
@@ -98,7 +116,7 @@ body[data-workspace="draw"] .actionbar {display:none;}
 .draw-panel-window .draw-dock-header { display: none; }
 .draw-panel-window .draw-dock-body { overflow: visible; }
 .draw-panel-window .draw-flyout__body:has(.draw-dock-section) { padding: 0; }
-.draw-shell--dock-empty:not(.draw-shell--panels-hidden) { grid-template-columns: 90px minmax(0,1fr) 48px 0; }
+.draw-shell--dock-empty:not(.draw-shell--panels-hidden) { grid-template-columns: 90px minmax(0,1fr) 0 48px 0; }
 .draw-shell--panels-hidden .draw-panel-window { display: none; }
 .draw-flyout__header { display: flex; align-items: center; gap: 4px; padding: 4px 4px 0 6px; border-bottom: 1px solid var(--border); background: var(--surface-2); }
 .draw-flyout__tabs { display: flex; flex: 1; min-width: 0; gap: 2px; overflow-x: auto; scrollbar-width: none; }

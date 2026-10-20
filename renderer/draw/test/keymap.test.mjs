@@ -24,6 +24,8 @@ test('key matching respects macOS/Windows modifiers, mode and exact combinations
   assert.equal(command(event('v')), 'tool.select');
   assert.equal(command(event('L', { shiftKey: false })), 'tool.ellipse');
   assert.equal(command(event('c')), 'tool.scissors');
+  assert.equal(command(event('q')), 'tool.lasso');
+  assert.equal(command(event('Q', { shiftKey: true })), 'tool.polygonal-lasso');
   assert.equal(command(event('v'), { workspace: 'cut' }), null);
   assert.equal(command(event('n', { metaKey: true }), { isMac: true }), 'new');
   assert.equal(command(event('n', { ctrlKey: true })), 'new');
@@ -146,9 +148,9 @@ test('temporary modes ignore typing, foreign modifiers, repeats, composition and
   engine.reset(); engine.reset();
 });
 
-test('49 registered tools are immutable metadata, with no unavailable placeholder implementations', () => {
-  assert.equal(TOOL_DEFINITIONS.length, 49);
-  assert.equal(new Set(TOOL_DEFINITIONS.map((tool) => tool.id)).size, 49);
+test('50 registered tools are immutable metadata, with no unavailable placeholder implementations', () => {
+  assert.equal(TOOL_DEFINITIONS.length, 50);
+  assert.equal(new Set(TOOL_DEFINITIONS.map((tool) => tool.id)).size, 50);
   assert.equal(toolRegistry.tools.every((tool) => tool.Tool === null), true);
   assert.equal(toolRegistry.get('unknown'), null); assert.equal(toolRegistry.available('pen'), false);
   assert.ok(toolRegistry.group('shapes').some((tool) => tool.id === 'star'));
@@ -166,7 +168,7 @@ test('every tool in specification chapter 6 has its SVG and a sprite symbol', ()
   const spec = readFileSync(new URL('../../../docs/DRAW_WORKSPACE.md', import.meta.url), 'utf8');
   const section = spec.slice(spec.indexOf('## 6. Verktøy'), spec.indexOf('## 7. Hurtigtaster'));
   const iconNames = [...section.matchAll(/\|[^\n]*?\|[^\n]*?\| (`[^\n]+?`) \|/g)].flatMap((match) => [...match[1].matchAll(/`([^`]+)`/g)].map((value) => value[1]));
-  assert.equal(iconNames.length, 49);
+  assert.equal(iconNames.length, 50);
   assert.deepEqual([...TOOL_DEFINITIONS.map((tool) => tool.icon)].sort(), [...iconNames].sort());
   const dir = new URL('../icons/', import.meta.url), sprite = readFileSync(new URL('sprite.svg', dir), 'utf8');
   const manifest = JSON.parse(readFileSync(new URL('sources.json', dir), 'utf8'));
@@ -175,12 +177,12 @@ test('every tool in specification chapter 6 has its SVG and a sprite symbol', ()
   assert.deepEqual(Object.keys(manifest.icons).sort(), [...iconNames].sort());
   assert.match(readFileSync(new URL('LICENSE.tabler.txt', dir), 'utf8'), /Copyright.*Paweł Kuna/);
   const sources = readdirSync(dir).filter((name) => name.endsWith('.svg') && name !== 'sprite.svg');
-  assert.equal(sources.length, 49);
+  assert.equal(sources.length, 50);
   for (const tool of TOOL_DEFINITIONS) {
     const source = readFileSync(new URL(`${tool.icon}.svg`, dir), 'utf8').replace(/\r\n/g, '\n');
     assert.match(source, /viewBox="0 0 24 24"/); assert.match(source, /stroke="currentColor"/); assert.match(source, /stroke-width="2"/);
     const provenance = manifest.icons[tool.icon];
-    assert.ok(source.includes(`icon-tabler-${provenance.name}"`));
+    assert.ok(source.includes(`icon-${provenance.author==='modCut'?'modcut':'tabler'}-${provenance.name}"`));
     assert.equal(createHash('sha256').update(source).digest('hex'), provenance.sha256);
     assert.ok(sprite.includes(`id="icon-${tool.icon}"`));
   }

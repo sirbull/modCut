@@ -5,6 +5,7 @@ const definitions = [
   ['group-selection', 'Group Selection', 'group-select', 'direct-selection', 2],
   ['magic-wand', 'Magic Wand', 'magic-wand', 'selection', 3],
   ['lasso', 'Lasso', 'lasso', 'selection', 3],
+  ['polygonal-lasso', 'Polygonal Lasso', 'polygonal-lasso', 'selection', 3],
   ['artboard', 'Artboard', 'artboard', 'artboard', 1],
   ['pen', 'Pen', 'pen', 'pen', 1],
   ['add-anchor', 'Add Anchor Point', 'anchor-add', 'pen', 1],

@@ -437,6 +437,12 @@
       "author": "modCut",
       "path": "stroke-align-outside.svg",
       "sha256": "2bb3c472ad4d9cfe2ee473948111bf0c4232aac85651a1080e8f8ee02fc2df9b"
+    },
+    "gradient-preview": {
+      "name": "gradient-preview",
+      "author": "modCut",
+      "path": "gradient-preview.svg",
+      "sha256": "c4fa6e31e36bc51bb90a8357baf2154ea434ad9388c7fa76ad7c981fc6bf5d9f"
     }
   }
 }

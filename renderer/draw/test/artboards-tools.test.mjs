@@ -13,7 +13,8 @@ import { changePaint } from '../doc/paint.mjs';
 import { appearance } from '../geometry.mjs';
 
 test('every registered drawing tool belongs to exactly one toolbar group',()=>{
-  const ids=TOOL_GROUPS.flatMap(g=>g.tools);assert.equal(ids.length,49);assert.equal(new Set(ids).size,49);
+  const ids=TOOL_GROUPS.flatMap(g=>g.tools);assert.equal(ids.length,50);assert.equal(new Set(ids).size,50);
+  assert.ok(TOOL_GROUPS.find(g=>g.tools.includes('lasso')).tools.includes('polygonal-lasso'));
   assert.equal(TOOL_GROUPS.filter(g=>g.tools.includes('ellipse')).length,1);
   assert.ok(TOOL_GROUPS.find(g=>g.id==='shapes').tools.includes('rounded-rectangle'));
 });

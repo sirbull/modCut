@@ -45,7 +45,7 @@ import { importArtwork, rasterAsset } from './import-artwork.mjs';
 import { cutPreviewIntroDialog,laserProcessesDialog,laserIssuesDialog,shapeSizeDialog, rearrangeDialog,transformDialog as openTransformDialog,layerOptionsDialog,swatchOptionsDialog,sendToCutDialog,averageDialog,offsetDialog,simplifyDialog,pencilDialog,expandDialog,cropImageDialog,effectDialog,magicWandDialog,eraserDialog,transformEachDialog,splitGridDialog,saveSelectionDialog,editSelectionDialog,widthPointDialog,blendOptionsDialog,paintbrushDialog,blobBrushDialog,workspaceNameDialog,workspacesDialog } from './ui/dialogs.mjs';
 import { laserPreviewIssues } from './view/laser-issues.mjs';
 import { shortcutsDialog } from './ui/shortcuts-dialog.mjs';
-import { ESSENTIALS, applyWorkspace, captureWorkspace, deleteWorkspace, loadWorkspaces, saveWorkspace } from './ui/workspaces.mjs';
+import { BUILTIN_WORKSPACES, ESSENTIALS, applyWorkspace, captureWorkspace, deleteWorkspace, loadWorkspaces, saveWorkspace, workspaceForExport, workspaceFileError } from './ui/workspaces.mjs';
 import { ALL_ARTBOARDS, artboardCutSvg } from './io/cut-svg.mjs';
 import { EXPORT_FORMATS, rasterSize, svgDocument } from './io/export.mjs';
 import { createExportController } from './export-controller.mjs';
@@ -68,13 +68,13 @@ const workspaces=new WeakMap();
 export function getDrawWorkspace(root) {return workspaces.get(root) || null;}
 // Custom shortcuts live in the main process (it builds the menus); the canvas takes the same ones.
 const shortcutsReady=globalThis.window?.modcut?.getDrawShortcuts?.().then(map=>{try{setKeyOverrides(map??{});}catch{/* unreadable: defaults */}}).catch(()=>{});
-const implementedTools=new Set(['path-eraser','smooth','vertical-type','touch-type','rotate-view','select','group-selection','magic-wand','lasso','shape-builder','knife','eraser','width','blend','paintbrush','blob-brush','free-transform','pencil','hand','zoom','artboard','gradient','eyedropper','measure','scissors','type','area-type','type-on-path',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
+const implementedTools=new Set(['path-eraser','smooth','vertical-type','touch-type','rotate-view','select','group-selection','magic-wand','lasso','polygonal-lasso','shape-builder','knife','eraser','width','blend','paintbrush','blob-brush','free-transform','pencil','hand','zoom','artboard','gradient','eyedropper','measure','scissors','type','area-type','type-on-path',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
 const commands=new Set(['undo','redo','delete','select-all','select-artboard','deselect','cancel','fit-artboard','fit-all','actual-size','zoom-in','zoom-out','outline','laser-preview','laser-preview-help','laser-processes',
   'cut','copy','paste','paste-front','paste-back','paste-place','paste-all-artboards','rulers','grid',
   'edit-text','create-outlines','join','average','offset-path','outline-stroke','expand','expand-appearance','transform-each','split-into-grid','crop-image','effect-last','effect-options',...Object.keys(EFFECTS).map(t=>`effect-${t}`),...Object.keys(WARP_STYLES).map(t=>`warp-${t}`),...Object.keys(LIVE_LABELS).map(t=>`live-${t}`),'simplify','reverse-path','add-anchors','remove-anchors','clean-up','compound-make','compound-release','clip-make','clip-release','reset-rotate-view','package','keyboard-shortcuts','workspace-new','workspace-reset','workspace-manage','blend-make','blend-release','blend-expand','blend-options','blend-reverse','blend-replace-spine','blend-reverse-spine','envelope-make','envelope-warp','envelope-release','envelope-expand','mask-make','mask-release','mask-clip','mask-invert','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
   'paint-focus','paint-swap','paint-none','paint-solid','paint-gradient','default-paint','smart-guides','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','shear-dialog','toggle-panels','toggle-panels-except-tools','command-search','draw-mode','draw-normal','draw-behind','draw-inside','reselect','select-inverse','select-next-above','select-next-below','save-selection','edit-selection',
   ...Object.keys(SAME_MODES).map(m=>`select-same-${m}`),...Object.keys(OBJECT_KINDS).map(k=>`select-object-${k}`),'select-object-direction-handles',
-  ...PANEL_DEFINITIONS.map(p=>`panel.${p.id}`),...['left','right','up','down'].flatMap(d=>[`nudge-${d}`,`nudge-large-${d}`,`duplicate-${d}`])]);
+  ...PANEL_DEFINITIONS.map(p=>`panel.${p.id}`),...BUILTIN_WORKSPACES.map(ws=>`workspace-preset.${ws.id}`),'workspace-save','workspace-load',...['left','right','up','down'].flatMap(d=>[`nudge-${d}`,`nudge-large-${d}`,`duplicate-${d}`])]);
 export function createDrawWorkspace(root,{paper=window.paper,state=createProjectDraw(),onError=console.warn,onNotice=()=>{},onImport=()=>{},onSendToCut=null,cutIsEmpty=()=>false,cutClipboard=()=>null,onExport=null,getPreferences=()=>({}),setPreferences=()=>{},getLaserProcesses=()=>null,setLaserProcesses=()=>false,statusHost=null}={}) {
   state.ui={tool:'select',flyout:null,layerId:state.document.data.layers[0]?.id,fill:'#FFFFFF',stroke:'#071411',strokeWidth:.5,paintFocus:'fill',...state.ui};
   state.ui.artboardId=activeArtboard(state).id;
@@ -199,6 +199,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       tool.id==='eraser' ? 'Drag to erase from filled shapes (the selection, or every shape) · Enter: diameter' :
       tool.id==='magic-wand' ? 'Click: objects with a similar fill · Shift: add · Alt: remove · Enter: tolerance' :
       tool.id==='lasso' ? 'Drag around anchor points to select them · Shift: add · Alt: remove · Alt+Ctrl/Cmd: whole objects' :
+      tool.id==='polygonal-lasso' ? 'Click corners around anchors · Double-click / Enter / click start: close · Backspace: last point · Esc: cancel · Shift: add · Alt: remove · Alt+Ctrl/Cmd: whole objects' :
       tool.id==='pencil' ? 'Drag: draw freehand · End near the start: close · Enter: Pencil options' :
       tool.id==='scissors' ? 'Click a path: cut it there (a closed path opens, an open path splits)' :
       tool.id==='group-selection' ? 'Click: object · Click again: its group, one level up per click · Shift: add' :
@@ -399,7 +400,8 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       const [a,b,c,d]=worldMatrix(node.id),width=node.strokeScaling===false?stroke.width/Math.sqrt(Math.abs(a*d-b*c)||1):stroke.width;
       // A width profile is outlined as drawn, in the node's own space like the other outlines.
       if(stroke.widthProfile?.length){const local=withScope(()=>renderer.profiledStroke(node.id,stroke));if(local){outlines.set(node.id,local);continue;}}
-      outlines.set(node.id,await outlineStroke(subpaths,{width,join:stroke.join??'miter',cap:stroke.cap??'butt',miterLimit:stroke.miterLimit??4}));
+      const dash=stroke.dash?{array:stroke.dash.array.map(n=>n*width/stroke.width),offset:(stroke.dash.offset??0)*width/stroke.width}:undefined;
+      outlines.set(node.id,await outlineStroke(subpaths,{width,join:stroke.join??'miter',cap:stroke.cap??'butt',miterLimit:stroke.miterLimit??4,dash}));
     }
     return outlines;
   }
@@ -1333,7 +1335,8 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
         // A stroke that does not scale is in world millimetres; the outline is built in the parent's space.
         const width=node.strokeScaling===false?entry.width/Math.sqrt(Math.abs(a*d-b*c)||1):entry.width;
         // A width profile is outlined by the renderer, which draws it that way too.
-        const subpaths=entry.widthProfile?.length?withScope(()=>renderer.profiledStroke(id,{...entry,width}))??[]:await outlineStroke(node.subpaths,{width,join:entry.join??'miter',cap:entry.cap??'butt',miterLimit:entry.miterLimit??4});
+        const dash=entry.dash?{array:entry.dash.array.map(n=>n*width/entry.width),offset:(entry.dash.offset??0)*width/entry.width}:undefined;
+        const subpaths=entry.widthProfile?.length?withScope(()=>renderer.profiledStroke(id,{...entry,width}))??[]:await outlineStroke(node.subpaths,{width,join:entry.join??'miter',cap:entry.cap??'butt',miterLimit:entry.miterLimit??4,dash});
         if(subpaths.length)parts.push(part({fills:[{paint:structuredClone(entry.paint),opacity:entry.opacity??1,blendMode:entry.blendMode??'normal',effects:[]}],strokes:[]},subpaths,'nonzero'));
       }
       else if(!fills.length&&strokes.length)parts.push(part({fills:[],strokes:structuredClone(strokes)}));
@@ -1547,6 +1550,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       return void addEffect(last.type,{ask:command==='effect-options'}).catch(error=>{if(!destroyed)onError(error.message);});}
     if(command==='command-search')return void openCommandSearch(commandEntries({commands:[...commands],tools:TOOL_DEFINITIONS.filter(t=>implementedTools.has(t.id)),panels:PANEL_DEFINITIONS}),{run:id=>handle(id),shortcut:id=>shortcutLabel(id,{isMac:/Mac/.test(navigator.platform)})});
     if(command==='cancel'&&(contextMenu.close({focus:true})||rulerInteractions.cancel()||cancelActiveScrub()||panels.close()))return;
+    if(interactions?.handle(command))return;
     if(paths?.handle(command)){if(command==='cancel')toolbar.close(true);return;}
     // Escape cancels a gesture in progress; otherwise it leaves isolation mode.
     if(command==='cancel'){const busy=interactions.busy();interactions.cancel();toolbar.close(true);if(!busy)exitIsolation();return;}
@@ -1606,11 +1610,22 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     if(command==='keyboard-shortcuts')return void shortcutsDialog({isMac:navigator.platform.startsWith('Mac')}).then(async map=>{if(!map||destroyed)return;
       const saved=await window.modcut?.setDrawShortcuts?.(map)??map;run(()=>{setKeyOverrides(saved);toolbar?.update();panels?.render();status();onNotice('Keyboard shortcuts saved.');});}).catch(error=>{if(!destroyed)onError(error.message);});
     if(command==='package')return void (async()=>{if(destroyed||document.querySelector('.modal-overlay'))return;interactions?.cancel();paths?.finish();await exporter.packageDocument();})().catch(error=>{if(!destroyed)onError(error.message);});
-    // Window > Workspace: the panel layout saved under a name (this computer only).
+    // Window > Workspaces: task presets, named local layouts and portable workspace files.
     const useWorkspace=ws=>{applyWorkspace(state.ui,ws);try{globalThis.localStorage?.setItem(CONTROL_BAR_KEY,state.ui.controlBar?'shown':'hidden');}catch{}panels.render();resize();onNotice(`Workspace: ${ws.name}`);};
     if(command==='workspace-reset')return useWorkspace(ESSENTIALS);
-    if(command==='workspace-new')return void workspaceNameDialog(state.ui.workspace&&state.ui.workspace!==ESSENTIALS.name?state.ui.workspace:'').then(name=>{if(name&&!destroyed)run(()=>{const ws=captureWorkspace(state.ui,name);saveWorkspace(ws);state.ui.workspace=ws.name;onNotice(`Saved workspace ${ws.name}.`);});});
-    if(command==='workspace-manage'){const list=loadWorkspaces();if(!list.length)return void onError('No saved workspaces yet. Use Window > Workspace > New Workspace first.');
+    if(command.startsWith('workspace-preset.')){const ws=BUILTIN_WORKSPACES.find(ws=>ws.id===command.slice(17));if(ws)return useWorkspace(ws);return;}
+    if(command==='workspace-save')return void (async()=>{
+      if(document.querySelector('.modal-overlay'))return;
+      const ws=await window.modcut.saveWorkspaceFile(workspaceForExport(state.ui));
+      if(!ws||destroyed)return;saveWorkspace(ws);state.ui.workspace=ws.name;onNotice(`Saved workspace ${ws.name}.`);
+    })().catch(error=>{if(!destroyed)onError(workspaceFileError(error));});
+    if(command==='workspace-load')return void (async()=>{
+      if(document.querySelector('.modal-overlay'))return;
+      const ws=await window.modcut.loadWorkspaceFile();
+      if(!ws||destroyed)return;saveWorkspace(ws);useWorkspace(ws);
+    })().catch(error=>{if(!destroyed)onError(workspaceFileError(error));});
+    if(command==='workspace-new')return void workspaceNameDialog(state.ui.workspace&&!BUILTIN_WORKSPACES.some(ws=>ws.name===state.ui.workspace)?state.ui.workspace:'').then(name=>{if(name&&!destroyed)run(()=>{const ws=captureWorkspace(state.ui,name);saveWorkspace(ws);state.ui.workspace=ws.name;onNotice(`Saved workspace ${ws.name}.`);});});
+    if(command==='workspace-manage'){const list=loadWorkspaces();if(!list.length)return void onError('No saved workspaces yet. Save or load a workspace first.');
       return void workspacesDialog(list.map(w=>w.name),state.ui.workspace).then(choice=>{if(!choice||destroyed)return;run(()=>{const ws=loadWorkspaces().find(w=>w.name===choice.name);if(!ws)return;
         if(choice.action==='delete'){deleteWorkspace(ws.name);if(state.ui.workspace===ws.name)state.ui.workspace=null;}else useWorkspace(ws);});});}
     if(command==='tool-dialog'&&state.ui.tool==='blend')return void blendOptionsCommand();

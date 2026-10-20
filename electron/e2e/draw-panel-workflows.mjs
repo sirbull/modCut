@@ -257,7 +257,7 @@ export async function runDrawPanelWorkflows(client) {
   await evaluate(`document.querySelector('${root} [data-draw-dock-toggle=layers]').click()`);
   after = await dock(); assert.ok(after.layers < 50 && after.properties > docked.properties);
   await command('panel.layers');
-  assert.ok(await evaluate(`!!document.querySelector('${floating('layers')} [role=tree]')`), 'F7 opens the existing Layers tree in a window');
+  assert.ok(await evaluate(`!!document.querySelector('${root} .draw-dock-column [data-draw-dock=layers]:not(.is-collapsed) [role=tree]')`), 'Opening Layers expands its existing dock instead of detaching it');
   await command('workspace-reset');
 
   // Color panel: Fill/Stroke target, RGB/HSB/CMYK/Grayscale/Hex, live slider (one undo step) and None.

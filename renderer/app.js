@@ -2412,11 +2412,12 @@ window.addEventListener("keydown", (event) => {
   }
   if (event.target.closest?.('.draw-artboard-rename, .draw-stroke-choices')) return;
   // Panel chrome handles its own activation, removal and keyboard reordering.
+  if (event.target.closest?.('[data-panel-resize]') && ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key)) return;
   const panelButton = event.target.closest?.('.draw-panel-rail [data-draw-panel]');
   if (panelButton && !event.ctrlKey && !event.metaKey && !event.shiftKey &&
       (event.altKey && ['ArrowUp','ArrowDown'].includes(event.key) || !event.altKey && ['Delete','Backspace'].includes(event.key))) return;
   if (!event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && ['Enter',' '].includes(event.key) &&
-      event.target.closest?.('.draw-panel-rail button, .draw-panel-window button')) return;
+      event.target.closest?.('.draw-panel-rail button, .draw-panel-window button, .draw-dock-heading button')) return;
   if (event.target.closest?.('.draw-context-menu')) {
     if (['ArrowDown','ArrowUp','Home','End','ArrowRight','ArrowLeft','Escape','Tab','Enter',' '].includes(event.key) && !event.ctrlKey && !event.metaKey && !event.altKey) return;
     activeTab()?.draw?.closeContextMenu();

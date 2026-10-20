@@ -1,7 +1,12 @@
 // Norwegian bokmål. Keys are the English interface text exactly as written in the code; {name} marks a
 // value that is carried over. Product and workspace names (modCut, Cut, Draw) stay as they are.
 export const NB = Object.freeze({
-  "Dock": "Fest", "Dock panel": "Fest panelet", "Drag to undock": "Dra for å løsne",
+  "Workspaces": "Arbeidsområder", "Save Current Workspace…": "Lagre gjeldende arbeidsområde…", "Load Workspace…": "Last inn arbeidsområde…",
+  "No saved workspaces yet. Save or load a workspace first.": "Ingen lagrede arbeidsområder ennå. Lagre eller last inn et arbeidsområde først.",
+  "Laser Cutting": "Laserskjæring", "Drawing": "Tegning", "Typography": "Typografi", "Image Tracing": "Bildesporing",
+  "This workspace is built in; choose another name.": "Dette arbeidsområdet er innebygd. Velg et annet navn.",
+  "Invalid workspace name.": "Ugyldig navn på arbeidsområdet.", "Invalid workspace file.": "Ugyldig arbeidsområdefil.", "Workspace file is too large.": "Arbeidsområdefilen er for stor.",
+  "Dock": "Fest", "Dock panel": "Fest panelet", "Drag to undock": "Dra for å løsne", "Collapse to icons": "Minimer til ikoner", "Resize panel column": "Endre bredden på panelkolonnen",
   "Cut tools": "Cut-verktøy", "Basic tools": "Grunnleggende verktøy", "View controls": "Visningskontroller",
   "Scale stroke widths, dash lengths and effect sizes with objects.": "Skaler strekbredder, stipling og effektstørrelser sammen med objektene.",
   "Ruler units": "Linjalenheter", "Percentage": "Prosent", "Points (pt)": "Punkter (pt)", "Picas": "Pica",
@@ -378,7 +383,8 @@ export const NB = Object.freeze({
   "Select artwork, then drag across it with the Gradient tool.": "Merk grafikk, og dra over den med Fargeovergang-verktøyet.", "The knife did not cross a filled shape.": "Kniven krysset ingen fylt form.",
   "Nothing to erase there.": "Ingenting å viske ut der.", "Resize": "Endre størrelse", "Add Anchor": "Legg til anker", "Delete Anchors": "Slett ankre",
   "Round Corners": "Avrund hjørner", "Move Anchors": "Flytt ankre", "Convert Anchor": "Konverter anker", "Bend Curve": "Bøy kurve", "Pen": "Penn", "Nudge Anchors": "Dytt ankre",
-  "Direct Selection": "Direkte utvalg", "Group Selection": "Gruppeutvalg", "Magic Wand": "Tryllestav", "Lasso": "Lasso", "Add Anchor Point": "Legg til ankerpunkt",
+  "Direct Selection": "Direkte utvalg", "Group Selection": "Gruppeutvalg", "Magic Wand": "Tryllestav", "Lasso": "Lasso", "Polygonal Lasso": "Polygonlasso", "Add Anchor Point": "Legg til ankerpunkt",
+  "Click corners around anchors · Double-click / Enter / click start: close · Backspace: last point · Esc: cancel · Shift: add · Alt: remove · Alt+Ctrl/Cmd: whole objects": "Klikk hjørner rundt ankre · Dobbeltklikk / Enter / klikk start: lukk · Backspace: siste punkt · Esc: avbryt · Shift: legg til · Alt: trekk fra · Alt+Ctrl/Cmd: hele objekter",
   "Delete Anchor Point": "Slett ankerpunkt", "Anchor Point": "Ankerpunkt", "Curvature": "Krumning", "Pencil": "Blyant", "Smooth": "Glatt", "Path Eraser": "Baneviskelær",
   "Paintbrush": "Pensel", "Rounded Rectangle": "Avrundet rektangel", "Line Segment": "Linjestykke", "Spiral": "Spiral", "Rectangular Grid": "Rektangulært rutenett",
   "Polar Grid": "Polart rutenett", "Area Type": "Områdetekst", "Vertical Type": "Loddrett tekst", "Free Transform": "Fri transformering", "Measure": "Mål",

@@ -1,4 +1,4 @@
-import { DOCK_PANELS, clampDockSplit, panelName, panelSpriteHref } from './registry.mjs';
+import { DOCK_PANELS, panelName, panelSpriteHref } from './registry.mjs';
 import { createPanelWindows } from './windows.mjs';
 import { strokePreview } from './stroke-icons.mjs';
 import { insertNode, updateDocument, updateNode } from '../doc/commands.mjs';
@@ -30,10 +30,7 @@ export function icon(href) {
   const use = document.createElementNS(svg.namespaceURI,'use'); use.setAttribute('href',href); svg.append(use);
   return svg;
 }
-const SPLIT_KEY = 'modcut_draw_dock_split';
 const LAYER_ROW_LIMIT = 200;
-function storedSplit() { try { return Number.parseFloat(localStorage.getItem(SPLIT_KEY)); } catch { return NaN; } }
-function storeSplit(value) { try { localStorage.setItem(SPLIT_KEY, String(value)); } catch {} }
 
 export function createPanels(shell, state, api) {
   const isMac = /Mac/.test(navigator.platform);
@@ -51,10 +48,7 @@ export function createPanels(shell, state, api) {
     const body = document.createElement('div'); body.className = 'draw-panel draw-dock-body';
     section.append(header,body); dock[id] = { section, header, body };
   }
-  const splitter = document.createElement('div'); splitter.className = 'draw-dock-splitter';
-  splitter.setAttribute('role','separator'); splitter.setAttribute('aria-orientation','horizontal'); splitter.setAttribute('aria-label','Resize Properties and Layers');
-  splitter.dataset.tooltip = 'Drag to resize · Double-click: reset';
-  panels.append(dock.properties.section,splitter,dock.layers.section);
+  panels.append(dock.properties.section,dock.layers.section);
   const primary = dock.properties.body;
   const propertiesFooter = document.createElement('div'); propertiesFooter.className = 'draw-properties-footer';
   const scaleStrokes = check(propertiesFooter,'Scale strokes & effects','properties-scale-strokes',state.ui.scaleStrokes !== false,value => api.setScaleStrokes(value));
@@ -63,11 +57,11 @@ export function createPanels(shell, state, api) {
   // Control bar stays above the canvas; the other panels have movable window chrome.
   const controlBar = document.createElement('div'); controlBar.className = 'draw-control-bar'; controlBar.setAttribute('role','toolbar'); controlBar.setAttribute('aria-label','Control bar');
   shell.append(controlBar,rail,panels);
-  const panelWindows = createPanelWindows({ shell, rail, panels, splitter, dock, state,
+  const panelWindows = createPanelWindows({ shell, rail, panels, dock, state,
     icon: name => icon(panelSpriteHref(name)), renderContent(id,host) {
       if (state.document.readOnly) text(host,state.warning || 'Read-only document');
       PANEL_CONTENT[id](host);
-    }, refresh: () => render(), layoutDock });
+    }, refresh: () => render() });
   function close() { if (panelWindows.cancel()) return true; if (state.ui.layerMenu) { state.ui.layerMenu = false; render(); return true; } return panelWindows.close(); }
   function open(id, { floating = false } = {}) {
     // Contextual actions can still take the user straight to the Artboard tool and its Properties.
@@ -82,30 +76,7 @@ export function createPanels(shell, state, api) {
     }
     return panelWindows.open(id,{floating});
   }
-  // The dock's height comes from a ResizeObserver, so laying out the dock never forces a synchronous layout.
-  let dockHeight = 0;
-  const dockObserver = new ResizeObserver(entries => { const next = entries[0]?.contentRect.height ?? 0; if (Math.abs(next - dockHeight) > .5) { dockHeight = next; layoutDock(); } }); dockObserver.observe(panels);
-  function layoutDock() {
-    const height = dockHeight || panels.clientHeight, split = clampDockSplit(state.ui.dockSplit ?? storedSplit(),height);
-    const inDock = id => panelWindows.location(id) === 'dock';
-    const collapsed = id => inDock(id) && !!state.ui.dockCollapsed[id];
-    for (const id of DOCK_PANELS) {
-      dock[id].section.classList.toggle('is-collapsed',collapsed(id)); dock[id].header.setAttribute('aria-expanded',String(!collapsed(id)));
-    }
-    splitter.hidden = !inDock('properties') || !inDock('layers') || collapsed('properties') || collapsed('layers');
-    dock.properties.section.style.flex = collapsed('properties') ? '0 0 auto' : !inDock('layers') || collapsed('layers') ? '1 1 0' : `0 0 ${(split*100).toFixed(3)}%`;
-    dock.layers.section.style.flex = collapsed('layers') ? '0 0 auto' : '1 1 0';
-    splitter.setAttribute('aria-valuenow',String(Math.round(split*100)));
-  }
-  function setSplit(fraction) { state.ui.dockSplit = clampDockSplit(fraction,panels.clientHeight); storeSplit(state.ui.dockSplit); layoutDock(); }
-  splitter.addEventListener('pointerdown',event => {
-    if (event.button !== 0) return; event.preventDefault(); splitter.setPointerCapture(event.pointerId);
-    const box = panels.getBoundingClientRect(), offset = event.clientY - splitter.getBoundingClientRect().top;
-    const move = e => setSplit((e.clientY - offset - box.top) / box.height);
-    const end = () => { splitter.removeEventListener('pointermove',move); splitter.removeEventListener('pointerup',end); splitter.removeEventListener('pointercancel',end); };
-    splitter.addEventListener('pointermove',move); splitter.addEventListener('pointerup',end); splitter.addEventListener('pointercancel',end);
-  });
-  splitter.addEventListener('dblclick',() => setSplit(.5));
+  function layoutDock() { panelWindows.layoutDock(); }
 
   function text(host, message) { const p = document.createElement('p'); p.className = 'draw-panel__hint'; p.textContent = message; host.append(p); }
   function button(label, action) {
@@ -1418,5 +1389,5 @@ export function createPanels(shell, state, api) {
       if (!show) continue; const b = button(label,action); b.dataset.drawCb = key; b.disabled = ro; actions.append(b);
     }
   }
-  render(); return { render, open, close, updateInfo, destroy() { panelWindows.destroy(); dockObserver.disconnect(); } };
+  render(); return { render, open, close, updateInfo, destroy() { panelWindows.destroy(); } };
 }

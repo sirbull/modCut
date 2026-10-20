@@ -27,7 +27,7 @@ export async function runDrawPanelLayoutWorkflows(client) {
   assert.equal(await evaluate(`(async()=>(${active}.state.ui.flyout))()`), null);
 
   // Reorder with the pointer still held: the DOM and state must change before pointerup.
-  const start = await point(icon('appearance')), first = await point(icon('swatches'));
+  const start = await point(icon('appearance')), first = await point(icon('color'));
   await mouse('mouseMoved', start); await mouse('mousePressed', start, { buttons: 1 });
   await mouse('mouseMoved', { x: first.x, y: first.y - 12 }, { buttons: 1 });
   assert.equal((await railOrder())[0], 'appearance', 'Icons reorder live while the pointer is held');
@@ -62,6 +62,8 @@ export async function runDrawPanelLayoutWorkflows(client) {
   await drag(await point(header('appearance')), target); await wait(350);
   assert.equal((await railOrder())[0], 'appearance'); assert.equal((await state()).floating.appearance, undefined);
   await click(await point(icon('appearance')));
+  await handle('panel.graphic-styles');
+  await click(await point(`${floating('graphic-styles')} [aria-label="Collapse to icons"]`));
   await click(await point(icon('graphic-styles')));
   assert.equal(await evaluate(`document.querySelector('${root} .draw-flyout [role=tabpanel]').dataset.drawPanelBody`), 'graphic-styles');
 
@@ -124,12 +126,12 @@ export async function runDrawPanelLayoutWorkflows(client) {
   await wait(100); assert.ok((await state()).floating.color, 'F6 opens Color as a movable window');
   await handle('toggle-panels'); await handle('panel.color');
   assert.equal(await evaluate(`document.querySelector('${root} .draw-shell').classList.contains('draw-shell--panels-hidden')`), false, 'Choosing a panel reveals panels hidden with Tab');
-  await click(await point(`${floating('color')} [aria-label="Dock panel"]`));
+  await click(await point(`${floating('color')} [aria-label="Collapse to icons"]`));
   assert.ok((await state()).rail.includes('color')); assert.equal((await state()).floating.color, undefined);
-  await evaluate(`document.querySelector('${icon('info')}').focus()`);
+  await evaluate(`document.querySelector('${icon('image-trace')}').focus()`);
   await command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Delete', code: 'Delete' });
   await command('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Delete', code: 'Delete' });
-  assert.ok(!(await state()).rail.includes('info'), 'Delete removes the focused panel icon');
+  assert.ok(!(await state()).rail.includes('image-trace'), 'Delete removes the focused panel icon');
 
   // Workspace snapshots include positions/order, and Essentials resets the modular layout.
   await handle('panel.appearance');

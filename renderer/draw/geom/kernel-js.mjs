@@ -143,26 +143,92 @@ function offsetWith(lib, paths, { distance, join = 'miter', miterLimit = 4, tole
   const rings = executeUnion(lib, result, lib.PolyFillType.pftNonZero).filter((ring) => ring.length >= 3);
   return rings.map((ring) => ({ closed: true, segments: ring.map(({ X, Y }) => ({ p: [X / SCALE, Y / SCALE], in: [0, 0], out: [0, 0] })) }));
 }
+/** Split flattened centre lines by arc length before offsetting, restarting the pattern per subpath. */
+function dashedContours(contours, dash) {
+  if (!dash) return contours;
+  const array = dash.array, offset = dash.offset ?? 0;
+  if (!Array.isArray(array) || array.length > LIMITS.points || array.some(n => !Number.isFinite(n) || n < 0)
+    || !Number.isFinite(offset)) throw new GeometryError('Invalid stroke dash');
+  const pattern = array.length % 2 ? [...array, ...array] : array;
+  const period = pattern.reduce((sum, n) => sum + n, 0);
+  if (!Number.isFinite(period)) throw new GeometryError('Invalid stroke dash');
+  // Canvas/SVG treat an empty or all-zero dash array as a solid stroke.
+  if (!period) return contours;
+  const phase = ((offset % period) + period) % period, result = [];
+  let events = 0, pointCount = 0;
+  const count = n => {
+    pointCount += n;
+    if (pointCount > LIMITS.points) throw new GeometryError('Dash result exceeds point limit', 'GEOMETRY_LIMIT');
+  };
+  for (const contour of contours) {
+    const points = contour.points.filter((p, i, all) => !i || p.some((v, j) => v !== all[i - 1][j]));
+    if (points.length < 2) continue;
+    if (contour.closed) points.push(points[0]);
+    const lengths = [0];
+    for (let i = 1; i < points.length; i++) lengths.push(lengths[i - 1] + Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]));
+    const total = lengths.at(-1), intervals = [];
+    for (let i = 0, from = -phase; from <= total; i++) {
+      if (++events > LIMITS.points) throw new GeometryError('Dash result exceeds point limit', 'GEOMETRY_LIMIT');
+      const span = pattern[i % pattern.length], to = from + span;
+      if (i % 2 === 0 && (span ? to > 0 && from < total : from >= 0)) {
+        const start = Math.max(0, from), end = Math.min(total, to), last = intervals.at(-1);
+        // Zero-length gaps must keep the join, instead of introducing two caps at a corner.
+        if (last && last[1] === start) last[1] = end;
+        else intervals.push([start, end]);
+      }
+      from = to;
+    }
+    const at = distance => {
+      let lo = 0, hi = points.length - 1;
+      while (lo + 1 < hi) { const mid = (lo + hi) >> 1; if (lengths[mid] <= distance) lo = mid; else hi = mid; }
+      const a = points[lo], b = points[hi], length = lengths[hi] - lengths[lo], t = (distance - lengths[lo]) / length;
+      return { index: lo, point: a.map((v, j) => v + (b[j] - v) * t), tangent: b.map((v, j) => (v - a[j]) / length) };
+    };
+    const pieces = intervals.map(([from, to]) => {
+      if (contour.closed && from === 0 && to === total) { count(points.length - 1); return contour; }
+      const start = at(from), end = at(to), part = [start.point];
+      if (to > from) {
+        for (let i = start.index + 1; i < points.length && lengths[i] < to; i++) part.push(points[i]);
+        part.push(end.point);
+      }
+      count(part.length);
+      return { closed: false, points: part, tangent: start.tangent };
+    });
+    // A dash crossing a closed path's seam has a join there, with caps only at the real dash ends.
+    if (contour.closed && pieces.length > 1 && intervals[0][0] === 0 && intervals.at(-1)[1] === total) {
+      const first = pieces.shift(), last = pieces.pop();
+      pieces.push({ closed: false, points: [...last.points, ...first.points.slice(1)], tangent: last.tangent });
+    }
+    for (const piece of pieces) result.push(piece);
+  }
+  return result;
+}
 /**
  * Outline Stroke: the area a stroke of `width` mm paints, as closed filled rings (holes wind the other
  * way). Closed subpaths give a band; open ones get butt, round or square caps. Result: straight segments.
  */
-export async function outlineStroke(path, { width, join = 'miter', cap = 'butt', miterLimit = 4, tolerance = .005 } = {}) {
+export async function outlineStroke(path, { width, join = 'miter', cap = 'butt', miterLimit = 4, tolerance = .005, dash } = {}) {
   positive(width, 'stroke width', 10000);
   if (!['miter', 'round', 'bevel'].includes(join)) throw new GeometryError('Invalid join');
   if (!['butt', 'round', 'square'].includes(cap)) throw new GeometryError('Invalid cap');
   positive(miterLimit, 'miter limit', 500); positive(tolerance, 'offset tolerance', 1);
   validatePath(path);
   const lib = await clipper(), ints = (points) => points.map(([x, y]) => ({ X: Math.round(x * SCALE), Y: Math.round(y * SCALE) }));
-  const engine = new lib.ClipperOffset(Math.max(1, miterLimit), tolerance * SCALE);
+  // Small dots and round caps also need a relative tolerance to retain their circular silhouette.
+  const engine = new lib.ClipperOffset(Math.max(1, miterLimit), Math.min(tolerance, width / 1000) * SCALE), dots = [];
   const joinType = { miter: lib.JoinType.jtMiter, round: lib.JoinType.jtRound, bevel: lib.JoinType.jtSquare }[join];
   const endType = { butt: lib.EndType.etOpenButt, round: lib.EndType.etOpenRound, square: lib.EndType.etOpenSquare }[cap];
-  for (const contour of flattenPath(path, tolerance / 4)) {
+  for (const contour of dashedContours(flattenPath(path, tolerance / 4), dash)) {
     if (contour.closed && contour.points.length >= 3) engine.AddPath(ints(contour.points), joinType, lib.EndType.etClosedLine);
     else if (contour.points.length >= 2) engine.AddPath(ints(contour.points), joinType, endType);
+    else if (contour.tangent && cap === 'round') engine.AddPath(ints(contour.points), lib.JoinType.jtRound, endType);
+    else if (contour.tangent && cap === 'square') {
+      const [x, y] = contour.points[0], [dx, dy] = contour.tangent, r = width / 2;
+      dots.push(ints([[1, 1], [-1, 1], [-1, -1], [1, -1]].map(([a, b]) => [x + r * (a * dx - b * dy), y + r * (a * dy + b * dx)])));
+    }
   }
   const result = new lib.Paths(); engine.Execute(result, width / 2 * SCALE);
-  return executeUnion(lib, result, lib.PolyFillType.pftNonZero).filter((ring) => ring.length >= 3)
+  return executeUnion(lib, [...result, ...dots], lib.PolyFillType.pftNonZero).filter((ring) => ring.length >= 3)
     .map((ring) => ({ closed: true, segments: ring.map(({ X, Y }) => ({ p: [X / SCALE, Y / SCALE], in: [0, 0], out: [0, 0] })) }));
 }
 export async function runGeometry(method, params) {

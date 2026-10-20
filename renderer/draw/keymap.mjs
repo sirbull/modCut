@@ -3,7 +3,7 @@ import { TOOL_DEFINITIONS, toolRegistry } from './tools/registry.mjs';
 import { PANEL_DEFINITIONS } from './panels/registry.mjs';
 const binding = (id, keys, when = 'draw', extra = {}) => ({ id, keys, when, command: id, ...extra });
 const toolKeys = {
-  select: ['V'], 'direct-selection': ['A'], 'magic-wand': ['Y'], lasso: ['Q'], artboard: ['Shift+O'],
+  select: ['V'], 'direct-selection': ['A'], 'magic-wand': ['Y'], lasso: ['Q'], 'polygonal-lasso': ['Shift+Q'], artboard: ['Shift+O'],
   pen: ['P'], 'add-anchor': ['Equal', 'Shift+Equal'], 'delete-anchor': ['Minus'], 'anchor-point': ['Shift+C'], curvature: ['Shift+Backquote'],
   pencil: ['N'], paintbrush: ['B'], 'blob-brush': ['Shift+B'], eraser: ['Shift+E'], scissors: ['C'], 'shape-builder': ['Shift+M'], width: ['Shift+W'],
   rectangle: ['M'], ellipse: ['L'], line: ['Backslash', 'IntlBackslash'], type: ['T'], 'touch-type': ['Shift+T'],

@@ -61,7 +61,9 @@ import { runDrawArtboardUIWorkflows } from './draw-artboard-ui-workflows.mjs';
 import { runWorkflows, verifyRecoveredSession } from "./workflows.mjs";
 import { runThemeWorkflows } from "./theme-workflows.mjs";
 import { runBackgroundWorkflows } from "./background-workflows.mjs";
+import { runDrawWorkspaceFileWorkflows } from './draw-workspace-files-workflows.mjs';
 import { runDrawPanelLayoutWorkflows } from './draw-panel-layout-workflows.mjs';
+import { runDrawDockingWorkflows } from './draw-docking-workflows.mjs';
 import { runWorkspaceLayoutWorkflows } from './workspace-layout-workflows.mjs';
 
 const port = 9400 + (process.pid % 200);
@@ -108,7 +110,13 @@ async function stop(signal = "SIGTERM") {
 try {
   launch();
   const first = await connectToApp(port);
-  if (process.argv.includes('--draw-panel-layout')) {
+  if (process.argv.includes('--draw-workspaces')) {
+    for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
+    await runDrawWorkspaceFileWorkflows(first); first.socket.close();
+  } else if (process.argv.includes('--draw-docking')) {
+    for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
+    await runDrawDockingWorkflows(first);first.socket.close();
+  } else if (process.argv.includes('--draw-panel-layout')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawPanelLayoutWorkflows(first); first.socket.close();
   } else if (process.argv.includes('--workspace-layout')) {
@@ -342,6 +350,8 @@ try {
       await runDrawBrushWorkflows(first);
       await runDrawWindowWorkflows(first);
       await runDrawPanelLayoutWorkflows(first);
+      await runDrawWorkspaceFileWorkflows(first);
+      await runDrawDockingWorkflows(first);
       await runDrawMcpWorkflows(first);
       await runDrawLanguageWorkflows(first);
       await runDrawPerfWorkflows(first);

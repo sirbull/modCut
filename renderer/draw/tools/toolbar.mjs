@@ -48,7 +48,7 @@ export function createToolbar(host, state, { available, setTool, command, openPa
     buttons.set(group.id,button); variants.set(group.id,group.tools[0]); paintButton(button,group.tools[0]); wrap.append(button);
     if (group.tools.length > 1) {
       button.setAttribute('aria-haspopup','menu'); button.setAttribute('aria-expanded','false');
-      const more = document.createElement('button'); more.type = 'button'; more.className = 'draw-tool-more'; more.textContent = '▾';
+      const more = document.createElement('button'); more.type = 'button'; more.className = 'draw-tool-more';
       more.setAttribute('aria-label',`${group.id === 'shapes' ? 'Shape' : toolRegistry.get(group.tools[0]).name} tools`);
       more.addEventListener('click',() => flyout && trigger === button ? close() : open(group,button)); wrap.append(more);
       button.addEventListener('contextmenu',event => { event.preventDefault(); open(group,button); });

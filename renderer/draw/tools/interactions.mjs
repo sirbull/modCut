@@ -16,6 +16,23 @@ export function createInteractions(canvas, state, api) {
   const screenDelta=(dx,dy)=>new scope.Point(dx,dy).rotate(-scope.view.rotation).divide(scope.view.zoom);
   function clearPreview() {preview?.remove();preview=null;renderer.clearTransformPreview();state.ui.transformPreviewBox=null;}
   function cancel() {const editor=nameEditor;nameEditor=null;editor?.remove();const previous=gesture;gesture=null;if(previous)canvas.style.cursor=api.cursor();if(previous?.mode==='free-transform')api.freeDistortPreview(null);withScope(()=>{clearPreview();if(TRANSFORM_TOOLS.includes(previous?.tool))api.transforms.setOrigin(previous.originBefore);renderer.updateView();});api.status();}
+  function applyLasso({points,modifiers}) {
+    api.lasso(points,modifiers.alt&&modifiers.mod?{objects:true,add:modifiers.shift}:{add:modifiers.shift,subtract:modifiers.alt});
+  }
+  function finishPolygonalLasso() {
+    if(gesture?.mode!=='polygonal-lasso'||gesture.points.length<3)return;
+    const polygon=gesture;cancel();run(()=>{if(!state.document.readOnly)applyLasso(polygon);});
+  }
+  function polygonalPreview() {
+    withScope(()=>{
+      clearPreview();const {points,end}=gesture,z=scope.view.zoom,first=points[0];
+      const closing=points.length>=3&&Math.hypot(end.x-first[0],end.y-first[1])<=6/z;
+      preview=new scope.Group({children:[
+        new scope.Path({segments:[...points,closing?first:[end.x,end.y]],closed:true,strokeColor:'#1473E6',dashArray:[4/z,3/z],strokeWidth:1/z}),
+        new scope.Path.Circle({center:first,radius:(closing?5:3)/z,fillColor:'#FFFFFF',strokeColor:'#1473E6',strokeWidth:1/z}),
+      ]});scope.view.update();
+    });
+  }
   function artboardEdge(p) {
     const tolerance=6/scope.view.zoom;
     const active=activeArtboard(state), boards=[active,...state.document.data.artboards.filter(a=>a.id!==active.id).toReversed()];
@@ -123,6 +140,7 @@ export function createInteractions(canvas, state, api) {
     if(SHAPE_TOOLS.includes(gesture.tool) && api.tool()==='hand')gesture.start=gesture.start.add(p.subtract(gesture.end));
     gesture.end=p;gesture.modifiers={shift:event.shiftKey,alt:event.altKey,mod:event.ctrlKey||event.metaKey};
     gesture.event=event;
+    if(gesture.mode==='polygonal-lasso'){polygonalPreview();return;}
     if(gesture.tool==='select' && gesture.box && !gesture.handle && gesture.mode!=='marquee')
       canvas.style.cursor=CURSORS[event.altKey?'select-copy':'select-move'];
     if (gesture.tool==='hand') {
@@ -239,7 +257,21 @@ export function createInteractions(canvas, state, api) {
   },events);
   canvas.addEventListener('pointerdown',event=>{
     if (event.button!==0) return;
-    api.closeMenus();canvas.focus();canvas.setPointerCapture(event.pointerId);const p=point(event),tool=api.tool();
+    api.closeMenus();canvas.focus();const p=point(event),tool=api.tool();
+    // Polygonal selection spans clicks, so it must survive each pointer release.
+    if(tool==='polygonal-lasso'&&!state.document.readOnly) {
+      const modifiers={shift:event.shiftKey,alt:event.altKey,mod:event.ctrlKey||event.metaKey};
+      if(gesture?.mode!=='polygonal-lasso')gesture={tool,mode:tool,points:[[p.x,p.y]],end:p,modifiers};
+      else {
+        gesture.end=p;gesture.modifiers=modifiers;
+        const first=gesture.points[0],last=gesture.points.at(-1);
+        if(gesture.points.length>=3&&Math.hypot(p.x-first[0],p.y-first[1])<=6/scope.view.zoom){finishPolygonalLasso();return;}
+        // The second press of a double-click must not add the same vertex twice.
+        if(Math.hypot(p.x-last[0],p.y-last[1])>1/scope.view.zoom)gesture.points.push([p.x,p.y]);
+      }
+      polygonalPreview();return;
+    }
+    canvas.setPointerCapture(event.pointerId);
     const base={tool,start:p,end:p,center:scope.view.center.clone(),zoom:scope.view.zoom,screen:[event.clientX,event.clientY],modifiers:{shift:event.shiftKey,alt:event.altKey,mod:event.ctrlKey||event.metaKey}};
     if (tool==='rotate-view') {gesture={...base,rotation:scope.view.rotation};return;}
     if (tool==='hand' || tool==='zoom') {gesture=base;if(tool==='hand')canvas.style.cursor=CURSORS['hand-active'];return;}
@@ -347,6 +379,7 @@ export function createInteractions(canvas, state, api) {
   canvas.addEventListener('pointermove',update,events);
   canvas.addEventListener('pointerup',event=>{
     if (!gesture) return;
+    if(gesture.mode==='polygonal-lasso')return;
     const end=point(event);if (end.getDistance(gesture.end)>.000001)update(event);
     const drag=gesture,moved=Math.hypot(event.clientX-drag.screen[0],event.clientY-drag.screen[1])>3;cancel();
     if (drag.tool==='hand'||drag.tool==='rotate-view'){canvas.style.cursor=api.cursor();return;}
@@ -373,7 +406,7 @@ export function createInteractions(canvas, state, api) {
         if(drag.moved)api.widthDrag(drag.session,[drag.end.x,drag.end.y],{alt:drag.alt??drag.modifiers.alt});
       }else if(drag.mode==='lasso') {
         // Alt+Mod: whole objects (any anchor inside), as Illustrator's Lasso with those keys.
-        if(drag.points.length>2)api.lasso(drag.points,drag.modifiers.alt&&drag.modifiers.mod?{objects:true,add:drag.modifiers.shift}:{add:drag.modifiers.shift,subtract:drag.modifiers.alt});else if(!drag.modifiers.shift)api.select([]);
+        if(drag.points.length>2)applyLasso(drag);else if(!drag.modifiers.shift)api.select([]);
       }else if(drag.mode==='measure') {
         if(drag.end)api.setMeasure([drag.start.x,drag.start.y],[drag.end.x,drag.end.y]);
       }else if(drag.mode==='gradient') {
@@ -400,8 +433,9 @@ export function createInteractions(canvas, state, api) {
       }
     });
   },events);
-  canvas.addEventListener('pointercancel',cancel,events);canvas.addEventListener('lostpointercapture',()=>{if(gesture)cancel();},events);
+  canvas.addEventListener('pointercancel',cancel,events);canvas.addEventListener('lostpointercapture',()=>{if(gesture&&gesture.mode!=='polygonal-lasso')cancel();},events);
   canvas.addEventListener('dblclick',event=>{
+    if(api.tool()==='polygonal-lasso'){event.preventDefault();finishPolygonalLasso();return;}
     const label=renderer.artboardLabelHit(point(event));
     if(label){event.preventDefault();renameArtboard(label);return;}
     if(TRANSFORM_TOOLS.includes(api.tool())){event.preventDefault();cancel();void api.transformDialog(api.tool());return;}
@@ -419,6 +453,14 @@ export function createInteractions(canvas, state, api) {
   },{...events,passive:false});
   window.addEventListener('blur',cancel,events);
   return {cancel,busy:()=>!!gesture,refreshEyedropper:eyedropperPreview.refresh,eyedropperModifiers:eyedropperPreview.modifiers,
+    handle(command) {
+      if(gesture?.mode!=='polygonal-lasso')return false;
+      if(command==='tool-dialog'){finishPolygonalLasso();return true;}
+      if(command==='delete'){
+        if(gesture.points.length<=1)cancel();else{gesture.points.pop();polygonalPreview();}return true;
+      }
+      return false;
+    },
     adjust(direction) {
       if(!direction || !gesture)return false;
       if(['polygon','star'].includes(gesture.tool))state.ui.points=Math.max(gesture.tool==='polygon'?3:2,Math.min(100,(state.ui.points || (gesture.tool==='polygon'?6:5))+direction));

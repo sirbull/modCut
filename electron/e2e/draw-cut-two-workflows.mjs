@@ -27,6 +27,40 @@ export async function runDrawCutTwoWorkflows(client) {
   assert.equal(outlined.steps, 1, 'Outline Stroke is one undo step');
   await evaluate(`(async()=>{${active}.handle('undo')})()`);
 
+  // Dashes are real filled contours after outlining, with the same rendered silhouette and one undo.
+  // Compare at 600 ppi so antialiasing on small dots does not dominate the pixel difference.
+  const dashed = await evaluate(`(async()=>{const w=${active},{createNode}=await import('./draw/doc/schema.mjs'),{insertNode,removeNode}=await import('./draw/doc/commands.mjs'),{appearance}=await import('./draw/geometry.mjs');
+    const b=w.state.document.data.artboards[0],L=w.state.document.data.layers[0].id,seg=p=>({p:[b.x+p[0],b.y+p[1]],in:[0,0],out:[0,0]});
+    const pixels=async()=>{const img=new Image();img.src=w.exportBoard(b.id,'png',{ppi:600,background:'white'});await img.decode();const c=document.createElement('canvas');c.width=img.width;c.height=img.height;const ctx=c.getContext('2d');ctx.drawImage(img,0,0);return ctx.getImageData(0,0,c.width,c.height).data;};
+    const cases=[
+      {name:'butt offset',array:[4,2],offset:1,cap:'butt'},
+      {name:'round negative offset',array:[3,4],offset:-2,cap:'round'},
+      {name:'odd pattern',array:[3,2,1],offset:0,cap:'butt'},
+      {name:'round dots',array:[0,4],offset:0,cap:'round'},
+      {name:'closed seam',array:[12,8],offset:4,cap:'square',closed:true},
+      {name:'cubic curve',array:[4,3],offset:1,cap:'round',curve:true}
+    ],results=[];
+    for(const spec of cases){
+      const look=appearance(null,'#000000',1);Object.assign(look.strokes[0],{dash:{array:spec.array,offset:spec.offset},cap:spec.cap,join:'miter'});
+      const segments=(spec.closed?[[50,40],[70,40],[70,60],[50,60]]:[[45,50],[100,50]]).map(seg);
+      if(spec.curve){segments[0].out=[0,-25];segments[1].in=[0,-25];}
+      const n=createNode('path',{name:spec.name,subpaths:[{closed:!!spec.closed,segments}],appearance:look});
+      w.state.history.execute(insertNode(L,n));w.select([n.id]);const before=await pixels(),saved=w.state.document.serialize(),steps=w.state.history.entries.filter(e=>e.applied).length;
+      await w.handle('outline-stroke');
+      for(let i=0;i<100&&w.state.document.getNode(n.id);i++)await new Promise(r=>setTimeout(r,20));
+      const outlined=w.state.document.getNode(w.state.selection.ids[0]),after=await pixels();let difference=0,ink=0;
+      for(let i=0;i<before.length;i+=4){difference+=Math.abs(before[i]-after[i]);ink+=255-before[i];}
+      const result={name:spec.name,difference:difference/ink,contours:outlined.subpaths?.length,strokes:outlined.appearance?.strokes.length,steps:w.state.history.entries.filter(e=>e.applied).length-steps};
+      w.handle('undo');result.restored=w.state.document.serialize()===saved;w.handle('redo');result.redone=!!w.state.document.getNode(outlined.id);w.handle('undo');
+      w.state.history.execute(removeNode(n.id));results.push(result);
+    }return results;})()`);
+  for(const proof of dashed){
+    assert.ok(proof.contours>1,`${proof.name}: each dash becomes a filled contour`);
+    assert.equal(proof.strokes,0,`${proof.name}: no dashed stroke remains`);
+    assert.ok(proof.difference<.025,`${proof.name}: before/after pixel difference ${proof.difference}`);
+    assert.equal(proof.steps,1);assert.equal(proof.restored,true);assert.equal(proof.redone,true);
+  }
+
   // Expand Appearance: two fills and a stroke become three paths in paint order; Expand with only Stroke
   // outlines the stroke and keeps the fills on one path.
   const expandedInfo=await evaluate(`(async()=>{const w=${active},{createNode}=await import('./draw/doc/schema.mjs'),{insertNode}=await import('./draw/doc/commands.mjs'),{appearance}=await import('./draw/geometry.mjs');
@@ -126,5 +160,5 @@ export async function runDrawCutTwoWorkflows(client) {
   assert.ok(Math.abs(all.line[0] - 160) < .05 && Math.abs(all.line[1] - 20) < .05, `The second artboard keeps its place: ${all.line}`);
   // The new Cut tab has no Draw document; closing it returns to the Draw tab.
   await restoreTabs();
-  console.log('PASS Draw Send to Cut v2: Outline Stroke, Expand and Expand Appearance, outline strokes and cut at the artboard in Send to Cut, duplicates left out, tiny segments and node count reported, artboard send status, Update in Cut keeps the choices, the move in Cut and other items, one undo, images as rotated engraving rasters, all artboards in one send');
+  console.log('PASS Draw Send to Cut v2: Outline Stroke including dashed paths, dots and curves with matching PNGs and undo/redo, Expand and Expand Appearance, outline strokes and cut at the artboard in Send to Cut, duplicates left out, tiny segments and node count reported, artboard send status, Update in Cut keeps the choices, the move in Cut and other items, one undo, images as rotated engraving rasters, all artboards in one send');
 }
