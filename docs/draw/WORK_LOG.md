@@ -2377,3 +2377,16 @@ Backup & transfer. Hurtigtastlisten er `shortcutsEditor`, delt med Edit > Keyboa
 tar også med hurtigtaster og lagrede arbeidsområder. 431 Draw-tester og i18n passerer; `--theme` og
 `--draw-mcp` passerer, skjermbilder kontrollert. To andre agenter jobbet samtidig (linjaler og Freeform);
 bare mine hunker i `index.mjs` og `i18n-nb.mjs` er tatt med.
+
+## 2026-10-22: Gradienter som i Illustrator, del 4 av 4 (Freeform)
+
+Freeform-gradient: modell og fargefelt (`doc/freeform.mjs`), validering, piksler klippet til fyllet i
+paint stack, annotator (punkter, Spread-ring med håndtak, linjer), Gradient-verktøyet (legg til, dra,
+spre, dra ut/Delete, Line mode med punkt på linje) og panelets Draw/Point/Color/Opacity/Spread. Fire
+ønsker fra brukeren underveis er med: Spread-ring, Line mode, opasitet per punkt og Within/Along/Across.
+431 Draw-tester og i18n passerer; `--draw-gradient` passerte tre ganger på rad, og skjermbilder av
+Point og Line mode er kontrollert. To tidligere ustabile kjøringer falt sammen med at den andre agenten
+var aktiv; ingen feil etter det.
+Den andre agenten har uncommittede endringer i ui.mjs, i18n-nb.mjs og index.mjs. Denne commiten er
+bygget som HEAD + bare Freeform-endringene. Merk: HEAD (a5daf7b) har en syntaksfeil i index.mjs
+(`syncShortcuts` midt i et uttrykk); rettelsen ligger uncommittet hos den andre agenten.

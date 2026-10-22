@@ -3,8 +3,9 @@
 **Start med [STATUS.md](STATUS.md)**: én side med hva som er gjort og hva som gjenstår.
 
 **Pågår 2026-10-22: gradienter som i Illustrator, i fire deler (STATUS.md 2.40).** Del 1 (Gradient-panelet
-med Recent, Presets, typeknapper og dragbar glidebryter) del 2 (Within, Along og Across stroke) og
-del 3 (annotator på lerretet) er ferdige. Neste er Freeform (del 4): punkter med farge, opasitet
+med Recent, Presets, typeknapper og dragbar glidebryter) del 2 (Within, Along og Across stroke),
+del 3 (annotator på lerretet) og del 4 (Freeform) er ferdige, se STATUS.md 2.40. Gjenstår: PDF-shading,
+ellipse-aspekt for Radial, stiplet Along/Across. Del 4 omfatter: punkter med farge, opasitet
 per punkt og Spread-ring som dras, og «Lines»-modus der punkter bindes sammen av glatte linjer.
 
 **Pågår 2026-10-22: Innstillinger med seksjoner og Properties uten utvalg, i tre deler (STATUS.md 2.42).**

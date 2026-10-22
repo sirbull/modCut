@@ -497,6 +497,12 @@
       "author": "modCut",
       "path": "recolor-brightness.svg",
       "sha256": "d005267d3f650326213dc2364ed9d9e35d3479d92463c6b2d5e77ea01cf16593"
+    },
+    "gradient-type-freeform": {
+      "name": "gradient-type-freeform",
+      "author": "modCut",
+      "path": "gradient-type-freeform.svg",
+      "sha256": "b2702845524fac34dd09bbc9059a5c3f36e3191625d9c00d882e252920f66ac8"
     }
   }
 }

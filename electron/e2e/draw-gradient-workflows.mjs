@@ -40,7 +40,7 @@ export async function runDrawGradientWorkflows(client) {
   steps=await applied();
   await mouse('mouseMoved',marker);await mouse('mousePressed',marker,{buttons:1});
   await mouse('mouseMoved',{x:bar.left+bar.width*.35,y:marker.y},{buttons:1});
-  g=await paint();assert.ok(Math.abs(g.stops[1].offset-.35)<.03,`Live while dragging: ${g.stops[1].offset}`);
+  g=await paint();assert.ok(Math.abs(g.stops[1].offset-.35)<.03,`Live while dragging: ${g.stops.map(s=>s.offset)}`);
   await mouse('mouseMoved',{x:bar.left+bar.width*.25,y:marker.y},{buttons:1});await mouse('mouseReleased',{x:bar.left+bar.width*.25,y:marker.y});
   g=await paint();assert.ok(Math.abs(g.stops[1].offset-.25)<.03,`Dragged stop: ${g.stops[1].offset}`);assert.deepEqual(g.stops[1].color.values,[1,0,0]);
   assert.equal(await applied(),steps+1,'A stop drag is one undo step');
@@ -141,7 +141,61 @@ export async function runDrawGradientWorkflows(client) {
   // SVG keeps the gradient; Send to Cut uses the first stop as the layer colour.
   assert.match(await evaluate(`(async()=>{const w=${active};return w.exportBoard(w.state.ui.artboardId,'svg')})()`),/linearGradient/);
   assert.match(await evaluate(`(async()=>{const w=${active};return w.cutSvg(w.state.ui.artboardId).svg})()`),/fill="#FFF3B0"/);
+  // Freeform: four points from the gradient's colours; colour two of them in the panel.
+  // The floating Gradient panel covers the right of the canvas; move the view so the artwork is clear of it.
+  await evaluate(`(async()=>{const w=${active};w.withScope(()=>{w.scope.view.center=w.scope.view.center.add([30,0]);w.renderer.updateView();})})()`);
+  await evaluate(`document.querySelector('${fly} [data-draw-gradient-type=freeform]').click()`);
+  g=await paint();assert.equal(g.type,'freeform');assert.equal(g.points.length,4);assert.deepEqual(g.points[0].position,[22,16]);
+  await until(`!!document.querySelector('${fly} [data-draw-freeform-mode=points][aria-pressed=true]')`,'Freeform controls');
+  const pointColor=async(i,hex)=>{await evaluate(`(async()=>{const w=${active};w.state.ui.gradientStop=${i};w.select(['${id}'])})()`);
+    await evaluate(`(()=>{const c=document.querySelector('${fly} [data-draw-field=freeform-color]');c.value='${hex}';c.dispatchEvent(new Event('change',{bubbles:true}));})()`);};
+  await pointColor(0,'#ff0000');await pointColor(2,'#0000ff');
+  const nearRed=await pixel(23,17),nearBlue=await pixel(77,43);
+  assert.ok(nearRed[0]>180&&nearRed[2]<120&&nearBlue[2]>180&&nearBlue[0]<120,`Each point shows its colour: ${nearRed} ${nearBlue} ${await evaluate(`(async()=>{const w=${active};const r=w.scope.project.getItems({class:w.scope.Raster});return JSON.stringify(r.map(x=>({w:x.width,h:x.height,b:x.bounds.toString(),vis:x.visible,p:x.parent?.className,pp:x.parent?.parent?.className,clipped:x.parent?.clipped,loaded:x.loaded})))})()`)}`);
+  // The Gradient tool: click in the artwork adds a point there (selected), then drag it; each is one undo step.
+  await evaluate(`(async()=>{${active}.setTool('gradient')})()`);
+  await until(`(async()=>{const w=${active},g=w.scope.project.getItems({name:'Gradient annotator'})[0];return !!g&&g.children.length>8})()`,'Freeform annotator');
+  await mouse('mouseMoved',await at(50,30));assert.match(await cursor(),/copy\s*$/,'Inside: the add-point cursor');
+  steps=await applied();await click(await at(50,30));
+  g=await paint();assert.equal(g.points.length,5);assert.deepEqual(g.points[4].position.map(Math.round),[50,30]);assert.equal(await applied(),steps+1);
+  assert.match(await evaluate(`document.querySelector('${fly} [data-draw-freeform-point]').textContent`),/Point 5 of 5/);
+  steps=await applied();
+  await mouse('mouseMoved',await at(50,30));await mouse('mousePressed',await at(50,30),{buttons:1});
+  await mouse('mouseMoved',await at(55,33),{buttons:1});g=await paint();assert.deepEqual(g.points[4].position.map(Math.round),[55,33],'Live while dragging the point');
+  await mouse('mouseMoved',await at(60,35),{buttons:1});await mouse('mouseReleased',await at(60,35));
+  g=await paint();assert.deepEqual(g.points[4].position.map(Math.round),[60,35]);assert.equal(await applied(),steps+1,'A point drag is one undo step');
+  // Colour it green, then drag its ring's handle (18 px below it while the spread is 0) to spread it.
+  await pointColor(4,'#00ff00');const unspread=await pixel(72,35);
+  const centre4=await at(60,35),handle={x:centre4.x,y:centre4.y+18};
+  steps=await applied();
+  await mouse('mouseMoved',{x:handle.x+3,y:handle.y+3});await mouse('mouseMoved',handle);
+  assert.match(await cursor(),/default\s*$/,`The spread handle takes the move cursor: ${(await cursor()).slice(-24)} ${await evaluate('document.elementFromPoint('+handle.x+','+handle.y+')?.className')}`);
+  await mouse('mousePressed',handle,{buttons:1});await mouse('mouseMoved',{x:handle.x,y:centre4.y+60},{buttons:1});await mouse('mouseReleased',{x:handle.x,y:centre4.y+60});
+  g=await paint();assert.ok(g.points[4].spread>5,`Spread from the ring: ${g.points[4].spread}`);assert.equal(await applied(),steps+1);
+  const spread=await pixel(72,35);assert.ok(spread[1]>unspread[1]+15,`More green further out: ${unspread} → ${spread}`);
+  // Opacity of the one selected point.
+  await evaluate(`(()=>{const c=document.querySelector('${fly} [data-draw-field=freeform-opacity]');c.value='40';c.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  g=await paint();assert.equal(g.points[4].opacity,.4);assert.equal(g.points[3].opacity,undefined,'Only that point');
+  // Drag it off the artwork: marked, then removed; Delete removes the selected point, not the object.
+  steps=await applied();
+  await mouse('mouseMoved',centre4);await mouse('mousePressed',centre4,{buttons:1});await mouse('mouseMoved',await at(60,70),{buttons:1});
+  assert.match(await cursor(),/not-allowed\s*$/,'The delete cursor off the artwork');
+  await mouse('mouseReleased',await at(60,70));g=await paint();assert.equal(g.points.length,4,'Dragged off: removed');assert.equal(await applied(),steps+1);
+  await click(await at(78,16));assert.equal(await evaluate(`(async()=>${active}.state.ui.gradientStop)()`),1,'Clicking a point selects it');
+  await evaluate("window.dispatchEvent(new KeyboardEvent('keydown',{key:'Delete',code:'Delete',bubbles:true,cancelable:true}))");
+  g=await paint();assert.equal(g.points.length,3,'Delete removes the selected point');
+  // Lines: each click continues the line from the selected point; the colour runs along it.
+  await evaluate(`document.querySelector('${fly} [data-draw-freeform-mode=lines]').click()`);
+  g=await paint();assert.equal(g.mode,'lines');
+  await click(await at(22,16));await click(await at(40,40));await click(await at(70,20));
+  g=await paint();assert.equal(g.points.length,5);assert.deepEqual(g.lines,[[0,3,4]],`One line through the clicks: ${JSON.stringify(g.lines)}`);
+  // A place on the curved line between the first two of its points (the artboard starts at 0,0).
+  const onLine=await evaluate(`(async()=>{const {lineSegments}=await import('./draw/doc/freeform.mjs');return lineSegments(${active}.state.document.getNode('${id}').appearance.fills[0].paint)[6].a})()`);
+  await click(await at(onLine[0],onLine[1]));g=await paint();assert.equal(g.points.length,6,'Clicking the line adds a point on it');assert.deepEqual(g.lines,[[0,5,3,4]]);
+  // Export: SVG carries the pixels; Send to Cut uses the first point's colour.
+  assert.match(await evaluate(`(async()=>{const w=${active};return w.exportBoard(w.state.ui.artboardId,'svg')})()`),/<image/);
+  assert.match(await evaluate(`(async()=>{const w=${active};return w.cutSvg(w.state.ui.artboardId).svg})()`),/fill="#FF0000"/);
   await evaluate(`(async()=>{const w=${active};w.setTool('select');w.handle('cancel')})()`);
   await restore();
-  console.log('PASS Draw gradients: Period applies white to black with one undo step, Properties names it, Recent and Presets, panel stops (add, colour, mouse drag, click to add, drag off to delete, reverse), type buttons, stroke within/along/across with pixels, presets keep the vector, Gradient tool drag as one step, PNG pixels, SVG gradient, first stop for Cut');
+  console.log('PASS Draw gradients: Period applies white to black with one undo step, Properties names it, Recent and Presets, panel stops (add, colour, mouse drag, click to add, drag off to delete, reverse), type buttons, stroke within/along/across with pixels, presets keep the vector, Gradient tool drag as one step, annotator, freeform points (colour, add, drag, spread ring, opacity, remove, Delete) and lines, PNG pixels, SVG, first stop or point for Cut');
 }

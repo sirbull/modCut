@@ -1001,14 +1001,29 @@ Radial og Freeform, og gradient på strek (Within, Along og Across stroke). Arbe
    legg til og slett (`render/gradient-annotator.mjs`).
    Rettet samtidig: en dokumentendring avbrøt pågående gest, så Gradient-verktøyets drag bare fulgte
    første musebevegelse. Gestens egne live-endringer avbryter den ikke lenger (`interactions.editing()`).
-4. **Freeform:** punkter i fyllet som legges til, flyttes og fargelegges, med myk overgang mellom
-   alle punktene; hvert punkt har en stiplet ring med håndtak som dras for å endre spredning (Spread).
+4. **Freeform (ferdig):** Type-knappen Freeform (bare for fyll) gjør gradienten om til fire punkter i
+   fyllet, farget fra gradientens stopp. Med Gradient-verktøyet: klikk i grafikken legger til et punkt
+   (fargen som er der), dra et punkt for å flytte det, dra et punkt ut av grafikken eller trykk Delete
+   for å fjerne det (minst ett blir igjen). Valgt punkt har en stiplet ring med håndtak; dra håndtaket
+   for å endre spredning (Spread), altså hvor langt punktets farge holder seg før den blander seg.
+   **Line mode:** hvert klikk fortsetter linjen fra valgt punkt (Alt-klikk starter en ny), klikk på en
+   linje legger til et punkt på den; linjene er glatte kurver (Catmull-Rom) og fargen går langs dem.
+   Panelet: Draw (Point mode / Line mode), «Point n of m» med slett, og Color, Opacity og Spread for
+   valgt punkt. Fargefeltet (`doc/freeform.mjs`) vekter hvert punkt og hvert linjestykke etter avstand
+   (spredning gir full vekt innenfor ringen); det tegnes som piksler klippet til fyllet
+   (`paper-adapter.mjs`, paint stack), så PNG og SVG (`<image>`) får det med. Send to Cut og PDF/EPS
+   bruker første punkts farge. Modellen: `paint: { type: 'freeform', mode, points: [{ position, color,
+   opacity?, spread? }], lines }` i objektets egne koordinater.
+   Begrensninger: Freeform på strek finnes ikke (som i Illustrator), og fargene blandes noe annerledes
+   enn Illustrators «Classic/Perceptual».
 
-Tester: `gradient-stroke.test.mjs` (bånd langs og på tvers, lukkede baner, caps, strokeMode i
+Tester: `freeform.test.mjs` (fargefelt, spredning, opasitet per punkt, linjer, legg til/sett inn/fjern,
+piksler og validering), `gradient-stroke.test.mjs` (bånd langs og på tvers, lukkede baner, caps, strokeMode i
 modell og validering), `gradient.test.mjs` (flytte stopp forbi andre, presets, Recent med ødelagt lagring) og
 `--draw-gradient` (ekte musedrag på glidebryteren, klikk for å legge til, dra av for å slette, ett
 angresteg per drag, Recent og Presets, typeknapper, annotator med ekte musedrag (legg til, flytt,
-slett, ende- og startdrag, pekere, live over flere bevegelser), Within/Along/Across med pikselkontroll, PNG,
+slett, ende- og startdrag, pekere, live over flere bevegelser), Freeform med ekte mus (legg til, dra,
+Spread-ring, opasitet per punkt, dra ut/Delete, Line mode og punkt på linje), Within/Along/Across med pikselkontroll, PNG,
 SVG og Send to Cut).
 
 ### 2.41 Recolor (Recolor Artwork med fargehjul) (2026-10-22)

@@ -152,8 +152,8 @@ the same commit that completes an item.
   Copy and paste work between Cut and Draw in both directions; Paste takes the newest copy.
   Unsupported non-vector glyphs and overset text block incomplete text output.
   Gradients are being extended to match Illustrator in four parts: the Gradient panel with
-  Recent, Presets and a draggable stop slider, the stroke modes (within, along, across) and
-  on-canvas editing with the Gradient tool are done; Freeform gradients (points and lines) follow.
+  Recent, Presets and a draggable stop slider, the stroke modes (within, along, across),
+  on-canvas editing with the Gradient tool and Freeform gradients (points and lines) are done.
   Recolor (a colour wheel that turns every colour of the selection together, with harmony
   rules and colour libraries) is in Window > Recolor, for all paint, fills or strokes, with Copy to Stroke/Fill.
   Preferences has sections on the left (appearance, units, navigation, keyboard shortcuts,

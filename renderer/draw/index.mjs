@@ -35,7 +35,8 @@ import { WARP_STYLES } from './geom/warp.mjs';
 import { BLOB_DEFAULTS, blobOptions, calligraphicProfile, paintbrushOptions } from './geom/brush.mjs';
 import { createId, createNode } from './doc/schema.mjs';
 import { appearance } from './geometry.mjs';
-import { changeGradient, defaultGradient, isGradient, vectorGradient } from './doc/gradient.mjs';
+import { changeGradient, defaultGradient, isAnyGradient, isGradient, vectorGradient } from './doc/gradient.mjs';
+import { isFreeform, removeFreeformPoint } from './doc/freeform.mjs';
 import { sampleAppearance, applySampleCommands, measure } from './doc/tool-rules.mjs';
 import { activeArtboard } from './doc/artboards.mjs';
 import { SAME_MODES, OBJECT_KINDS, magicWand, inverseSelection, sameAs, objectsOfKind, stackNeighbour, saveSelection, savedSelection, selectableObjects, insidePolygon } from './doc/select-rules.mjs';
@@ -951,9 +952,11 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     let last=null;
     state.history.transaction(label,()=>{for(const id of ids){
       const node=state.document.getNode(id),entry=(kind==='stroke'?node.appearance.strokes:node.appearance.fills)[0];
-      const box=withScope(()=>renderer.localBounds(id))??{x:0,y:0,width:10,height:10},next=edit(isGradient(entry?.paint)?entry.paint:null,box,node);
+      const box=withScope(()=>renderer.localBounds(id))??{x:0,y:0,width:10,height:10},next=edit(isAnyGradient(entry?.paint)?entry.paint:null,box,node);
       if(next){last=next;state.history.execute(updateNode(id,{appearance:changeGradient(node.appearance,kind,next,state.ui)},{label}));}
     }},{mergeKey});
+    // Freeform gradients have points, not stops; the last linear or radial one stays the one to reuse.
+    if(last&&!isGradient(last))last=null;
     if(last)state.ui.lastGradient={type:last.type,stops:structuredClone(last.stops),angle:last.angle};
     // Drags (merged edits) reach Recent once they end, through rememberGradient.
     if(last&&!mergeKey)state.ui.recentGradients=rememberRecentGradient(last,state.ui.recentGradients);
@@ -1593,6 +1596,10 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     if(['rotate-dialog','reflect-dialog','scale-dialog','shear-dialog'].includes(command))return void transformToolDialog(command.split('-')[0]);
     if(command==='delete') {
       if(state.ui.tool==='artboard')return artboards.remove();
+      // With the Gradient tool on a freeform fill, Delete removes the selected point, not the object.
+      const node=state.ui.tool==='gradient'&&state.document.getNode(paintIds()[0]),fill=node&&state.ui.paintFocus!=='stroke'&&node.appearance.fills[0];
+      if(isFreeform(fill?.paint)&&fill.paint.points.length>1){const index=Math.min(state.ui.gradientStop??0,fill.paint.points.length-1);
+        gradient('fill',current=>removeFreeformPoint(current,index),{label:'Delete Gradient Point',only:[node.id]});state.ui.gradientStop=Math.max(0,index-1);return;}
       state.history.transaction('Delete',()=>{for(const id of selectedIds())state.history.execute(removeNode(id));});return;
     }
     if(command==='smart-guides'){const settings=state.document.data.settings;state.history.execute(updateDocument({settings:{...settings,smartGuides:!settings.smartGuides}}));return;}
@@ -1698,10 +1705,12 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     rememberGradient,gradientHit:point=>withScope(()=>renderer.gradientHit(point)),gradientProject:point=>withScope(()=>renderer.gradientProject(point)),
     gradientAnnotation:value=>withScope(()=>renderer.setGradientAnnotation(value)),
     /** One annotated gradient (`target` from gradientHit): `edit(current, node)` returns the new gradient. */
-    gradientEditOne(target,edit,label,mergeKey){gradient(target.kind,(current,box,node)=>current&&edit(current,node),{label,mergeKey,only:[target.id]});},
+    gradientEditOne(target,edit,label,mergeKey){gradient(target.kind,(current,box,node)=>current&&edit(current,node,box),{label,mergeKey,only:[target.id]});},
+    gradientSpreadAt:point=>withScope(()=>renderer.gradientSpreadAt(point)),
     gradientStop(index){state.ui.gradientStop=index;panels?.render();withScope(()=>renderer.updateView({viewOnly:true}));},
     gradientVector(from,to,mergeKey){const kind=state.ui.paintFocus==='stroke'?'stroke':'fill',last=state.ui.lastGradient;
       gradient(kind,(current,box,node)=>{const a=renderer.pointToLocal(node.id,from),b=renderer.pointToLocal(node.id,to);
+        if(isFreeform(current))return null;
         return vectorGradient(current??defaultGradient(box,last?{type:last.type,stops:last.stops}:{}),[a.x,a.y],[b.x,b.y]);},{label:'Gradient',mergeKey});},
 typeOnPath:id=>editText(undefined,null,null,{pathFrom:id}),cursor,contextMenu:(x,y)=>contextMenu.open(x,y),
     tool:()=>temporary?.id || state.ui.tool,zoomOut:()=>!!temporary?.zoomOut,preferences:getPreferences,closeMenus:()=>{contextMenu.close();toolbar.close();},notify:message=>onError(message)});

@@ -1,5 +1,7 @@
 import { DOCK_PANELS, panelName, panelSpriteHref } from './registry.mjs';
 import { createPanelWindows } from './windows.mjs';
+import { isAnyGradient } from '../doc/gradient.mjs';
+import { freeformFrom, isFreeform, removeFreeformPoint, setFreeformMode, stopsFromFreeform, updateFreeformPoint } from '../doc/freeform.mjs';
 import { strokePreview } from './stroke-icons.mjs';
 import { insertNode, updateDocument, updateNode, updateNodes } from '../doc/commands.mjs';
 import { createId } from '../doc/schema.mjs';
@@ -876,7 +878,7 @@ export function createPanels(shell, state, api) {
       const summary = document.createElement('div'); summary.className = 'draw-appearance'; summary.setAttribute('aria-label','Appearance');
       // A gradient shows as its bar and opens the Gradient panel.
       const paintOf = kind => (kind === 'fill' ? painted.appearance.fills : painted.appearance.strokes)[0]?.paint;
-      const grads = { fill: isGradient(paintOf('fill')) ? paintOf('fill') : null, stroke: isGradient(paintOf('stroke')) ? paintOf('stroke') : null };
+      const grads = { fill: isAnyGradient(paintOf('fill')) ? paintOf('fill') : null, stroke: isAnyGradient(paintOf('stroke')) ? paintOf('stroke') : null };
       const fill = paintHex(painted.appearance.fills[0]), stroke = paintHex(painted.appearance.strokes[0]) ?? (grads.stroke ? colorHex(grads.stroke.stops[0].color) : null), weight = painted.appearance.strokes[0]?.width;
       for (const [kind,label,value,panel] of [['fill','Fill',fill,grads.fill ? 'gradient' : 'color'],['stroke','Stroke',stroke,grads.stroke ? 'gradient' : 'color'],['weight','Weight',stroke ? `${Number(weight.toFixed(3))} mm` : '—','stroke']]) {
         const line = document.createElement('div'); line.className = 'draw-appearance__line';
@@ -900,7 +902,7 @@ export function createPanels(shell, state, api) {
         const grad = kind === 'weight' ? null : grads[kind];
         if (grad) chip.style.background = gradientCss(grad);
         else if (kind !== 'weight') { chip.style.setProperty('--paint-color',value || 'transparent'); chip.classList.toggle('is-none',!value); } else chip.classList.add('is-weight');
-        const name = document.createElement('span'); name.textContent = kind === 'weight' ? `${label} ${value}` : grad ? `${label} ${grad.type === 'radial' ? 'radial' : 'linear'} gradient` : `${label} ${value ?? 'none'}`;
+        const name = document.createElement('span'); name.textContent = kind === 'weight' ? `${label} ${value}` : grad ? `${label} ${({ radial: 'radial', freeform: 'freeform' })[grad.type] ?? 'linear'} gradient` : `${label} ${value ?? 'none'}`;
         b.setAttribute('aria-label',`${name.textContent}: open ${{ color: 'Color', stroke: 'Stroke', gradient: 'Gradient' }[panel]} panel`);
         b.addEventListener('click',() => { if (kind !== 'weight') state.ui.paintFocus = kind; open(panel); if (kind !== 'weight') api.paintFocus(kind); });
         b.append(chip,name); line.append(b); summary.append(line);
@@ -1215,11 +1217,35 @@ export function createPanels(shell, state, api) {
       queueMicrotask(() => document.querySelector('[data-draw-recolor-wheel]')?.focus());
     });
   }
+  /** Freeform: Draw Points or Lines, and the selected point's colour, opacity and spread (points are placed with the Gradient tool). */
+  function freeformControls(host, g, edit, ro) {
+    const draw = document.createElement('div'); draw.className = 'draw-gradient-head'; host.append(draw);
+    const drawLabel = document.createElement('span'); drawLabel.textContent = 'Draw:';
+    const modes = document.createElement('div'); modes.className = 'draw-segmented draw-freeform-modes'; modes.setAttribute('role','group'); modes.setAttribute('aria-label','Draw');
+    for (const [id,label] of [['points','Point mode'],['lines','Line mode']]) {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'draw-segmented__option'; b.textContent = label; b.dataset.drawFreeformMode = id;
+      b.setAttribute('aria-pressed',String(g.mode === id)); b.disabled = ro;
+      b.addEventListener('click',() => api.run(() => edit(current => current.mode === id ? null : setFreeformMode(current,id),'Freeform Mode'))); modes.append(b);
+    }
+    draw.append(drawLabel,modes);
+    const selected = Math.min(state.ui.gradientStop ?? 0, g.points.length - 1), point = g.points[selected];
+    const head = document.createElement('div'); head.className = 'draw-gradient-head'; host.append(head);
+    const name = document.createElement('span'); name.textContent = `Point ${selected + 1} of ${g.points.length}`; name.dataset.drawFreeformPoint = String(selected);
+    const remove = iconButton('Delete point','trash',() => { edit(current => removeFreeformPoint(current,selected),'Delete Gradient Point'); state.ui.gradientStop = Math.max(0,selected - 1); });
+    remove.dataset.drawGradientAction = 'delete-point'; remove.disabled = ro || g.points.length <= 1; head.append(name,remove);
+    const fields = document.createElement('div'); fields.className = 'draw-fields'; host.append(fields);
+    field(fields,'Color',colorHex(point.color)?.toLowerCase() ?? '#000000',value => edit(current => updateFreeformPoint(current,selected,{ color: value.toUpperCase() }),'Gradient Point'),{ type:'color', key:'freeform-color', disabled: ro });
+    field(fields,'Opacity (%)',(point.opacity ?? 1) * 100,value => edit(current => updateFreeformPoint(current,selected,{ opacity: value / 100 }),'Gradient Point',`freeform-opacity-${selected}`),{ min:0, max:100, key:'freeform-opacity', disabled: ro });
+    field(fields,'Spread (mm)',point.spread ?? 0,value => edit(current => updateFreeformPoint(current,selected,{ spread: value }),'Gradient Point',`freeform-spread-${selected}`),{ min:0, max:10000, key:'freeform-spread', disabled: ro });
+    text(host,g.mode === 'lines'
+      ? 'With the Gradient tool (G): each click in the artwork continues the line from the selected point; click a line to add a point on it. Drag points to move them; Delete removes the selected one.'
+      : 'With the Gradient tool (G): click in the artwork to add a point, drag a point to move it, and drag the handle on its dashed ring to spread its colour. Drag a point out of the artwork or press Delete to remove it.');
+  }
   function gradientPanel(host) {
     const target = state.ui.paintFocus === 'stroke' ? 'stroke' : 'fill', ro = state.document.readOnly;
     paintTargets(host,target);
     const node = state.document.getNode(api.paintIds()[0]);
-    const entry = node && (target === 'fill' ? node.appearance.fills : node.appearance.strokes)[0], g = isGradient(entry?.paint) ? entry.paint : null;
+    const entry = node && (target === 'fill' ? node.appearance.fills : node.appearance.strokes)[0], g = isAnyGradient(entry?.paint) ? entry.paint : null;
     const edit = (fn, label, mergeKey = null) => api.gradient(target,fn,{ label, mergeKey });
     const focusedStops = () => state.document.getNode(api.paintIds()[0]).appearance[target === 'fill' ? 'fills' : 'strokes'][0].paint.stops;
     // Recent and Presets (built-in, then the document's gradient swatches): a click applies to the selection.
@@ -1230,7 +1256,7 @@ export function createPanels(shell, state, api) {
       list.forEach(({ name, gradient },i) => {
         const b = document.createElement('button'); b.type = 'button'; b.className = 'draw-gradient-preset'; b.style.backgroundImage = `${gradientPreviewCss(gradient)}, ${CHECKER}`;
         b.setAttribute('aria-label',name); b.dataset.tooltip = name; b.dataset.drawGradientPreset = `${key}-${i}`; b.disabled = ro || !node;
-        b.setAttribute('aria-pressed',String(!!g && gradientKey(g) === gradientKey(gradient)));
+        b.setAttribute('aria-pressed',String(!!g && isGradient(g) && gradientKey(g) === gradientKey(gradient)));
         b.addEventListener('click',() => api.run(() => { edit((current,box) => applyGradientPreset(current,gradient,box),'Gradient Preset'); state.ui.gradientStop = 0; }));
         row.append(b);
       });
@@ -1244,12 +1270,18 @@ export function createPanels(shell, state, api) {
     const thumb = document.createElement('span'); thumb.className = 'draw-gradient-thumb'; thumb.setAttribute('aria-hidden','true');
     if (g) thumb.style.backgroundImage = `${gradientPreviewCss(g)}, ${CHECKER}`; else thumb.classList.add('is-empty');
     const types = document.createElement('div'); types.className = 'draw-segmented draw-gradient-types'; types.setAttribute('role','group'); types.setAttribute('aria-label','Gradient type');
-    for (const [id,label] of [['linear','Linear gradient'],['radial','Radial gradient']]) {
+    for (const [id,label] of [['linear','Linear gradient'],['radial','Radial gradient'],['freeform','Freeform gradient']]) {
       const b = document.createElement('button'); b.type = 'button'; b.className = 'draw-segmented__option draw-stroke-option'; b.append(icon(panelSpriteHref(`gradient-type-${id}`)));
-      b.setAttribute('aria-label',label); b.dataset.tooltip = label; b.dataset.drawGradientType = id; b.setAttribute('aria-pressed',String(g?.type === id)); b.disabled = ro;
+      b.setAttribute('aria-label',label); b.dataset.tooltip = label; b.dataset.drawGradientType = id; b.setAttribute('aria-pressed',String(g?.type === id));
+      // Freeform is for fills, as in Illustrator.
+      b.disabled = ro || (id === 'freeform' && target === 'stroke'); if (id === 'freeform' && target === 'stroke') b.dataset.tooltip = 'Freeform gradients are for fills.';
       b.addEventListener('click',() => api.run(() => {
         const last = state.ui.lastGradient;
-        edit((current,box) => current ? (current.type === id ? null : setGradientType(current,id,box)) : defaultGradient(box,{ type: id, stops: last?.stops ?? null, angle: id === 'linear' ? last?.angle ?? 0 : 0 }),'Gradient Type');
+        edit((current,box) => current?.type === id ? null
+          : id === 'freeform' ? freeformFrom(current,box)
+          : isFreeform(current) ? defaultGradient(box,{ type: id, stops: stopsFromFreeform(current) })
+          : current ? setGradientType(current,id,box) : defaultGradient(box,{ type: id, stops: last?.stops ?? null, angle: id === 'linear' ? last?.angle ?? 0 : 0 }),'Gradient Type');
+        state.ui.gradientStop = 0;
       }));
       types.append(b);
     }
@@ -1258,6 +1290,7 @@ export function createPanels(shell, state, api) {
       const apply = button(`Apply Gradient to ${target === 'fill' ? 'Fill' : 'Stroke'}`,() => api.command('paint-gradient')); apply.dataset.drawGradientApply = ''; apply.disabled = ro; host.append(apply);
       text(host,'Choose a preset or a type, or apply the last gradient you used (white to black the first time).'); return;
     }
+    if (isFreeform(g)) { freeformControls(host,g,edit,ro); return; }
     // Stroke: how a stroke takes the gradient, as in Illustrator (only for strokes).
     const strokeRow = document.createElement('div'); strokeRow.className = 'draw-gradient-head draw-gradient-stroke'; host.append(strokeRow);
     const strokeLabel = document.createElement('span'); strokeLabel.textContent = 'Stroke:';
@@ -1375,7 +1408,7 @@ export function createPanels(shell, state, api) {
     if (box) { row('left','Left',mm(box.x)); row('top','Top',mm(box.y)); }
     const node = state.document.getNode(api.paintIds()[0]);
     if (node?.appearance) {
-      const describe = entry => !entry ? 'None' : isGradient(entry.paint) ? `${entry.paint.type === 'radial' ? 'Radial' : 'Linear'} gradient` : paintHex(entry)?.toUpperCase() ?? 'None';
+      const describe = entry => !entry ? 'None' : isAnyGradient(entry.paint) ? `${({ radial: 'Radial', freeform: 'Freeform' })[entry.paint.type] ?? 'Linear'} gradient` : paintHex(entry)?.toUpperCase() ?? 'None';
       row('fill','Fill',describe(node.appearance.fills[0]));
       const stroke = node.appearance.strokes[0]; row('stroke','Stroke',describe(stroke) + (stroke ? ` · ${Number(stroke.width ?? 0).toFixed(2)} mm` : ''));
     }
@@ -1544,7 +1577,7 @@ export function createPanels(shell, state, api) {
       const tile = document.createElement('button'); tile.type = 'button'; tile.className = 'draw-style-tile'; tile.dataset.drawStyle = style.id;
       tile.title = style.name; tile.setAttribute('aria-label',style.name); tile.setAttribute('role','listitem'); tile.setAttribute('aria-pressed',String(state.ui.graphicStyle === style.id));
       const fill = style.appearance.fills.find(e => !e.hidden), stroke = style.appearance.strokes.find(e => !e.hidden);
-      tile.style.background = fill?.paint?.type === 'solid' ? paintHex(fill) : fill?.paint && isGradient(fill.paint) ? gradientCss(fill.paint) : 'transparent';
+      tile.style.background = fill?.paint?.type === 'solid' ? paintHex(fill) : fill?.paint && isAnyGradient(fill.paint) ? gradientCss(fill.paint) : 'transparent';
       if (stroke) tile.style.boxShadow = `inset 0 0 0 ${Math.min(6,Math.max(1,stroke.width*3))}px ${paintHex(stroke) ?? '#000'}`;
       tile.style.opacity = String(Math.max(.2,style.opacity ?? 1));
       tile.addEventListener('click',() => api.run(() => { state.ui.graphicStyle = style.id;

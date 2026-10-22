@@ -4,11 +4,14 @@
  * counterclockwise from the x axis on screen.
  */
 import { appearance } from '../geometry.mjs';
+import { freeformCss, isFreeform } from './freeform.mjs';
 
 const clamp = (v, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, v));
 const rgb = (hex) => ({ space: 'rgb', values: [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255) });
 export const colorHex = (color) => color?.space === 'rgb' ? '#' + color.values.map((v) => Math.round(clamp(v) * 255).toString(16).padStart(2, '0')).join('').toUpperCase() : null;
 export const isGradient = (paint) => paint?.type === 'linear' || paint?.type === 'radial';
+/** Linear, radial or freeform: any paint the Gradient panel and tool edit. */
+export const isAnyGradient = (paint) => isGradient(paint) || isFreeform(paint);
 
 /** A gradient across a box: linear from the left edge to the right, radial from the centre out. */
 export function defaultGradient(box, { type = 'linear', stops = null, angle = 0 } = {}) {
@@ -78,9 +81,10 @@ export function changeGradient(original, kind, gradient, defaults = {}) {
   return result;
 }
 /** A solid stand-in for places that need one colour (laser layers, legacy writers): the first stop. */
-export function gradientHex(paint) { return isGradient(paint) ? colorHex([...paint.stops].sort((a, b) => a.offset - b.offset)[0].color) : null; }
+export function gradientHex(paint) { return isGradient(paint) ? colorHex([...paint.stops].sort((a, b) => a.offset - b.offset)[0].color) : isFreeform(paint) ? colorHex(paint.points[0].color) : null; }
 /** CSS for the gradient bar in the panel (always left to right). */
 export function gradientCss(g) {
+  if (isFreeform(g)) return freeformCss(g);
   return `linear-gradient(to right, ${sorted(g).stops.map((s) => { const [r, gg, b] = s.color.values.map((v) => Math.round(clamp(v) * 255)); return `rgba(${r}, ${gg}, ${b}, ${s.opacity ?? 1}) ${Math.round(s.offset * 1000) / 10}%`; }).join(', ')})`;
 }
 /** Move one stop to `offset`; returns the gradient and the stop's index after reordering. */
@@ -90,6 +94,7 @@ export function moveStop(g, index, offset) {
 }
 /** CSS for a preset tile: linear left to right, radial from the centre. */
 export function gradientPreviewCss(g) {
+  if (isFreeform(g)) return freeformCss(g);
   const css = gradientCss(g);
   return g.type === 'radial' ? css.replace(/^linear-gradient\(to right, /, 'radial-gradient(circle closest-side, ') : css;
 }

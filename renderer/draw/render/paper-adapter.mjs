@@ -14,6 +14,7 @@ import { arrowShapes } from '../geom/arrows.mjs';
 import { normalizeProfile, variableStrokeRings } from '../geom/width-profile.mjs';
 import { gradientStrokeBands } from '../geom/gradient-stroke.mjs';
 import { colorAt, isGradient, opacityAt } from '../doc/gradient.mjs';
+import { freeformPixels, isFreeform } from '../doc/freeform.mjs';
 import { blendStepCount, matchShapes, interpolateShapes, stepPositions, lerpColor, spineCurve, placeOnSpine, keyPosition } from '../geom/blend.mjs';
 import { PT_TO_MM, textValues } from '../doc/text.mjs';
 import { applyVectorEffects, hasVectorEffects, dropShadow, livePathfinder, pixelEffects, scribbleOf, vectorEffects, withGroupEffects } from '../doc/effects.mjs';
@@ -86,7 +87,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
   }
   const anchors=createAnchorOverlay(scope,overlay,state,editPointToWorld,id=>editingNode(id,{logical:['direct-selection','anchor-point','delete-anchor'].includes(state.ui?.tool)}),cornerWidgets);
   // Gradient tool: the annotated gradient, drawn on the first painted object (see setGradientTarget).
-  const gradientAnnotator=createGradientAnnotator(scope,overlay,state,id=>records.get(id)?.worldMatrix??null);let gradientAnnotation={};
+  const gradientAnnotator=createGradientAnnotator(scope,overlay,state,id=>records.get(id)?.worldMatrix??null,(id,point)=>hit(point)===id);let gradientAnnotation={};
 
   function color(paint, opacity = 1) {
     if (paint?.type === 'linear' || paint?.type === 'radial') {
@@ -297,7 +298,9 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
   const banded = (node, entry) => ['path', 'shape'].includes(node.type) && isGradient(entry?.paint) && ['along', 'across'].includes(entry.paint.strokeMode);
   function stacked(node) {
     return !node.children && node.type !== 'image' && (shown(node.appearance?.fills).length > 1 || shown(node.appearance?.strokes).length > 1
-      || shown(node.appearance?.strokes).some(entry => profiled(node, entry) || banded(node, entry)));
+      || shown(node.appearance?.strokes).some(entry => profiled(node, entry) || banded(node, entry))
+      // A freeform gradient is drawn as pixels clipped to the fill, so it goes through the paint stack too.
+      || shown(node.appearance?.fills).some(entry => isFreeform(entry.paint)));
   }
   /**
    * Points along each subpath of `item` (its own space) with unit normals and length shares: each curve
@@ -333,6 +336,16 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
     piece.fillColor = color(stroke.paint, stroke.opacity ?? 1);
     if (piece.fillColor && stroke.paint?.type === 'solid') piece.fillColor.alpha = stroke.opacity ?? 1;
     return piece;
+  }
+  /** A freeform fill: the colour field as pixels over the fill's box, clipped to its shape. */
+  function freeformFill(item, fill) {
+    const clip = item.clone({ insert: false }); clip.matrix = new scope.Matrix(); clip.clipMask = true;
+    const box = clip.bounds, pixels = freeformPixels(fill.paint, { x: box.x, y: box.y, width: box.width, height: box.height });
+    const canvas = document.createElement('canvas'); canvas.width = pixels.width; canvas.height = pixels.height;
+    canvas.getContext('2d').putImageData(new ImageData(pixels.data, pixels.width, pixels.height), 0, 0);
+    const raster = new scope.Raster(canvas); raster.remove(); raster.smoothing = 'high'; raster.bounds = box;
+    const group = new scope.Group({ insert: false, children: [clip, raster], clipped: true }); group.opacity = fill.opacity ?? 1;
+    return group;
   }
   /** A gradient along or across the stroke: one filled band per colour step (dashes are not applied). */
   function gradientStroke(item, stroke) {
@@ -380,6 +393,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
     group.opacity = node.opacity; group.data.baseOpacity = node.opacity; group.blendMode = node.blendMode;
     const entries = [...shown(node.appearance.fills).map(e => ['fills', e]), ...shown(node.appearance.strokes).map(e => ['strokes', e])];
     for (const [kind, entry] of entries) {
+      if (kind === 'fills' && isFreeform(entry.paint)) { const piece = freeformFill(item, entry); piece.blendMode = entry.blendMode ?? 'normal'; group.addChild(piece); continue; }
       if (kind === 'strokes' && (profiled(node, entry) || banded(node, entry))) { const piece = variableStroke(item, entry); piece.blendMode = entry.blendMode ?? 'normal'; group.addChild(piece); continue; }
       const piece = item.clone({ insert: false }); piece.matrix = new scope.Matrix();
       style(piece, { ...node, opacity: 1, blendMode: 'normal', appearance: { ...node.appearance, fills: kind === 'fills' ? [entry] : [], strokes: kind === 'strokes' ? [entry] : [] } }, false);
@@ -1124,7 +1138,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
   /** The width-profiled stroke `entry` of node `id` as filled outline subpaths in the node's own space (Outline Stroke). */
   const profiledStroke = (id, entry) => { const item = items.get(id); return item ? variableStrokeSubpaths(item, entry) : null; };
   return { render, select: updateView,
-    setGradientTarget: fn => gradientAnnotator.setTarget(fn), gradientHit: point => gradientAnnotator.hit(point), gradientProject: point => gradientAnnotator.project(point),
+    setGradientTarget: fn => gradientAnnotator.setTarget(fn), gradientHit: point => gradientAnnotator.hit(point), gradientProject: point => gradientAnnotator.project(point), gradientSpreadAt: point => gradientAnnotator.spreadAt(point),
     /** Annotator state during a drag (a stop marked for removal); redraws at once. */
     setGradientAnnotation(value) { gradientAnnotation = value ?? {}; gradientAnnotator.update(gradientAnnotation); scope.view.update(); }, updateView, requestDraw, bounds, painted: id => paintedBounds.get(id)?.clone() ?? bounds(id), profiledStroke, blendSteps, liveSteps, envelopeSteps, strokeLocation, widthHandles, selectionBounds, hit, items, setOutline, setLaserPreview(value){const next=!!value,changed=next!==laserPreview;if(!next&&!changed)return;laserPreview=next;lastFrame=null;if(changed)setOutline(outline);scope.view._needsUpdate=true;requestDraw();}, get laserPreview(){return laserPreview;}, laserIntent(id){return laserPreviewIntent(state.document,id,getLaserProcesses());}, thumbnail, exportArtwork, clippedSubpaths, clipToRect, effectiveSubpaths, booleanOperand, selectionHandle:point=>selection.hit(point),
     artboardAddHandles:()=>artboardAddPoints.map(h=>({...h,point:h.point.clone()})),

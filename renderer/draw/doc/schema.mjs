@@ -83,7 +83,7 @@ export function validateDocument(doc, { trusted = null } = {}) {
   };
   function paint(value, path) {
     if (!object(value)) { fail(path, 'Expected paint'); return; }
-    enumeration(value.type, ['none', 'solid', 'linear', 'radial'], `${path}.type`);
+    enumeration(value.type, ['none', 'solid', 'linear', 'radial', 'freeform'], `${path}.type`);
     function color(c, p) {
       const sizes = { rgb: 3, cmyk: 4, gray: 1, hsb: 3 };
       if (!object(c) || !sizes[c.space]) { fail(p, 'Expected a color'); return; }
@@ -104,6 +104,22 @@ export function validateDocument(doc, { trusted = null } = {}) {
       number(value.angle, `${path}.angle`); number(value.length, `${path}.length`, Number.MIN_VALUE);
       number(value.aspect, `${path}.aspect`, Number.MIN_VALUE);
       if (value.strokeMode !== undefined) enumeration(value.strokeMode, ['within', 'along', 'across'], `${path}.strokeMode`);
+    }
+    if (value.type === 'freeform') {
+      enumeration(value.mode, ['points', 'lines'], `${path}.mode`);
+      const points = array(value.points, `${path}.points`);
+      if (!points.length) fail(`${path}.points`, 'Expected at least one freeform point');
+      points.forEach((point, i) => {
+        if (!object(point)) { fail(`${path}.points.${i}`, 'Expected a point'); return; }
+        vector(point.position, 2, `${path}.points.${i}.position`); color(point.color, `${path}.points.${i}.color`);
+        if (point.opacity !== undefined) number(point.opacity, `${path}.points.${i}.opacity`, 0, 1);
+        if (point.spread !== undefined) number(point.spread, `${path}.points.${i}.spread`, 0);
+      });
+      array(value.lines, `${path}.lines`).forEach((line, i) => {
+        const list = array(line, `${path}.lines.${i}`);
+        if (list.length < 2) fail(`${path}.lines.${i}`, 'Expected at least two points in a line');
+        list.forEach((index, j) => { if (!Number.isInteger(index) || index < 0 || index >= points.length) fail(`${path}.lines.${i}.${j}`, 'Expected a point index'); });
+      });
     }
   }
   function appearance(value, path) {
