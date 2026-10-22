@@ -17,7 +17,9 @@ export async function runDrawPanelLayoutWorkflows(client) {
   const box = selector => evaluate(`(()=>{const b=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return {x:b.x,y:b.y,width:b.width,height:b.height}})()`);
   const point = async selector => { await evaluate(`document.querySelector(${JSON.stringify(selector)}).scrollIntoView({block:'nearest'})`); const b = await box(selector); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; };
   const header = id => `${floating(id)} .draw-flyout__tab`;
-  const railOrder = () => evaluate(`[...document.querySelectorAll('${rail} [data-draw-panel]')].map(b=>b.dataset.drawPanel)`);
+  // A rail flyout has no ×; Delete on the icon removes the panel from the rail.
+  const removeIcon = id => evaluate(`document.querySelector('${icon(id)}').dispatchEvent(new KeyboardEvent('keydown',{key:'Delete',bubbles:true}))`);
+  const railOrder = () =>evaluate(`[...document.querySelectorAll('${rail} [data-draw-panel]')].map(b=>b.dataset.drawPanel)`);
   await handle('workspace-reset'); await wait(100);
 
   // Ordinary clicks still open and collapse a docked flyout, without starting a drag.
@@ -97,10 +99,10 @@ export async function runDrawPanelLayoutWorkflows(client) {
   assert.deepEqual(await evaluate(`(async()=>(${active}.state.ui.referencePoint))()`), [1,1]);
   const transformShot = await command('Page.captureScreenshot', { format: 'png' });
   await writeFile(join(tmpdir(), 'modcut-compact-transform.png'), Buffer.from(transformShot.data, 'base64'));
-  await click(await point(`${root} .draw-flyout [aria-label="Close panel"]`));
+  await removeIcon('transform');
   assert.ok(!(await state()).rail.includes('transform') && (await state()).rail.includes('align') && (await state()).rail.includes('pathfinder'));
   await click(await point(icon('align')));
-  await click(await point(`${root} .draw-flyout [aria-label="Close panel"]`));
+  await removeIcon('align');
   assert.deepEqual((await railOrder()).filter(id => ['transform', 'align', 'pathfinder'].includes(id)), ['pathfinder'], 'Only Pathfinder is retained');
   await click(await point(icon('pathfinder')));
   assert.equal(await evaluate(`document.querySelector('${root} .draw-flyout [role=tabpanel]').dataset.drawPanelBody`), 'pathfinder');

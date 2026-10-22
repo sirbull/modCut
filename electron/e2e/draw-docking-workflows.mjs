@@ -58,15 +58,22 @@ export async function runDrawDockingWorkflows(client) {
     const stage=await box(`${root} .draw-stage`),free={x:stage.x+45,y:stage.y+55};
     await drop(await point(heading('layers')),free);
     assert.ok((await state()).floating.layers);assert.equal((await state()).columns.length,1);
-    await click(await point(`${root} .draw-floating-panel[data-draw-group=layers] [aria-label="Dock panel"]`));
+    c=await box(await column(0));
+    await drop(await point(`${root} .draw-floating-panel[data-draw-group=layers] .draw-flyout__tab`),{x:c.x+c.width/2,y:c.y+c.height-20},'dock');
     assert.equal((await state()).floating.layers,undefined);assert.equal((await state()).columns[0].panels.at(-1),'layers');
     c=await box(await column(0));
     await drop(await point(heading('layers')),{x:c.x+c.width-2,y:c.y+c.height/2},'column');
     assert.deepEqual((await state()).columns.map(c=>c.panels),[['stroke','properties','color'],['layers']]);
     await click(await point(`${dock('stroke')} [aria-label="Collapse to icons"]`));
     assert.ok((await state()).rail.includes('stroke'));assert.ok(!(await state()).dock.includes('stroke'));
-    await click(await point(rail('stroke')));await click(await point(`${root} .draw-flyout[data-draw-group=stroke] [aria-label="Dock panel"]`));
-    assert.equal((await state()).columns[1].panels.at(-1),'stroke','Dock keeps the panel open instead of returning it to an icon');
+    await click(await point(rail('stroke')));
+    assert.equal(await evaluate(`document.querySelector('${root} .draw-flyout[data-draw-group=stroke] [aria-label="Close panel"]').hidden`),true,'A rail flyout has no ×');
+    await click(await point(`${root} .draw-flyout[data-draw-group=stroke] [aria-label="Collapse to icons"]`));
+    assert.equal(await evaluate(`document.querySelector('${root} .draw-flyout').hidden`),true);assert.ok((await state()).rail.includes('stroke'),'» closes the flyout and keeps the icon');
+    await click(await point(rail('stroke')));c=await box(await column(1));
+    await drop(await point(`${root} .draw-flyout[data-draw-group=stroke] .draw-flyout__tab`),{x:c.x+c.width/2,y:c.y+c.height-20},'dock');
+    assert.equal((await state()).columns[1].panels.at(-1),'stroke','Dragging a flyout into the dock keeps the panel open');
+    assert.equal(await evaluate(`[...document.querySelectorAll('${root} .draw-dock-column button')].filter(b=>b.offsetParent&&(b.getAttribute('aria-label')==='Close panel'||b.textContent==='Dock')).length`),0,'Docked panels have no × or Dock');
 
     // Column width, cancellation, and saved workspaces retain the complete layout.
     const beforeWidth=(await state()).columns[0].width,edge=await point(`${await column(0)} > .draw-dock-column-resizer`);

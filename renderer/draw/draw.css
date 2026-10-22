@@ -110,8 +110,7 @@ body[data-workspace="draw"] .actionbar {display:none;}
 .draw-panel-rail .draw-icon-button.is-dragging { opacity: .5; outline: 2px solid var(--brand-mid); }
 .draw-panel-rail.is-drop-target { background: var(--brand-pale); box-shadow: inset 0 0 0 2px var(--brand-mid); }
 .draw-shell.is-panel-dragging, .draw-shell.is-panel-dragging * { cursor: grabbing !important; user-select: none !important; }
-.draw-panel-dock { width: auto; flex: 0 0 auto; padding: 0 5px; font-size: var(--fs-xs); }
-.draw-panel-dock[hidden] { display: none; }
+.draw-flyout__close[hidden] { display: none; }
 .draw-panel-window .draw-dock-section { flex: 1 1 auto !important; }
 .draw-panel-window .draw-dock-header { display: none; }
 .draw-panel-window .draw-dock-body { overflow: visible; }

@@ -17,10 +17,6 @@ export function createPanelWindows({ shell, rail, panels, dock, state, icon, ren
   const indicator = document.createElement('div'); indicator.className = 'draw-panel-drop-line'; indicator.hidden = true; indicator.setAttribute('aria-hidden','true'); shell.append(indicator);
   const beforePanels=document.createElement('aside');beforePanels.className='draw-panels draw-panels--before-rail';beforePanels.setAttribute('aria-label','Draw options');shell.append(beforePanels);
 
-  function pin(id) {
-    state.ui.panelLayout = movePanel(state.ui.panelLayout,id,{to:'dock'});
-    state.ui.dockCollapsed[id]=false; state.ui.flyout=null; persist(); refresh();
-  }
   function collapse(id) {
     state.ui.panelLayout = movePanel(state.ui.panelLayout,id,{to:'rail'});
     if(state.ui.flyout===id)state.ui.flyout=null; persist(); refresh(); buttons.get(id)?.focus({preventScroll:true});
@@ -40,24 +36,19 @@ export function createPanelWindows({ shell, rail, panels, dock, state, icon, ren
     element.hidden = true; element.setAttribute('role', docked ? 'region' : 'dialog');
     const header = document.createElement('div'); header.className = 'draw-flyout__header';
     const tabs = document.createElement('div'); tabs.className = 'draw-flyout__tabs'; tabs.setAttribute('role', 'tablist');
-    const dockButton = document.createElement('button'); dockButton.type = 'button'; dockButton.className = 'draw-layer-action draw-panel-dock';
-    dockButton.textContent = 'Dock'; dockButton.setAttribute('aria-label', 'Dock panel'); dockButton.dataset.tooltip = 'Dock panel';
-    dockButton.addEventListener('click', () => {
-      const id = element.dataset.drawGroup;
-      pin(id);
-    });
     const close = document.createElement('button'); close.type = 'button'; close.className = 'draw-layer-action draw-flyout__close';
     close.setAttribute('aria-label', 'Close panel'); close.dataset.tooltip = 'Close panel'; close.append(icon('x'));
     close.addEventListener('click', () => hide(element.dataset.drawGroup));
-    const railButton=action('Collapse to icons','»',()=>collapse(element.dataset.drawGroup));
-    header.append(tabs, dockButton, railButton, close);
+    // Docked panels and rail flyouts only collapse to their icon; removing a panel takes a floating window's ×.
+    close.hidden = !floating;
+    header.append(tabs, action('Collapse to icons','»',()=>collapse(element.dataset.drawGroup)), close);
     const body = document.createElement('div'); body.className = 'draw-panel draw-flyout__body'; body.setAttribute('role', 'tabpanel');
     element.append(header, body); if(!docked)shell.append(element);
     header.addEventListener('pointerdown', event => {
       if (!event.target.closest('.draw-layer-action')) startDrag(event, element.dataset.drawGroup, element);
     });
     element.addEventListener('pointerdown', () => { if (floating) element.style.zIndex = String(++front); });
-    return { element, header, tabs, body, dockButton, railButton };
+    return { element, header, tabs, body };
   }
   const flyout = makeWindow(false);
 
@@ -84,7 +75,7 @@ export function createPanelWindows({ shell, rail, panels, dock, state, icon, ren
   }
   for (const [id, entry] of Object.entries(dock)) {
     const heading=document.createElement('div');heading.className='draw-dock-heading';entry.section.prepend(heading);heading.append(entry.header);
-    heading.append(action('Collapse to icons','»',()=>collapse(id)),action('Close panel','×',()=>hide(id)));
+    heading.append(action('Collapse to icons','»',()=>collapse(id)));
     heading.addEventListener('pointerdown',event=>{if(!event.target.closest('.draw-layer-action'))startDrag(event,id,entry.section);});
   }
 
@@ -101,8 +92,6 @@ export function createPanelWindows({ shell, rail, panels, dock, state, icon, ren
   function syncWindow(entry, group, content) {
     const { element, tabs, body } = entry, active = activeTab(group), changed = body.dataset.drawPanelBody !== active;
     element.hidden = false; element.dataset.drawGroup = group.id; element.setAttribute('aria-label', group.tabs.map(panelName).join(', '));
-    entry.dockButton.hidden = state.ui.panelLayout.dock.includes(group.id);
-    entry.railButton.hidden = state.ui.panelLayout.rail.includes(group.id);
     // Keep tab nodes stable during a drag; replacing the pressed tab would cancel its click.
     if (tabs.dataset.group !== group.id) {
       tabs.dataset.group = group.id; tabs.replaceChildren(...group.tabs.map(id => {
