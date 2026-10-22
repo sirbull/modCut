@@ -171,10 +171,16 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
     const out = document.createElement('canvas'); out.width = canvas.width; out.height = canvas.height;
     const g = out.getContext('2d'); g.filter = sigma > 0 ? `blur(${sigma}px)` : 'none'; g.drawImage(canvas, 0, 0); return out;
   }
-  /** Gaussian Blur, Feather, Outer and Inner Glow on the object's pixels (radius and blur in mm). */
+  /** Gaussian Blur, Mosaic, Feather, Outer and Inner Glow on the object's pixels (radius, cell and blur in mm). */
   function applyPixelEffect(canvas, e, ppmm) {
     const g = canvas.getContext('2d', { willReadFrequently: true }), w = canvas.width, h = canvas.height;
     if (e.type === 'gaussian-blur') { const blurred = blurredAlpha(canvas, e.radius * ppmm / 2); g.clearRect(0, 0, w, h); g.drawImage(blurred, 0, 0); return; }
+    if (e.type === 'mosaic') {
+      // Shrinking with smoothing averages each cell; growing back without it keeps the cells square.
+      const cell = Math.max(1, e.cell * ppmm), small = document.createElement('canvas'); small.width = Math.max(1, Math.round(w / cell)); small.height = Math.max(1, Math.round(h / cell));
+      const sg = small.getContext('2d'); sg.imageSmoothingQuality = 'high'; sg.drawImage(canvas, 0, 0, small.width, small.height);
+      g.save(); g.clearRect(0, 0, w, h); g.imageSmoothingEnabled = false; g.drawImage(small, 0, 0, w, h); g.restore(); return;
+    }
     if (e.type === 'feather') {
       // The edge fades inwards: alpha falls from full, a radius inside the edge, to none at the edge.
       const mask = blurredAlpha(canvas, e.radius * ppmm / 2).getContext('2d').getImageData(0, 0, w, h).data, data = g.getImageData(0, 0, w, h);

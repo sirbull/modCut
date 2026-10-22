@@ -82,3 +82,38 @@ test('Free Distort as an effect moves the box corners by shares of the box, keep
   assert.deepEqual(out[0].segments.map((g) => g.p.map((v) => Math.round(v * 100) / 100)), [[0, 0], [15, -2], [10, 10], [0, 10]]);
   assert.throws(() => effect('free-distort', { blx: 5000 }), /Invalid Free Distort/);
 });
+
+test('Convert to Shape draws a rectangle, rounded rectangle or ellipse around the object, relative or absolute', async () => {
+  const { effectLabel } = await import('../doc/effects.mjs');
+  assert.deepEqual(effect('convert-to-shape'), { type: 'convert-to-shape', shape: 'rectangle', mode: 'relative', width: 0, height: 0, radius: 3 });
+  assert.throws(() => effect('convert-to-shape', { shape: 'star' }), /Invalid Convert to Shape/);
+  assert.throws(() => effect('convert-to-shape', { mode: 'absolute', width: 0 }), /Invalid Convert to Shape/);
+  const triangle = [{ closed: true, segments: [[0, 0], [10, 0], [4, 6]].map(seg) }];
+  const rect = applyVectorEffects(triangle, [effect('convert-to-shape', { width: 2, height: 4 })]);
+  assert.equal(rect[0].segments.length, 4); assert.deepEqual(bounds(rect), [-1, -2, 11, 8]);
+  const exact = applyVectorEffects(triangle, [effect('convert-to-shape', { shape: 'ellipse', mode: 'absolute', width: 4, height: 2 })]);
+  assert.deepEqual(bounds(exact), [3, 2, 7, 4], 'Centred on the object');
+  assert.ok(exact[0].segments.every((g) => Math.hypot(...g.out) > 0), 'Ellipse anchors are smooth');
+  const rounded = applyVectorEffects(square, [effect('convert-to-shape', { shape: 'rounded-rectangle', radius: 2 })]);
+  assert.equal(rounded[0].segments.length, 8); assert.deepEqual(bounds(rounded), [0, 0, 10, 10]);
+  assert.equal(effectLabel(effect('convert-to-shape', { shape: 'rounded-rectangle' })), 'Rounded Rectangle');
+  assert.equal(hasVectorEffects({ appearance: { effects: [effect('convert-to-shape')] } }), true);
+});
+
+test('Mosaic is a pixel effect with a checked cell size', async () => {
+  const { pixelEffects } = await import('../doc/effects.mjs');
+  assert.deepEqual(effect('mosaic', { cell: 2 }), { type: 'mosaic', cell: 2 });
+  assert.throws(() => effect('mosaic', { cell: 0 }), /Invalid Mosaic/);
+  assert.deepEqual(pixelEffects({ appearance: { effects: [effect('mosaic')] } }).map((e) => e.type), ['mosaic']);
+  assert.equal(hasVectorEffects({ appearance: { effects: [effect('mosaic')] } }), false);
+});
+
+test('the Effect menu lists every effect once, under Illustrator and Photoshop headings', async () => {
+  const { EFFECT_MENU } = await import('../ui/effect-menu.mjs');
+  const { EFFECTS } = await import('../doc/effects.mjs');
+  assert.deepEqual(EFFECT_MENU.map((s) => s.heading), ['Illustrator Effects', 'Photoshop Effects']);
+  const commands = EFFECT_MENU.flatMap((s) => s.items).flatMap((i) => i.items ?? [i]).map((i) => i.command);
+  assert.equal(new Set(commands).size, commands.length, 'No duplicates');
+  for (const type of Object.keys(EFFECTS).filter((t) => !['pathfinder', 'warp', 'convert-to-shape'].includes(t))) assert.ok(commands.includes(`effect-${type}`), `${type} is in the menu`);
+  for (const c of ['convert-rectangle', 'convert-rounded-rectangle', 'convert-ellipse', 'live-unite', 'warp-arc', 'effect-mosaic']) assert.ok(commands.includes(c), c);
+});

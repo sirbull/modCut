@@ -15,6 +15,7 @@ import { createFontService } from './font-service.mjs';
 import { registerExportFiles } from './export-files.mjs';
 import { registerWorkspaceFiles } from './workspace-files.mjs';
 import { BUILTIN_WORKSPACES } from '../renderer/draw/ui/workspaces.mjs';
+import { EFFECT_MENU } from '../renderer/draw/ui/effect-menu.mjs';
 import { CASE_MODES, SPECIAL_CHARACTERS, TYPE_SIZES, WHITESPACE_CHARACTERS } from '../renderer/draw/doc/type-commands.mjs';
 import { createGoogleFonts } from './google-fonts.mjs';
 import { createMcpHost } from './mcp-host.mjs';
@@ -297,15 +298,10 @@ function buildMenu(mode = "cut") {
     template.find(item=>item.label==='Help').submenu.unshift({label:"Laser Preview explained…",click:()=>send("laser-preview-help")});
     const objectItem=(label,command)=>({label,accelerator:acceleratorFor(command,{isMac}),click:()=>send(command)});
     // Effect menu (D3.2): live vector effects, kept in the object's Appearance.
-    template.find(item=>item.label==='Effect').submenu=[objectItem('Apply Last Effect','effect-last'),objectItem('Last Effect…','effect-options'),{type:'separator'},
-      {label:'Distort & Transform',submenu:[objectItem('Free Distort…','effect-free-distort'),objectItem('Pucker & Bloat…','effect-pucker-bloat'),objectItem('Roughen…','effect-roughen'),objectItem('Transform…','effect-transform'),
-        objectItem('Twist…','effect-twist'),objectItem('Zig Zag…','effect-zig-zag')]},{label:'Path',submenu:[objectItem('Offset Path…','effect-offset-path')]},
-      objectItem('Rasterize…','effect-rasterize'),{label:'Blur',submenu:[objectItem('Gaussian Blur…','effect-gaussian-blur')]},
-      {label:'Stylize',submenu:[objectItem('Drop Shadow…','effect-drop-shadow'),objectItem('Feather…','effect-feather'),objectItem('Inner Glow…','effect-inner-glow'),objectItem('Outer Glow…','effect-outer-glow'),objectItem('Round Corners…','effect-round-corners'),objectItem('Scribble…','effect-scribble')]},
-      {label:'Pathfinder',submenu:[['unite','Add'],['intersect','Intersect'],['exclude','Exclude'],['minusFront','Subtract'],['minusBack','Minus Back'],['divide','Divide'],['trim','Trim'],['merge','Merge'],['crop','Crop'],['outline','Outline']]
-        .map(([id,label])=>objectItem(label,`live-${id}`))},
-      {label:'Warp',submenu:[['arc','Arc'],['arc-lower','Arc Lower'],['arc-upper','Arc Upper'],['arch','Arch'],['bulge','Bulge'],['shell-lower','Shell Lower'],['shell-upper','Shell Upper'],
-        ['flag','Flag'],['wave','Wave'],['fish','Fish'],['rise','Rise'],['fisheye','Fisheye'],['inflate','Inflate'],['squeeze','Squeeze'],['twist','Twist']].map(([id,label])=>objectItem(`${label}…`,`warp-${id}`))}];
+    // The same entries as the fx button in Properties; the group headings show greyed out, as in Illustrator.
+    const effectItem=entry=>entry.items?{label:entry.label,submenu:entry.items.map(effectItem)}:objectItem(entry.label,entry.command);
+    template.find(item=>item.label==='Effect').submenu=[objectItem('Apply Last Effect','effect-last'),objectItem('Last Effect…','effect-options'),
+      ...EFFECT_MENU.flatMap(({heading,items})=>[{type:'separator'},{label:heading,enabled:false},...items.map(effectItem)])];
     // Window menu (D4.5): workspaces and the panels, as in Illustrator; the window roles stay.
     const windowMenu=template.find(item=>item.label==='Window');
     if(windowMenu){delete windowMenu.role;windowMenu.submenu=[{label:'Workspaces',submenu:[

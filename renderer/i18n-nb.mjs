@@ -787,4 +787,11 @@ export const NB = Object.freeze({
   "Dashed score lines": "Stiplede rispelinjer", "Draw score lines dashed, so they stand apart from cut lines even in similar colours.": "Tegn rispelinjer stiplet, så de skiller seg fra kuttelinjer selv i like farger.",
   "Engraved areas": "Graverte flater", "Colour of engraved fills and strokes. Engraved images are shown in grayscale. Applies immediately.": "Farge på graverte fyll og streker. Graverte bilder vises i gråtoner. Gjelder med en gang.",
   "Simulating without focus offsets: {name} has no controlled Z axis, so sending this job will be blocked until the layers' Focus offset is 0 or Z is enabled.": "Simulerer uten fokusforskyvning: {name} har ingen styrt Z-akse, så jobben blir stoppet ved sending til lagenes fokusforskyvning er 0 eller Z er slått på.",
+  "Choose an effect": "Velg en effekt", "Illustrator Effects": "Illustrator-effekter", "Photoshop Effects": "Photoshop-effekter", "Convert to Shape": "Konverter til figur",
+  "Rectangle…": "Rektangel…", "Rounded Rectangle…": "Avrundet rektangel…", "Ellipse…": "Ellipse…", "Pixelate": "Pikseler", "Mosaic…": "Mosaikk…", "Mosaic": "Mosaikk",
+  "Cell size (mm)": "Cellestørrelse (mm)", "Shape Options": "Figuralternativer", "Relative: add to the object": "Relativ: legg til objektet", "Absolute: exact size": "Absolutt: nøyaktig størrelse",
+  "Width or extra width (mm)": "Bredde eller ekstra bredde (mm)", "Height or extra height (mm)": "Høyde eller ekstra høyde (mm)", "Increase stroke weight": "Øk strektykkelse", "Decrease stroke weight": "Reduser strektykkelse",
+  "Stroke options: open Stroke panel": "Strekalternativer: åpne Strek-panelet", "Opacity: open Transparency panel": "Opasitet: åpne Gjennomsiktighet-panelet",
+  "Blending and opacity options: open Transparency panel": "Blanding og opasitet: åpne Gjennomsiktighet-panelet", "More options: open Appearance panel": "Flere alternativer: åpne Utseende-panelet",
+  "Appearance panel": "Utseende-panelet", "Fill color": "Fyllfarge", "Stroke color": "Strekfarge", "Enter a valid opacity.": "Skriv inn en gyldig opasitet.", "Effect: Mosaic": "Effekt: Mosaikk",
 });

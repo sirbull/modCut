@@ -46,9 +46,10 @@ export function dragTransform(tool,origin,start,end,constrain=false) {
 const EFFECT_LENGTHS=Object.freeze({
   'offset-path':['distance'],'round-corners':['radius'],transform:['moveX','moveY'],'zig-zag':['size'],roughen:['size'],
   scribble:['spacing','strokeWidth','overlap','variation'],'drop-shadow':['x','y','blur'],rasterize:['padding'],
-  'gaussian-blur':['radius'],feather:['radius'],'inner-glow':['blur'],'outer-glow':['blur'],
+  'gaussian-blur':['radius'],feather:['radius'],'inner-glow':['blur'],'outer-glow':['blur'],mosaic:['cell'],
+  'convert-to-shape':['width','height','radius'],
 });
-const PARENT_EFFECTS=new Set(['rasterize','gaussian-blur','feather','inner-glow','outer-glow']);
+const PARENT_EFFECTS=new Set(['rasterize','gaussian-blur','feather','inner-glow','outer-glow','mosaic']);
 /** Widths use world mm; effect lengths remain in the coordinate system in which they render. */
 export function scaledStrokeProperties(node,worldMatrix,matrix,scaleStrokes,{descendant=false,baked=node.type==='path'&&!descendant}={}) {
   if(!node.appearance)return {};

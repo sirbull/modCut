@@ -6,7 +6,7 @@ import { cutPaint } from '../io/cut-paint.mjs';
 import { scribbleOf } from '../doc/effects.mjs';
 
 export const LASER_COLORS = Object.freeze({Cut:'#C5221F',Score:'#C5221F',Engrave:'#000000',unresolved:'#965300'});
-const PREVIEW_VECTOR_EFFECTS=new Set(['round-corners','zig-zag','offset-path','transform','pucker-bloat','roughen','twist','free-distort','warp','scribble']);
+const PREVIEW_VECTOR_EFFECTS=new Set(['round-corners','zig-zag','offset-path','transform','pucker-bloat','roughen','twist','free-distort','warp','scribble','convert-to-shape']);
 
 export function laserPreviewIntent(doc, id, snapshot) {
   const node=doc.getNode(id), process=resolveCutPreviewProcess(doc,id,snapshot);

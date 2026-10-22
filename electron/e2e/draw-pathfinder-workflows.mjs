@@ -75,8 +75,13 @@ export async function runDrawPathfinderWorkflows(client) {
   for (let i = 0; i < 6; i++) await command('undo');
   assert.deepEqual([(await look()).fills.length, (await look()).strokes.length], [1, 1], 'Each Appearance edit is one undo step');
   // Live effects exist now: Add Effect lists them for the selected path.
-  assert.equal(await evaluate(`document.querySelector('${root} [data-draw-add-effect]').disabled`), false);
-  assert.ok(await evaluate(`document.querySelectorAll('${root} [data-draw-add-effect] option').length`) >= 9, 'Add Effect lists the effects');
+  assert.equal(await evaluate(`document.querySelector('${root} [data-draw-fx=add-effect]').disabled`), false);
+  await evaluate(`document.querySelector('${root} [data-draw-fx=add-effect]').click()`);
+  assert.ok(await evaluate(`document.querySelectorAll('[data-draw-effect-menu] button').length`) >= 9, 'fx lists the effect groups');
+  await evaluate(`document.querySelector('[data-draw-effect-menu] [data-draw-effect-submenu=Stylize]').click()`);
+  assert.ok(await evaluate(`!!document.querySelector('[data-draw-effect-menu="1"] [data-draw-effect-command=effect-drop-shadow]')`), 'Stylize lists Drop Shadow');
+  await evaluate(`document.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}))`);
+  assert.equal(await evaluate(`document.querySelectorAll('[data-draw-effect-menu]').length`), 0, 'A click outside closes the fx menu');
 
   // Properties: a title for the selection, quick actions, and a Document section with nothing selected.
   const title = () => evaluate(`document.querySelector('${root} [data-draw-selection-title]').textContent`);
@@ -86,7 +91,7 @@ export async function runDrawPathfinderWorkflows(client) {
   assert.equal((await kids()).find(n => n.id === ellipse.id).type, 'path', 'Expand Shape keeps the id and becomes a path');
   assert.equal(await title(), 'Path');
   await command('undo'); assert.equal((await kids()).find(n => n.id === ellipse.id).type, 'shape');
-  await evaluate(`document.querySelector('${root} [data-draw-quick=appearance]').click()`);
+  await evaluate(`document.querySelector('${root} [data-draw-prop-action=appearance]').click()`);
   assert.equal(await evaluate(`document.querySelector('${root} .draw-flyout').dataset.drawGroup`), 'appearance', 'Quick actions open their panel group');
   await command('select-all'); assert.equal(await title(), '2 objects');
   await command('deselect'); assert.equal(await title(), 'No Selection');

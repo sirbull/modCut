@@ -435,13 +435,6 @@ body[data-workspace="draw"] .statusbar .spacer { display: none; }
 .draw-color-dialog__swatches .draw-swatch {width:24px;height:24px;}
 .modal-overlay.draw-color-sampling {visibility:hidden;pointer-events:none;}
 @media (max-width:460px) {.draw-color-dialog__layout {grid-template-columns:1fr;} .draw-color-dialog .draw-color-surface {width:min(260px,100%);justify-self:center;} }
-.draw-appearance { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
-.draw-appearance__item { display: flex; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 5px; background: transparent; color: var(--text); padding: 5px 8px; font: inherit; font-size: var(--fs-sm); text-align: left; cursor: pointer; }
-.draw-appearance__item:hover { background: var(--surface-2); }
-.draw-appearance__item:focus-visible { outline: 2px solid var(--brand-mid); outline-offset: 1px; }
-.draw-appearance__chip { width: 16px; height: 16px; border: 1px solid var(--text-muted); border-radius: 3px; background: var(--paint-color); }
-.draw-appearance__chip.is-none { background: linear-gradient(to top right, transparent calc(50% - 1px), var(--danger) calc(50% - 1px), var(--danger) calc(50% + 1px), transparent calc(50% + 1px)); }
-.draw-appearance__chip.is-weight { border: 0; height: 3px; background: var(--text); }
 /* Scrubby labels: drag a number field's title to change its value (Shift faster, Alt finer). */
 .draw-scrub { cursor: ew-resize; user-select: none; touch-action: none; }
 .draw-scrub:hover { color: var(--text); }
@@ -530,6 +523,42 @@ body.draw-scrubbing, body.draw-scrubbing * { cursor: ew-resize !important; user-
 .draw-appearance-width input { width: 62px; box-sizing: border-box; border: 1px solid var(--border); border-radius: 5px; background: var(--bg); color: var(--text); padding: 4px 6px; font: inherit; font-size: var(--fs-sm); }
 .draw-appearance-opacity { margin-left: auto; font-size: var(--fs-xs); color: var(--text-muted); }
 .draw-appearance-opacity-row { display: block; width: 100%; padding: 8px 6px; border-top: 1px solid var(--border); border-radius: 0; color: var(--text-muted); }
+/* Properties > Appearance, as in Illustrator: swatch, underlined name, then the row's own controls. */
+.draw-prop-appearance { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+.draw-prop-appearance__row { display: grid; grid-template-columns: 24px auto 1fr auto; align-items: center; gap: 8px; min-height: 30px; }
+.draw-prop-appearance__name { justify-self: start; border: 0; background: transparent; color: var(--text); font: inherit; font-size: var(--fs-sm); padding: 2px 0; cursor: pointer;
+  text-decoration: underline dotted var(--text-muted); text-underline-offset: 4px; }
+.draw-prop-appearance__name:hover { text-decoration-color: var(--text); }
+.draw-prop-appearance__name:focus-visible, .draw-prop-swatch:focus-within { outline: 2px solid var(--brand-mid); outline-offset: 2px; }
+.draw-prop-swatch { position: relative; display: block; width: 22px; height: 22px; box-sizing: border-box; border: 1px solid var(--text-muted); border-radius: 2px; cursor: pointer; overflow: hidden; }
+.draw-prop-swatch__chip { position: absolute; inset: 0; background: var(--paint); }
+.draw-prop-swatch:disabled { cursor: default; opacity: .5; }
+/* Stroke: a hollow square, the panel showing through its middle. */
+.draw-prop-swatch--stroke .draw-prop-swatch__chip::after { content: ""; position: absolute; inset: 5px; background: var(--surface); border: 1px solid var(--text-muted); }
+.draw-prop-swatch.is-none .draw-prop-swatch__chip { background: #fff linear-gradient(135deg, transparent calc(50% - 1px), #e32336 calc(50% - 1px), #e32336 calc(50% + 1px), transparent calc(50% + 1px)); }
+.draw-prop-swatch--stroke.is-none .draw-prop-swatch__chip::after { display: none; }
+.draw-prop-swatch--opacity { cursor: default; background: repeating-conic-gradient(var(--surface-2) 0 25%, var(--surface) 0 50%) 0 0 / 10px 10px; }
+.draw-prop-weight, .draw-prop-opacity { display: inline-flex; align-items: center; gap: 2px; justify-self: start; font-size: var(--fs-xs); color: var(--text-muted); }
+.draw-prop-weight input, .draw-prop-opacity input { width: 54px; height: 24px; box-sizing: border-box; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); padding: 0 5px; font: inherit; font-size: var(--fs-xs); }
+.draw-prop-weight__stepper { display: inline-flex; flex-direction: column; }
+.draw-prop-weight__step { display: grid; place-items: center; width: 16px; height: 12px; padding: 0; border: 0; background: transparent; color: var(--text); cursor: pointer; }
+.draw-prop-weight__step svg { width: 12px; height: 12px; }
+.draw-prop-weight__step:hover:not(:disabled) { background: var(--surface-2); }
+.draw-prop-weight__step:disabled { opacity: .4; cursor: default; }
+.draw-prop-appearance__more { display: grid; place-items: center; grid-column: 4; width: 24px; height: 24px; padding: 0; border: 1px solid var(--border); border-radius: 4px; background: transparent; color: var(--text); cursor: pointer; }
+.draw-prop-appearance__more svg { width: 14px; height: 14px; }
+.draw-prop-appearance__more:hover { background: var(--surface-2); }
+.draw-prop-appearance__foot { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
+.draw-prop-fx { display: inline-flex; align-items: flex-end; gap: 1px; height: 26px; padding: 0 6px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--text); cursor: pointer; }
+.draw-prop-fx i { font-family: Georgia, "Times New Roman", serif; font-size: 16px; line-height: 22px; }
+.draw-prop-fx span { font-size: 8px; line-height: 14px; color: var(--text-muted); }
+.draw-prop-fx:hover:not(:disabled), .draw-prop-fx[aria-expanded=true] { border-color: var(--brand-mid); background: var(--surface-2); }
+.draw-prop-fx:disabled { opacity: .45; cursor: default; }
+.draw-prop-appearance__dots { height: 22px; padding: 0 6px; border: 0; border-radius: 4px; background: transparent; color: var(--text-muted); font-size: 9px; letter-spacing: 1px; cursor: pointer; }
+.draw-prop-appearance__dots:hover { background: var(--surface-2); color: var(--text); }
+/* The fx menu: Illustrator's Effect menu with greyed group headings. */
+.draw-effect-menu { min-width: 220px; }
+.draw-effect-menu__heading { padding: 5px 8px 3px 32px; color: var(--text-muted); font-size: var(--fs-xs); }
 /* Properties: quick actions and document summary */
 .draw-quick-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; padding-top: 8px; border-top: 1px solid var(--border); }
 .draw-quick-actions .btn { margin: 0; }
@@ -559,16 +588,10 @@ body.draw-scrubbing, body.draw-scrubbing * { cursor: ew-resize !important; user-
 [data-draw-dock="properties"] .draw-fields { gap: 4px 8px; }
 [data-draw-dock="properties"] .draw-transform-top { gap: 8px; }
 [data-draw-dock="properties"] .draw-panel__hint { margin-bottom: 8px; font-size: var(--fs-xs); }
-[data-draw-dock="properties"] .draw-appearance { gap: 3px; margin-bottom: 6px; }
-[data-draw-dock="properties"] .draw-appearance__item { padding: 3px 6px; font-size: var(--fs-xs); }
 [data-draw-dock="properties"] .draw-flip-row { padding-bottom: 6px; }
 /* Properties sections (Transform, Appearance, Align) as in Illustrator */
 .draw-prop-section { margin-top: 10px !important; }
 .draw-flip-row { display: flex; gap: 4px; align-items: center; padding-bottom: 12px; }
-.draw-appearance__line { display: flex; align-items: center; gap: 6px; }
-.draw-appearance__line .draw-appearance__item { flex: 1; min-width: 0; }
-.draw-appearance__line .draw-appearance-width { margin-left: 0; }
-.draw-appearance__line .draw-appearance-width input { width: 56px; }
 /* Layers panel menu and multi-picked layers */
 .draw-layer-search { grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; }
 .draw-dock-section[data-draw-dock="layers"] .draw-dock-body { position: relative; }
@@ -736,9 +759,8 @@ body[data-workspace="draw"] #sendToCut { display: inline-flex; }
 .draw-swatch.is-global { position: relative; }
 .draw-swatch.is-global::after { content: ''; position: absolute; right: 0; bottom: 0; border-style: solid; border-width: 0 0 7px 7px; border-color: transparent transparent #fff transparent; filter: drop-shadow(0 0 1px rgba(0,0,0,.5)); }
 /* Edit Text: style the selected characters. */
-/* Appearance: live effects and Add Effect. */
+/* Appearance: live effects; fx adds one. */
 .draw-effect-row .draw-appearance-name { flex: 1; text-align: left; }
-.draw-add-effect { max-width: 150px; font-size: 12px; }
 /* Graphic Styles: a grid of style tiles. */
 .draw-style-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(32px, 1fr)); gap: 6px; padding-bottom: 10px; }
 .draw-style-tile { aspect-ratio: 1; border: 1px solid var(--border, #c9d1cf); border-radius: 4px; cursor: pointer; padding: 0; }

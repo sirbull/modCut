@@ -1158,6 +1158,28 @@ Margin Alignment, Bullets and Numbering, Show Hidden Characters, Legacy Text og 
 Area Type Options og Type on a Path Options finnes i Properties. Font-undermenyen er Character-panelet.
 Tester: `test/type-commands.test.mjs` og `--draw-type-menu` (E2E med angring av alt).
 
+### 2.44 Appearance i Properties og fx-menyen som i Illustrator (2026-10-22)
+
+Brukerønske (skjermbilder av Illustrators Appearance i Properties og fx-menyen): samme oppsett, og
+fx skal vise effektene som kan legges på objektet. Nå:
+
+- **Appearance i Properties** (`propertiesPanel` i `panels/ui.mjs`): én rad per Fill, Stroke og Opacity
+  med fargerute (strek som hul firkant, gradient i ruten, rød strek for ingen) og stiplet understreket
+  navn som åpner Color/Gradient, Stroke eller Transparency. Strektykkelse med pil opp/ned (0,1 mm,
+  Shift 1 mm) og scrubbing på «mm»; nedoverpil åpner Stroke. Opacity i % med scrubbing og › til
+  Transparency. Nederst **fx** (effektmenyen) og **•••** (Appearance-panelet). Hurtigknappen
+  «Appearance…» er fjernet; Appearance-panelet har også fått fx-knappen i stedet for nedtrekkslisten.
+- **Felles effektmeny** (`ui/effect-menu.mjs`, `EFFECT_MENU`): både Effect i menylinjen og fx bygger
+  fra den, ordnet som Illustrator under Illustrator Effects og Photoshop Effects (grå overskrifter).
+- **Nye effekter:** Convert to Shape (Rectangle, Rounded Rectangle, Ellipse; relativ eller absolutt
+  størrelse, hjørneradius; vektor, med i Laser Preview) og Pixelate > Mosaic (cellestørrelse i mm,
+  pikseleffekt). Kommandoer `convert-<shape>` og `effect-mosaic`; begge skaleres med Scale Strokes & Effects.
+
+Ikke tatt med fra Illustrators meny: 3D and Materials, Crop Marks, SVG Filters og de fleste
+Photoshop-effektene (Artistic, Brush Strokes, Sketch, Texture, Video m.fl.).
+Tester: `test/effects.test.mjs` (Convert to Shape, Mosaic, menyen); `--draw-panels`, `--draw-effects`
+og `--draw-gradient` passerer. `--draw-pathfinder` feiler allerede på HEAD før fx-delen (flyout-fanen).
+
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
 | Oppgave | Status |

@@ -24,7 +24,7 @@ export async function runDrawGradientWorkflows(client) {
   await until(`!!document.querySelector('${fly} [data-draw-gradient-type=linear][aria-pressed=true]')`,'Gradient panel');
   let g=await paint();assert.equal(g.type,'linear');assert.equal(g.stops.length,2);assert.equal(await applied(),steps+1);
   const left=await pixel(12,30),right=await pixel(88,30);assert.ok(left[0]>230&&right[0]<25,`White to black: ${left} ${right}`);
-  assert.match(await evaluate(`document.querySelector('${root} [data-draw-open=fill]').textContent`),/linear gradient/,'Properties names the gradient');
+  assert.match(await evaluate(`document.querySelector('${root} [data-draw-open=fill]').getAttribute('aria-label')`),/linear gradient/,'Properties names the gradient');
   // Recent shows the gradient just applied; Presets list the built-in gradients.
   assert.equal(await evaluate(`document.querySelectorAll('${fly} [data-draw-gradient-preset^=recent-]').length`),1,'One recent gradient');
   assert.ok(await evaluate(`document.querySelectorAll('${fly} [data-draw-gradient-preset^=preset-]').length`)>=8,'Preset tiles');

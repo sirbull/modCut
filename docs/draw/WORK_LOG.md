@@ -2450,3 +2450,13 @@ holder glyfene på plass (målt i E2E innen 0,5 mm) og bryter ikke teksten om. N
 462 Draw-enhetstester passerer, og `--draw-type-menu`, `--draw-text`, `--draw-area-text` og
 `--draw-character` passerer. Full npm test er ikke kjørt. Andre agenter hadde uferdige endringer i
 `main.mjs`, `index.mjs` og `i18n-nb.mjs` (Effect-menyen); bare Type-endringene er tatt med via egen indeks.
+
+## 2026-10-22: Appearance i Properties og fx-menyen (STATUS.md 2.44)
+
+Appearance i Properties har fått Illustrators oppsett (fargeruter, stiplede navn, strektykkelse med piler,
+Opacity, fx og •••). fx åpner effektmenyen, som nå deles med Effect i menylinjen (`ui/effect-menu.mjs`).
+Nye effekter: Convert to Shape (Rectangle, Rounded Rectangle, Ellipse) og Pixelate > Mosaic. Kontrollert
+med skjermbilder i appen. 464 Draw-enhetstester passerer; `--draw-panels`, `--draw-effects` og
+`--draw-gradient` passerer. `--draw-pathfinder` feiler også på ren HEAD (Pathfinder-fanen finnes ikke i
+flyouten) før den når fx-sjekken. Full npm test er ikke kjørt. Andre agenter hadde uferdige endringer i
+de samme filene; bare disse endringene er tatt med via egen indeks.

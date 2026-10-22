@@ -10,7 +10,8 @@ import { GRADIENT_PRESETS, addStop, applyGradientPreset, colorHex, defaultGradie
 import { recentGradients as savedRecentGradients } from '../doc/recent-gradients.mjs';
 import { HARMONY_RULES, RECOLOR_SCOPES, adjustedColors, collectColors, colorGroups, paletteFromPixels, transferSettings, dragSettings, harmonyRule, hexLab, hexRgb, nearestIndex, neutralSettings, recolorHexes, recolorMap, remapAppearance, rgbLab, wheelLevel, wheelPixel, wheelPoint } from '../doc/recolor.mjs';
 import { RECOLOR_LIBRARIES, recolorLibrary } from '../doc/recolor-libraries.mjs';
-import { EFFECTS, effectLabel } from '../doc/effects.mjs';
+import { effectLabel } from '../doc/effects.mjs';
+import { openEffectMenu } from '../ui/effect-menu.mjs';
 import { documentInfo } from '../doc/document-info.mjs';
 import { TRACE_PRESETS } from '../geom/trace.mjs';
 import { WIDTH_PROFILES, flipAcross, flipAlong, profileName } from '../geom/width-profile.mjs';
@@ -657,10 +658,7 @@ export function createPanels(shell, state, api) {
       ['Duplicate Selected Item','copy',() => { const r = duplicateEntry(look,pick.kind,pick.index); commit('Duplicate Appearance',r.appearance,{ kind:pick.kind, index:r.index }); },readOnly || !pick,'duplicate'],
       ['Delete Selected Item','trash',() => commit('Delete Appearance',removeEntry(look,pick.kind,pick.index),null),readOnly || !pick,'delete'],
     ]) { const b = iconButton(label,iconId,action); b.disabled = disabled; b.dataset.drawAppearanceAction = key; actions.append(b); }
-    const addEffect = document.createElement('select'); addEffect.className = 'select draw-add-effect'; addEffect.dataset.drawAddEffect = ''; addEffect.disabled = readOnly || !['path','shape','text'].includes(node.type);
-    addEffect.setAttribute('aria-label','Add New Effect'); addEffect.append(new Option('Add Effect…',''),...Object.entries(EFFECTS).map(([type,d]) => new Option(`${d.group}: ${d.label}…`,type)));
-    addEffect.addEventListener('change',() => { const type = addEffect.value; addEffect.value = ''; if (type) api.addEffect(type); });
-    bar.append(addEffect,actions); host.append(bar);
+    bar.append(fxButton(readOnly || !['path','shape','text','group'].includes(node.type),'add-effect'),actions); host.append(bar);
     text(host,'The top row draws on top. Drag rows to reorder fills or strokes. Click a row name to choose it for Duplicate and Delete.');
   }
   let colorGesture = 0;
@@ -839,6 +837,15 @@ export function createPanels(shell, state, api) {
     const node = state.document.getNode(ids[0]);
     return node?.type === 'shape' ? { rect: 'Rectangle', ellipse: 'Ellipse', polygon: 'Polygon', star: 'Star', line: 'Line' }[node.shape] ?? 'Shape' : TYPE_NAMES[node?.type] ?? 'Object';
   }
+  /** The fx button: opens the Effect menu (as in Illustrator) for the selection. */
+  function fxButton(disabled, key) {
+    const fx = document.createElement('button'); fx.type = 'button'; fx.className = 'draw-prop-fx'; fx.dataset.drawFx = key;
+    fx.setAttribute('aria-label','Choose an effect'); fx.dataset.tooltip = 'Choose an effect'; fx.setAttribute('aria-haspopup','menu'); fx.setAttribute('aria-expanded','false');
+    fx.disabled = disabled; fx.innerHTML = '<i>fx</i><span aria-hidden="true">▾</span>';
+    let menu = null;
+    fx.addEventListener('click',() => { if (fx.getAttribute('aria-expanded') === 'true') return menu?.close({ focus: true }); menu = openEffectMenu(fx,{ command: id => api.command(id) }); });
+    return fx;
+  }
   function section(host, title) { const h = document.createElement('h3'); h.className = 'draw-panel__section draw-prop-section'; h.textContent = title; host.append(h); }
   function quickActions(host, actions) {
     const row = document.createElement('div'); row.className = 'draw-quick-actions'; row.setAttribute('aria-label','Quick actions');
@@ -896,48 +903,71 @@ export function createPanels(shell, state, api) {
       section(host,'Type'); quickActions(host,[['Edit Text…',() => api.command('edit-text'),'edit-text',state.document.readOnly || !state.document.isEditable(node.id)],['Create Outlines',()=>api.command('create-outlines'),'create-outlines',state.document.readOnly || !state.document.isEditable(node.id)]]);
     }
     section(host,'Transform'); transform(host,{ compact: true });
-    // Appearance: the same fill, stroke, weight and opacity Illustrator shows; the buttons open the full panels.
+    // Appearance, laid out as Illustrator's Properties: a swatch and a name per row (the name opens its
+    // panel), the stroke weight with a stepper, opacity, then fx (the Effect menu) and … (the Appearance panel).
     section(host,'Appearance');
     const painted = state.document.getNode(api.paintIds()[0]), ro = state.document.readOnly;
+    const summary = document.createElement('div'); summary.className = 'draw-prop-appearance'; summary.setAttribute('aria-label','Appearance');
+    const line = () => { const l = document.createElement('div'); l.className = 'draw-prop-appearance__row'; summary.append(l); return l; };
+    const nameButton = (text, label, action) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'draw-prop-appearance__name'; b.textContent = text;
+      b.setAttribute('aria-label',label); b.dataset.tooltip = label; b.addEventListener('click',action); return b; };
     if (painted) {
-      const summary = document.createElement('div'); summary.className = 'draw-appearance'; summary.setAttribute('aria-label','Appearance');
-      // A gradient shows as its bar and opens the Gradient panel.
+      // A gradient shows in its swatch and opens the Gradient panel.
       const paintOf = kind => (kind === 'fill' ? painted.appearance.fills : painted.appearance.strokes)[0]?.paint;
       const grads = { fill: isAnyGradient(paintOf('fill')) ? paintOf('fill') : null, stroke: isAnyGradient(paintOf('stroke')) ? paintOf('stroke') : null };
       const fill = paintHex(painted.appearance.fills[0]), stroke = paintHex(painted.appearance.strokes[0]) ?? (grads.stroke ? colorHex(grads.stroke.stops[0].color) : null), weight = painted.appearance.strokes[0]?.width;
-      for (const [kind,label,value,panel] of [['fill','Fill',fill,grads.fill ? 'gradient' : 'color'],['stroke','Stroke',stroke,grads.stroke ? 'gradient' : 'color'],['weight','Weight',stroke ? `${Number(weight.toFixed(3))} mm` : '—','stroke']]) {
-        const line = document.createElement('div'); line.className = 'draw-appearance__line';
-        if (kind !== 'weight') {
-          const picker = document.createElement('input'); picker.type = 'color'; picker.className = 'draw-appearance-color'; picker.value = (value ?? '#ffffff').toLowerCase();
-          picker.setAttribute('aria-label',`${label} color`); picker.dataset.drawField = `prop-${kind}`; picker.disabled = ro;
-          picker.addEventListener('change',() => api.run(() => api.paint(kind,picker.value.toUpperCase())));
-          line.append(picker);
-        } else {
-          const w = document.createElement('label'); w.className = 'draw-appearance-width';
-          const unit = document.createElement('span'); unit.textContent = 'mm';
+      for (const [kind,label,value] of [['fill','Fill',fill],['stroke','Stroke',stroke]]) {
+        const row = line(), grad = grads[kind], panel = grad ? 'gradient' : 'color';
+        // Use the app picker so Properties also offers transparent fill and stroke.
+        const swatch = document.createElement('button'); swatch.type = 'button'; swatch.className = `draw-prop-swatch draw-prop-swatch--${kind}`; swatch.dataset.tooltip = `${label} color`;
+        swatch.setAttribute('aria-label',`${label} color`); swatch.setAttribute('aria-haspopup','dialog'); swatch.dataset.drawField = `prop-${kind}`; swatch.disabled = ro;
+        swatch.addEventListener('click',() => { void api.editPaint(kind); });
+        const chip = document.createElement('span'); chip.className = 'draw-prop-swatch__chip'; chip.setAttribute('aria-hidden','true');
+        if (grad) chip.style.setProperty('--paint',gradientCss(grad)); else chip.style.setProperty('--paint',value || 'transparent');
+        swatch.classList.toggle('is-none',!value && !grad);
+        swatch.append(chip);
+        const described = grad ? `${label} ${({ radial: 'radial', freeform: 'freeform' })[grad.type] ?? 'linear'} gradient` : `${label} ${value ?? 'none'}`;
+        const name = nameButton(label,`${described}: open ${panel === 'gradient' ? 'Gradient' : 'Color'} panel`,() => { state.ui.paintFocus = kind; open(panel); api.paintFocus(kind); });
+        name.dataset.drawOpen = kind; row.append(swatch,name);
+        if (kind === 'stroke') {
+          // Weight: the arrows step by 0.1 mm (Shift: 1 mm); drag "mm" to scrub.
+          const apply = v => api.paint('width',v), w = document.createElement('div'); w.className = 'draw-prop-weight';
           const input = document.createElement('input'); input.type = 'number'; input.min = '0'; input.step = 'any'; input.value = String(Number((weight ?? 0).toFixed(3)));
           input.dataset.drawField = 'prop-stroke-weight'; input.setAttribute('aria-label','Stroke weight (mm)'); input.disabled = ro || !stroke;
-          const apply = v => api.paint('width',v);
           input.addEventListener('change',() => api.run(() => { if (!(input.valueAsNumber >= 0)) throw new Error('Enter a valid stroke weight.'); apply(input.valueAsNumber); }));
+          const stepper = document.createElement('span'); stepper.className = 'draw-prop-weight__stepper';
+          for (const [dir,iconId,text] of [[1,'chevron-up','Increase stroke weight'],[-1,'chevron-down','Decrease stroke weight']]) {
+            const b = iconButton(text,iconId,event => apply(Math.max(0,Number(((weight ?? 0) + dir * (event.shiftKey ? 1 : .1)).toFixed(3)))),'draw-prop-weight__step');
+            b.dataset.drawWeightStep = dir > 0 ? 'up' : 'down'; b.disabled = input.disabled; stepper.append(b);
+          }
+          const unit = document.createElement('span'); unit.className = 'draw-prop-weight__unit'; unit.textContent = 'mm';
           attachScrub(unit,input,{ step: .05, min: 0, onScrub: scrubField('prop-stroke-weight',apply) });
-          w.append(input,unit); line.append(w);
+          w.append(stepper,input,unit);
+          const more = iconButton('Stroke options: open Stroke panel','chevron-down',() => open('stroke'),'draw-prop-appearance__more'); more.dataset.drawOpen = 'weight';
+          row.append(w,more);
         }
-        const b = document.createElement('button'); b.type = 'button'; b.className = 'draw-appearance__item'; b.dataset.drawOpen = kind;
-        const chip = document.createElement('span'); chip.className = 'draw-appearance__chip'; chip.setAttribute('aria-hidden','true');
-        const grad = kind === 'weight' ? null : grads[kind];
-        if (grad) chip.style.background = gradientCss(grad);
-        else if (kind !== 'weight') { chip.style.setProperty('--paint-color',value || 'transparent'); chip.classList.toggle('is-none',!value); } else chip.classList.add('is-weight');
-        const name = document.createElement('span'); name.textContent = kind === 'weight' ? `${label} ${value}` : grad ? `${label} ${({ radial: 'radial', freeform: 'freeform' })[grad.type] ?? 'linear'} gradient` : `${label} ${value ?? 'none'}`;
-        b.setAttribute('aria-label',`${name.textContent}: open ${{ color: 'Color', stroke: 'Stroke', gradient: 'Gradient' }[panel]} panel`);
-        b.addEventListener('click',() => { if (kind !== 'weight') state.ui.paintFocus = kind; open(panel); if (kind !== 'weight') api.paintFocus(kind); });
-        b.append(chip,name); line.append(b); summary.append(line);
       }
-      host.append(summary);
     }
-    const opacity = state.document.getNode(api.selectedIds()[0])?.opacity ?? 1;
-    field(host,'Opacity (%)',opacity*100,value => state.history.transaction('Opacity',() => {
-      for (const id of api.selectedIds()) state.history.execute(updateNode(id,{opacity:value/100}));
-    }),{min:0,max:100,disabled:!api.selectedIds().length,key:'opacity'});
+    // Opacity applies to every selected object, painted or not (images, groups).
+    const ids0 = api.selectedIds(), opacity = state.document.getNode(ids0[0])?.opacity ?? 1, row = line();
+    const checker = document.createElement('span'); checker.className = 'draw-prop-swatch draw-prop-swatch--opacity'; checker.setAttribute('aria-hidden','true');
+    const opacityName = nameButton('Opacity','Opacity: open Transparency panel',() => open('transparency')); opacityName.dataset.drawPropAction = 'transparency-name';
+    const box = document.createElement('label'); box.className = 'draw-prop-opacity';
+    const input = document.createElement('input'); input.type = 'number'; input.min = '0'; input.max = '100'; input.step = 'any'; input.value = String(Number((opacity*100).toFixed(3)));
+    input.dataset.drawField = 'opacity'; input.setAttribute('aria-label','Opacity (%)'); input.disabled = ro || !ids0.length;
+    const setOpacity = value => state.history.transaction('Opacity',() => { for (const id of api.selectedIds()) state.history.execute(updateNode(id,{opacity:value/100})); });
+    input.addEventListener('change',() => api.run(() => { const v = input.valueAsNumber; if (!(v >= 0 && v <= 100)) throw new Error('Enter a valid opacity.'); setOpacity(v); }));
+    const percent = document.createElement('span'); percent.textContent = '%';
+    attachScrub(percent,input,{ step: 1, min: 0, max: 100, onScrub: scrubField('opacity',setOpacity) });
+    box.append(input,percent);
+    const transparency = iconButton('Blending and opacity options: open Transparency panel','chevron-right',() => open('transparency'),'draw-prop-appearance__more'); transparency.dataset.drawPropAction = 'transparency';
+    row.append(checker,opacityName,box,transparency);
+    // fx: the Effect menu for the selection; …: the full Appearance panel.
+    const foot = document.createElement('div'); foot.className = 'draw-prop-appearance__foot';
+    const more = document.createElement('button'); more.type = 'button'; more.className = 'draw-prop-appearance__dots'; more.textContent = '•••';
+    more.setAttribute('aria-label','More options: open Appearance panel'); more.dataset.tooltip = 'Appearance panel'; more.dataset.drawPropAction = 'appearance';
+    more.addEventListener('click',() => open('appearance'));
+    foot.append(fxButton(ro || !ids0.length,'effects'),more); summary.append(foot); host.append(summary);
     const corners=api.cornerInfo?.();
     if (corners || node?.type === 'shape') section(host,node?.type === 'shape' ? selectionTitle([node.id]) : 'Corners');
     if(corners){
@@ -966,7 +996,7 @@ export function createPanels(shell, state, api) {
       ['Bring to Front',() => api.command('bring-front'),'bring-front',ro],['Send to Back',() => api.command('send-back'),'send-back',ro],
       ['Expand Shape',() => api.expandShapes(shapes),'expand-shape',!shapes.length || ro],
       ['Transform…',() => open('transform'),'transform'],['Align…',() => open('align'),'align'],
-      ['Pathfinder…',() => open('pathfinder'),'pathfinder',ids.length < 2],['Appearance…',() => open('appearance'),'appearance'],
+      ['Pathfinder…',() => open('pathfinder'),'pathfinder',ids.length < 2],
     ]);
   }
   const WEIGHTS = ['normal','bold',100,200,300,400,500,600,700,800,900];

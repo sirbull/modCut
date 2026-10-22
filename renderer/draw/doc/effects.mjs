@@ -32,7 +32,14 @@ export const EFFECTS = Object.freeze({
   feather: { label: 'Feather', group: 'Stylize', raster: true, pixels: true, defaults: { radius: 1 } },
   'outer-glow': { label: 'Outer Glow', group: 'Stylize', raster: true, pixels: true, defaults: { color: '#FFFF00', opacity: .75, blur: 2 } },
   'inner-glow': { label: 'Inner Glow', group: 'Stylize', raster: true, pixels: true, defaults: { color: '#FFFFFF', opacity: .75, blur: 2 } },
+  // Mosaic: the object's pixels averaged in square cells (cell in mm), as Pixelate > Mosaic.
+  mosaic: { label: 'Mosaic', group: 'Pixelate', raster: true, pixels: true, defaults: { cell: 1 } },
+  // Convert to Shape: the outline becomes a rectangle, rounded rectangle or ellipse around its bounds,
+  // larger by width and height (relative) or exactly that size (absolute), centred where the object is.
+  'convert-to-shape': { label: 'Convert to Shape', group: 'Convert to Shape', defaults: { shape: 'rectangle', mode: 'relative', width: 0, height: 0, radius: 3 } },
 });
+/** Illustrator's shapes in Effect > Convert to Shape. */
+export const CONVERT_SHAPES = Object.freeze({ rectangle: 'Rectangle', 'rounded-rectangle': 'Rounded Rectangle', ellipse: 'Ellipse' });
 const finite = (value, min, max) => Number.isFinite(value) && value >= min && value <= max;
 /** A validated effect: `{ type, ...settings, hidden? }`. */
 export function effect(type, settings = {}) {
@@ -51,6 +58,9 @@ export function effect(type, settings = {}) {
     : type === 'warp' ? !!WARP_STYLES[e.style] && finite(e.bend, -100, 100) && finite(e.horizontal, -100, 100) && finite(e.vertical, -100, 100) && ['horizontal', 'vertical'].includes(e.orientation)
     : type === 'gaussian-blur' || type === 'feather' ? finite(e.radius, 0, 250)
     : type === 'outer-glow' || type === 'inner-glow' ? /^#[0-9A-Fa-f]{6}$/.test(e.color) && finite(e.opacity, 0, 1) && finite(e.blur, 0, 250)
+    : type === 'mosaic' ? finite(e.cell, .01, 1000)
+    : type === 'convert-to-shape' ? !!CONVERT_SHAPES[e.shape] && ['relative', 'absolute'].includes(e.mode) && finite(e.radius, 0, 10000)
+      && (e.mode === 'absolute' ? finite(e.width, .001, 100000) && finite(e.height, .001, 100000) : finite(e.width, -100000, 100000) && finite(e.height, -100000, 100000))
     : type === 'rasterize' ? (e.ppi === 0 || finite(e.ppi, 9, 2400)) && ['transparent', 'white'].includes(e.background) && finite(e.padding, 0, 1000) && typeof e.antialias === 'boolean'
     : type === 'drop-shadow' ? finite(e.x, -1000, 1000) && finite(e.y, -1000, 1000) && finite(e.blur, 0, 1000) && /^#[0-9A-Fa-f]{6}$/.test(e.color) && finite(e.opacity, 0, 1)
     : finite(e.scaleX, -100000, 100000) && finite(e.scaleY, -100000, 100000) && Math.abs(e.scaleX) > 1e-6 && Math.abs(e.scaleY) > 1e-6
@@ -63,7 +73,7 @@ export function effect(type, settings = {}) {
 }
 /** Illustrator's names in Effect > Pathfinder. */
 export const LIVE_LABELS = Object.freeze({ unite: 'Add', intersect: 'Intersect', exclude: 'Exclude', minusFront: 'Subtract', minusBack: 'Minus Back', divide: 'Divide', trim: 'Trim', merge: 'Merge', crop: 'Crop', outline: 'Outline' });
-export const effectLabel = (e) => e.type === 'pathfinder' ? `Pathfinder: ${LIVE_LABELS[e.op] ?? e.op}` : e.type === 'warp' ? `Warp: ${WARP_STYLES[e.style] ?? e.style}` : EFFECTS[e.type]?.label ?? e.type;
+export const effectLabel = (e) => e.type === 'convert-to-shape' ? CONVERT_SHAPES[e.shape] ?? e.shape : e.type === 'pathfinder' ? `Pathfinder: ${LIVE_LABELS[e.op] ?? e.op}` : e.type === 'warp' ? `Warp: ${WARP_STYLES[e.style] ?? e.style}` : EFFECTS[e.type]?.label ?? e.type;
 /** The visible vector effects of a node (those that change its geometry), in order. */
 export const vectorEffects = (node) => (node?.appearance?.effects ?? []).filter((e) => !e.hidden && EFFECTS[e.type] && !EFFECTS[e.type].raster && !EFFECTS[e.type].container);
 /**
@@ -109,6 +119,22 @@ const boundsOf = (subpaths) => {
   const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
   return { x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) };
 };
+/** Bounds of the drawn curves (handles bend them past their anchors), sampled per segment. */
+const curveBounds = (subpaths) => boundsOf(subpaths.map((s) => ({ segments: [...s.segments, ...pairs(s).flatMap(([a, b]) => [1, 2, 3, 4, 5, 6, 7].map((k) => corner(at(a, b, k / 8))))] })));
+const KAPPA = .5522847498;
+/** Convert to Shape's outline: clockwise from the top left, centred on `box`. */
+function convertToShape(box, e) {
+  const w = Math.max(.001, e.mode === 'absolute' ? e.width : box.width + e.width), h = Math.max(.001, e.mode === 'absolute' ? e.height : box.height + e.height);
+  const x = box.x + box.width / 2 - w / 2, y = box.y + box.height / 2 - h / 2, cx = x + w / 2, cy = y + h / 2;
+  if (e.shape === 'ellipse') {
+    const kx = w / 2 * KAPPA, ky = h / 2 * KAPPA;
+    return { closed: true, segments: [{ p: [cx, y], in: [-kx, 0], out: [kx, 0] }, { p: [x + w, cy], in: [0, -ky], out: [0, ky] }, { p: [cx, y + h], in: [kx, 0], out: [-kx, 0] }, { p: [x, cy], in: [0, ky], out: [0, -ky] }] };
+  }
+  const rect = { closed: true, segments: [[x, y], [x + w, y], [x + w, y + h], [x, y + h]].map(corner) };
+  if (e.shape !== 'rounded-rectangle' || !(e.radius > 0)) return rect;
+  const { cornerData, ...plain } = roundCorners(rect, [0, 1, 2, 3], Math.min(e.radius, w / 2, h / 2));
+  return plain;
+}
 const mapSubpath = (s, [a, b, c, d, e, f]) => ({ closed: s.closed, segments: s.segments.map((g) => ({
   p: [a * g.p[0] + c * g.p[1] + e, b * g.p[0] + d * g.p[1] + f], in: [a * g.in[0] + c * g.in[1], b * g.in[0] + d * g.in[1]], out: [a * g.out[0] + c * g.out[1], b * g.out[0] + d * g.out[1]] })) });
 
@@ -150,6 +176,7 @@ export function applyVectorEffects(subpaths, effects = [], { offset = () => null
       const polygons = out.filter((sub) => sub.closed).map((sub) => resample(sub, (a, b) => Math.max(1, Math.ceil(segmentLength(a, b) / .25)), (a, b, t) => at(a, b, t)));
       out = scribble(polygons, e);
     }
+    else if (e.type === 'convert-to-shape') out = [convertToShape(curveBounds(out), e)];
     else if (e.type === 'free-distort') {
       const box = boundsOf(out), [tl, tr, br, bl] = boxCorners(box), move = (p, x, y) => [p[0] + x / 100 * box.width, p[1] + y / 100 * box.height];
       out = distortSubpaths(out, box, [move(tl, e.tlx, e.tly), move(tr, e.trx, e.try), move(br, e.brx, e.bry), move(bl, e.blx, e.bly)]);

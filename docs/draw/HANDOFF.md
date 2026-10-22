@@ -8,6 +8,10 @@ del 3 (annotator på lerretet) og del 4 (Freeform) er ferdige, se STATUS.md 2.40
 ellipse-aspekt for Radial, stiplet Along/Across. Del 4 omfatter: punkter med farge, opasitet
 per punkt og Spread-ring som dras, og «Lines»-modus der punkter bindes sammen av glatte linjer.
 
+**Ferdig 2026-10-22: Appearance i Properties og fx-menyen som i Illustrator (STATUS.md 2.44).** Fill/Stroke/Opacity-rader
+med fargeruter og stiplede navn, fx med hele effektmenyen (felles med menylinjen i `ui/effect-menu.mjs`),
+og to nye effekter: Convert to Shape og Pixelate > Mosaic.
+
 **Ferdig 2026-10-22: Type-menyen som i Illustrator (STATUS.md 2.43).** Size, Glyphs, Convert To Area/Point Type,
 Change Case, Smart Punctuation, Insert Special/Whitespace Character, Placeholder Text og Type Orientation.
 
