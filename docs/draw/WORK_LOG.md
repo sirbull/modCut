@@ -2317,3 +2317,13 @@ Brukerønsker underveis for del 4: Spread-ring som dras, opasitet per punkt og �
 412 Draw-tester og i18n passerer; `--draw-gradient` passerer med pikselkontroll av alle tre modi,
 og skjermbilder av Along og Across er kontrollert. `--draw-laser-paints` feiler på Windows også
 uten disse endringene (skriver til `/tmp`), ikke en regresjon herfra.
+
+## 2026-10-22: Recolor, del 1 av 3 (kjernen)
+
+Brukerønske: Recolor-panel (som Illustrators Recolor Artwork) under Window, festbart, med fargehjul
+der alle utvalgets farger dreies samtidig, harmoniregler som color.adobe.com, fargebiblioteker og
+brightness/saturation-slider. Delt i tre, se STATUS.md 2.41. Del 1: `doc/recolor.mjs` (innsamling,
+RYB-hjul, regler, drag-innstillinger, slider, Lab-snapping, remap av appearance) og
+`doc/recolor-libraries.mjs` (egne paletter). `recolor.test.mjs` passerer (9 tester).
+Neste: del 2, panelet. En annen agent jobber samtidig med gradient-annotatoren (del 3 av gradienter);
+de filene er ikke tatt med i Recolor-commitene.

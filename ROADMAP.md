@@ -154,6 +154,8 @@ the same commit that completes an item.
   Gradients are being extended to match Illustrator in four parts: the Gradient panel with
   Recent, Presets and a draggable stop slider and the stroke modes (within, along, across)
   are done; on-canvas editing and Freeform gradients (points and lines) follow.
+  Recolor (a colour wheel that turns every colour of the selection together, with harmony
+  rules and colour libraries) is in progress: the core is done, the panel follows.
 - [ ] Phase 3 — Advanced editing: stroke expansion, effects, Image Trace,
   additional editing tools and AI/DXF export.
 - [ ] Phase 4 — Full feature set: Width, Blend, brushes, additional export

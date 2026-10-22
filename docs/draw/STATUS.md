@@ -1001,6 +1001,28 @@ modell og validering), `gradient.test.mjs` (flytte stopp forbi andre, presets, R
 angresteg per drag, Recent og Presets, typeknapper, Within/Along/Across med pikselkontroll, PNG,
 SVG og Send to Cut).
 
+### 2.41 Recolor (Recolor Artwork med fargehjul), del 1 av 3: kjernen (2026-10-22)
+
+Brukerønske: et eget Recolor-panel under Window, festbart som de andre, som endrer alle fargene i
+utvalget samtidig på et fargehjul (som Illustrators Recolor Artwork), med harmoniregler som på
+color.adobe.com, fargebiblioteker («templates»), og brightness/saturation-modus med slider.
+
+1. **Kjernen (ferdig):** `doc/recolor.mjs`. Fargene samles fra fyll, strek og gradientstopp
+   (mest brukte først). Hjulet er kunstnerisk (RYB-aktig, rødt mot grønt, gult mot fiolett), vinkel
+   mot klokka fra rødt kl. 3. En økt holder originalfargene; innstillingene (rotasjon, radial skala per
+   modus, regel, basefarge, overstyring per farge, slider og bibliotek) gir hver originalfarge sin nye
+   farge, så endringer aldri sklir. Regler: Custom, Analogous, Monochromatic, Triad, Complementary,
+   Split/Double Split Complementary, Square, Compound, Shades; fargene fordeles på regelens plasser i
+   hue-rekkefølge og beholder litt spredning (±12°). Grått står i midten og påvirkes ikke av rotasjon.
+   Biblioteker (`doc/recolor-libraries.mjs`, egne paletter, gruppert med undermenyer som Foods og
+   Nature) snapper hver farge til nærmeste bibliotekfarge i Lab. Globale swatches kobles fra når
+   fargen endres.
+2. **Panelet:** hjul med håndtak (dra: roter alt; Ctrl/Cmd: også inn/ut; Shift: én farge),
+   regelknapper, Prominent Colors med basefarge, Color Library-meny, modusknapper og slider, Reset.
+3. **E2E og finpuss.**
+
+Tester: `recolor.test.mjs`.
+
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
 | Oppgave | Status |

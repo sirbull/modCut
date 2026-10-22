@@ -74,6 +74,9 @@ Ferdige trinn committes og pushes på `feat/vector-draw`. GitHub-tilgangen er re
 
 **Laser Preview er implementert i første versjon. «Engrave as seen» er fortsatt planlagt.** Se siste WORK_LOG og cut-optimized.md.
 
+**Recolor (STATUS.md 2.41) pågår:** del 1 (kjernen, `doc/recolor.mjs` og `doc/recolor-libraries.mjs`) er ferdig;
+del 2 er panelet under Window (`recolor` i `panels/registry.mjs` og `recolorPanel` i `panels/ui.mjs`).
+
 Fase 0 og fase 1 er fullført. Export As, **D2.1a/b punkttekst med systemfonter, shaping og
 Create Outlines** og **D2.1c rektangulær områdetekst med linjebryting** er ferdige.
 **Tekst på path (STATUS.md 2.10) og Character/Paragraph (2.11) er ferdige.** D2.1 er ferdig i grunnform;
