@@ -25,6 +25,7 @@ import { createToolbar } from './tools/toolbar.mjs';
 import { createInteractions } from './tools/interactions.mjs';
 import { createMeasureLabel, measurementValue } from './ui/measure-label.mjs';
 import { createRulerInteractions } from './tools/rulers.mjs';
+import { pointerReadoutText, rulerUnit } from './view/rulers.mjs';
 import { createPathInteractions, PATH_TOOLS } from './tools/paths.mjs';
 import { createArtboardController } from './tools/artboards.mjs';
 import { createTransformController } from './tools/transforms.mjs';
@@ -180,7 +181,8 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     measureLabel.refresh();
     if(point)lastPoint=point;
     const tool=toolRegistry.get(temporary?.id || state.ui.tool),a=activeArtboard(state);
-    positionLabel.textContent=state.ui.guideReadout ? state.ui.guideReadout : lastPoint ? `X ${lastPoint.x.toFixed(1)}  Y ${lastPoint.y.toFixed(1)} mm` : `${a.width.toFixed(1)} × ${a.height.toFixed(1)} mm`;
+    // The pointer and a drag's change, in the ruler unit; the change stays here, off the artwork.
+    positionLabel.textContent=state.ui.guideReadout || pointerReadoutText(lastPoint,a,rulerUnit(state),state.ui.dragReadout);
     const percent=scope.view.zoom/(96/25.4)*100;zoomInput.value=String(percent<1 ? Number(percent.toFixed(4)) : Math.round(percent));
     const drawMode=(state.ui.drawMode??'normal')==='normal'?'':`${DRAW_MODE_LABELS[state.ui.drawMode]} · `;
     statusLine.textContent=`${tool.name} · ${drawMode}${state.selection.ids.length} selected · `+(

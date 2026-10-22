@@ -4,7 +4,7 @@ import paper from 'paper';
 import { createProjectDraw } from '../io/project.mjs';
 import { createArtboard, createDocument } from '../doc/schema.mjs';
 import { createDrawRenderer } from '../render.mjs';
-import { RULER_UNITS, createGuideSnapper, guideReadout, guideReadoutText, guideSegment, rulerAt, rulerNumber, rulerScale, rulerTicks, rulerUnit } from '../view/rulers.mjs';
+import { RULER_UNITS, createGuideSnapper, guideReadout, guideReadoutText, guideSegment, pointerReadoutText, rulerAt, rulerNumber, rulerScale, rulerTicks, rulerUnit } from '../view/rulers.mjs';
 
 test('ruler units convert physical lengths and percentages independently on each artboard axis', () => {
   const board = { width: 200, height: 80 };
@@ -135,4 +135,18 @@ test('both rulers always mark the artboard middle, in every unit and at every zo
     const marks = Object.fromEntries(rulers.children.filter(item => item.data.rulerMiddle).map(item => [item.data.rulerMiddle, item.firstSegment.point]));
     assert.ok(Math.abs(marks.x.x - centre.x) <= .5, `${unit} x`); assert.ok(Math.abs(marks.y.y - centre.y) <= .5, `${unit} y`);
   }
+});
+
+test('the status readout follows the ruler unit, from the artboard origin, with what a drag changes', () => {
+  const board = { x: 10, y: 20, width: 200, height: 80 }, unit = id => RULER_UNITS.find(u => u.id === id);
+  assert.equal(pointerReadoutText({ x: 35.4, y: 45.4 }, board, unit('mm')), 'X 25.40  Y 25.40 mm');
+  assert.equal(pointerReadoutText({ x: 35.4, y: 20 }, board, unit('in')), 'X 1.000  Y 0.000 in');
+  assert.equal(pointerReadoutText({ x: 110, y: 60 }, board, unit('%')), 'X 50.0  Y 50.0 %');
+  assert.equal(pointerReadoutText({ x: 10, y: 20 }, board, unit('mm'), { kind: 'move', dx: 68.9, dy: -73.824 }), 'X 0.00  Y 0.00 · ΔX 68.90  ΔY -73.82 mm');
+  assert.equal(pointerReadoutText({ x: 10, y: 20 }, board, unit('cm'), { kind: 'resize', width: 40, height: 30 }), 'X 0.000  Y 0.000 · W 4.000  H 3.000 cm');
+  assert.equal(pointerReadoutText({ x: 10, y: 20 }, board, unit('mm'), { kind: 'rotate', angle: 44.96 }), 'X 0.00  Y 0.00 mm · 45.0°');
+  assert.equal(pointerReadoutText({ x: 10.001, y: 19.999 }, board, unit('mm')), 'X 0.00  Y 0.00 mm', 'no negative zero');
+  // Before the pointer is on the canvas: the artboard size, in millimetres for percentages.
+  assert.equal(pointerReadoutText(null, board, unit('cm')), '20.000 × 8.000 cm');
+  assert.equal(pointerReadoutText(null, board, unit('%')), '200.00 × 80.00 mm');
 });

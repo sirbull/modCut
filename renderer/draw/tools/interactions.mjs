@@ -27,7 +27,7 @@ export function createInteractions(canvas, state, api) {
   // A screen movement in project units, turned back through Rotate View.
   const screenDelta=(dx,dy)=>new scope.Point(dx,dy).rotate(-scope.view.rotation).divide(scope.view.zoom);
   function clearHighlight() {highlight?.remove();highlight=null;}
-  function clearPreview() {clearHighlight();preview?.remove();preview=null;widthPaintPreview?.remove();widthPaintPreview=null;if(widthPreviewing){renderer.setEditPreview();widthPreviewing=false;}renderer.clearTransformPreview();state.ui.transformPreviewBox=null;}
+  function clearPreview() {clearHighlight();preview?.remove();preview=null;widthPaintPreview?.remove();widthPaintPreview=null;if(widthPreviewing){renderer.setEditPreview();widthPreviewing=false;}renderer.clearTransformPreview();state.ui.transformPreviewBox=null;state.ui.dragReadout=null;}
   function highlightObjects(ids) {
     clearHighlight();
     const prefs=smartPreferences();
@@ -148,9 +148,6 @@ export function createInteractions(canvas, state, api) {
       const b=scope.view.bounds, vertical=guide.axis==='x';
       const line=new scope.Path.Line(vertical ? [guide.value,b.top] : [b.left,guide.value],vertical ? [guide.value,b.bottom] : [b.right,guide.value]);
       line.strokeColor=color;line.strokeWidth=1/z;line.dashArray=[4/z,3/z];group.addChild(line);
-    }
-    if(smartEnabled()&&prefs.smartGuideMeasurements&&gesture?.tool==='select'&&gesture.box&&!gesture.handle) {
-      group.addChild(new scope.PointText({point:[gesture.end.x+14/z,gesture.end.y-14/z],content:`ΔX ${matrix[4].toFixed(2)} mm · ΔY ${matrix[5].toFixed(2)} mm`,fontSize:11/z,fillColor:color,data:{smartMeasurement:true}}));
     }
     return group;
   }
@@ -351,6 +348,9 @@ export function createInteractions(canvas, state, api) {
         if(gesture.tool==='select')highlightObjects(guides.map(g=>g.targetId));
         // The artwork itself follows the drag with fill, stroke and effects; Alt-drag copies, so the original stays put.
         if(gesture.tool==='select')renderer.previewTransform(api.selectedIds(),gesture.matrix,{keepOriginals:event.altKey&&!gesture.handle});
+        // The status bar shows what the drag changes, so no label covers the artwork.
+        if(gesture.tool==='select'){const m=gesture.matrix,b=transformedBox(gesture.box,m);
+          state.ui.dragReadout=gesture.handle==='rotate'?{kind:'rotate',angle:-Math.atan2(m[1],m[0])*180/Math.PI}:gesture.handle?{kind:'resize',width:b.width,height:b.height}:{kind:'move',dx:m[4],dy:m[5]};api.status();}
       }
       scope.view.update();
     });

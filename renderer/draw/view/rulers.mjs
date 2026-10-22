@@ -113,3 +113,25 @@ export function guideReadoutText(guide, board, unitId = 'mm') {
   const { axis, values } = guideReadout(guide, board), first = values[unitId] ? unitId : 'mm';
   return `Guide ${axis}  ${[values[first], ...Object.entries(values).filter(([id]) => id !== first).map(([, text]) => text)].join(' · ')}`;
 }
+
+const READOUT_DIGITS = Object.freeze({ mm: 2, cm: 3, in: 3, px: 1, pt: 1, pc: 2, '%': 1 });
+
+/**
+ * Status bar text in the ruler unit: the pointer from the artboard origin, as the rulers measure it,
+ * then what a drag changes (move ΔX/ΔY, resize W/H, rotate angle).
+ */
+export function pointerReadoutText(point, board, unit, drag = null) {
+  const digits = READOUT_DIGITS[unit.id] ?? 2;
+  const n = (mm, axis) => { const v = Number((mm / rulerScale(unit, board, axis)).toFixed(digits)); return (v || 0).toFixed(digits); };
+  const parts = [];
+  if (point) parts.push(`X ${n(point.x - board.x, 'x')}  Y ${n(point.y - board.y, 'y')}`);
+  if (drag?.kind === 'move') parts.push(`ΔX ${n(drag.dx, 'x')}  ΔY ${n(drag.dy, 'y')}`);
+  if (drag?.kind === 'resize') parts.push(`W ${n(drag.width, 'x')}  H ${n(drag.height, 'y')}`);
+  if (!parts.length) {
+    // Nothing to follow yet: the artboard size, in millimetres when the unit is a percentage of it.
+    const size = unit.id === '%' ? RULER_UNITS[0] : unit, d = READOUT_DIGITS[size.id];
+    return `${(board.width / size.mm).toFixed(d)} × ${(board.height / size.mm).toFixed(d)} ${size.id}`;
+  }
+  const text = `${parts.join(' · ')} ${unit.id}`;
+  return drag?.kind === 'rotate' ? `${text} · ${(Number(drag.angle.toFixed(1)) || 0).toFixed(1)}°` : text;
+}

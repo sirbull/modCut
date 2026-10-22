@@ -164,7 +164,9 @@ async function runSmartGuideWorkflows(client) {
   const cancel=async()=>{await client.command('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape'});await client.command('Input.dispatchKeyEvent',{type:'keyUp',key:'Escape',code:'Escape'});await mouse('mouseReleased',await project(70,30));};
   await begin(70+off,30+off);let view=await live();
   assert.ok(Math.abs(view.x-60)<.01&&Math.abs(view.y-20)<.01,JSON.stringify(view));
-  assert.equal(view.spacing,2);assert.ok(view.measurements.length>=3);assert.equal(view.color,'#c026d3');
+  assert.equal(view.spacing,2);assert.equal(view.measurements.length,2,'only spacing distances are drawn on the canvas');assert.equal(view.color,'#c026d3');
+  // The move's ΔX/ΔY is in the status bar, in the ruler unit, beside X and Y.
+  assert.match(await evaluate("[...document.querySelectorAll('.draw-position')].find(e=>e.offsetParent).textContent"),/^X -?[\d.]+  Y -?[\d.]+ · ΔX -?[\d.]+  ΔY -?[\d.]+ \w+$/);
   // The artwork itself moves live, painted, and the original is hidden until release.
   const moving=await workspace(`const id=w.state.selection.ids[0],g=w.scope.project.getItem({name:'Transform preview'}),clone=g?.children.find(c=>c.data.nodeId===id);
     const originals=w.scope.project.getItems({match:i=>i.data.nodeId===id&&i.isInserted()&&!i.isDescendant(g)&&i.visible});
