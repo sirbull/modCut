@@ -21,6 +21,9 @@ const LABELS = {
   'save-selection': 'Save Selection', 'edit-selection': 'Edit Selection',
   ...Object.fromEntries(Object.entries({ appearance: 'Appearance', 'fill-stroke': 'Fill & Stroke', 'fill-color': 'Fill Color', opacity: 'Opacity', 'stroke-color': 'Stroke Color', 'stroke-weight': 'Stroke Weight', shape: 'Shape', text: 'Text' }).map(([k, v]) => [`select-same-${k}`, `Select Same ${v}`])),
   ...Object.fromEntries(Object.entries({ 'same-layers': 'All on Same Layers', 'stray-points': 'Stray Points', 'open-paths': 'Open Paths', 'clipping-masks': 'Clipping Masks', text: 'Text Objects', images: 'Raster Images' }).map(([k, v]) => [`select-object-${k}`, `Select ${v}`])),
+  'type-to-area': 'Convert To Area Type', 'type-to-point': 'Convert To Point Type', 'smart-punctuation': 'Smart Punctuation', 'fill-placeholder': 'Fill With Placeholder Text',
+  'case-upper': 'Change Case: UPPERCASE', 'case-lower': 'Change Case: lowercase', 'case-title': 'Change Case: Title Case', 'case-sentence': 'Change Case: Sentence case',
+  'type-horizontal': 'Horizontal Type', 'type-vertical': 'Vertical Type',
   'draw-mode': 'Cycle Drawing Mode', 'draw-normal': 'Draw Normal', 'draw-behind': 'Draw Behind', 'draw-inside': 'Draw Inside', 'command-search': 'Search Commands',
 };
 const KEYWORDS = { 'send-to-cut': 'laser cut bed', 'export-as': 'svg png jpg pdf eps dxf save', 'create-outlines': 'text type convert', 'clip-make': 'mask',

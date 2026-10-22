@@ -1520,6 +1520,7 @@ Oversikt over hva som er gjort og gjenstår, inkludert delvis ferdige oppgaver: 
 * [x] D1.11 Place bitmap og template-lag (høyreklikkmeny, Crop Image og Links gjenstår, se [STATUS.md](draw/STATUS.md))
 * [x] D1.12 Send til Cut v1 (se [STATUS.md](draw/STATUS.md) for hva v1 dekker)
 * [x] D2.1 Tekst (Small Caps, understreking, optisk kerning og redigering direkte på lerretet gjenstår, se [STATUS.md](draw/STATUS.md))
+* [x] Type-menyen: Size, Glyphs, punkt-/områdetekst, Change Case, Smart Punctuation, spesialtegn, plassholdertekst og retning (STATUS.md 2.43)
 * [x] D2.2 Pathfinder, Compound, Clipping (lagklipping gjenstår, se [STATUS.md](draw/STATUS.md))
 * [x] D2.3 Gradienter og Swatches (PDF-shading gjenstår, se [STATUS.md](draw/STATUS.md))
   * [x] Gradienter som i Illustrator, del 1: Gradient-panelet med Recent, Presets og dragbare stopp (STATUS.md 2.40)

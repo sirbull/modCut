@@ -8,6 +8,9 @@ del 3 (annotator på lerretet) og del 4 (Freeform) er ferdige, se STATUS.md 2.40
 ellipse-aspekt for Radial, stiplet Along/Across. Del 4 omfatter: punkter med farge, opasitet
 per punkt og Spread-ring som dras, og «Lines»-modus der punkter bindes sammen av glatte linjer.
 
+**Ferdig 2026-10-22: Type-menyen som i Illustrator (STATUS.md 2.43).** Size, Glyphs, Convert To Area/Point Type,
+Change Case, Smart Punctuation, Insert Special/Whitespace Character, Placeholder Text og Type Orientation.
+
 **Ferdig 2026-10-22: Innstillinger med seksjoner og Properties uten utvalg, i tre deler (STATUS.md 2.42).**
 Alle tre deler er ferdige: Innstillinger med sider, hurtigtaster og alt-i-ett eksport/import;
 Properties med Ruler & Grids, Guides og Snap Options; og den visuelle Smart Guides-siden med direkteknapp.

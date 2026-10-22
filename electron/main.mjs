@@ -15,6 +15,7 @@ import { createFontService } from './font-service.mjs';
 import { registerExportFiles } from './export-files.mjs';
 import { registerWorkspaceFiles } from './workspace-files.mjs';
 import { BUILTIN_WORKSPACES } from '../renderer/draw/ui/workspaces.mjs';
+import { CASE_MODES, SPECIAL_CHARACTERS, TYPE_SIZES, WHITESPACE_CHARACTERS } from '../renderer/draw/doc/type-commands.mjs';
 import { createGoogleFonts } from './google-fonts.mjs';
 import { createMcpHost } from './mcp-host.mjs';
 import { localizeMenuTemplate, translator } from '../renderer/i18n.mjs';
@@ -314,7 +315,16 @@ function buildMenu(mode = "cut") {
       // Artboards uses the drawing tool and Properties; Asset Export belongs to File.
       ...PANEL_DEFINITIONS.filter(panel=>!['artboards','asset-export'].includes(panel.id)).sort((a,b)=>a.name.localeCompare(b.name)).map(panel=>objectItem(panel.name,`panel.${panel.id}`)),
       {type:'separator'},{role:'minimize'},...(isMac?[{role:'zoom'}]:[])];}
-    template.find(item=>item.label==='Type').submenu=[objectItem('Edit Text…','edit-text'),objectItem('Create Outlines','create-outlines')];
+    // Type menu (D5): what applies to text set with the Type tools; frame and path options are in Properties.
+    const insertItems=entries=>entries.map(([id,label])=>objectItem(label,`insert-${id}`));
+    template.find(item=>item.label==='Type').submenu=[objectItem('Edit Text…','edit-text'),
+      {label:'Size',submenu:TYPE_SIZES.map(n=>objectItem(`${n} pt`,`type-size-${n}`))},{type:'separator'},objectItem('Glyphs','panel.glyphs'),
+      {type:'separator'},objectItem('Convert To Area Type','type-to-area'),objectItem('Convert To Point Type','type-to-point'),
+      {type:'separator'},{label:'Change Case',submenu:Object.entries(CASE_MODES).map(([mode,label])=>objectItem(label,`case-${mode}`))},objectItem('Smart Punctuation','smart-punctuation'),
+      {type:'separator'},objectItem('Create Outlines','create-outlines'),
+      {type:'separator'},{label:'Insert Special Character',submenu:Object.entries(SPECIAL_CHARACTERS).map(([label,entries])=>({label,submenu:insertItems(entries)}))},
+      {label:'Insert Whitespace Character',submenu:insertItems(WHITESPACE_CHARACTERS)},objectItem('Fill With Placeholder Text','fill-placeholder'),
+      {type:'separator'},{label:'Type Orientation',submenu:[objectItem('Horizontal','type-horizontal'),objectItem('Vertical','type-vertical')]}];
     // Select menu (D3.5): Same compares every painted object; Object picks kinds of objects.
     template.find(item=>item.label==='Select').submenu=[objectItem('All','select-all'),objectItem('All on Active Artboard','select-artboard'),objectItem('Deselect','deselect'),
       objectItem('Reselect','reselect'),objectItem('Inverse','select-inverse'),{type:'separator'},objectItem('Next Object Above','select-next-above'),objectItem('Next Object Below','select-next-below'),

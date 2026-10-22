@@ -99,6 +99,14 @@ export function inlineText(stage, initial, { update, position, finish, onError, 
     } else values = next;
     fontRevision++; paint(); await apply();
   }
+  /** Type menu edits (case, punctuation): `change(runs, from, to)` on the selected characters, or on all of them. */
+  function rewrite(change) {
+    capture(); const [from,to] = selection, all = from === to;
+    const next = change(runs(),all ? 0 : from,all ? values.text.length : to), text = next.map(r => r.text).join('');
+    if (text.length > 10000) { onError('Text is limited to 10,000 characters per object.'); return pending; }
+    selection = all ? [Math.min(from,text.length),Math.min(from,text.length)] : [from,to+text.length-values.text.length];
+    values = {...values,text,runs:next}; paint(); return apply();
+  }
   async function done() {
     if (!alive) return;
     await pending; if (!alive) return; destroy(); finish(values);
@@ -107,5 +115,5 @@ export function inlineText(stage, initial, { update, position, finish, onError, 
   paint(); editor.dataset.textReady='true'; editor.focus(); restore();
   const trackView = () => { if (!alive) return; reposition(); frame = requestAnimationFrame(trackView); }; frame = requestAnimationFrame(trackView);
   const selectedValues=()=>{let at=0;for(const run of runs()){at+=run.text.length;if(selection[0]<at)return runValues(run);}return values;};
-  return {editor,style,done,destroy,reposition,flush:()=>pending,values:selectedValues,sample:()=>values.text.slice(...selection)||'Lorem Ipsum',selection:()=>selection,focus(){editor.focus();restore();},insert(ch){editor.focus();restore();insertPlain(ch);}};
+  return {editor,style,done,destroy,reposition,flush:()=>pending,values:selectedValues,sample:()=>values.text.slice(...selection)||'Lorem Ipsum',selection:()=>selection,focus(){editor.focus();restore();},insert(ch){editor.focus();restore();insertPlain(ch);},rewrite,caretToEnd(){selection=[values.text.length,values.text.length];restore();}};
 }

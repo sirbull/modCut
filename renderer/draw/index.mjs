@@ -66,6 +66,7 @@ import { CURSORS, toolCursor } from './tools/cursors.mjs';
 import { alignReference, alignOffsets, distributeOffsets, spacingOffsets } from './geom/align.mjs';
 import { pointText, pathText, textValues, textProperties, textToOutlines, textDefaults, textStyleValues, DEFAULT_CHARACTER, PT_TO_MM, characterAt, styleRange, textContent } from './doc/text.mjs';
 import { hasTextLayout } from './doc/text-layout.mjs';
+import { CASE_MODES, INSERT_CHARACTERS, PLACEHOLDER_TEXT, TYPE_SIZES, areaTypeValues, changeCase, placeholderFit, pointTypeValues, smartPunctuation } from './doc/type-commands.mjs';
 import { inlineText } from './ui/inline-text.mjs';
 import { installedFonts, prepareFont, closeFontBrowser } from './ui/font-browser.mjs';
 
@@ -76,7 +77,7 @@ const shortcutsReady=globalThis.window?.modcut?.getDrawShortcuts?.().then(map=>{
 const implementedTools=new Set(['path-eraser','smooth','vertical-type','touch-type','rotate-view','select','group-selection','magic-wand','lasso','polygonal-lasso','shape-builder','knife','eraser','width','blend','paintbrush','blob-brush','free-transform','pencil','hand','zoom','artboard','gradient','eyedropper','measure','scissors','type','area-type','type-on-path',...SHAPE_TOOLS,...PATH_TOOLS,...TRANSFORM_TOOLS]);
 const commands=new Set(['undo','redo','delete','delete-keep-closed','select-all','select-artboard','deselect','cancel','fit-artboard','fit-all','actual-size','zoom-in','zoom-out','outline','laser-preview','laser-preview-help','laser-processes',
   'cut','copy','paste','paste-front','paste-back','paste-place','paste-all-artboards','rulers','grid',
-  'edit-text','create-outlines','join','average','offset-path','outline-stroke','expand','expand-appearance','transform-each','split-into-grid','crop-image','effect-last','effect-options',...Object.keys(EFFECTS).map(t=>`effect-${t}`),...Object.keys(WARP_STYLES).map(t=>`warp-${t}`),...Object.keys(LIVE_LABELS).map(t=>`live-${t}`),'simplify','reverse-path','add-anchors','remove-anchors','clean-up','compound-make','compound-release','clip-make','clip-release','reset-rotate-view','package','keyboard-shortcuts','workspace-new','workspace-reset','workspace-manage','blend-make','blend-release','blend-expand','blend-options','blend-reverse','blend-replace-spine','blend-reverse-spine','envelope-make','envelope-warp','envelope-release','envelope-expand','mask-make','mask-release','mask-clip','mask-invert','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
+  'edit-text','create-outlines',...TYPE_SIZES.map(n=>`type-size-${n}`),'type-horizontal','type-vertical',...Object.keys(CASE_MODES).map(m=>`case-${m}`),'smart-punctuation','type-to-area','type-to-point','fill-placeholder',...Object.keys(INSERT_CHARACTERS),'join','average','offset-path','outline-stroke','expand','expand-appearance','transform-each','split-into-grid','crop-image','effect-last','effect-options',...Object.keys(EFFECTS).map(t=>`effect-${t}`),...Object.keys(WARP_STYLES).map(t=>`warp-${t}`),...Object.keys(LIVE_LABELS).map(t=>`live-${t}`),'simplify','reverse-path','add-anchors','remove-anchors','clean-up','compound-make','compound-release','clip-make','clip-release','reset-rotate-view','package','keyboard-shortcuts','workspace-new','workspace-reset','workspace-manage','blend-make','blend-release','blend-expand','blend-options','blend-reverse','blend-replace-spine','blend-reverse-spine','envelope-make','envelope-warp','envelope-release','envelope-expand','mask-make','mask-release','mask-clip','mask-invert','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
   'paint-focus','paint-swap','paint-none','paint-solid','paint-gradient','default-paint','smart-guides','guides','guides-lock','snap-point','snap-grid','transparency-grid','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','shear-dialog','toggle-panels','toggle-panels-except-tools','command-search','draw-mode','draw-normal','draw-behind','draw-inside','reselect','select-inverse','select-next-above','select-next-below','save-selection','edit-selection',
   ...Object.keys(SAME_MODES).map(m=>`select-same-${m}`),...Object.keys(OBJECT_KINDS).map(k=>`select-object-${k}`),'select-object-direction-handles',
   ...PANEL_DEFINITIONS.map(p=>`panel.${p.id}`),...BUILTIN_WORKSPACES.map(ws=>`workspace-preset.${ws.id}`),'workspace-save','workspace-load',...['left','right','up','down'].flatMap(d=>[`nudge-${d}`,`nudge-large-${d}`,`duplicate-${d}`])]);
@@ -1092,6 +1093,82 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       run(()=>{state.history.transaction('Create Outlines',()=>{for(const group of groups){const {parentId,index}=state.document.locate(group.id);state.history.execute(removeNode(group.id));state.history.execute(insertNode(parentId,group,index));}});select(previousSelection);});
     }finally{textBusy=false;if(!destroyed)status();}
   }
+  /** The node with a layout for its current text and font. */
+  async function laidOut(node){return hasTextLayout(node)?node:{...node,...await resolveText(node,{content:node.content,character:node.character??DEFAULT_CHARACTER,paragraph:node.paragraph})};}
+  /**
+   * Type menu edits on every selected text object: `prepare(node)` gives the resolved patch and, when the text
+   * changes kind, the local shift (mm) that keeps its glyphs in place; then the object is replaced, not patched.
+   */
+  async function updateTexts(label,prepare) {
+    await activeText?.done();
+    if(destroyed||state.document.readOnly)return;
+    if(textBusy)throw new Error('Text is still being updated. Try again in a moment.');
+    const previousSelection=selectedIds(),ids=previousSelection.filter(id=>state.document.getNode(id)?.type==='text'&&state.document.isEditable(id));
+    if(!ids.length)throw new Error('Select text first.');
+    textBusy=true;statusLine.textContent='Updating text…';const before=state.document.data;
+    try {
+      const results=await Promise.all(ids.map(async id=>[id,await prepare(state.document.getNode(id))]));
+      if(destroyed)return;if(state.document.data!==before)throw new Error('The artwork changed while updating text. Try again.');
+      run(()=>{state.history.transaction(label,()=>{for(const [id,{patch,offset}] of results) {
+        const node=state.document.getNode(id);
+        if(!offset){state.history.execute(updateNode(id,patch));continue;}
+        const {frame,onPath,...rest}=node,{parentId,index}=state.document.locate(id);
+        state.history.execute(removeNode(id));
+        state.history.execute(insertNode(parentId,{...rest,...patch,transform:multiplyMatrix(node.transform??[1,0,0,1,0,0],[1,0,0,1,...offset])},index));
+      }});select(previousSelection);});
+    }finally{textBusy=false;if(!destroyed){status();panels?.render();}}
+  }
+  /** Case and punctuation: on the characters selected in the open editor, else on all of each selected text. */
+  function rewriteTexts(label,change) {
+    if(activeText)return activeText.rewrite(change);
+    return updateTexts(label,async node=>{const values=textValues(node),runs=change(values.runs,0,values.text.length);
+      return {patch:await resolveText(node,textProperties({...values,text:runs.map(r=>r.text).join(''),runs}))};});
+  }
+  async function convertTextKind(kind) {
+    await updateTexts(kind==='area'?'Convert To Area Type':'Convert To Point Type',async original=>{
+      const node=await laidOut(original),converted=(kind==='area'?areaTypeValues:pointTypeValues)(textValues(node),node.layout);
+      let values=converted.values,patch=await resolveText(node,textProperties(values));
+      // Larger runs or paragraph spacing can need a taller frame than the estimate.
+      for(let tries=0;kind==='area'&&patch.layout.overflow&&tries<4;tries++){values={...values,frameHeight:values.frameHeight*1.5};patch=await resolveText(node,textProperties(values));}
+      return {patch,offset:converted.offset};
+    });
+  }
+  /** Fill With Placeholder Text: a phrase for point text and paths; area text gets the whole words that fit its frame. */
+  async function fillPlaceholder() {
+    await updateTexts('Fill With Placeholder Text',async node=>{
+      const {runs,...values}=textValues(node);
+      if(values.kind!=='area')return {patch:await resolveText(node,textProperties({...values,text:values.kind==='point'?'Lorem ipsum':'Lorem ipsum dolor sit amet'}))};
+      const em=values.fontSize*PT_TO_MM,wanted=Math.min(10000,Math.ceil(values.frameWidth*values.frameHeight/(em*em*.4))+40);
+      let text='';while(text.length<wanted)text+=(text?' ':'')+PLACEHOLDER_TEXT;text=placeholderFit(text,wanted);
+      let patch=await resolveText(node,textProperties({...values,text}));
+      if(patch.layout.overflow){
+        const end=Math.max(0,...patch.layout.glyphs.filter(g=>g.index!==undefined).map(g=>g.index+1));
+        patch=await resolveText(node,textProperties({...values,text:placeholderFit(text,end)}));
+      }
+      return {patch};
+    });
+  }
+  /** Insert Special / Whitespace Character: at the cursor, or after the selected text's last character. */
+  async function insertCharacter(ch) {
+    if(!activeText){
+      const id=selectedIds().find(i=>state.document.getNode(i)?.type==='text');
+      if(!id)throw new Error('Select a text object, or start typing with the Type tool, to insert a character.');
+      await editText(undefined,id);activeText?.caretToEnd();
+    }
+    activeText?.insert(ch);
+  }
+  function typeMenuCommand(command) {
+    const size=/^type-size-(\d+)$/.exec(command)?.[1];
+    if(size)return ()=>textStyle({fontSize:Number(size)},'Font Size');
+    if(command==='type-horizontal'||command==='type-vertical')return ()=>textStyle({orientation:command.slice(5)},'Type Orientation');
+    const mode=/^case-(\w+)$/.exec(command)?.[1];
+    if(CASE_MODES[mode])return ()=>rewriteTexts('Change Case',(runs,from,to)=>changeCase(runs,mode,from,to));
+    if(command==='smart-punctuation')return ()=>rewriteTexts('Smart Punctuation',smartPunctuation);
+    if(command==='type-to-area'||command==='type-to-point')return ()=>convertTextKind(command==='type-to-area'?'area':'point');
+    if(command==='fill-placeholder')return fillPlaceholder;
+    if(INSERT_CHARACTERS[command])return ()=>insertCharacter(INSERT_CHARACTERS[command]);
+    return null;
+  }
   /** The first subpath of a path or live shape, in its parent's coordinates, for Type on a Path. */
   function textPathFrom(id) {
     const source=state.document.getNode(id);
@@ -1649,6 +1726,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     if(state.document.readOnly)return;
     if(command==='edit-text')return void editText(undefined,selectedIds()[0]);
     if(command==='create-outlines')return void createTextOutlines().catch(error=>{if(!destroyed)onError(error.message);});
+    const typeCommand=typeMenuCommand(command);if(typeCommand)return void typeCommand().catch(error=>{if(!destroyed)onError(error.message);});
     if(command==='transform-again')return transforms.again();
     if(command==='use-as-template'){const images=selectedIds().filter(id=>state.document.getNode(id)?.type==='image'&&state.document.isEditable(id));
       if(!images.length)throw new Error('Select a placed image to use as a template.');

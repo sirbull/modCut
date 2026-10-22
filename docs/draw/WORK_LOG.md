@@ -2441,3 +2441,12 @@ const-navn to ganger i CDP; rettet til lokal funksjon. Full npm test er ikke kj?
 Andre agenter endret blant annet Cut-verkt?ylinjen og markeringsvisningen i samme arbeidskopi.
 Bare Smart Guides-endringene er tatt med; delte filer er bygget fra HEAD med innholdsankre i egen
 indeks, og JavaScript-innholdet i indeksen er syntakskontrollert f?r commit.
+
+## 2026-10-22: Type-menyen (STATUS.md 2.43)
+
+Type-menyen i Draw har fått Size, Glyphs, Convert To Area/Point Type, Change Case, Smart Punctuation,
+Insert Special/Whitespace Character, Fill With Placeholder Text og Type Orientation. Konverteringen
+holder glyfene på plass (målt i E2E innen 0,5 mm) og bryter ikke teksten om. Norske menytekster er med.
+462 Draw-enhetstester passerer, og `--draw-type-menu`, `--draw-text`, `--draw-area-text` og
+`--draw-character` passerer. Full npm test er ikke kjørt. Andre agenter hadde uferdige endringer i
+`main.mjs`, `index.mjs` og `i18n-nb.mjs` (Effect-menyen); bare Type-endringene er tatt med via egen indeks.

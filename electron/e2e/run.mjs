@@ -34,6 +34,7 @@ import { runDrawLanguageWorkflows } from './draw-language-workflows.mjs';
 import { runDrawTextWorkflows } from './draw-text-workflows.mjs';
 import { runDrawGoogleFontWorkflows } from './draw-google-font-workflows.mjs';
 import { runDrawAreaTextWorkflows } from './draw-area-text-workflows.mjs';
+import { runDrawTypeMenuWorkflows } from './draw-type-menu-workflows.mjs';
 import { runDrawPathTextWorkflows } from './draw-path-text-workflows.mjs';
 import { runDrawCharacterWorkflows } from './draw-character-workflows.mjs';
 import { runDrawCompoundWorkflows } from './draw-compound-workflows.mjs';
@@ -149,6 +150,9 @@ try {
   } else if (process.argv.includes('--draw-google-fonts')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawGoogleFontWorkflows(first);first.socket.close();
+  } else if (process.argv.includes('--draw-type-menu')) {
+    for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
+    await runDrawTypeMenuWorkflows(first);first.socket.close();
   } else if (process.argv.includes('--draw-outlines')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawTextOutlineWorkflows(first);first.socket.close();

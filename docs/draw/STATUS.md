@@ -1133,6 +1133,31 @@ akser. `--draw-rulers` åpner siden via Properties, bruker ekte musedrag og kont
 objektkontur, lik avstand, målemerker, uavhengige brytere og hovedbryteren midt i gesten, samt plassering
 etter slipp. Skjermbilder av siden, objektmarkering og drag er kontrollert visuelt. Draw og i18n er grønne.
 
+### 2.43 Type-menyen som i Illustrator (2026-10-22)
+
+Brukerønske (skjermbilde av Illustrators Type-meny): ta med de punktene som gir mening. Draw-menyen
+Type hadde bare Edit Text og Create Outlines. Nå (`doc/type-commands.mjs`, menyen i `electron/main.mjs`):
+
+- **Size** med faste punktstørrelser (6–72 pt) og **Glyphs** (åpner panelet).
+- **Convert To Area Type / Convert To Point Type** (`type-to-area`, `type-to-point`): rammen får
+  bredden til den lengste linjen, og objektet flyttes én ascent så glyfene blir stående. Områdetekst
+  får et linjeskift ved hver myk brytning (mellomrommene ved brytningen blir skiftet). Loddrett tekst
+  kan ikke bli områdetekst. Objektet erstattes (ingen `frame` igjen på punkttekst), ett angresteg.
+- **Change Case** (UPPERCASE, lowercase, Title Case, Sentence case) og **Smart Punctuation** (krøllete
+  anførselstegn og apostrof, `--` til –, `---` til —, `...` til …). Under skriving virker de på de
+  markerte tegnene (`inlineText().rewrite`), ellers på hele teksten i hvert markert objekt. Stilene
+  per tegn beholdes (`rewriteRuns`).
+- **Insert Special Character** (symboler, streker, anførselstegn) og **Insert Whitespace Character**
+  (em/en/tynt/hårfint/siffer/skilletegn/hardt mellomrom): ved markøren, ellers etter siste tegn.
+- **Fill With Placeholder Text**: «Lorem ipsum» for punkttekst, en frase for tekst på bane, og hele
+  ord som fyller rammen for områdetekst (uten overløp).
+- **Type Orientation**: Horizontal / Vertical for punkttekst.
+
+Ikke tatt med: Adobe Fonts, Recent Fonts, Retype/Rewrite (AI), Threaded Text, Fit Headline, Optical
+Margin Alignment, Bullets and Numbering, Show Hidden Characters, Legacy Text og Find/Replace Font.
+Area Type Options og Type on a Path Options finnes i Properties. Font-undermenyen er Character-panelet.
+Tester: `test/type-commands.test.mjs` og `--draw-type-menu` (E2E med angring av alt).
+
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
 | Oppgave | Status |
