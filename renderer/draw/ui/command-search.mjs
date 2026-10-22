@@ -3,7 +3,7 @@
  * `searchCommands` is pure; `openCommandSearch` shows the list in a modal.
  */
 const LABELS = {
-  undo: 'Undo', redo: 'Redo', delete: 'Delete', 'select-all': 'Select All', 'select-artboard': 'Select All on Active Artboard', deselect: 'Deselect',
+  undo: 'Undo', redo: 'Redo', delete: 'Delete', 'delete-keep-closed': 'Delete Anchors, Keep Path Closed', 'select-all': 'Select All', 'select-artboard': 'Select All on Active Artboard', deselect: 'Deselect',
   'fit-artboard': 'Fit Artboard in Window', 'fit-all': 'Fit All in Window', 'actual-size': 'Actual Size', 'zoom-in': 'Zoom In', 'zoom-out': 'Zoom Out', outline: 'Outline / Preview',
   cut: 'Cut', copy: 'Copy', paste: 'Paste', 'paste-front': 'Paste in Front', 'paste-back': 'Paste in Back', 'paste-place': 'Paste in Place', 'paste-all-artboards': 'Paste on All Artboards',
   group: 'Group', ungroup: 'Ungroup', 'bring-forward': 'Bring Forward', 'send-backward': 'Send Backward', 'bring-front': 'Bring to Front', 'send-back': 'Send to Back',

@@ -618,7 +618,7 @@ export function createInteractions(canvas, state, api) {
     handle(command) {
       if(gesture?.mode!=='polygonal-lasso')return false;
       if(command==='tool-dialog'){finishPolygonalLasso();return true;}
-      if(command==='delete'){
+      if(command==='delete'||command==='delete-keep-closed'){
         if(gesture.points.length<=1)cancel();else{gesture.points.pop();polygonalPreview();}return true;
       }
       return false;

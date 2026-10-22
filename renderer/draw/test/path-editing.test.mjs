@@ -67,3 +67,13 @@ test('expanding a leaf retains identity and restores the exact shape on undo',()
   state.history.redo();assert.deepEqual(state.document.getNode(shape.id),replacement);
   assert.throws(()=>replaceLeaf(shape.id,{...replacement,id:'other'}));
 });
+test('deleting an anchor without bridging opens a closed path there and splits an open one',()=>{
+  const square={closed:true,segments:[[0,0],[10,0],[10,10],[0,10]].map(anchor)};
+  const [opened]=deleteAnchors([square],[{subpath:0,segment:0}],{bridge:false});
+  assert.equal(opened.closed,false);assert.deepEqual(opened.segments.map(s=>s.p),[[10,0],[10,10],[0,10]],'Starts after the deleted anchor, so nothing joins across the gap');
+  const [kept]=deleteAnchors([square],[{subpath:0,segment:0}]);assert.equal(kept.closed,true);assert.equal(kept.segments.length,3);
+  const pieces=deleteAnchors([square],[{subpath:0,segment:0},{subpath:0,segment:2}],{bridge:false});assert.equal(pieces.length,0,'Single anchors left over are dropped');
+  const line={closed:false,segments:[[0,0],[10,0],[20,0],[30,0],[40,0]].map(anchor)};
+  const split=deleteAnchors([line],[{subpath:0,segment:2}],{bridge:false});
+  assert.deepEqual(split.map(p=>p.segments.map(s=>s.p[0])),[[0,10],[30,40]]);assert.ok(split.every(p=>!p.closed));
+});

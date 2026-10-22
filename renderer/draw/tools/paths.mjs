@@ -52,10 +52,10 @@ export function createPathInteractions(canvas,state,api) {
       return node;
     });
   }
-  function deleteSelected(anchors=state.selection.anchors){
+  function deleteSelected(anchors=state.selection.anchors,{bridge=true}={}){
     if(!anchors.length)return false;
     finish();state.history.transaction('Delete Anchors',()=>{
-      for(const id of new Set(anchors.map(a=>a.nodeId))){const node=editNode(id),subpaths=deleteAnchors(node.subpaths,anchors.filter(a=>a.nodeId===id));
+      for(const id of new Set(anchors.map(a=>a.nodeId))){const node=editNode(id),subpaths=deleteAnchors(node.subpaths,anchors.filter(a=>a.nodeId===id),{bridge});
         if(subpaths.length)commit({...node,subpaths},'Delete Anchors');else state.history.execute(removeNode(id));}
     });api.select(state.selection.ids);return true;
   }
@@ -276,7 +276,8 @@ export function createPathInteractions(canvas,state,api) {
     handle(command){
       if(command==='cancel'){if(gesture)cancelDrag();else finish();return PATH_TOOLS.includes(state.ui.tool);}
       if(command==='tool-dialog'&&state.ui.tool==='pen'){finish();return true;}
-      if(command==='delete'&&state.ui.tool==='direct-selection'&&!state.document.readOnly)return deleteSelected();
+      // Delete opens the path at the anchor; Shift+Delete joins its neighbours and keeps the shape closed.
+      if((command==='delete'||command==='delete-keep-closed')&&state.ui.tool==='direct-selection'&&!state.document.readOnly)return deleteSelected(undefined,{bridge:command==='delete-keep-closed'});
       return false;
     },
     nudge(x,y){const anchors=state.selection.anchors;if(state.ui.tool!=='direct-selection'||!anchors.length)return false;

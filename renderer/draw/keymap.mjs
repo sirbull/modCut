@@ -44,6 +44,7 @@ const entries = [
   binding('paint-gradient-shifted', ['Shift+Period'], 'draw', { command: 'paint-gradient' }),
   binding('zoom-in', ['Mod+Equal', 'Mod+Shift+Equal']), binding('zoom-out', ['Mod+Minus']),
   binding('delete', ['Backspace', 'Delete'], 'draw', { repeat: true }),
+  binding('delete-keep-closed', ['Shift+Backspace', 'Shift+Delete'], 'draw', { repeat: true }),
   ...['Left', 'Right', 'Up', 'Down'].flatMap((direction) => [
     binding(`nudge-${direction.toLowerCase()}`, [`Arrow${direction}`], 'draw', { repeat: true }),
     binding(`nudge-large-${direction.toLowerCase()}`, [`Shift+Arrow${direction}`], 'draw', { repeat: true }),

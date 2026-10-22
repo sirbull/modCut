@@ -63,3 +63,8 @@ test('shape anchor selection is transient, signature guarded and survives expans
   state.history.undo();assert.equal(state.selection.anchors.length,1);
   state.history.execute(updateNode(shape.id,{params:{width:30,height:10}}));assert.equal(state.selection.anchors.length,0,'Changed shape geometry invalidates transient indices');
 });
+test('opening a rounded path at an anchor keeps the other corners live',()=>{
+  const rounded=roundCorners({closed:true,segments:[[0,0],[40,0],[40,40],[0,40]].map(anchor)},[0,1,2,3],5);
+  const [opened]=deleteAnchors([rounded],[{subpath:0,segment:0}],{bridge:false});
+  assert.equal(opened.closed,false);assert.equal(opened.cornerData.segments.length,3);assert.deepEqual(opened.cornerData.segments.map(s=>s.p),[[40,0],[40,40],[0,40]]);
+});

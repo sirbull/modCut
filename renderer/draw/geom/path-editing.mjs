@@ -45,12 +45,20 @@ export function moveAnchors(subpaths,selected,delta) {
   });
   return result;
 }
-export function deleteAnchors(subpaths,selected) {
+/** bridge: the neighbours join and a closed path stays closed (Shift+Delete, Remove Anchor Points).
+ * Otherwise each anchor goes with its segments, like Illustrator's Delete: a closed path opens there
+ * and an open one splits; pieces with fewer than two anchors are dropped. */
+export function deleteAnchors(subpaths,selected,{bridge=true}={}) {
   return subpaths.flatMap((path,i)=>{
     if(!selected.some(s=>s.subpath===i))return [structuredClone(path)];
-    const keep=(_,j)=>!selected.some(s=>s.subpath===i&&s.segment===j),segments=structuredClone(editablePath(path).segments.filter(keep));
-    if(segments.length<2)return [];
-    return [path.cornerData?resolveCorners({...path,cornerData:{segments,radii:path.cornerData.radii.filter(keep)}}):{...structuredClone(path),segments}];
+    const removed=j=>selected.some(s=>s.subpath===i&&s.segment===j),source=editablePath(path).segments;
+    const build=(indices,closed)=>{const segments=structuredClone(indices.map(j=>source[j]));
+      return path.cornerData?resolveCorners({...path,closed,cornerData:{segments,radii:indices.map(j=>path.cornerData.radii[j])}}):{...structuredClone(path),closed,segments};};
+    if(bridge){const indices=source.map((_,j)=>j).filter(j=>!removed(j));return indices.length<2?[]:[build(indices,path.closed)];}
+    // A closed path is walked from just after its first deleted anchor, so a run never wraps.
+    const n=source.length,first=source.findIndex((_,j)=>removed(j)),start=path.closed?first+1:0,runs=[[]];
+    for(let k=0;k<n;k++){const j=(start+k)%n;if(removed(j))runs.push([]);else runs.at(-1).push(j);}
+    return runs.filter(run=>run.length>=2).map(run=>build(run,false));
   });
 }
 export function convertAnchor(path,index,smooth=false) {
