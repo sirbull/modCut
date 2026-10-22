@@ -1035,9 +1035,9 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
     return {...result,...transformProperties(result,node.transform)};
   }
   function clearTransformPreview(){transformPreview?.remove();transformPreview=null;transformPreviewIds.clear();}
-  /** `matrix` is one matrix for all, or a function giving each object its own (Transform Each). */
-  function previewTransform(ids,matrixOf,{scaleStrokes}={}){
-    clearTransformPreview();transformPreview=new scope.Group({insert:false});overlay.addChild(transformPreview);
+  /** `matrix` is one matrix for all, or a function giving each object its own (Transform Each). `keepOriginals` leaves them showing (Alt-drag copy). */
+  function previewTransform(ids,matrixOf,{scaleStrokes,keepOriginals=false}={}){
+    clearTransformPreview();transformPreview=new scope.Group({insert:false,name:'Transform preview'});overlay.addChild(transformPreview);
     for(const id of ids){const original=items.get(id);if(!original)continue;let clone=original.clone({insert:false});const matrix=typeof matrixOf==='function'?matrixOf(id):matrixOf,policy=scaleStrokes===undefined?strokeScalingPolicy(state.ui??{},matrix):scaleStrokes;
       const prepare=(item,root=false)=>{
         const record=records.get(item.data.nodeId);if(record){item.visible=record.node.visible;
@@ -1053,7 +1053,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
         }
         for(const child of [...(item.children??[])])prepare(child);
         return item;
-      };clone=prepare(clone,true);clone.applyMatrix=false;clone.matrix=new scope.Matrix(...matrix).append(records.get(id).worldMatrix);transformPreview.addChild(clone);transformPreviewIds.add(id);
+      };clone=prepare(clone,true);clone.applyMatrix=false;clone.matrix=new scope.Matrix(...matrix).append(records.get(id).worldMatrix);transformPreview.addChild(clone);if(!keepOriginals)transformPreviewIds.add(id);
       const stack=records.get(id)?.stack;if(stack){const copy=prepare(stack.clone({insert:false}),true);copy.matrix=clone.matrix.clone();copy.visible=true;transformPreview.addChild(copy);}
     }updateView();
   }

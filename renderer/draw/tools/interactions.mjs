@@ -349,7 +349,8 @@ export function createInteractions(canvas, state, api) {
         }
         preview=boxPreview(gesture.box,gesture.matrix,guides);
         if(gesture.tool==='select')highlightObjects(guides.map(g=>g.targetId));
-        if(gesture.tool==='select'&&gesture.handle&&gesture.handle!=='rotate')renderer.previewTransform(api.selectedIds(),gesture.matrix);
+        // The artwork itself follows the drag with fill, stroke and effects; Alt-drag copies, so the original stays put.
+        if(gesture.tool==='select')renderer.previewTransform(api.selectedIds(),gesture.matrix,{keepOriginals:event.altKey&&!gesture.handle});
       }
       scope.view.update();
     });

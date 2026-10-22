@@ -165,6 +165,12 @@ async function runSmartGuideWorkflows(client) {
   await begin(70+off,30+off);let view=await live();
   assert.ok(Math.abs(view.x-60)<.01&&Math.abs(view.y-20)<.01,JSON.stringify(view));
   assert.equal(view.spacing,2);assert.ok(view.measurements.length>=3);assert.equal(view.color,'#c026d3');
+  // The artwork itself moves live, painted, and the original is hidden until release.
+  const moving=await workspace(`const id=w.state.selection.ids[0],g=w.scope.project.getItem({name:'Transform preview'}),clone=g?.children.find(c=>c.data.nodeId===id);
+    const originals=w.scope.project.getItems({match:i=>i.data.nodeId===id&&i.isInserted()&&!i.isDescendant(g)&&i.visible});
+    return {bounds:clone&&{x:clone.bounds.x,y:clone.bounds.y},fill:!!clone?.fillColor,stroke:!!clone?.strokeColor,originals:originals.length};`);
+  assert.ok(moving.bounds&&Math.abs(moving.bounds.x-60)<.01&&Math.abs(moving.bounds.y-20)<.01,JSON.stringify(moving));
+  assert.ok(moving.fill||moving.stroke,'the live copy keeps its paint');assert.equal(moving.originals,0,'the original hides while dragging');
   await snapshot('drag');
   assert.equal(await workspace('return JSON.stringify(w.state.document.toJSON());'),documentBefore,'live overlays do not edit the model');
   // A second move in the same gesture refreshes the live measurement.
