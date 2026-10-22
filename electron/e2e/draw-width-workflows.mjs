@@ -92,7 +92,7 @@ export async function runDrawWidthWorkflows(client) {
     return {end:at(99,40.7),start:at(21,40.7)}})()`);
   assert.ok(pixels.end < 60 && pixels.start > 200, `Wide at the end, nothing at the start: ${JSON.stringify(pixels)}`);
   // Outline Stroke turns the profile into a filled shape of the same outline.
-  await evaluate(`(async()=>{${active}.handle('outline-stroke')})()`);
+  await evaluate("(()=>{for(const type of ['keydown','keyup'])window.dispatchEvent(new KeyboardEvent(type,{key:'o',code:'KeyO',ctrlKey:true,altKey:true,bubbles:true,cancelable:true}));})()");
   await until(`(async()=>!${active}.state.document.getNode('${line}'))()`, 'outlined');
   const outlined = await evaluate(`(async()=>{const w=${active},n=w.state.document.getNode(w.state.selection.ids[0]),r=w.renderer.bounds(n.id),b=w.state.document.data.artboards[0];
     return {fill:(await import('./draw/doc/paint.mjs')).paintHex(n.appearance.fills[0]),strokes:n.appearance.strokes.length,box:[r.x-b.x,r.y-b.y,r.width,r.height].map(v=>Math.round(v))}})()`);

@@ -51,6 +51,40 @@ export async function runDrawPanelLayoutWorkflows(client) {
   const after = await box(floating('appearance'));
   assert.ok(Math.abs(after.x - before.x - 100) < 3 && Math.abs(after.y - before.y - 45) < 3, 'The entire box follows its title bar');
 
+  // Floating panels keep their size and pointer offset when parked partly outside the workspace.
+  await handle('panel.stroke');
+  const shell = await box(`${root} .draw-shell`), stroke = await box(floating('stroke'));
+  const strokeGrip = `${floating('stroke')} .draw-flyout__header`;
+  const park = async destination => {
+    const before = await box(floating('stroke')), grip = await box(strokeGrip);
+    const start = { x: grip.x + grip.width / 2, y: Math.max(shell.y + 2, grip.y + grip.height / 2) };
+    const end = { x: start.x + destination.x - before.x, y: start.y + destination.y - before.y };
+    await mouse('mouseMoved', start); await mouse('mousePressed', start, { buttons: 1 });
+    await mouse('mouseMoved', end, { buttons: 1 });
+    const moved = await box(floating('stroke'));
+    assert.ok(Math.abs(moved.x - destination.x) < 2 && Math.abs(moved.y - destination.y) < 2, 'The panel follows the pointer past the old bounds before release');
+    assert.ok(Math.abs(moved.height - stroke.height) < 2, 'Moving a panel does not shrink its contents');
+    await mouse('mouseReleased', end); await wait(100);
+    assert.deepEqual(await box(floating('stroke')), moved, 'Dropping a floating panel does not snap it back inside');
+    return moved;
+  };
+  const parked = await park({ x: canvas.x + 80, y: shell.y + shell.height - 48 });
+  assert.ok(parked.y + parked.height > shell.y + shell.height, 'Only the top of Stroke needs to remain visible');
+  const panelShot = await command('Page.captureScreenshot', { format: 'png' });
+  await writeFile(join(tmpdir(), 'modcut-floating-panel-unrestricted.png'), Buffer.from(panelShot.data, 'base64'));
+  await handle('deselect');
+  assert.deepEqual(await box(floating('stroke')), parked, 'Refreshing the panels preserves partial visibility');
+  assert.deepEqual(JSON.parse(await evaluate("localStorage.getItem('modcut.draw.panel-layout')")).floating.stroke,
+    (await state()).floating.stroke, 'The position beyond the bottom edge is persisted');
+  const parkedTab = await evaluate("document.querySelector('.doc-tab.is-active').dataset.tabId");
+  await evaluate("document.querySelector('#newDoc').click()"); await submitNewDrawDialog(evaluate, { name: 'Partly visible panel' });
+  assert.deepEqual(await box(floating('stroke')), parked, 'New documents restore the partly visible panel without clamping');
+  await evaluate(`document.querySelector('.doc-tab[data-tab-id="${parkedTab}"]').click()`);
+  await park({ x: -80, y: shell.y + 80 });
+  await park({ x: canvas.x + 80, y: shell.y - 8 });
+  await park({ x: canvas.x + 80, y: shell.y + 80 });
+  await click(await point(`${floating('stroke')} [aria-label="Close panel"]`));
+
   await click(await point(`${floating('appearance')} [aria-label="Close panel"]`));
   assert.equal((await state()).floating.appearance, undefined); assert.ok(!(await state()).rail.includes('appearance'));
   assert.equal(await evaluate("window.modcut.clickE2EMenuItem('Window','Appearance')"), true);
@@ -149,10 +183,12 @@ export async function runDrawPanelLayoutWorkflows(client) {
   const wide = await command('Page.captureScreenshot', { format: 'png' });
   await writeFile(join(tmpdir(), 'modcut-modular-panels-wide.png'), Buffer.from(wide.data, 'base64'));
 
-  // Resize: the title bar remains reachable, even after a window was moved to the bottom right.
+  // Resize preserves chosen floating positions, including portions beyond the viewport.
   await command('Emulation.setDeviceMetricsOverride', { width: 790, height: 600, deviceScaleFactor: 1, mobile: false }); await wait(200);
-  for (const id of Object.keys((await state()).floating)) {
-    const b = await box(floating(id)); assert.ok(b.x >= 0 && b.y >= 0 && b.x + b.width <= 791 && b.y + 30 <= 600);
+  const resizedShell = await box(`${root} .draw-shell`);
+  for (const [id, position] of Object.entries((await state()).floating)) {
+    const b = await box(floating(id));
+    assert.ok(Math.abs(b.x - resizedShell.x - position.x) < 2 && Math.abs(b.y - resizedShell.y - position.y) < 2, 'Resize keeps the saved position');
   }
   const { data } = await command('Page.captureScreenshot', { format: 'png' });
   await writeFile(join(tmpdir(), 'modcut-modular-panels.png'), Buffer.from(data, 'base64'));

@@ -19,14 +19,18 @@ export async function runDrawDockingWorkflows(client) {
   const column=async index=>{const id=(await state()).columns[index].id;return `${root} [data-draw-dock-column="${id}"]`;};
   const shot=async name=>{const s=await command('Page.captureScreenshot',{format:'png'});await writeFile(join(tmpdir(),name),Buffer.from(s.data,'base64'));};
   const drop=async (start,end,kind)=>{
+    const offset=await evaluate(`(()=>{const p=document.elementFromPoint(${start.x},${start.y})?.closest('.draw-floating-panel'),b=p?.getBoundingClientRect();return b?{x:${start.x}-b.x,y:${start.y}-b.y}:{x:24,y:16}})()`);
     await mouse('mouseMoved',start);await mouse('mousePressed',start,{buttons:1});await mouse('mouseMoved',end,{buttons:1});
     if(kind)assert.equal(await evaluate(`(()=>{const l=document.querySelector('${root} .draw-panel-drop-line');return l.hidden?null:l.dataset.dropKind})()`),kind,'A docking line previews the exact destination before release');
+    if(kind)assert.ok(await evaluate(`[...document.querySelectorAll('${root} .draw-floating-panel')].some(p=>{const b=p.getBoundingClientRect();return Math.abs(b.x-(${end.x}-${offset.x}))<2&&Math.abs(b.y-(${end.y}-${offset.y}))<2})`),'The panel stays under the pointer even at the bottom and right docking edges');
     if(kind)await shot(`modcut-dock-preview-${kind}.png`);
     await mouse('mouseReleased',end);await wait(100);
   };
   try {
     await enterDraw(evaluate);await evaluate("document.querySelector('#newDoc').click()");await submitNewDrawDialog(evaluate,{name:'Docking proof'});
     await handle('workspace-reset');await wait(100);const original=await shape();
+    // The reset toast covers the Properties header until it disappears.
+    for(let i=0;i<100&&await evaluate("!!document.querySelector('.toasts .toast')");i++)await wait(50);
     await click(await point(rail('stroke')));
     let layers=await box(dock('layers'));
     await drop(await point(`${root} .draw-flyout[data-draw-group=stroke] .draw-flyout__tab`),{x:layers.x+layers.width/2,y:layers.y+2},'dock');

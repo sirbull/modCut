@@ -66,6 +66,7 @@ export function fitOutline(scope, subpaths, tolerance = .01) {
       else segments.push(...fitted);
     });
     segments[0].in = segments.pop().in;
+    if(segments.length<3)return structuredClone(subpath);
     return { closed: true, segments };
   });
 }

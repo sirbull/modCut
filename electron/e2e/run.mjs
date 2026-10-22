@@ -360,6 +360,7 @@ try {
       await runDrawEffectWorkflows(first);
       await runDrawLinkWorkflows(first);
       await runDrawWidthWorkflows(first);
+      await runDrawOutlineWorkflows(first);
       await runDrawBlendWorkflows(first);
       await runDrawWarpMaskWorkflows(first);
       await runDrawBrushWorkflows(first);

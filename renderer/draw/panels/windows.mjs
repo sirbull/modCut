@@ -79,14 +79,16 @@ export function createPanelWindows({ shell, rail, panels, dock, state, icon, ren
     heading.addEventListener('pointerdown',event=>{if(!event.target.closest('.draw-layer-action'))startDrag(event,id,entry.section);});
   }
 
-  function clampPoint(point, element) {
+  function clampFlyoutPoint(point, element) {
     return { x: Math.round(Math.max(0, Math.min(point.x, Math.max(0, shell.clientWidth - Math.min(288, shell.clientWidth))))),
       y: Math.round(Math.max(0, Math.min(point.y, Math.max(0, shell.clientHeight - Math.min(element?.offsetHeight || 40, shell.clientHeight))))) };
   }
   function place(entry, point) {
-    const next = clampPoint(point, entry.element);
+    // Floating panels may extend beyond any edge. Only anchored rail flyouts must fit.
+    const floating = entry.element.classList.contains('draw-floating-panel');
+    const next = floating ? point : clampFlyoutPoint(point, entry.element);
     entry.element.style.left = `${next.x}px`; entry.element.style.top = `${next.y}px`;
-    entry.element.style.maxHeight = `${Math.max(40, shell.clientHeight - next.y)}px`;
+    entry.element.style.maxHeight = `${Math.max(40, shell.clientHeight - (floating ? 0 : next.y))}px`;
     return next;
   }
   function syncWindow(entry, group, content) {
@@ -334,7 +336,7 @@ export function createPanelWindows({ shell, rail, panels, dock, state, icon, ren
       drag.target={to:'rail',index:index<0?others.length:index};
       state.ui.panelLayout = movePanel(state.ui.panelLayout, drag.id, drag.target);
     } else {
-      const point = clampPoint({ x: event.clientX - box.left - drag.offsetX, y: event.clientY - box.top - drag.offsetY }, windows.get(drag.id)?.element);
+      const point = { x: Math.round(event.clientX - box.left - drag.offsetX), y: Math.round(event.clientY - box.top - drag.offsetY) };
       state.ui.panelLayout = movePanel(state.ui.panelLayout, drag.id, { to: 'floating', ...point });
       state.ui.dockCollapsed[drag.id] = false;
       drag.target=target;
