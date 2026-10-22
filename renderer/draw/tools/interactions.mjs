@@ -8,13 +8,16 @@ import { createEyedropperPreview } from './eyedropper-preview.mjs';
 import { addStop, moveStop, removeStop, vectorGradient } from '../doc/gradient.mjs';
 import { addFreeformPoint, insertLinePoint, removeFreeformPoint, updateFreeformPoint } from '../doc/freeform.mjs';
 import { snapMove, snapPoint } from './snapping.mjs';
+import { DEFAULT_SMART_GUIDES } from '../../preferences.mjs';
 
 // Gradient tool over the annotator: move a handle or stop, or add a stop on the line.
 const gradientCursor=hit=>!hit ? CURSORS.gradient : CURSORS[['line','segment','inside'].includes(hit.part)?'gradient-add':'gradient-move'];
 
 export function createInteractions(canvas, state, api) {
   const {scope,renderer,withScope,run}=api, controller=new AbortController(), events={signal:controller.signal};
-  let gesture=null,preview=null;
+  let gesture=null,preview=null,highlight=null;
+  const smartPreferences=()=>({...DEFAULT_SMART_GUIDES,...api.preferences()});
+  const smartEnabled=()=>state.document.data.settings.smartGuides!==false;
   // Edits a gesture makes while it runs (live gradient drags) must not cancel the gesture itself.
   let ownEdits=0;
   const live=fn=>{ownEdits++;try{return run(fn);}finally{ownEdits--;}};
@@ -23,7 +26,27 @@ export function createInteractions(canvas, state, api) {
   const eyedropperPreview=createEyedropperPreview(canvas,{active:()=>api.tool()==='eyedropper',current:()=>state.ui[state.ui.paintFocus==='stroke'?'stroke':'fill']});
   // A screen movement in project units, turned back through Rotate View.
   const screenDelta=(dx,dy)=>new scope.Point(dx,dy).rotate(-scope.view.rotation).divide(scope.view.zoom);
-  function clearPreview() {preview?.remove();preview=null;renderer.clearTransformPreview();state.ui.transformPreviewBox=null;}
+  function clearHighlight() {highlight?.remove();highlight=null;}
+  function clearPreview() {clearHighlight();preview?.remove();preview=null;renderer.clearTransformPreview();state.ui.transformPreviewBox=null;}
+  function highlightObjects(ids) {
+    clearHighlight();
+    const prefs=smartPreferences();
+    if(!smartEnabled()||!prefs.smartGuideHighlight||!ids.some(Boolean))return;
+    highlight=new scope.Group({name:'Smart guide highlights'});
+    for(const id of new Set(ids.filter(Boolean))) {
+      const original=renderer.items.get(id);if(!original)continue;
+      const copy=original.clone({insert:false});copy.matrix=new scope.Matrix(...renderer.worldMatrix(id));
+      const outline=item=>{
+        item.data={};item.opacity=1;item.blendMode='normal';
+        if(item.className==='Raster'||item.className==='PointText'){item.remove();return;}
+        if(item.children)for(const child of [...item.children])outline(child);
+        item.fillColor=null;item.strokeColor=prefs.smartGuideColor;item.strokeWidth=1;item.strokeScaling=false;item.dashArray=[];
+      };
+      outline(copy);
+      if(copy.parent||copy.className==='Path'||copy.className==='CompoundPath'||copy.children?.length)highlight.addChild(copy);
+      else {copy.remove();const b=renderer.bounds(id);if(b)highlight.addChild(new scope.Path.Rectangle({rectangle:b,strokeColor:smartPreferences().smartGuideColor,strokeWidth:1/scope.view.zoom}));}
+    }
+  }
   function cancel() {const editor=nameEditor;nameEditor=null;editor?.remove();const previous=gesture;gesture=null;if(previous)canvas.style.cursor=api.cursor();if(previous?.mode==='free-transform')api.freeDistortPreview(null);if(previous?.mode==='gradient-edit'||previous?.mode==='freeform-edit')api.gradientAnnotation(null);withScope(()=>{clearPreview();if(TRANSFORM_TOOLS.includes(previous?.tool))api.transforms.setOrigin(previous.originBefore);renderer.updateView();});api.status();}
   function applyLasso({points,modifiers}) {
     api.lasso(points,modifiers.alt&&modifiers.mod?{objects:true,add:modifiers.shift}:{add:modifiers.shift,subtract:modifiers.alt});
@@ -79,9 +102,10 @@ export function createInteractions(canvas, state, api) {
     for (const node of state.document.descendants(null)) {
       if (node.children || !state.document.isEditable(node.id) || selected.has(node.id) || state.document.ancestors(node.id).some(n=>selected.has(n.id))) continue;
       const b=renderer.bounds(node.id); if (!b) continue;
-      targets.push({x:b.left,y:b.top,label:'edge'},{x:b.right,y:b.bottom,label:'edge'},{x:b.center.x,y:b.center.y,label:'center'});
+      targets.push({x:b.left,y:b.top,label:'edge',id:node.id,box:{x:b.x,y:b.y,width:b.width,height:b.height}},
+        {x:b.right,y:b.bottom,label:'edge',id:node.id},{x:b.center.x,y:b.center.y,label:'center',id:node.id});
       if (node.type==='path') for (const path of node.subpaths) for (const segment of path.segments) {
-        const p=renderer.pointToWorld(node.id,segment.p);targets.push({x:p.x,y:p.y,label:'anchor'});
+        const p=renderer.pointToWorld(node.id,segment.p);targets.push({x:p.x,y:p.y,label:'anchor',id:node.id});
       }
     }
     return targets;
@@ -103,20 +127,30 @@ export function createInteractions(canvas, state, api) {
     for (const guide of guides) {
       const b=scope.view.bounds,vertical=guide.axis==='x';
       const line=new scope.Path.Line(vertical?[guide.value,b.top]:[b.left,guide.value],vertical?[guide.value,b.bottom]:[b.right,guide.value]);
-      line.strokeColor='#006B5C';line.strokeWidth=1/scope.view.zoom;line.dashArray=[4/scope.view.zoom,3/scope.view.zoom];group.addChild(line);
+      line.strokeColor=smartPreferences().smartGuideColor;line.strokeWidth=1/scope.view.zoom;line.dashArray=[4/scope.view.zoom,3/scope.view.zoom];group.addChild(line);
     }
     return group;
   }
   function boxPreview(box, matrix=[1,0,0,1,0,0], guides=[]) {
-    const group=new scope.Group();
+    const prefs=smartPreferences(),color=prefs.smartGuideColor,z=scope.view.zoom;
+    const group=new scope.Group({name:'Smart guide preview'});
     const points=[[box.x,box.y],[box.x+box.width,box.y],[box.x+box.width,box.y+box.height],[box.x,box.y+box.height]];
     const path=new scope.Path({segments:points.map(p=>new scope.Point(...p).transform(new scope.Matrix(...matrix))),closed:true});
-    path.strokeColor='#006B5C';path.strokeWidth=1/scope.view.zoom;group.addChild(path);
+    path.strokeColor=color;path.strokeWidth=1/z;group.addChild(path);
     for (const guide of guides) {
+      if(guide.kind==='spacing') {
+        const horizontal=guide.axis==='x',cross=guide.cross+8/z,p=horizontal?[guide.from,cross]:[cross,guide.from],q=horizontal?[guide.to,cross]:[cross,guide.to];
+        const line=new scope.Path.Line({from:p,to:q,strokeColor:color,strokeWidth:1/z});line.data.smartSpacing=true;group.addChild(line);
+        for(const end of [p,q])group.addChild(new scope.Path.Line({from:[end[0]-(horizontal?0:3/z),end[1]-(horizontal?3/z:0)],to:[end[0]+(horizontal?0:3/z),end[1]+(horizontal?3/z:0)],strokeColor:color,strokeWidth:1/z}));
+        if(prefs.smartGuideMeasurements)group.addChild(new scope.PointText({point:[(p[0]+q[0])/2+4/z,(p[1]+q[1])/2-4/z],content:`${guide.distance.toFixed(2)} mm`,fontSize:11/z,fillColor:color,data:{smartMeasurement:true}}));
+        continue;
+      }
       const b=scope.view.bounds, vertical=guide.axis==='x';
       const line=new scope.Path.Line(vertical ? [guide.value,b.top] : [b.left,guide.value],vertical ? [guide.value,b.bottom] : [b.right,guide.value]);
-      line.strokeColor='#006B5C';line.strokeWidth=1/scope.view.zoom;line.dashArray=[4/scope.view.zoom,3/scope.view.zoom];group.addChild(line);
-      const label=new scope.PointText({point:vertical ? [guide.value+5/scope.view.zoom,gesture.end.y] : [gesture.end.x,guide.value-5/scope.view.zoom],content:guide.label,fontSize:11/scope.view.zoom,fillColor:'#006B5C'});group.addChild(label);
+      line.strokeColor=color;line.strokeWidth=1/z;line.dashArray=[4/z,3/z];group.addChild(line);
+    }
+    if(smartEnabled()&&prefs.smartGuideMeasurements&&gesture?.tool==='select'&&gesture.box&&!gesture.handle) {
+      group.addChild(new scope.PointText({point:[gesture.end.x+14/z,gesture.end.y-14/z],content:`ΔX ${matrix[4].toFixed(2)} mm · ΔY ${matrix[5].toFixed(2)} mm`,fontSize:11/z,fillColor:color,data:{smartMeasurement:true}}));
     }
     return group;
   }
@@ -165,6 +199,7 @@ export function createInteractions(canvas, state, api) {
         : tool==='gradient' ? gradientCursor(api.gradientHit([p.x,p.y])) : api.cursor();
       if(tool==='width')withScope(()=>{clearPreview();preview=widthMarkers(api.widthHandles([p.x,p.y]));scope.view.update();});
       if(tool==='touch-type')withScope(()=>{clearPreview();const t=state.ui.touchType;preview=touchMarkers(t&&api.touchGlyph(t.id,t.index)?.corners);scope.view.update();});
+      if(tool==='select')withScope(()=>{highlightObjects([renderer.hit(p)]);scope.view.update();});
       return;
       return;
     }
@@ -298,11 +333,16 @@ export function createInteractions(canvas, state, api) {
           // Snap to Point and Snap to Grid come before Smart Guides; with the grid on, the grid decides, as in Illustrator.
           const snap=gesture.tool==='select'&&snapping(gesture.targets),moved=snap&&snapMove(gesture.box,gesture.start,[delta.x,delta.y],snap);
           if (moved && (moved.x!==delta.x||moved.y!==delta.y)) snapped=moved;
-          else if (state.document.data.settings.smartGuides && gesture.tool==='select') snapped=snapTranslation(gesture.box,[delta.x,delta.y],gesture.targets,4/scope.view.zoom);
+          else if (smartEnabled() && gesture.tool==='select'&&!snap?.grid) {
+            const prefs=smartPreferences();
+            snapped=snapTranslation(gesture.box,[delta.x,delta.y],gesture.targets,prefs.smartGuideTolerance/scope.view.zoom,
+              {alignment:prefs.smartGuideAlignment,spacing:prefs.smartGuideSpacing,boxes:gesture.targets.filter(t=>t.box).map(t=>t.box)});
+          }
           if(event.shiftKey){const axis=Math.abs(delta.x)>Math.abs(delta.y)?'y':'x';snapped[axis]=0;snapped.guides=snapped.guides.filter(g=>g.axis!==axis);}
           guides=snapped.guides;gesture.matrix=[1,0,0,1,snapped.x,snapped.y];
         }
         preview=boxPreview(gesture.box,gesture.matrix,guides);
+        if(gesture.tool==='select')highlightObjects(guides.map(g=>g.targetId));
         if(gesture.tool==='select'&&gesture.handle&&gesture.handle!=='rotate')renderer.previewTransform(api.selectedIds(),gesture.matrix);
       }
       scope.view.update();
@@ -475,6 +515,8 @@ export function createInteractions(canvas, state, api) {
     }
   },events);
   canvas.addEventListener('pointermove',update,events);
+  canvas.addEventListener('pointerleave',()=>{if(!gesture)withScope(()=>{clearHighlight();scope.view.update();});},events);
+  window.addEventListener('modcut-preferences-change',()=>withScope(()=>{clearHighlight();scope.view.update();}),events);
   canvas.addEventListener('pointerup',event=>{
     if (!gesture) return;
     if(gesture.mode==='polygonal-lasso')return;

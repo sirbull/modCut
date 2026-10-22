@@ -77,7 +77,7 @@ const commands=new Set(['undo','redo','delete','select-all','select-artboard','d
   'paint-focus','paint-swap','paint-none','paint-solid','paint-gradient','default-paint','smart-guides','guides','guides-lock','snap-point','snap-grid','transparency-grid','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','shear-dialog','toggle-panels','toggle-panels-except-tools','command-search','draw-mode','draw-normal','draw-behind','draw-inside','reselect','select-inverse','select-next-above','select-next-below','save-selection','edit-selection',
   ...Object.keys(SAME_MODES).map(m=>`select-same-${m}`),...Object.keys(OBJECT_KINDS).map(k=>`select-object-${k}`),'select-object-direction-handles',
   ...PANEL_DEFINITIONS.map(p=>`panel.${p.id}`),...BUILTIN_WORKSPACES.map(ws=>`workspace-preset.${ws.id}`),'workspace-save','workspace-load',...['left','right','up','down'].flatMap(d=>[`nudge-${d}`,`nudge-large-${d}`,`duplicate-${d}`])]);
-export function createDrawWorkspace(root,{paper=window.paper,state=createProjectDraw(),onError=console.warn,onNotice=()=>{},onImport=()=>{},onSendToCut=null,cutIsEmpty=()=>false,cutClipboard=()=>null,onExport=null,getPreferences=()=>({}),setPreferences=()=>{},getLaserProcesses=()=>null,setLaserProcesses=()=>false,statusHost=null}={}) {
+export function createDrawWorkspace(root,{paper=window.paper,state=createProjectDraw(),onError=console.warn,onNotice=()=>{},onImport=()=>{},onSendToCut=null,cutIsEmpty=()=>false,cutClipboard=()=>null,onExport=null,getPreferences=()=>({}),setPreferences=()=>{},onPreferences=()=>{},getLaserProcesses=()=>null,setLaserProcesses=()=>false,statusHost=null}={}) {
   state.ui={tool:'select',flyout:null,layerId:state.document.data.layers[0]?.id,fill:'#FFFFFF',stroke:'#071411',strokeWidth:.5,paintFocus:'fill',...state.ui};
   state.ui.artboardId=activeArtboard(state).id;
   state.ui.laserPreview??=!!getPreferences().laserPreviewEnabled;
@@ -1154,7 +1154,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     return ()=>finish();
   }
   artboards=createArtboardController(state,{refresh,fit,bounds:id=>renderer.bounds(id),localMatrix:(id,m)=>renderer.localMatrix(id,m)});
-  panels=createPanels(shell,state,{run,select,selectedIds,paintIds,pickArtwork,paint,editPaint,bounds:()=>renderer.selectionBounds(),fit,artboards,setTool,navigatorImage,navigatorView,navigateTo,
+  panels=createPanels(shell,state,{openPreferences:onPreferences,run,select,selectedIds,paintIds,pickArtwork,paint,editPaint,bounds:()=>renderer.selectionBounds(),fit,artboards,setTool,navigatorImage,navigatorView,navigateTo,
     // Glyphs panel: into the open text editor at the cursor; else open the editor for the selected text first.
     async insertGlyph(ch){
       if(!activeText){const id=selectedIds().find(i=>state.document.getNode(i)?.type==='text');if(!id)throw new Error('Select a text object, or start typing with the Type tool, to insert a glyph.');await editText(undefined,id);}

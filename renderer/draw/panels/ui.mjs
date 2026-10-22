@@ -864,6 +864,7 @@ export function createPanels(shell, state, api) {
       }
       box.append(label,group);
     }
+    quickActions(host,[['Smart Guides Preferences…',() => api.openPreferences('Smart Guides'),'smart-guides-preferences']]);
   }
   function documentProperties(host) {
     const doc = state.document.data, board = api.artboards.active();

@@ -240,6 +240,18 @@
 .form-section { font-size: var(--fs-sm); color: var(--text); margin: 24px 0 16px; padding-top: 16px; border-top: 1px solid var(--border); }
 .form-section:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
 .preferences-modal .field { margin-bottom: var(--sp-4); }
+.smart-guide-settings__controls { display: grid; grid-template-columns: 1fr 2fr; gap: 24px; }
+.smart-guide-settings__controls input[type=color] { width: 64px; height: 32px; padding: 2px; }
+.smart-guide-settings__controls input[type=range] { width: 100%; accent-color: var(--brand-fill); }
+.smart-guide-settings__controls output { color: var(--text-muted); font-size: var(--fs-sm); }
+.smart-guide-settings__cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.smart-guide-settings__card { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
+.smart-guide-settings__card small { grid-column: 1 / -1; color: var(--text-muted); }
+.smart-guide-example { grid-column: 1 / -1; color: var(--smart-guide-color); background: #fff; border-radius: 4px; }
+.smart-guide-example svg { display: block; width: 100%; height: 48px; }
+.smart-guide-example__objects { stroke: #777; fill: #eee; }
+.smart-guide-example text { fill: currentColor; stroke: none; font-size: 7px; text-anchor: middle; }
+.smart-guide-settings__card:has(input:not(:checked)) .smart-guide-example { opacity: .4; }
 fieldset.field { min-width: 0; padding: 0; border: 0; margin-inline: 0; }
 .field > legend { padding: 0; margin-bottom: 8px; font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); }
 .field__description { display: block; margin-top: 6px; color: var(--text-muted); font-size: var(--fs-xs); line-height: 1.45; }

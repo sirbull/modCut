@@ -25,6 +25,7 @@ import { defaultMotionTiming, motionTimingForMachine } from "./motion-timing.mjs
 import { EPILOG_NATIVE_MAX_RASTER_SAMPLES, MAX_RASTER_SAMPLES } from "./output-quality.mjs";
 import { openModal, showMessageModal } from "./ui.js";
 import { loadPreferences, normalizePreferences, PREFERENCES_KEY } from "./preferences.mjs";
+import { smartGuidesSettings } from "./ui/smart-guides-settings.mjs";
 import { LANGUAGES, localizeTree, resolveLanguage, translator, watchLocalization } from "./i18n.mjs";
 import { DOCUMENT_FORMATS, IMAGE_FORMATS, PDF_FORMATS, TEXT_FORMATS, TIFF_FORMATS } from "../electron/import-formats.mjs";
 
@@ -373,7 +374,7 @@ function setWorkspace(mode) {
     tab.drawRoot.className = "draw-project";
     tab.drawRoot.dataset.tabId = tab.id;
     $("drawWorkspace").append(tab.drawRoot);
-    tab.draw = createDrawWorkspace(tab.drawRoot, { state: drawState, onError: message => toast(message,"err"), onNotice: message => toast(message,"info"), onImport: () => importDrawFiles(), onSendToCut: sendDrawToCut, cutIsEmpty: () => !bed.getDesign(), cutClipboard: () => bed.clipboardTime() ? bed.clipboardSVG() : null, onExport: drawExportBridge, getPreferences:()=>preferences,setPreferences:updatePreferences,getLaserProcesses:()=>{const source=tab===activeTab()?state:tab.session;return source?{mappingMode:source.mappingMode,layers:source.layers}:null;},setLaserProcesses:values=>{if(tab!==activeTab())return false;configureLaserProcesses(values);return true;}, statusHost: $("drawStatus") });
+    tab.draw = createDrawWorkspace(tab.drawRoot, { state: drawState, onError: message => toast(message,"err"), onNotice: message => toast(message,"info"), onImport: () => importDrawFiles(), onSendToCut: sendDrawToCut, cutIsEmpty: () => !bed.getDesign(), cutClipboard: () => bed.clipboardTime() ? bed.clipboardSVG() : null, onExport: drawExportBridge, getPreferences:()=>preferences,setPreferences:updatePreferences,onPreferences:openSettings,getLaserProcesses:()=>{const source=tab===activeTab()?state:tab.session;return source?{mappingMode:source.mappingMode,layers:source.layers}:null;},setLaserProcesses:values=>{if(tab!==activeTab())return false;configureLaserProcesses(values);return true;}, statusHost: $("drawStatus") });
   }
   drawKeymap.reset();
   tab.workspace = mode;
@@ -2323,6 +2324,9 @@ async function openSettings(section = null) {
       { key: "processPreviewScore", label: "Score lines", type: "color", value: preferences.processPreviewScore, description: "Colour of paths scored on the surface. Applies immediately.", onChange: (value) => updatePreferences({ processPreviewScore: value }) },
       { key: "processPreviewScoreDashed", label: "Dashed score lines", type: "checkbox", value: preferences.processPreviewScoreDashed, description: "Draw score lines dashed, so they stand apart from cut lines even in similar colours.", onChange: (value) => updatePreferences({ processPreviewScoreDashed: value }) },
       { key: "processPreviewEngrave", label: "Engraved areas", type: "color", value: preferences.processPreviewEngrave, description: "Colour of engraved fills and strokes. Engraved images are shown in grayscale. Applies immediately.", onChange: (value) => updatePreferences({ processPreviewEngrave: value }) },
+      { key: "smartGuides", section: "Smart Guides", type: "custom",
+        sectionDescription: "Visual help for selecting and moving in Draw. Changes apply and save immediately.",
+        render: host => smartGuidesSettings(host, preferences, updatePreferences) },
       { key: "invertZoom", section: "Navigation & help", sectionDescription: "Zooming, tooltips and explanations.", label: "Reverse zoom direction", type: "checkbox", value: preferences.invertZoom, description: "Reverse Cmd/Ctrl + scroll and trackpad pinch zoom in Cut. Panning stays the same. Applies immediately.", onChange: (value) => updatePreferences({ invertZoom: value }) },
       { key: "tooltips", label: "Show tooltips", type: "checkbox", value: preferences.tooltips, description: "Show explanations when hovering over or focusing toolbar buttons. Applies immediately.", onChange: (value) => updatePreferences({ tooltips: value }) },
       { key: "hideLaserPreviewIntro", label: "Skip Laser Preview explanation", type: "checkbox", value: preferences.hideLaserPreviewIntro, description: "Turn this off to show the explanation on the next activation. You can also open it from Help.", onChange: value => updatePreferences({ hideLaserPreviewIntro: value }) },

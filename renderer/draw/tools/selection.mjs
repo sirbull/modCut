@@ -27,16 +27,45 @@ export function transformedBox(box, matrix) {
   const xs=points.map(p=>p[0]),ys=points.map(p=>p[1]);
   return {x:Math.min(...xs),y:Math.min(...ys),width:Math.max(...xs)-Math.min(...xs),height:Math.max(...ys)-Math.min(...ys)};
 }
-export function snapTranslation(box, delta, targets, tolerance) {
+export function snapTranslation(box, delta, targets, tolerance, {alignment=true,spacing=false,boxes=[]}={}) {
   const xs=[box.x,box.x+box.width/2,box.x+box.width], ys=[box.y,box.y+box.height/2,box.y+box.height];
   const result={x:delta[0],y:delta[1],guides:[]};
   for (const [axis,values,index] of [['x',xs,0],['y',ys,1]]) {
     let distance=tolerance, best=null;
-    for (const target of targets) for (const value of values) {
+    for (const target of alignment?targets:[]) for (const value of values) {
       const offset=target[axis]-(value+delta[index]);
       if (Number.isFinite(offset) && Math.abs(offset)<distance) {distance=Math.abs(offset);best={offset,target};}
     }
-    if (best) {result[axis]+=best.offset; result.guides.push({axis,value:best.target[axis],label:best.target.label || 'anchor'});}
+    let gaps=null;
+    if(spacing) {
+      const other=axis==='x'?'y':'x',size=axis==='x'?'width':'height',otherSize=axis==='x'?'height':'width';
+      const start=box[axis]+delta[index],end=start+box[size],cross=box[other]+delta[1-index];
+      // Only neighbours sharing a row/column participate. Consecutive pairs keep this O(n log n).
+      const neighbours=boxes.filter(b=>b[other]<cross+box[otherSize]&&b[other]+b[otherSize]>cross).toSorted((a,b)=>a[axis]-b[axis]);
+      const offer=(offset,ranges)=>{
+        if(Math.abs(offset)>=distance)return;
+        const proposed=start+offset;
+        // Repeating a farther pair's gap must not place the object over a nearer neighbour.
+        if(neighbours.some(b=>proposed<b[axis]+b[size]-1e-9&&proposed+box[size]>b[axis]+1e-9))return;
+        distance=Math.abs(offset);best={offset};gaps=ranges;
+      };
+      for(let i=1;i<neighbours.length;i++) {
+        const a=neighbours[i-1],b=neighbours[i],left=a[axis]+a[size],right=b[axis],gap=right-left;
+        if(gap<0)continue;
+        const line=Math.max(cross+box[otherSize],a[other]+a[otherSize],b[other]+b[otherSize]);
+        if(left<=start+tolerance&&right>=end-tolerance&&gap>=box[size]) {
+          const value=left+(gap-box[size])/2;
+          offer(value-start,[[left,value,line],[value+box[size],right,line]]);
+        }
+        if(end<=a[axis]+tolerance)offer(a[axis]-gap-end,[[a[axis]-gap,a[axis],line],[left,right,line]]);
+        if(start>=b[axis]+b[size]-tolerance)offer(b[axis]+b[size]+gap-start,[[left,right,line],[b[axis]+b[size],b[axis]+b[size]+gap,line]]);
+      }
+    }
+    if (best) {
+      result[axis]+=best.offset;
+      if(gaps)result.guides.push(...gaps.map(([from,to,cross])=>({axis,kind:'spacing',from,to,cross,distance:to-from})));
+      else result.guides.push({axis,value:best.target[axis],label:best.target.label || 'anchor',targetId:best.target.id});
+    }
   }
   return result;
 }

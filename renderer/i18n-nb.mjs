@@ -1,6 +1,15 @@
 // Norwegian bokmål. Keys are the English interface text exactly as written in the code; {name} marks a
 // value that is carried over. Product and workspace names (modCut, Cut, Draw) stay as they are.
 export const NB = Object.freeze({
+  "Smart Guides Preferences…": "Innstillinger for smarte hjelpelinjer…",
+  "Guide colour": "Farge på hjelpelinjene", "Snapping Tolerance": "Festetoleranse",
+  "Alignment Guides": "Justeringslinjer", "Object Highlighting": "Objektmarkering",
+  "Measurement Labels": "Målemerker", "Spacing Guides": "Avstandslinjer",
+  "Visual help for selecting and moving in Draw. Changes apply and save immediately.": "Visuell hjelp når du velger og flytter i Draw. Endringer brukes og lagres med en gang.",
+  "Snap edges and centres into line while moving objects.": "Fest kanter og midtpunkter på linje mens du flytter objekter.",
+  "Outline the object under the pointer before selecting it.": "Vis omrisset av objektet under pekeren før du velger det.",
+  "Show movement and equal-gap distances while dragging.": "Vis forflytning og like avstander mens du drar.",
+  "Snap to equal gaps between nearby objects.": "Fest til like avstander mellom objekter i nærheten.",
   "Workspaces": "Arbeidsområder", "Save Current Workspace…": "Lagre gjeldende arbeidsområde…", "Load Workspace…": "Last inn arbeidsområde…",
   "No saved workspaces yet. Save or load a workspace first.": "Ingen lagrede arbeidsområder ennå. Lagre eller last inn et arbeidsområde først.",
   "Laser Cutting": "Laserskjæring", "Drawing": "Tegning", "Typography": "Typografi", "Image Tracing": "Bildesporing",

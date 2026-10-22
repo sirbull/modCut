@@ -8,10 +8,11 @@ del 3 (annotator på lerretet) og del 4 (Freeform) er ferdige, se STATUS.md 2.40
 ellipse-aspekt for Radial, stiplet Along/Across. Del 4 omfatter: punkter med farge, opasitet
 per punkt og Spread-ring som dras, og «Lines»-modus der punkter bindes sammen av glatte linjer.
 
-**Pågår 2026-10-22: Innstillinger med seksjoner og Properties uten utvalg, i tre deler (STATUS.md 2.42).**
-Del 1 (Innstillinger-vinduet med sider til venstre, hurtigtaster og alt-i-ett eksport/import) og del 2
-(Ruler & Grids, Guides og Snap Options i Properties, med snapping og gjennomsiktighetsrutenett) er ferdige.
-Neste er del 3: Smart Guides-siden i Innstillinger og knappen «Smart Guides Preferences…» i Properties.
+**Ferdig 2026-10-22: Innstillinger med seksjoner og Properties uten utvalg, i tre deler (STATUS.md 2.42).**
+Alle tre deler er ferdige: Innstillinger med sider, hurtigtaster og alt-i-ett eksport/import;
+Properties med Ruler & Grids, Guides og Snap Options; og den visuelle Smart Guides-siden med direkteknapp.
+Smart Guides har app-preferanser for farge, justering, objektkontur, målemerker, lik avstand og toleranse.
+Alle virker live; `--draw-rulers` dekker bryterne, ekte drag og plassering etter slipp. Se STATUS.md 2.42.
 
 Oppdatert 2026-10-19. Arbeidsgren: `feat/vector-draw` (Claude og Codex jobber der; hent før du starter).
 

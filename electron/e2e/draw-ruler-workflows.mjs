@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { inputHelpers, wait } from './cdp.mjs';
 import { activeDraw as active, enterDraw, submitNewDrawDialog } from './draw-test-helpers.mjs';
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { DEFAULT_SMART_GUIDES } from '../../renderer/preferences.mjs';
 
 export async function runDrawRulerWorkflows(client) {
   const { evaluate } = client, { drag, click, mouse } = inputHelpers(client);
@@ -111,7 +115,82 @@ export async function runDrawRulerWorkflows(client) {
   }
   await action('rulers');
   await runDrawViewToggleWorkflows(client);
+  await runSmartGuideWorkflows(client);
   console.log('PASS Draw rulers: unit menus on both rulers, keyboard, adaptive zoom labels, pointer markers, guide creation/move/cancel/delete, rotated views and unchanged document/history');
+}
+
+/** Inspect real pointer gestures before release: settings must affect the live canvas. */
+async function runSmartGuideWorkflows(client) {
+  const {evaluate}=client,{drag,mouse}=inputHelpers(client);
+  const workspace=body=>evaluate(`(async()=>{const w=${active};${body}})()`);
+  const project=(x,y)=>workspace(`const b=w.scope.view.element.getBoundingClientRect(),p=w.scope.view.projectToView(new w.scope.Point(${x},${y}));return{x:b.x+p.x,y:b.y+p.y};`);
+  const root='.draw-project[style*=block]',saved=await evaluate("localStorage.getItem('modcut_preferences')");
+  const applied=()=>workspace('return w.state.history.entries.filter(e=>e.applied).length;'),history=await applied();
+  const snapshot=async name=>{const {data}=await client.command('Page.captureScreenshot',{format:'png'});await writeFile(join(tmpdir(),`modcut-smart-guides-${name}.png`),Buffer.from(data,'base64'));};
+  const open=async()=>{
+    await workspace("w.handle('deselect');");
+    for(let i=0;i<30;i++){if(await evaluate(`!!document.querySelector('${root} [data-draw-quick=smart-guides-preferences]')`))break;await wait(40);}
+    await evaluate(`document.querySelector('${root} [data-draw-quick=smart-guides-preferences]').click()`);
+    for(let i=0;i<50;i++){if(await evaluate("!!document.querySelector('.preferences-modal [name=smartGuideColor]')"))break;await wait(40);}
+    assert.equal(await evaluate("document.querySelector('.preferences-modal .form-nav [aria-current=page]')?.textContent"),'Smart Guides');
+  };
+  const configure=async changes=>{
+    await open();
+    await evaluate(`(()=>{for(const [key,value] of Object.entries(${JSON.stringify(changes)})){const el=document.querySelector('.preferences-modal [name='+key+']');if(el.type==='checkbox'){if(el.checked!==value)el.click();}else{el.value=value;el.dispatchEvent(new Event('input',{bubbles:true}));}}})()`);
+    await evaluate("document.querySelector('.preferences-modal [data-x=cancel]').click()");
+  };
+  await configure({smartGuideColor:'#c026d3',smartGuideTolerance:12,smartGuideAlignment:true,smartGuideHighlight:true,smartGuideMeasurements:true,smartGuideSpacing:true});
+  await open();
+  assert.equal(await evaluate("document.querySelectorAll('.smart-guide-settings [role=switch]').length"),4);
+  assert.equal(await evaluate("document.querySelector('[name=smartGuideColor]').value"),'#c026d3');
+  assert.equal(await evaluate("document.querySelector('[name=smartGuideTolerance]').value"),'12');
+  await snapshot('preferences');await evaluate("document.querySelector('.preferences-modal [data-x=cancel]').click()");
+  await open();
+  await evaluate("(()=>{const lang=document.querySelector('[name=language]');lang.value='nb';lang.dispatchEvent(new Event('change',{bubbles:true}));})()");await wait(80);
+  assert.equal(await evaluate("document.querySelector('.preferences-modal .form-nav [aria-current=page]').textContent"),'Smarte hjelpelinjer');
+  assert.match(await evaluate("document.querySelector('.smart-guide-settings').textContent"),/Objektmarkering/);
+  await snapshot('preferences-nb');
+  await evaluate("(()=>{const lang=document.querySelector('[name=language]');lang.value='en';lang.dispatchEvent(new Event('change',{bubbles:true}));document.querySelector('.preferences-modal [data-x=cancel]').click();})()");
+  await workspace("if(w.state.document.data.settings.snapping.point)w.handle('snap-point');if(w.state.document.data.settings.snapping.grid)w.handle('snap-grid');if(!w.state.document.data.settings.smartGuides)w.handle('smart-guides');w.setTool('rectangle');");
+  for(const [x,y] of [[20,20],[100,20],[65,50]])await drag(await project(x,y),await project(x+20,y+20));
+  await workspace("w.setTool('select');w.handle('deselect');");
+  const documentBefore=await workspace('return JSON.stringify(w.state.document.toJSON());');
+  await mouse('mouseMoved',await project(25,25));
+  assert.ok(await workspace("return w.scope.project.getItem({name:'Smart guide highlights'})?.children.some(c=>c.strokeColor?.toCSS(true)==='#c026d3');"),'hover outline uses the chosen colour');
+  await snapshot('highlight');
+  const zoom=await workspace('return w.scope.view.zoom;'),off=6/zoom;
+  const begin=async(x,y)=>{await mouse('mouseMoved',await project(75,60));await mouse('mousePressed',await project(75,60),{buttons:1});await mouse('mouseMoved',await project(x,y),{buttons:1});};
+  const live=()=>workspace(`const g=w.scope.project.getItem({name:'Smart guide preview'});return {box:g?.firstChild.bounds.toJSON(),x:g?.firstChild.bounds.x,y:g?.firstChild.bounds.y,spacing:g?.children.filter(c=>c.data.smartSpacing).length,measurements:g?.children.filter(c=>c.data.smartMeasurement).map(c=>c.content),dashes:g?.children.filter(c=>c.dashArray?.length).length,color:g?.firstChild.strokeColor.toCSS(true)};`);
+  const cancel=async()=>{await client.command('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape'});await client.command('Input.dispatchKeyEvent',{type:'keyUp',key:'Escape',code:'Escape'});await mouse('mouseReleased',await project(70,30));};
+  await begin(70+off,30+off);let view=await live();
+  assert.ok(Math.abs(view.x-60)<.01&&Math.abs(view.y-20)<.01,JSON.stringify(view));
+  assert.equal(view.spacing,2);assert.ok(view.measurements.length>=3);assert.equal(view.color,'#c026d3');
+  await snapshot('drag');
+  assert.equal(await workspace('return JSON.stringify(w.state.document.toJSON());'),documentBefore,'live overlays do not edit the model');
+  // A second move in the same gesture refreshes the live measurement.
+  await mouse('mouseMoved',await project(70+off/2,30+off/2),{buttons:1});assert.equal((await live()).spacing,2);await cancel();
+  await configure({smartGuideHighlight:false,smartGuideMeasurements:false,smartGuideSpacing:false});
+  await mouse('mouseMoved',await project(25,25));
+  assert.ok(!await workspace("return w.scope.project.getItem({name:'Smart guide highlights'})?.children.length;"));
+  await begin(70+off,30+off);view=await live();
+  assert.ok(Math.abs(view.x-(60+off))<.01&&Math.abs(view.y-20)<.01,JSON.stringify(view));
+  assert.equal(view.spacing,0);assert.equal(view.measurements.length,0);assert.ok(view.dashes>0);await cancel();
+  await configure({smartGuideAlignment:false});
+  await begin(70+off,30+off);view=await live();assert.ok(Math.abs(view.y-(20+off))<.01,JSON.stringify(view));assert.equal(view.dashes,0);await cancel();
+  await configure({smartGuideAlignment:true,smartGuideTolerance:2});
+  await begin(70+off,30+off);view=await live();assert.ok(Math.abs(view.y-(20+off))<.01,JSON.stringify(view));await cancel();
+  await configure({smartGuideTolerance:12,smartGuideSpacing:true,smartGuideMeasurements:true,smartGuideHighlight:true});
+  await begin(70+off,30+off);await mouse('mouseReleased',await project(70+off,30+off));
+  const placed=await workspace('const b=w.renderer.selectionBounds();return {x:b.x,y:b.y};');
+  assert.ok(Math.abs(placed.x-60)<.01&&Math.abs(placed.y-20)<.01,JSON.stringify(placed));
+  await workspace("w.handle('undo');");
+  // The document master switch disables all Smart Guide feedback, even with preferences on.
+  await workspace("w.handle('smart-guides');");
+  await begin(70+off,30+off);view=await live();assert.equal(view.spacing,0);assert.equal(view.measurements.length,0);assert.equal(view.dashes,0);await cancel();
+  // Restore app preferences through the page, and undo the fixture's document edits.
+  const original={...DEFAULT_SMART_GUIDES,...JSON.parse(saved)};await configure(Object.fromEntries(Object.keys(DEFAULT_SMART_GUIDES).map(k=>[k,original[k]])));
+  while(await applied()>history)await workspace("w.handle('undo');");
+  console.log('PASS Smart Guides: direct Preferences navigation, persisted switches/colour/tolerance, hover outlines, live alignment/equal spacing/measurements, independent switches and master toggle');
 }
 
 /** Properties with nothing selected: Ruler & Grids, Guides and Snap Options toggles, and what each one does. */

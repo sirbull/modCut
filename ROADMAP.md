@@ -46,6 +46,10 @@ the same commit that completes an item.
 
 ## P3: Draw workspace (vector editor)
 
+- [x] Visual Smart Guides preferences with a direct Properties button: colour, alignment,
+  hover outlines, movement/gap measurements, equal spacing and screen-pixel tolerance.
+  All apply live and persist as app preferences; real mouse-drag E2E covers each switch
+  and placement after release. Completes settings/Properties step 3 (STATUS.md 2.42).
 - [x] D5.1 Laser Preview first version: shared process lookup, red Cut/dashed Score,
   engraving, controls, explicit process setup, remembered introduction and Electron checks.
   Advanced unresolved appearances and Engrave as seen remain separate follow-ups.

@@ -1108,9 +1108,15 @@ Smart Guides-dialog er for mye og for lite visuell; vi tar bare med det som virk
    Grid overstyrer Smart Guides som i Illustrator. Formverktøyene fester start og slutt. Det man fester
    til vises som stiplede linjer mens man drar. Snap to Point er på i nye dokumenter (som i Illustrator).
    Ikke tatt med: Snap to Pixel (lite nytte i mm for laser), og snapping med Pen og Direct Selection.
-   Knappen «Smart Guides Preferences…» kommer i del 3, sammen med siden den åpner.
-3. **Smart Guides i Innstillinger (neste):** et lite utvalg med visuelle brytere: farge på guidene,
-   Alignment Guides, Object Highlighting, Measurement Labels, Spacing Guides og Snapping Tolerance.
+   Knappen «Smart Guides Preferences…» åpner nå siden direkte i Innstillinger (del 3).
+3. **Smart Guides i Innstillinger (ferdig):** fargevelger, toleranseglider (1–20 skjermpiksler) og fire
+   illustrerte brytere: Alignment Guides, Object Highlighting, Measurement Labels og Spacing Guides.
+   App-preferanser i `preferences.mjs`, med umiddelbar lagring og eksisterende eksport/import.
+   Alignment styrer kant-/midt-/ankersnapping under flytting; Highlight viser objektets kontur under
+   pekeren og ved justeringssnapping. Measurement viser ΔX/ΔY og avstanden i like mellomrom live.
+   Spacing fester til midten mellom naboer eller gjentar avstanden utenfor et nabopar, i begge akser.
+   Bare naboer som deler rad/kolonne brukes; Snap to Point/Grid beholder prioritet. Dokumentets
+   Smart Guides-bryter slår av disse funksjonene samlet. Fargen brukes også på eksisterende snapmerker.
    Transform Tools, Construction Guides (vinkler), Snap to Glyph og Limit Snapping tas ikke med.
 
 Tester: `--theme` sjekker sidene, at bare én side vises, hurtigtastlisten, Export/Import-knappene og at
@@ -1122,6 +1128,10 @@ Del 2: `snapping.test.mjs` og `--draw-rulers` (`runDrawViewToggleWorkflows`: rad
 linjaler, gjennomsiktighetsrutenett under tegningen, skjult og låst hjelpelinje som ikke flyttes, rektangel
 og flytting festet til rutenett med ekte musedrag, rektangel festet til hjørne og hjelpelinje med stiplede
 linjer midt i draget, tilbake til utgangspunktet). Skjermbilder av radene og midt i draget er kontrollert.
+Del 3: `smart-guides.test.mjs` dekker validering/lagring, toleranse, justering og lik avstand i begge
+akser. `--draw-rulers` åpner siden via Properties, bruker ekte musedrag og kontrollerer farge,
+objektkontur, lik avstand, målemerker, uavhengige brytere og hovedbryteren midt i gesten, samt plassering
+etter slipp. Skjermbilder av siden, objektmarkering og drag er kontrollert visuelt. Draw og i18n er grønne.
 
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 

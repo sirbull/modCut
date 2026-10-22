@@ -2415,3 +2415,29 @@ parses i a5daf7b til og med 7349683. Årsaken var at bare egne hunker ble lagt i
 `git diff -U0` og `git apply --unidiff-zero`: uten kontekst havner linjene på feil sted når andre har
 uncommittede endringer lenger opp. Rettet her. Når flere agenter deler arbeidskopien: legg filen i
 indeksen som HEAD pluss egne endringer ved et innholdsanker, og kjør `node --check` på `git show :fil`.
+
+## 2026-10-22: Innstillinger med seksjoner, del 3 av 3 (Smart Guides)
+
+Smart Guides-side med fargevelger, toleranseglider (1?20 skjermpiksler) og fire illustrerte brytere:
+Alignment Guides, Object Highlighting, Measurement Labels og Spacing Guides. Properties uten utvalg
+har ?Smart Guides Preferences??, som ?pner siden direkte via openSettings(section). Norske tekster
+er med. Alle valg lagres umiddelbart som app-preferanser og f?lger eksisterende eksport/import.
+
+Alignment styrer justeringssnapping under flytting. Objektets kontur vises under pekeren og ved
+justeringssnapping. M?lemerker viser ?X/?Y og like avstander. Spacing fester mellom to naboer eller
+gjentar mellomrommet utenfor et nabopar i begge akser, begrenset til samme rad/kolonne. Toleransen
+er skjermpiksler ved all zoom. Gjentatt avstand kan ikke feste opp? en annen nabo.
+Snap to Point/Grid har prioritet; Smart Guides-hovedbryteren sl?r av
+alle de nye hjelpefunksjonene. Visningsobjektene endrer ikke dokumentmodellen.
+
+441 Draw-tester i den delte arbeidskopien og 440 i en isolert kopi fra egen indeks passerer.
+i18n, kontrast og --draw-rulers passerer. E2E er ogs? kj?rt fra den isolerte kopien, med ekte
+musedrag: direkte navigasjon, vedvarende verdier, norsk side, farge, hover-kontur, lik avstand,
+m?lemerker, uavhengige brytere, toleranse, hovedbryter og plassering etter slipp. Skjermbilder av
+siden p? begge spr?k og midt i gesten er kontrollert. En testutvidelse brukte f?rst samme globale
+const-navn to ganger i CDP; rettet til lokal funksjon. Full npm test er ikke kj?rt. Kjente
+--draw-pathfinder/--draw-transforms-feil med .draw-flyout er utenfor dette arbeidet.
+
+Andre agenter endret blant annet Cut-verkt?ylinjen og markeringsvisningen i samme arbeidskopi.
+Bare Smart Guides-endringene er tatt med; delte filer er bygget fra HEAD med innholdsankre i egen
+indeks, og JavaScript-innholdet i indeksen er syntakskontrollert f?r commit.
