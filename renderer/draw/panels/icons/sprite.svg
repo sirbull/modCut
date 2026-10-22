@@ -891,6 +891,9 @@
   <path d="M12 5l0 14" />
   <path d="M5 12l14 0" />
 </symbol>
+<symbol id="icon-recolor-brightness" viewBox="0 0 24 24" fill="none" stroke="currentColor"><g stroke="none" fill="currentColor"><circle cx="12" cy="12" r="8" fill-opacity=".3"/><circle cx="12" cy="12" r="5.4" fill-opacity=".55"/><circle cx="12" cy="12" r="2.6"/></g><circle cx="12" cy="12" r="8" stroke-width="1.5"/></symbol>
+<symbol id="icon-recolor-saturation" viewBox="0 0 24 24" fill="none" stroke="currentColor"><g stroke="none" fill="currentColor"><circle cx="12" cy="12" r="8" fill-opacity=".15"/><circle cx="12" cy="12" r="2.6"/></g><circle cx="12" cy="12" r="8" stroke-width="1.5"/></symbol>
+<symbol id="icon-recolor" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 12l3 -5.5"/><path d="M12 12l-4.5 2"/><circle cx="15.5" cy="6" r="1.5" fill="currentColor"/><circle cx="7" cy="14.5" r="1.2" fill="currentColor"/><circle cx="12" cy="12" r=".6" fill="currentColor"/></symbol>
 <symbol id="icon-search" width="24"
   height="24"
   viewBox="0 0 24 24"

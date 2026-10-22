@@ -777,3 +777,34 @@ body[data-workspace="draw"] #sendToCut { display: inline-flex; }
 .draw-font-options input, .draw-font-options select { min-width:0; width:100%; }
 .draw-font-options pre { max-height:160px; overflow:auto; white-space:pre-wrap; font-size:11px; }
 .draw-inline-text { tab-size:4; overflow-wrap:anywhere; }
+/* Recolor panel, as Illustrator's Recolor Artwork: library and reset, harmony rules, the wheel with handles, prominent colours and the slider. */
+.draw-recolor-top { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px; }
+.draw-recolor-top .btn { margin-bottom: 6px; }
+.draw-recolor-rule-name { margin: 4px 0 4px; font-size: var(--fs-xs); color: var(--text-muted); }
+.draw-recolor-rule-name strong { color: var(--text); }
+.draw-recolor-rules { display: grid; grid-template-columns: repeat(auto-fill, minmax(30px, 1fr)); gap: 3px; margin-bottom: 8px; }
+.draw-recolor-rule { display: grid; place-items: center; aspect-ratio: 1; padding: 2px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); cursor: pointer; }
+.draw-recolor-rule svg { width: 22px; height: 22px; }
+.draw-recolor-rule:hover:not(:disabled) { background: var(--surface-2); }
+.draw-recolor-rule[aria-pressed=true] { border-color: var(--text); box-shadow: inset 0 0 0 1px var(--text); }
+.draw-recolor-rule:focus-visible { outline: 2px solid var(--brand-mid); outline-offset: 1px; }
+.draw-recolor-wheel { position: relative; width: min(100%, 240px); aspect-ratio: 1; margin: 6px auto 10px; }
+.draw-recolor-wheel canvas, .draw-recolor-wheel svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.draw-recolor-wheel canvas { box-sizing: border-box; border: 4px solid #FFFFFF; border-radius: 50%; box-shadow: 0 0 0 1px var(--border); }
+.draw-recolor-wheel canvas.is-library { image-rendering: pixelated; }
+.draw-recolor-wheel svg { overflow: visible; touch-action: none; border-radius: 50%; }
+.draw-recolor-wheel svg:focus-visible { outline: 2px solid var(--brand-mid); outline-offset: 4px; }
+.draw-recolor-spoke { stroke: #1A1A1A; stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
+.draw-recolor-centre { fill: #FFFFFF; stroke: #1A1A1A; stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
+.draw-recolor-handle { cursor: grab; }
+.draw-recolor-handle circle { stroke: #FFFFFF; stroke-width: 2px; vector-effect: non-scaling-stroke; }
+.draw-recolor-handle .draw-recolor-ring { fill: #FFFFFF; stroke: #1A1A1A; stroke-width: 1.5px; }
+.draw-recolor-wheel:active .draw-recolor-handle { cursor: grabbing; }
+.draw-recolor-link { position: absolute; right: -4px; bottom: -4px; background: var(--surface); box-shadow: 0 0 0 1px var(--border); }
+.draw-recolor-prominent { display: flex; height: 40px; margin: 0 0 18px; border: 1px solid var(--border); }
+.draw-recolor-color { position: relative; flex: 1 1 0; min-width: 6px; padding: 0; border: 0; cursor: pointer; }
+.draw-recolor-color[aria-pressed=true]::after { content: ''; position: absolute; left: 50%; top: calc(100% + 3px); margin-left: -6px; border: 6px solid transparent; border-bottom-color: var(--text); border-top: 0; }
+.draw-recolor-color:focus-visible { outline: 2px solid var(--brand-mid); outline-offset: -2px; z-index: 1; }
+.draw-recolor-foot { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px; }
+.draw-recolor-foot .draw-gradient-types { margin: 0; }
+.draw-recolor-slider { width: 100%; accent-color: var(--text-muted); background: linear-gradient(var(--text-muted), var(--text-muted)) center / 1px 12px no-repeat; }

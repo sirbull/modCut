@@ -2339,3 +2339,11 @@ flere bevegelser. 421 Draw-tester og i18n passerer; `--draw-gradient` passerte f
 rettingen. Skjermbilde av annotatoren midt i et drag er kontrollert.
 En annen agent har samtidig uncommittede endringer (linjaler, keymap, recolor, guideReadout i
 index.mjs); de er ikke tatt med i denne commiten.
+
+## 2026-10-22: Recolor, del 2 av 3 (panelet)
+
+Window > Recolor med hjul, regler, biblioteker, Prominent Colors, modus og slider (STATUS.md 2.41).
+`--draw-recolor` passerer med ekte musedrag (Ctrl/Shift), 428 Draw-tester, i18n og `--workspace-layout`
+passerer. Skjermbilder kontrollert. Bare Recolor-hunkene i `panels/ui.mjs` er committet; den andre
+agentens Freeform-endringer i samme fil er latt ligge. Brukerønske underveis: Alt/Fill/Stroke-omfang og
+enkel kopiering av justeringen fra fyll til strek (del 3).

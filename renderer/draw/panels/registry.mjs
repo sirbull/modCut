@@ -4,7 +4,7 @@ export const PANEL_DEFINITIONS = Object.freeze([
   ['properties', 'Properties', 'adjustments'], ['layers', 'Layers', 'layers-intersect'],
   ['artboards', 'Artboards', 'artboard'], ['swatches', 'Swatches', 'color-swatch'], ['color', 'Color', 'palette'],
   ['character', 'Character', 'typography'], ['paragraph', 'Paragraph', 'align-left'], ['glyphs', 'Glyphs', 'letter-case-upper'],
-  ['stroke', 'Stroke', 'stroke-weight'], ['gradient', 'Gradient', 'gradient-preview'], ['transparency', 'Transparency', 'blend-mode'], ['appearance', 'Appearance', 'stack-2'], ['align', 'Align', 'align-center'], ['transform', 'Transform', 'arrows-move'], ['pathfinder', 'Pathfinder', 'layers-subtract'],
+  ['stroke', 'Stroke', 'stroke-weight'], ['gradient', 'Gradient', 'gradient-preview'], ['recolor', 'Recolor', 'recolor'], ['transparency', 'Transparency', 'blend-mode'], ['appearance', 'Appearance', 'stack-2'], ['align', 'Align', 'align-center'], ['transform', 'Transform', 'arrows-move'], ['pathfinder', 'Pathfinder', 'layers-subtract'],
   ['info', 'Info', 'info-circle'], ['history', 'History', 'history'], ['document-info', 'Document Info', 'file-info'], ['links', 'Links', 'link'],
   ['image-trace', 'Image Trace', 'photo-scan'], ['graphic-styles', 'Graphic Styles', 'brush'], ['navigator', 'Navigator', 'map-2'], ['asset-export', 'Asset Export', 'packages'],
 ].map(([id, name, icon]) => Object.freeze({ id, name, icon, ...(UNAVAILABLE[id] ? { unavailable: UNAVAILABLE[id] } : {}) })));
@@ -21,6 +21,7 @@ export const DOCK_PANELS = Object.freeze(['properties', 'layers']);
 export const PANEL_GROUPS = Object.freeze([
   ['swatches', 'color-swatch', ['swatches']],
   ['color', 'palette', ['color']],
+  ['recolor', 'recolor', ['recolor']],
   ['stroke', 'stroke-weight', ['stroke', 'gradient', 'transparency']],
   ['appearance', 'stack-2', ['appearance', 'graphic-styles']],
   ['transform', 'arrows-move', ['transform', 'align', 'pathfinder']],

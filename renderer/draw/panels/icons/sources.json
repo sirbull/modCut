@@ -479,6 +479,24 @@
       "author": "modCut",
       "path": "gradient-stroke-across.svg",
       "sha256": "87417c7a5b4ebd2da69efd8eb93b787a9450869a64efd61fe029af3ea5563c9c"
+    },
+    "recolor": {
+      "name": "recolor",
+      "author": "modCut",
+      "path": "recolor.svg",
+      "sha256": "519f1d8f235c2f55a6e268105bae3c5291151d21ed7ce7d34ea058112eb524b0"
+    },
+    "recolor-saturation": {
+      "name": "recolor-saturation",
+      "author": "modCut",
+      "path": "recolor-saturation.svg",
+      "sha256": "7beb9d64c5b28f88cc20191141fdd6e6d4a18c423d157d5b5b1b345099ff11e4"
+    },
+    "recolor-brightness": {
+      "name": "recolor-brightness",
+      "author": "modCut",
+      "path": "recolor-brightness.svg",
+      "sha256": "d005267d3f650326213dc2364ed9d9e35d3479d92463c6b2d5e77ea01cf16593"
     }
   }
 }

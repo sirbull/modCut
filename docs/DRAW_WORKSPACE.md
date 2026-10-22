@@ -1528,8 +1528,8 @@ Oversikt over hva som er gjort og gjenstår, inkludert delvis ferdige oppgaver: 
   * [ ] Del 4: Freeform-gradient med punkter (Spread-ring, opasitet per punkt) og linjer mellom punkter
 * [ ] Recolor (Recolor Artwork med fargehjul, harmoniregler og fargebiblioteker), STATUS.md 2.41
   * [x] Del 1: kjernen (farger, hjul, regler, biblioteker)
-  * [ ] Del 2: panelet under Window
-  * [ ] Del 3: E2E og finpuss
+  * [x] Del 2: panelet under Window, med E2E (`--draw-recolor`)
+  * [ ] Del 3: Fill/Stroke/Alt-omfang og kopiering av stilen mellom fyll og strek
 * [x] D2.4 Path-kommandoer (Smooth og Split Into Grid gjenstår, se [STATUS.md](draw/STATUS.md))
 * [x] D2.5 SVG eksport/import (mask og filter rasteriseres fortsatt, se [STATUS.md](draw/STATUS.md))
 * [ ] D2.6 PDF-eksport

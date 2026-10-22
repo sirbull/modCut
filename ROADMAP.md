@@ -155,7 +155,7 @@ the same commit that completes an item.
   Recent, Presets and a draggable stop slider, the stroke modes (within, along, across) and
   on-canvas editing with the Gradient tool are done; Freeform gradients (points and lines) follow.
   Recolor (a colour wheel that turns every colour of the selection together, with harmony
-  rules and colour libraries) is in progress: the core is done, the panel follows.
+  rules and colour libraries) is in Window > Recolor; fill/stroke scope follows.
 - [ ] Phase 3 — Advanced editing: stroke expansion, effects, Image Trace,
   additional editing tools and AI/DXF export.
 - [ ] Phase 4 — Full feature set: Width, Blend, brushes, additional export

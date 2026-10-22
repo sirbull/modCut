@@ -118,12 +118,11 @@ export function wheelColors(colors, settings) {
     return [wrap(angle), clamp(sat), clamp(bri)];
   });
 }
+/** Each colour with the slider applied: where its handle sits on the wheel. */
+export const adjustedColors = (colors, settings) => wheelColors(colors, settings).map(([a, s, b]) => [a, adjust(s, settings.adjust.saturation), adjust(b, settings.adjust.brightness)]);
 /** The finished colours, as the artwork gets them: `[hex, ...]` in the order of `colors`. */
 export function recolorHexes(colors, settings, library = null) {
-  return wheelColors(colors, settings).map(([a, s, b]) => {
-    const hex = wheelHex([a, adjust(s, settings.adjust.saturation), adjust(b, settings.adjust.brightness)]);
-    return library?.length ? nearestColor(hex, library) : hex;
-  });
+  return adjustedColors(colors, settings).map((wheel) => { const hex = wheelHex(wheel); return library?.length ? nearestColor(hex, library) : hex; });
 }
 export function recolorMap(colors, settings, library = null) {
   const out = recolorHexes(colors, settings, library);
@@ -159,15 +158,17 @@ export function dragSettings(start, colors, index, from, to, { radial = false, s
 }
 
 /** CIE Lab for nearest-colour matching (sRGB, D65). */
-export function hexLab(hex) {
-  const lin = hexRgb(hex).map((c) => c <= .04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4);
+export const hexLab = (hex) => rgbLab(hexRgb(hex));
+export function rgbLab(rgb) {
+  const lin = rgb.map((c) => c <= .04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4);
   const xyz = [[.4124, .3576, .1805], [.2126, .7152, .0722], [.0193, .1192, .9505]].map((row) => row.reduce((s, k, i) => s + k * lin[i], 0));
   const f = (t) => t > 216 / 24389 ? Math.cbrt(t) : (24389 / 27 * t + 16) / 116, [x, y, z] = [xyz[0] / .95047, xyz[1], xyz[2] / 1.08883].map(f);
   return [116 * y - 16, 500 * (x - y), 200 * (y - z)];
 }
-export function nearestColor(hex, library) {
-  const [l, a, b] = hexLab(hex);
-  let best = library[0], distance = Infinity;
-  for (const option of library) { const [l2, a2, b2] = hexLab(option), d = (l - l2) ** 2 + (a - a2) ** 2 + (b - b2) ** 2; if (d < distance) { distance = d; best = option; } }
+/** Index of the Lab colour in `labs` nearest to `lab`. */
+export function nearestIndex([l, a, b], labs) {
+  let best = 0, distance = Infinity;
+  labs.forEach(([l2, a2, b2], i) => { const d = (l - l2) ** 2 + (a - a2) ** 2 + (b - b2) ** 2; if (d < distance) { distance = d; best = i; } });
   return best;
 }
+export const nearestColor = (hex, library) => library[nearestIndex(hexLab(hex), library.map(hexLab))];

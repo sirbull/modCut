@@ -39,6 +39,7 @@ import { runDrawCharacterWorkflows } from './draw-character-workflows.mjs';
 import { runDrawCompoundWorkflows } from './draw-compound-workflows.mjs';
 import { runDrawPathCommandWorkflows } from './draw-path-commands-workflows.mjs';
 import { runDrawGradientWorkflows } from './draw-gradient-workflows.mjs';
+import { runDrawRecolorWorkflows } from './draw-recolor-workflows.mjs';
 import { runDrawToolsTwoWorkflows } from './draw-tools-two-workflows.mjs';
 import { runDrawHistoryInfoWorkflows } from './draw-history-info-workflows.mjs';
 import { runDrawModeWorkflows } from './draw-modes-workflows.mjs';
@@ -194,6 +195,9 @@ try {
   } else if (process.argv.includes('--draw-history')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawHistoryInfoWorkflows(first);first.socket.close();
+  } else if (process.argv.includes('--draw-recolor')) {
+    for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
+    await runDrawRecolorWorkflows(first);first.socket.close();
   } else if (process.argv.includes('--draw-gradient')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawGradientWorkflows(first);first.socket.close();

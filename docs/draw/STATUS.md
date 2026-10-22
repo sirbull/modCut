@@ -1011,7 +1011,7 @@ angresteg per drag, Recent og Presets, typeknapper, annotator med ekte musedrag 
 slett, ende- og startdrag, pekere, live over flere bevegelser), Within/Along/Across med pikselkontroll, PNG,
 SVG og Send to Cut).
 
-### 2.41 Recolor (Recolor Artwork med fargehjul), del 1 av 3: kjernen (2026-10-22)
+### 2.41 Recolor (Recolor Artwork med fargehjul) (2026-10-22)
 
 Brukerønske: et eget Recolor-panel under Window, festbart som de andre, som endrer alle fargene i
 utvalget samtidig på et fargehjul (som Illustrators Recolor Artwork), med harmoniregler som på
@@ -1027,11 +1027,23 @@ color.adobe.com, fargebiblioteker («templates»), og brightness/saturation-modu
    Biblioteker (`doc/recolor-libraries.mjs`, egne paletter, gruppert med undermenyer som Foods og
    Nature) snapper hver farge til nærmeste bibliotekfarge i Lab. Globale swatches kobles fra når
    fargen endres.
-2. **Panelet:** hjul med håndtak (dra: roter alt; Ctrl/Cmd: også inn/ut; Shift: én farge),
-   regelknapper, Prominent Colors med basefarge, Color Library-meny, modusknapper og slider, Reset.
-3. **E2E og finpuss.**
+2. **Panelet (ferdig):** Window > Recolor, festbart som de andre (egen gruppe i `panels/registry.mjs`,
+   `recolorPanel` i `panels/ui.mjs`). Color Library (None, Document Swatches, bibliotekene med
+   undergrupper) og Reset; regelknapper med tegnede ikoner; hjulet (canvas, cachet per modus/nivå/bibliotek;
+   med bibliotek vises nærmeste-farge-regioner) med SVG-håndtak og eiker, basefargen størst. Dra en farge:
+   alt roterer live; Ctrl/Cmd: også inn/ut (metning eller lysstyrke etter modus); Shift eller frakoblet
+   kjede: bare den fargen; klikk: gjør den til basefarge. Piltaster dreier og skalerer. Prominent Colors
+   viser de nye fargene etter bruk, klikk velger base. Nederst: saturation/brightness-modus og slider som
+   justerer den andre verdien for alle farger live (ett angresteg). Håndtakene viser fargen etter slider.
+   Hver gest er ett angresteg; angre eller annen redigering starter økten på nytt fra fargene slik de er.
+   Fallgruve: panelet rendres inne i vår egen `history.execute`; `recoloring`-flagget hindrer at økten
+   starter på nytt midt i en endring.
+3. **Fill/Stroke-omfang og kopiering mellom dem** (brukerønske underveis): neste del.
 
-Tester: `recolor.test.mjs`.
+Ikke laget ennå: Colors-antall (redusere til N farger) og Color Theme Picker.
+
+Tester: `recolor.test.mjs` og `--draw-recolor` (Window-meny, ekte musedrag med Ctrl og Shift, live under
+drag, svart uendret, regler, Skintones-bibliotek, slider, modus, Reset, angre; skjermbilder kontrollert).
 
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 

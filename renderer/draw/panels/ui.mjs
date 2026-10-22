@@ -1,13 +1,15 @@
 import { DOCK_PANELS, panelName, panelSpriteHref } from './registry.mjs';
 import { createPanelWindows } from './windows.mjs';
 import { strokePreview } from './stroke-icons.mjs';
-import { insertNode, updateDocument, updateNode } from '../doc/commands.mjs';
+import { insertNode, updateDocument, updateNode, updateNodes } from '../doc/commands.mjs';
 import { createId } from '../doc/schema.mjs';
 import { textDefaults, textValues } from '../doc/text.mjs';
 import { GRADIENT_PRESETS, addStop, applyGradientPreset, colorHex, defaultGradient, gradientCss, gradientKey, gradientPreviewCss, isGradient, moveStop, removeStop, reverseGradient, setStrokeMode, setGradientAngle, setGradientType, updateStop } from '../doc/gradient.mjs';
 import { recentGradients as savedRecentGradients } from '../doc/recent-gradients.mjs';
 import { EFFECTS, effectLabel } from '../doc/effects.mjs';
 import { documentInfo } from '../doc/document-info.mjs';
+import { HARMONY_RULES, adjustedColors, collectColors, dragSettings, harmonyRule, hexLab, hexRgb, nearestIndex, neutralSettings, recolorHexes, recolorMap, remapAppearance, rgbLab, wheelLevel, wheelPixel, wheelPoint } from '../doc/recolor.mjs';
+import { RECOLOR_LIBRARIES, recolorLibrary } from '../doc/recolor-libraries.mjs';
 import { TRACE_PRESETS } from '../geom/trace.mjs';
 import { WIDTH_PROFILES, flipAcross, flipAlong, profileName } from '../geom/width-profile.mjs';
 import { addStyleCommand, applyStyleCommands, graphicStyles, removeStyleCommand, styleFrom } from '../doc/graphic-styles.mjs';
@@ -1005,6 +1007,184 @@ export function createPanels(shell, state, api) {
   }
   /** Gradient, as Illustrator's panel: Recent and Presets, type, the stop slider (drag, click to add, drag off to delete), stop colour, opacity and location. */
   let stopDrag = null;
+  /**
+   * Recolor, as Illustrator's Recolor Artwork: every colour of the selection on one wheel. Drag a colour to turn
+   * them all; Ctrl/Cmd also moves them in and out; Shift (or unlinked) moves only that colour. Harmony rules,
+   * colour libraries and the slider act on the session's original colours, so each gesture is one undo step.
+   */
+  let recolor = null, recoloring = false;
+  const wheelImages = new Map();
+  function recolorSession() {
+    const ids = api.paintIds(), key = ids.join(' ');
+    // The panel re-renders inside our own edits, before the session has seen the new document.
+    if (recolor && recolor.key === key && (recoloring || recolor.data === state.document.data)) return recolor;
+    const nodes = ids.map(id => state.document.getNode(id)), colors = collectColors(nodes);
+    const previous = recolor?.key === key ? recolor.settings : null, settings = neutralSettings(colors);
+    // Selecting other artwork, undo or another edit starts over from the colours as they are now.
+    settings.mode = previous?.mode ?? state.ui.recolorMode ?? 'saturation'; settings.linked = previous?.linked ?? true;
+    recolor = { key, ids, colors, settings, sources: new Map(nodes.map(n => [n.id,n.appearance])), data: state.document.data };
+    return recolor;
+  }
+  function recolorLibraryColors(id) {
+    if (id === 'document') return documentSwatches(state.document.data).filter(s => s.hex).map(s => s.hex.toUpperCase());
+    return recolorLibrary(id)?.colors ?? null;
+  }
+  function applyRecolor(session, { label = 'Recolor', mergeKey = null } = {}) {
+    const map = recolorMap(session.colors,session.settings,recolorLibraryColors(session.settings.library));
+    const entries = session.ids.filter(id => state.document.isEditable(id)).map(id => [id,{ appearance: remapAppearance(session.sources.get(id),map) }]);
+    recoloring = true;
+    try { if (entries.length) state.history.transaction(label,() => state.history.execute(updateNodes(entries,{ label })),{ mergeKey }); }
+    finally { recoloring = false; }
+    session.data = state.document.data;
+  }
+  /** Wheel background: hue around, the wheel's value outward, the other value from the slider; library regions when one is chosen. */
+  function wheelImage(mode, level, libraryId) {
+    const colors = libraryId ? recolorLibraryColors(libraryId) : null, key = `${mode}|${level.toFixed(3)}|${libraryId ?? ''}|${colors?.join() ?? ''}`;
+    if (wheelImages.has(key)) return wheelImages.get(key);
+    const size = colors?.length ? 96 : 180, image = new ImageData(size,size), labs = colors?.map(hexLab), rgbs = colors?.map(hexRgb);
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+      const u = (x + .5) / size * 2 - 1, v = (y + .5) / size * 2 - 1, at = (y * size + x) * 4;
+      if (u * u + v * v > 1) continue;
+      let rgb = wheelPixel([u,v],mode,level);
+      if (labs?.length) rgb = rgbs[nearestIndex(rgbLab(rgb),labs)];
+      image.data.set([...rgb.map(c => Math.round(c * 255)),255],at);
+    }
+    if (wheelImages.size > 24) wheelImages.clear();
+    wheelImages.set(key,image); return image;
+  }
+  function harmonyIcon(rule) {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg','svg'); svg.setAttribute('viewBox','0 0 24 24'); svg.setAttribute('aria-hidden','true');
+    const dot = ([x,y], r = 1.9) => `<circle cx="${(12 + x).toFixed(2)}" cy="${(12 + y).toFixed(2)}" r="${r}" fill="currentColor" stroke="none"/>`;
+    const at = (angle, r) => [Math.cos(angle * Math.PI / 180) * r,-Math.sin(angle * Math.PI / 180) * r];
+    let body = '<circle cx="12" cy="12" r="9" stroke-opacity=".35"/>';
+    if (!rule.offsets) body += [[-4,-3],[4,-4],[2,4]].map(p => dot(p)).join('');
+    else if (rule.offsets.length === 1) body += `<path d="M12 12L${12 + at(90,7)[0]} ${12 + at(90,7)[1]}"/>` + [3,5.5,8].map(r => dot(at(90,r),rule.id === 'shades' ? 1.2 + r / 8 : 1.6)).join('');
+    else body += rule.offsets.map(o => { const p = at(90 + o,7); return `<path d="M12 12L${(12 + p[0]).toFixed(2)} ${(12 + p[1]).toFixed(2)}"/>${dot(p)}`; }).join('');
+    svg.innerHTML = `<g fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round">${body}</g>`;
+    return svg;
+  }
+  let recolorDrag = null;
+  function recolorPanel(host) {
+    const ids = api.paintIds(), ro = state.document.readOnly || !ids.length;
+    if (!ids.length) { text(host,'Select artwork to recolor all its colors together.'); return; }
+    const session = recolorSession(), { colors, settings } = session;
+    if (!colors.length) { text(host,'The selection has no solid or gradient colors to recolor.'); return; }
+    const change = (fn, label, mergeKey = null) => api.run(() => { fn(session.settings); applyRecolor(session,{ label, mergeKey }); render(); });
+    // Color Library and Reset.
+    const top = document.createElement('div'); top.className = 'draw-recolor-top'; host.append(top);
+    const libRow = document.createElement('label'); libRow.className = 'draw-field draw-recolor-library';
+    const libName = document.createElement('span'); libName.textContent = 'Color Library';
+    const library = document.createElement('select'); library.className = 'draw-select'; library.dataset.drawField = 'recolor-library'; library.disabled = ro;
+    library.append(new Option('None','',false,!settings.library),new Option('Document Swatches','document',false,settings.library === 'document'));
+    for (const entry of RECOLOR_LIBRARIES) {
+      const parent = entry.items ? Object.assign(document.createElement('optgroup'),{ label: entry.name }) : library;
+      for (const item of entry.items ?? [entry]) parent.append(new Option(item.name,item.id,false,settings.library === item.id));
+      if (parent !== library) library.append(parent);
+    }
+    library.addEventListener('change',() => change(s => { s.library = library.value || null; },'Recolor Library'));
+    libRow.append(libName,library); top.append(libRow);
+    const reset = button('Reset',() => { const mode = settings.mode, linked = settings.linked; session.settings = { ...neutralSettings(colors), mode, linked }; applyRecolor(session,{ label: 'Reset Recolor' }); render(); });
+    reset.dataset.drawRecolor = 'reset'; reset.disabled = ro; top.append(reset);
+    // Harmony rules, as color.adobe.com lists them.
+    const rules = document.createElement('div'); rules.className = 'draw-recolor-rules'; rules.setAttribute('role','group'); rules.setAttribute('aria-label','Color harmonies');
+    const ruleName = document.createElement('p'); ruleName.className = 'draw-recolor-rule-name';
+    ruleName.innerHTML = '<strong>Color harmonies:</strong> '; ruleName.append(harmonyRule(settings.rule).name); host.append(ruleName,rules);
+    for (const rule of HARMONY_RULES) {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'draw-recolor-rule'; b.append(harmonyIcon(rule));
+      b.setAttribute('aria-label',rule.name); b.dataset.tooltip = rule.name; b.dataset.drawRecolorRule = rule.id; b.disabled = ro;
+      b.setAttribute('aria-pressed',String(settings.rule === rule.id));
+      b.addEventListener('click',() => change(s => { s.rule = rule.id; },'Recolor Harmony')); rules.append(b);
+    }
+    // The wheel: a canvas background with an SVG of handles on top, in unit coordinates.
+    const wrapEl = document.createElement('div'); wrapEl.className = 'draw-recolor-wheel'; host.append(wrapEl);
+    const canvas = document.createElement('canvas'); canvas.setAttribute('aria-hidden','true');
+    const svg = document.createElementNS('http://www.w3.org/2000/svg','svg'); svg.setAttribute('viewBox','-1 -1 2 2'); svg.tabIndex = ro ? -1 : 0;
+    svg.setAttribute('role','application'); svg.setAttribute('aria-label','Color wheel: drag a color to turn all colors. Ctrl or Cmd: also in and out. Shift: only that color. Arrow keys turn and scale.');
+    svg.dataset.drawRecolorWheel = '';
+    wrapEl.append(canvas,svg);
+    const link = iconButton(settings.linked ? 'Unlink harmony colors' : 'Link harmony colors',settings.linked ? 'link' : 'unlink',() => change(s => { s.linked = !s.linked; },'Recolor Link'),'draw-layer-action draw-recolor-link');
+    link.setAttribute('aria-pressed',String(settings.linked)); link.dataset.drawRecolor = 'link'; link.disabled = ro; wrapEl.append(link);
+    const prominent = document.createElement('div');
+    const paintWheel = () => {
+      const s = session.settings, image = wheelImage(s.mode,wheelLevel(s),s.library);
+      canvas.width = image.width; canvas.height = image.height; canvas.getContext('2d').putImageData(image,0,0);
+      canvas.classList.toggle('is-library',!!s.library);
+      const out = recolorHexes(colors,s,recolorLibraryColors(s.library)), places = adjustedColors(colors,s).map(w => wheelPoint(w,s.mode));
+      // Base last, so it stays on top.
+      const order = [...colors.keys()].sort((a,b) => (a === s.base) - (b === s.base));
+      svg.innerHTML = order.map(i => `<line x1="0" y1="0" x2="${places[i][0]}" y2="${places[i][1]}" class="draw-recolor-spoke"/>`).join('') + '<circle r=".035" class="draw-recolor-centre"/>' + order.map(i => {
+        const [x,y] = places[i], base = i === s.base;
+        return `<g class="draw-recolor-handle${base ? ' is-base' : ''}" data-draw-recolor-handle="${i}" transform="translate(${x} ${y})">${base ? '<circle r=".095" class="draw-recolor-ring"/>' : ''}<circle r="${base ? .07 : .055}" fill="${out[i]}"/></g>`;
+      }).join('');
+      prominentBar(out);
+    };
+    // Prominent Colors: the new colours by how much they are used; click one to make it the base.
+    const prominentTitle = document.createElement('h3'); prominentTitle.className = 'draw-panel__section'; prominentTitle.textContent = 'Prominent Colors';
+    prominent.className = 'draw-recolor-prominent'; prominent.setAttribute('role','group'); prominent.setAttribute('aria-label','Prominent colors');
+    host.append(prominentTitle,prominent);
+    function prominentBar(out) {
+      prominent.replaceChildren();
+      colors.forEach(({ hex, weight },i) => {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'draw-recolor-color'; b.style.flexGrow = String(weight); b.style.background = out[i];
+        b.dataset.drawRecolorColor = hex; b.disabled = ro; b.setAttribute('aria-pressed',String(i === session.settings.base));
+        b.setAttribute('aria-label',`${hex} becomes ${out[i]}${i === session.settings.base ? ' (base color)' : ''}`); b.dataset.tooltip = `${hex} → ${out[i]}: click to make it the base color`;
+        b.addEventListener('click',() => change(s => { s.base = i; },'Recolor Base Color')); prominent.append(b);
+      });
+    }
+    // Wheel mode and slider: saturation mode adjusts brightness, brightness mode adjusts saturation.
+    const foot = document.createElement('div'); foot.className = 'draw-recolor-foot'; host.append(foot);
+    const modes = document.createElement('div'); modes.className = 'draw-segmented draw-gradient-types'; modes.setAttribute('role','group'); modes.setAttribute('aria-label','Color wheel display');
+    for (const [id,label] of [['saturation','Show saturation and hue on color wheel'],['brightness','Show brightness and hue on color wheel']]) {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'draw-segmented__option draw-stroke-option'; b.append(icon(panelSpriteHref(`recolor-${id}`)));
+      b.setAttribute('aria-label',label); b.dataset.tooltip = label; b.dataset.drawRecolorMode = id; b.setAttribute('aria-pressed',String(settings.mode === id));
+      b.addEventListener('click',() => { session.settings.mode = state.ui.recolorMode = id; render(); }); modes.append(b);
+    }
+    const sliderKey = settings.mode === 'brightness' ? 'saturation' : 'brightness';
+    const slider = document.createElement('input'); slider.type = 'range'; slider.min = '-100'; slider.max = '100'; slider.step = '1'; slider.className = 'draw-recolor-slider';
+    slider.value = String(Math.round(settings.adjust[sliderKey] * 100)); slider.disabled = ro; slider.dataset.drawField = 'recolor-adjust';
+    slider.setAttribute('aria-label',sliderKey === 'brightness' ? 'Adjust brightness' : 'Adjust saturation'); slider.dataset.tooltip = `${slider.getAttribute('aria-label')} of all colors`;
+    let sliderKeyMerge = null;
+    // Live: the canvas and handles update here, since the panel does not rebuild while the slider has focus.
+    slider.addEventListener('input',() => api.run(() => {
+      liveEdit = true; sliderKeyMerge ??= `recolor-slider-${Date.now()}`;
+      session.settings.adjust[sliderKey] = slider.valueAsNumber / 100; applyRecolor(session,{ label: 'Recolor Adjust', mergeKey: sliderKeyMerge }); paintWheel();
+    }));
+    slider.addEventListener('change',() => { sliderKeyMerge = null; liveEdit = false; render(); });
+    foot.append(modes,slider);
+    paintWheel();
+    if (ro) return;
+    const unit = event => { const r = svg.getBoundingClientRect(); return [(event.clientX - r.left) / (r.width / 2) - 1,(event.clientY - r.top) / (r.height / 2) - 1]; };
+    svg.addEventListener('pointerdown',event => {
+      const handle = event.target.closest('[data-draw-recolor-handle]'); if (!handle || event.button !== 0) return;
+      event.preventDefault(); svg.focus({ preventScroll: true });
+      const index = Number(handle.dataset.drawRecolorHandle), places = adjustedColors(colors,session.settings).map(w => wheelPoint(w,session.settings.mode));
+      recolorDrag = { index, from: places[index], startPointer: unit(event), start: structuredClone(session.settings), moved: false, mergeKey: `recolor-wheel-${Date.now()}` };
+      const move = e => {
+        const drag = recolorDrag; if (!drag) return;
+        const p = unit(e), offset = [p[0] - drag.startPointer[0],p[1] - drag.startPointer[1]];
+        if (!drag.moved && Math.hypot(...offset) < .03) return;
+        drag.moved = true;
+        // The handle follows the pointer from where it was grabbed.
+        session.settings = dragSettings(drag.start,colors,drag.index,drag.from,[drag.from[0] + offset[0],drag.from[1] + offset[1]],{ radial: e.ctrlKey || e.metaKey, single: e.shiftKey });
+        api.run(() => { applyRecolor(session,{ label: 'Recolor', mergeKey: drag.mergeKey }); render(); });
+      };
+      const up = () => {
+        window.removeEventListener('pointermove',move); window.removeEventListener('pointerup',up); window.removeEventListener('pointercancel',up);
+        const drag = recolorDrag; recolorDrag = null;
+        // A click without moving makes that colour the base.
+        if (drag && !drag.moved && drag.index !== session.settings.base) change(s => { s.base = drag.index; },'Recolor Base Color'); else render();
+      };
+      window.addEventListener('pointermove',move); window.addEventListener('pointerup',up); window.addEventListener('pointercancel',up);
+    });
+    svg.addEventListener('keydown',event => {
+      const step = event.shiftKey ? 15 : 5, radial = session.settings.mode === 'brightness' ? 'brightness' : 'saturation';
+      const action = { ArrowLeft: s => { s.rotation += step; }, ArrowRight: s => { s.rotation -= step; },
+        ArrowUp: s => { s.scale[radial] = Math.min(4,s.scale[radial] * 1.05); }, ArrowDown: s => { s.scale[radial] = Math.max(0,s.scale[radial] / 1.05); } }[event.key];
+      if (!action) return;
+      event.preventDefault(); change(action,'Recolor',`recolor-key-${event.key}`);
+      queueMicrotask(() => document.querySelector('[data-draw-recolor-wheel]')?.focus());
+    });
+  }
   function gradientPanel(host) {
     const target = state.ui.paintFocus === 'stroke' ? 'stroke' : 'fill', ro = state.document.readOnly;
     paintTargets(host,target);
@@ -1374,7 +1554,7 @@ export function createPanels(shell, state, api) {
       } else if (host.dataset.drawPanelBody === 'info') { host.replaceChildren(); infoPanel(host); }
     }
   }
-  const PANEL_CONTENT = { gradient: gradientPanel, character: host => characterPanel(host), paragraph: host => paragraphPanel(host), swatches: swatchesPanel, color: colorPanel, stroke: strokePanel, transparency: transparencyPanel, pathfinder: pathfinderPanel, appearance: appearancePanel, transform: host => transform(host), align: alignPanel, artboards: artboardPanel, history: historyPanel, info: infoPanel, 'document-info': documentInfoPanel, links: linksPanel, 'image-trace': imageTracePanel, 'graphic-styles': graphicStylesPanel, navigator: navigatorPanel, 'asset-export': assetExportPanel, glyphs: glyphsPanel };
+  const PANEL_CONTENT = { gradient: gradientPanel, recolor: recolorPanel, character: host => characterPanel(host), paragraph: host => paragraphPanel(host), swatches: swatchesPanel, color: colorPanel, stroke: strokePanel, transparency: transparencyPanel, pathfinder: pathfinderPanel, appearance: appearancePanel, transform: host => transform(host), align: alignPanel, artboards: artboardPanel, history: historyPanel, info: infoPanel, 'document-info': documentInfoPanel, links: linksPanel, 'image-trace': imageTracePanel, 'graphic-styles': graphicStylesPanel, navigator: navigatorPanel, 'asset-export': assetExportPanel, glyphs: glyphsPanel };
   function render() {
     scaleStrokes.checked = state.ui.scaleStrokes !== false;
     propertiesFooter.hidden = state.ui.tool === 'artboard';
