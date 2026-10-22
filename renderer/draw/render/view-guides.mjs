@@ -109,9 +109,9 @@ export function createViewGuides(scope, state, boards, overlay) {
         const p = size + (middle - first) / slope;
         if (Number.isFinite(p) && p >= size && p <= end) {
           const [from, to, width] = crisp(horizontal ? [new scope.Point(p, 0), new scope.Point(p, size)] : [new scope.Point(0, p), new scope.Point(size, p)]);
-          line(rulers, from, to, '#1473E6', width).data.rulerMiddle = axis;
+          line(rulers, from, to, foreground, width).data.rulerMiddle = axis;
           const c = horizontal ? from[0] : from[1], notch = horizontal ? [[c - 4, size], [c + 4, size], [c, size - 5]] : [[size, c - 4], [size, c + 4], [size - 5, c]];
-          rulers.addChild(new scope.Path({ insert: false, segments: notch, closed: true, fillColor: '#1473E6' }));
+          rulers.addChild(new scope.Path({ insert: false, segments: notch, closed: true, fillColor: foreground }));
         }
       }
       rulers.addChild(new scope.Path.Rectangle({ insert: false, rectangle: [0, 0, size, size], fillColor: background }));
