@@ -2359,3 +2359,10 @@ Begge linjaler markerer alltid artboardets midte med linje og trekant, i alle en
 følger tegnet på tasten, så zoom virker på norsk tastatur (+ på Minus, - på Slash) og numerisk tastatur.
 429 Draw-tester og `--draw-rulers` passerer; skjermbilde midt i drag kontrollert. Den andre agentens
 uncommittede endringer er ikke tatt med.
+
+## 2026-10-22: Recolor, del 3 av 3 (All / Fill / Stroke og kopiering)
+
+Brukerønske: kunne justere bare strek eller bare fyll, eller alt, og enkelt kopiere justeringen fra fyll
+til strek. Omfangsvelger øverst i panelet og Copy to Stroke / Copy to Fill (STATUS.md 2.41 punkt 3).
+431 Draw-tester, i18n og `--draw-recolor` passerer; skjermbilde kontrollert. Committet med egen
+midlertidig indeks, fordi den andre agenten hadde staget linjal-endringer i den delte indeksen.

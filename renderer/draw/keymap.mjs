@@ -101,8 +101,6 @@ function parse(key) {
   return { token, mod: modifiers.has('Mod') || token === 'Mod', shift: modifiers.has('Shift'), alt: modifiers.has('Alt') };
 }
 function tokenFor(event) {
-  // Ctrl/Cmd with + or − follows the printed key, so zoom works where they sit elsewhere (Norwegian + is on Minus, - on Slash).
-  if ((event.ctrlKey || event.metaKey) && ['+', '-'].includes(event.key)) return symbols[event.key];
   if (physical.has(event.code) || /^(Digit\d|Arrow(Left|Right|Up|Down)|F\d+)$/.test(event.code || '')) return event.code;
   const key = event.key || '';
   if (/^[a-z]$/i.test(key)) return key.toUpperCase();

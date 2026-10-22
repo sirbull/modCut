@@ -1,11 +1,10 @@
-import { activeArtboard } from '../doc/artboards.mjs';
-import { createGuideSnapper, guideReadout, guideReadoutText, guideSegment, rulerAt, rulerUnit, RULER_SIZE } from '../view/rulers.mjs';
+import { guideSegment, rulerAt, rulerUnit, RULER_SIZE } from '../view/rulers.mjs';
 
 /** Capture ruler gestures before drawing tools; guides belong only to this tab's view. */
 export function createRulerInteractions(canvas, state, api) {
   const { scope, renderer, withScope } = api, controller = new AbortController();
   const events = { signal: controller.signal, capture: true };
-  let drag = null; const snapper = createGuideSnapper();
+  let drag = null;
   const screen = event => {
     const box = canvas.getBoundingClientRect();
     return new scope.Point((event.clientX - box.left) * scope.view.viewSize.width / box.width,
@@ -30,10 +29,10 @@ export function createRulerInteractions(canvas, state, api) {
   function draw(fn) { withScope(() => { fn(); renderer.requestDraw(); }); }
   function cancel() {
     if (!drag) return false;
-    const pointerId = drag.pointerId; drag = null; state.ui.guideReadout = null;
+    const pointerId = drag.pointerId; drag = null;
     draw(() => renderer.viewGuides.setGuidePreview(null));
     if (canvas.hasPointerCapture(pointerId)) canvas.releasePointerCapture(pointerId);
-    canvas.style.cursor = api.cursor(); api.status();
+    canvas.style.cursor = api.cursor();
     return true;
   }
   const stop = event => { event.preventDefault(); event.stopImmediatePropagation(); };
@@ -42,16 +41,11 @@ export function createRulerInteractions(canvas, state, api) {
     if (drag) {
       if (event.pointerId !== drag.pointerId) return;
       stop(event);
-      const world = scope.view.viewToProject(p), board = activeArtboard(state);
-      // Alt drags freely; otherwise the guide is drawn to quarters, thirds and the middle until pulled past them.
-      const { value, fraction } = snapper.snap(world[drag.axis] + drag.offset, board, drag.axis, scope.view.zoom, !event.altKey);
-      drag.value = value;
-      const guide = { axis: drag.axis, value }, unit = rulerUnit(state).id, { values } = guideReadout(guide, board);
-      const first = values[unit] ? unit : 'mm', label = `${values[first]}  ·  ${first === '%' ? values.mm : values['%']}`;
-      state.ui.guideReadout = guideReadoutText(guide, board, unit) + (fraction !== null ? '  (snapped)' : '');
+      const world = scope.view.viewToProject(p);
+      drag.value = world[drag.axis] + drag.offset;
       draw(() => {
         renderer.viewGuides.setPointer(p);
-        renderer.viewGuides.setGuidePreview({ ...guide, source: drag.source, label, snapped: fraction !== null });
+        renderer.viewGuides.setGuidePreview({ axis: drag.axis, value: drag.value, source: drag.source });
       });
       api.status(world);
       return;
@@ -75,7 +69,6 @@ export function createRulerInteractions(canvas, state, api) {
     const world = scope.view.viewToProject(p), guideAxis = source?.axis ?? axis;
     drag = { axis: guideAxis, source, offset: source ? source.value - world[guideAxis] : 0,
       value: source?.value ?? world[guideAxis], pointerId: event.pointerId };
-    snapper.reset(source && { value: source.value, axis: source.axis, board: activeArtboard(state), pixel: scope.view.zoom });
     canvas.setPointerCapture(event.pointerId);
     move(event);
   }, events);

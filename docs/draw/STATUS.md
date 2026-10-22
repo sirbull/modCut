@@ -1038,12 +1038,19 @@ color.adobe.com, fargebiblioteker («templates»), og brightness/saturation-modu
    Hver gest er ett angresteg; angre eller annen redigering starter økten på nytt fra fargene slik de er.
    Fallgruve: panelet rendres inne i vår egen `history.execute`; `recoloring`-flagget hindrer at økten
    starter på nytt midt i en endring.
-3. **Fill/Stroke-omfang og kopiering mellom dem** (brukerønske underveis): neste del.
+3. **Omfang og kopiering (ferdig, brukerønske underveis):** øverst velges All, Fill eller Stroke
+   (`RECOLOR_SCOPES`, `state.ui.recolorScope`). Hvert omfang samler og endrer bare sine malinger; bytte av
+   omfang starter en ny økt fra dokumentet slik det er, så det som er gjort med fyll blir stående.
+   I Fill vises **Copy to Stroke** (i Stroke: Copy to Fill): samme regel, dreiing, skala, slider og bibliotek
+   på den andre malingen (`transferSettings`; basefarge og enkeltjusteringer bare der fargen finnes også der),
+   ett angresteg. Kopien regnes fra den andre malingens opprinnelige farger i økten, så ny kopiering etter
+   mer justering erstatter forrige kopi i stedet for å dreie to ganger.
 
 Ikke laget ennå: Colors-antall (redusere til N farger) og Color Theme Picker.
 
 Tester: `recolor.test.mjs` og `--draw-recolor` (Window-meny, ekte musedrag med Ctrl og Shift, live under
-drag, svart uendret, regler, Skintones-bibliotek, slider, modus, Reset, angre; skjermbilder kontrollert).
+drag, svart uendret, regler, Skintones-bibliotek, slider, modus, Reset, angre, Fill-omfang, Copy to Stroke
+to ganger, Stroke-omfang; skjermbilder kontrollert).
 
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 

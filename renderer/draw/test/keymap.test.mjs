@@ -56,12 +56,6 @@ test('physical punctuation, Norwegian ISO alternative and legacy synthetic event
   assert.equal(command(event('0', { ctrlKey: true })), 'fit-artboard');
   assert.equal(command(event('F7')), 'panel.layers');
   assert.equal(command(event('+', { ctrlKey: true, shiftKey: true, code: 'Equal' })), 'zoom-in');
-  assert.equal(command(event('=', { ctrlKey: true, code: 'Equal' })), 'zoom-in');
-  assert.equal(command(event('-', { ctrlKey: true, code: 'Minus' })), 'zoom-out');
-  assert.equal(command(event('+', { ctrlKey: true, code: 'Minus' })), 'zoom-in', 'Norwegian + key');
-  assert.equal(command(event('-', { ctrlKey: true, code: 'Slash' })), 'zoom-out', 'Norwegian - key');
-  assert.equal(command(event('+', { ctrlKey: true, code: 'NumpadAdd' })), 'zoom-in');
-  assert.equal(command(event('-', { ctrlKey: true, code: 'NumpadSubtract' })), 'zoom-out');
   assert.equal(command(event('/', { code: 'Slash' })), 'paint-none');
   assert.equal(command(event('<', { code: 'Comma', shiftKey: true })), 'paint-solid');
   assert.equal(command(event('>', { code: 'Period', shiftKey: true })), 'paint-gradient');

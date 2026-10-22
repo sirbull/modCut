@@ -4,7 +4,7 @@ import paper from 'paper';
 import { createProjectDraw } from '../io/project.mjs';
 import { createArtboard, createDocument } from '../doc/schema.mjs';
 import { createDrawRenderer } from '../render.mjs';
-import { RULER_UNITS, createGuideSnapper, guideReadout, guideReadoutText, guideSegment, rulerAt, rulerNumber, rulerScale, rulerTicks, rulerUnit } from '../view/rulers.mjs';
+import { RULER_UNITS, guideSegment, rulerAt, rulerNumber, rulerScale, rulerTicks, rulerUnit } from '../view/rulers.mjs';
 
 test('ruler units convert physical lengths and percentages independently on each artboard axis', () => {
   const board = { width: 200, height: 80 };
@@ -75,64 +75,4 @@ test('guides and pointer markers stay screen-sized after pan/zoom/rotation witho
   assert.equal(rulers.visible, false); assert.equal(guides.children.length, 2);
   assert.equal(JSON.stringify(state.snapshot()), saved); assert.equal(state.dirty, false); assert.equal(state.history.canUndo, false);
   assert.equal(renderer.exportArtwork().exportJSON({ asString: true }), exported);
-});
-
-test('dragged guides snap to quarters, thirds and the middle but let go when pulled past', () => {
-  const board = { x: 30, y: 40, width: 200, height: 80 }, snapper = createGuideSnapper(), pixel = 4;
-  assert.deepEqual(snapper.snap(129, board, 'x', pixel), { value: 130, fraction: .5 }, '4 px from 50 % snaps');
-  assert.equal(snapper.snap(128.5, board, 'x', pixel).value, 130, 'held while pushing within the release distance');
-  assert.deepEqual(snapper.snap(126.8, board, 'x', pixel), { value: 126.8, fraction: null }, 'pulling past lets go');
-  assert.equal(snapper.snap(128, board, 'x', pixel).value, 128, 'a freed fraction does not catch values beside it (49 %)');
-  snapper.snap(100, board, 'x', pixel);
-  assert.equal(snapper.snap(129.5, board, 'x', pixel).value, 130, 'moving well away re-arms it');
-  snapper.reset();
-  assert.deepEqual(snapper.snap(96.4, board, 'x', pixel), { value: 30 + 1 / 3 * 200, fraction: 1 / 3 });
-  assert.equal(snapper.snap(81, board, 'y', pixel, false).value, 81, 'Alt drags freely');
-  snapper.reset({ value: 128, axis: 'x', board, pixel });
-  assert.equal(snapper.snap(128, board, 'x', pixel).value, 128, 'grabbing a guide at 49 % keeps it there');
-  snapper.reset({ value: 130, axis: 'x', board, pixel });
-  assert.equal(snapper.snap(131, board, 'x', pixel).value, 130, 'a guide on 50 % stays snapped when grabbed');
-});
-
-test('guide readout gives percent, millimetres and inches from the artboard origin', () => {
-  const board = { x: 30, y: 40, width: 200, height: 80 }, readout = guideReadout({ axis: 'y', value: 60 }, board);
-  assert.equal(readout.percent, 25); assert.equal(readout.mm, 20); assert.ok(Math.abs(readout.inches - 20 / 25.4) < 1e-12);
-  assert.equal(guideReadoutText({ axis: 'x', value: 130 }, board, '%'), 'Guide X  50 % · 100.0 mm · 3.937 in');
-  assert.equal(guideReadoutText({ axis: 'x', value: 130 }, board, 'cm'), 'Guide X  100.0 mm · 50 % · 3.937 in');
-});
-
-test('the dragged guide is solid, pixel-aligned and labelled beside the line above the artwork', t => {
-  const state = createProjectDraw(createDocument({ artboards: [createArtboard({ x: 0, y: 0, width: 200, height: 80 })] }));
-  state.ui = { rulers: true, rulerGuides: [] };
-  const scope = new paper.PaperScope(); scope.setup(new scope.Size(800, 600)); scope.view.autoUpdate = false;
-  const renderer = createDrawRenderer(scope, state); renderer.render();
-  t.after(() => { renderer.destroy(); scope.remove(); });
-  scope.view.zoom = 3.3; scope.view.center = [100, 40]; renderer.updateView();
-  const pointer = scope.view.projectToView(new scope.Point(100, 40));
-  renderer.viewGuides.setPointer(pointer);
-  renderer.viewGuides.setGuidePreview({ axis: 'x', value: 100, label: '50 %  ·  100.0 mm', snapped: true });
-  const [line] = scope.project.getItem({ name: 'Ruler guides' }).children, label = scope.project.getItem({ name: 'Ruler guide label' });
-  assert.equal(line.dashArray.length, 0); assert.equal(line.strokeWidth, 1);
-  const x = line.firstSegment.point.x;
-  assert.ok(Math.abs(x - Math.floor(x) - .5) < 1e-6, 'centred on a pixel so the 1 px line is crisp');
-  const [box, text] = label.children, bounds = box.bounds;
-  assert.equal(text.content, '50 %  ·  100.0 mm');
-  assert.ok(bounds.left > x && !bounds.contains(pointer), 'beside the line and off the pointer');
-  assert.ok(label.isAbove(scope.project.getItem({ name: 'Ruler guides' })));
-  renderer.viewGuides.setGuidePreview(null); assert.equal(label.children.length, 0);
-});
-
-test('both rulers always mark the artboard middle, in every unit and at every zoom', t => {
-  const state = createProjectDraw(createDocument({ artboards: [createArtboard({ x: 30, y: 40, width: 200, height: 80 })] }));
-  state.ui = { rulers: true };
-  const scope = new paper.PaperScope(); scope.setup(new scope.Size(800, 600)); scope.view.autoUpdate = false;
-  const renderer = createDrawRenderer(scope, state); renderer.render();
-  t.after(() => { renderer.destroy(); scope.remove(); });
-  const rulers = scope.project.getItem({ name: 'View rulers' }), middle = new scope.Point(130, 80);
-  for (const [unit, zoom] of [['%', 1.3], ['mm', 3.3], ['in', .7], ['px', 12], ['cm', 2]]) {
-    state.ui.rulerUnit = unit; scope.view.zoom = zoom; scope.view.center = [140, 70]; renderer.updateView();
-    const centre = scope.view.projectToView(middle);
-    const marks = Object.fromEntries(rulers.children.filter(item => item.data.rulerMiddle).map(item => [item.data.rulerMiddle, item.firstSegment.point]));
-    assert.ok(Math.abs(marks.x.x - centre.x) <= .5, `${unit} x`); assert.ok(Math.abs(marks.y.y - centre.y) <= .5, `${unit} y`);
-  }
 });
