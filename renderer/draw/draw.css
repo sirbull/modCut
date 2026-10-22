@@ -1,3 +1,7 @@
+/* Panel form controls share one height and padding, so a field and a menu side by side line up and
+   menu text stays vertically centred (no block padding inside a fixed height). Compact rows use the small size. */
+:root { --draw-control-h: 26px; --draw-control-h-sm: 24px; --draw-control-pad: 0 6px; }
+
 /* Visibility belongs to the workspace attribute; Cut retains its layout and view. */
 .workspace { position: relative; }
 .draw-workspace { display: none; }
@@ -83,7 +87,7 @@ body[data-workspace="draw"] .actionbar {display:none;}
 .draw-panel-drop-line[hidden] { display: none; }
 .draw-dock-splitter:focus-visible { outline: 2px solid var(--brand-mid); outline-offset: -2px; }
 .draw-panel { padding: 10px; min-height: 0; overflow: auto; font-size: var(--fs-xs); }
-.draw-panel .select { box-sizing: border-box; min-width: 0; padding: 3px 6px; height: 26px; border-radius: 4px; font: inherit; }
+.draw-panel .select { box-sizing: border-box; min-width: 0; padding: var(--draw-control-pad); height: var(--draw-control-h); border-radius: 4px; font: inherit; }
 .draw-panel .btn { min-height: 26px; padding: 3px 9px; border-radius: 4px; font-size: var(--fs-xs); }
 /* Right dock: Properties above Layers, with a draggable splitter between them. */
 .draw-dock-section { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
@@ -131,7 +135,8 @@ body[data-workspace="draw"] .actionbar {display:none;}
 .draw-panel__hint { color: var(--text-muted); font-size: var(--fs-xs); line-height: 1.4; margin: 0 0 8px; }
 .draw-fields { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 6px; }
 .draw-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; margin-bottom: 6px; font-size: var(--fs-xs); color: var(--text-muted); }
-.draw-field input { box-sizing: border-box; width: 100%; min-width: 0; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); padding: 4px 6px; font: inherit; font-size: var(--fs-xs); }
+.draw-field input { box-sizing: border-box; width: 100%; min-width: 0; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); padding: var(--draw-control-pad); font: inherit; font-size: var(--fs-xs); }
+.draw-field input:not([type=color], [type=checkbox], [type=radio], [type=range]) { height: var(--draw-control-h); }
 .draw-field input[type="color"] { width: 100%; height: 26px; padding: 3px; cursor: pointer; }
 .draw-field input:disabled { opacity: .45; cursor: default; }
 .draw-field input:focus { outline: 2px solid var(--brand-mid); outline-offset: 1px; }
@@ -306,7 +311,7 @@ body[data-workspace="draw"] .statusbar .spacer { display: none; }
 .draw-align-row { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
 .draw-align-button { width: 30px; height: 30px; border: 1px solid var(--border); }
 .draw-align-button svg { width: 18px; height: 18px; }
-.draw-select { box-sizing: border-box; width: 100%; min-width: 0; height: 26px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); padding: 3px 6px; font: inherit; font-size: var(--fs-xs); }
+.draw-select { box-sizing: border-box; width: 100%; min-width: 0; height: var(--draw-control-h); border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); padding: var(--draw-control-pad); font: inherit; font-size: var(--fs-xs); }
 .draw-field input[data-draw-field=align-spacing]::placeholder { color: var(--text-muted); }
 .draw-segmented { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; padding: 2px; margin-bottom: 8px; border: 1px solid var(--border); border-radius: 6px; }
 .draw-segmented__option { border: 0; border-radius: 4px; padding: 5px 8px; background: transparent; color: var(--text-muted); font: 600 var(--fs-xs) var(--font-sans); cursor: pointer; }
@@ -319,7 +324,7 @@ body[data-workspace="draw"] .statusbar .spacer { display: none; }
 .draw-color-swatch.is-none::-webkit-color-swatch { opacity: 0; }
 .draw-color-channel { display: grid; grid-template-columns: 18px 1fr 64px; gap: 8px; align-items: center; margin-bottom: 8px; font-size: var(--fs-xs); color: var(--text-muted); }
 .draw-color-channel input[type=range] { width: 100%; accent-color: var(--brand-fill); }
-.draw-color-channel input[type=number] { box-sizing: border-box; width: 100%; height: 26px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); padding: 3px 6px; font: inherit; font-size: var(--fs-xs); }
+.draw-color-channel input[type=number] { box-sizing: border-box; width: 100%; height: var(--draw-control-h); border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); padding: var(--draw-control-pad); font: inherit; font-size: var(--fs-xs); }
 .draw-dash-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .draw-dash-grid .draw-field { margin-bottom: 8px; }
 .draw-segmented__option:disabled { opacity: .4; cursor: default; }
@@ -346,7 +351,7 @@ body[data-workspace="draw"] .statusbar .spacer { display: none; }
 /* Compact Stroke rows: label, small controls, and shared rows for related settings. */
 .draw-stroke-panel { --stroke-label: 74px; }
 .draw-stroke-panel .draw-field { display: grid; grid-template-columns: var(--stroke-label) minmax(0,1fr); align-items: center; gap: 4px; margin: 0 0 4px; }
-.draw-stroke-panel .draw-field input, .draw-stroke-panel .draw-select { height: 24px; padding: 2px 4px; font-size: var(--fs-xs); }
+.draw-stroke-panel .draw-field input, .draw-stroke-panel .draw-select { height: var(--draw-control-h-sm); padding: 0 4px; font-size: var(--fs-xs); }
 .draw-stroke-panel > .draw-field:first-child input { max-width: 120px; }
 .draw-stroke-panel .draw-segmented { grid-auto-columns: 24px; width: max-content; gap: 1px; padding: 1px; margin: 0; border-radius: 4px; }
 .draw-stroke-panel .draw-stroke-option { width: 24px; height: 24px; min-height: 0; padding: 2px; border-radius: 2px; }
@@ -418,7 +423,7 @@ body[data-workspace="draw"] .statusbar .spacer { display: none; }
 .draw-color-dialog__channels legend {font-size:var(--fs-xs);color:var(--text-muted);margin-bottom:6px;}
 .draw-color-dialog__channels label {display:flex;align-items:center;gap:5px;margin-bottom:5px;font-size:var(--fs-xs);}
 .draw-color-dialog__channels label span {width:12px;flex:none;}
-.draw-color-dialog__channels input {box-sizing:border-box;width:100%;min-width:0;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);padding:4px;font:inherit;}
+.draw-color-dialog__channels input {box-sizing:border-box;width:100%;min-width:0;height:var(--draw-control-h);border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);padding:0 4px;font:inherit;}
 .draw-color-dialog__channels input::-webkit-inner-spin-button {appearance:none;margin:0;}
 .draw-color-dialog__hex {grid-column:1 / -1;display:flex;align-items:end;gap:8px;}
 .draw-color-dialog__hex .draw-field {flex:1;min-width:0;margin:0;}
@@ -444,9 +449,9 @@ body.draw-scrubbing, body.draw-scrubbing * { cursor: ew-resize !important; user-
 .draw-field input.is-scrubbing { outline: 2px solid var(--brand-mid); outline-offset: 1px; }
 /* Layers panel (Illustrator-style rows): eye, lock, color bar, indent, twisty, thumbnail, name, target, delete. */
 .draw-layer-search { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; margin-bottom: 8px; }
-.draw-layer-search__input { min-width: 0; box-sizing: border-box; border: 1px solid var(--border); border-radius: 5px; background: var(--bg); color: var(--text); padding: 6px 8px; font: inherit; font-size: var(--fs-sm); }
+.draw-layer-search__input { min-width: 0; box-sizing: border-box; height: var(--draw-control-h); border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); padding: 0 8px; font: inherit; font-size: var(--fs-xs); }
 .draw-layer-search__input:focus { outline: 2px solid var(--brand-mid); outline-offset: 1px; }
-.draw-layer-search__filter { width: auto; padding: 5px 6px; font-size: var(--fs-xs); }
+.draw-layer-search__filter { width: auto; }
 .draw-layer-list { gap: 1px; }
 .draw-layer-row { min-height: 32px; gap: 0; padding: 0 2px; border-left: 0; border-radius: 4px; }
 .draw-layer-row.is-layer { min-height: 36px; border-left: 0; }
@@ -550,7 +555,7 @@ body.draw-scrubbing, body.draw-scrubbing * { cursor: ew-resize !important; user-
 /* Compact Properties rows: label beside a small field, as in Illustrator's Properties panel. */
 [data-draw-dock="properties"] .draw-field { flex-direction: row; align-items: center; gap: 6px; margin-bottom: 6px; }
 [data-draw-dock="properties"] .draw-field > span { flex: 0 0 auto; min-width: 22px; white-space: nowrap; }
-[data-draw-dock="properties"] .draw-field input:not([type=color]), [data-draw-dock="properties"] .draw-field select { padding: 4px 6px; font-size: var(--fs-xs); }
+[data-draw-dock="properties"] .draw-field input:not([type=color]), [data-draw-dock="properties"] .draw-field select { padding: var(--draw-control-pad); font-size: var(--fs-xs); }
 [data-draw-dock="properties"] .draw-fields { gap: 4px 8px; }
 [data-draw-dock="properties"] .draw-transform-top { gap: 8px; }
 [data-draw-dock="properties"] .draw-panel__hint { margin-bottom: 8px; font-size: var(--fs-xs); }
