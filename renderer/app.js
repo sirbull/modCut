@@ -1,5 +1,7 @@
 import { processColorsForDocument } from './draw/view/cut-process.mjs';
-import { createKeymap, shortcutLabel } from "./draw/keymap.mjs";
+import { createKeymap, keyOverrides, setKeyOverrides, shortcutLabel } from "./draw/keymap.mjs";
+import { shortcutsEditor } from "./draw/ui/shortcuts-dialog.mjs";
+import { loadWorkspaces, parseWorkspace, saveWorkspace, serializeWorkspace } from "./draw/ui/workspaces.mjs";
 import { createDrawWorkspace } from "./draw/index.mjs";
 import { drawClipboard } from "./draw/doc/clipboard.mjs";
 import { PROJECT_VERSION, validateProject, createProjectDraw } from "./draw/io/project.mjs";
@@ -2182,15 +2184,19 @@ async function exportSettings() {
       { key: "materials", label: "Materials", type: "checkbox", value: true },
       { key: "profiles", label: "Process profiles", type: "checkbox", value: true },
       { key: "prefs", label: "Preferences (appearance, workspace and units)", type: "checkbox", value: true },
+      { key: "shortcuts", label: "Keyboard shortcuts", type: "checkbox", value: true },
+      { key: "workspaces", label: "Saved Draw workspaces", type: "checkbox", value: true },
     ],
   });
   if (!v) return;
-  if (!v.machines && !v.materials && !v.profiles && !v.prefs) return toast("Nothing selected to export.", "info");
+  if (!v.machines && !v.materials && !v.profiles && !v.prefs && !v.shortcuts && !v.workspaces) return toast("Nothing selected to export.", "info");
   const payload = { app: "modCut", version: 1, exported: new Date().toISOString() };
   if (v.machines) payload.machines = machines;
   if (v.materials) payload.materials = materials;
   if (v.profiles) payload.processProfiles = processProfiles;
   if (v.prefs) payload.prefs = { ...preferences, units: state.units, theme: window.modcutTheme.preference, background: window.modcutTheme.background, gridUnit: state.gridUnit, gridXmm: state.gridXmm, gridYmm: state.gridYmm };
+  if (v.shortcuts) payload.drawShortcuts = keyOverrides();
+  if (v.workspaces) payload.drawWorkspaces = loadWorkspaces();
   try {
     const path = await window.modcut.exportSettings(JSON.stringify(payload, null, 2), "modcut-settings.json");
     if (path) toast("Settings exported → " + path, "ok");
@@ -2216,20 +2222,55 @@ async function importSettings() {
       bed.setGrid(state.gridXmm, state.gridYmm);
       n++;
     }
+    if (p.drawShortcuts && typeof p.drawShortcuts === "object") { await saveShortcuts(p.drawShortcuts); n++; }
+    // Each workspace goes through the same checks as a workspace file; a damaged one is left out.
+    if (Array.isArray(p.drawWorkspaces)) {
+      for (const ws of p.drawWorkspaces) { try { if (ws?.panelLayout) saveWorkspace(parseWorkspace(serializeWorkspace(ws))); } catch { /* skipped */ } }
+      n++;
+    }
     toast(n ? "Settings imported." : "No recognizable settings in that file.", n ? "ok" : "info");
   } catch (e) { toast("Import failed: " + e.message, "err"); }
 }
 
+// Draw shortcuts are kept by the main process (it also rebuilds the menus); open Draw tabs refresh their tooltips.
+async function saveShortcuts(map) {
+  const saved = await window.modcut.setDrawShortcuts?.(map) ?? map;
+  setKeyOverrides(saved);
+  window.dispatchEvent(new Event("modcut-shortcuts-change"));
+}
+const settingsButtons = (host, buttons) => {
+  const row = document.createElement("div");
+  row.className = "form-buttons";
+  for (const [label, action, data] of buttons) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "btn btn--ghost btn--sm";
+    button.textContent = label;
+    if (data) button.dataset[data] = "";
+    button.addEventListener("click", action);
+    row.append(button);
+  }
+  host.append(row);
+};
 $("settings").addEventListener("click", () => openSettings());
-async function openSettings() {
+// Preferences: one window with sections on the left, as in Illustrator. `section` opens that page.
+async function openSettings(section = null) {
+  if (document.querySelector(".preferences-modal")) return;
   const gu = state.gridUnit;
   const uiScaleLabels = ["Smallest", "Small", "Default", "Large", "Largest"];
   const mcp = await window.modcut.getMcpServer?.().catch(() => null);
   const mcpCommand = (status) => `claude mcp add --transport http modcut ${status.url} --header "Authorization: Bearer ${status.token}"`;
+  let shortcuts = null;
+  // Import replaces what this window shows, so it closes first and opens again on the same page.
+  const closeThen = (action) => async () => {
+    document.querySelector('.preferences-modal [data-x="cancel"]')?.click();
+    await action();
+    openSettings("Backup & transfer");
+  };
   const v = await openModal({
-    title: "Preferences", submitLabel: "Save", className: "preferences-modal",
+    title: "Preferences", submitLabel: "Save", className: "preferences-modal", navigation: true, initialSection: typeof section === "string" ? section : null,
     fields: [
-      { key: "theme", section: "Appearance", label: "Theme", type: "segmented", value: window.modcutTheme.preference,
+      { key: "theme", section: "Appearance", sectionDescription: "Colours, language and the size of the interface. These apply as soon as you change them.", label: "Theme", type: "segmented", value: window.modcutTheme.preference,
         showIf: (values) => values.background === "green",
         onChange: (value) => window.modcutTheme.setPreference(value),
         description: "System follows your device’s appearance automatically. Light and Dark keep a fixed theme. Changes apply and save immediately.",
@@ -2246,17 +2287,26 @@ async function openSettings() {
         description: "Scale menus, icons, text and panels. Smaller sizes leave more room for the workspace. Applies and saves immediately.",
         options: window.modcutUiScale.levels.map((value, index) => ({ value, label: `${uiScaleLabels[index]} (${Math.round(value * 100)}%)` })),
         onChange: (value) => window.modcutUiScale.setPreference(value) },
-      { key: "units", section: "Units & grid", label: "Display units", description: "Units used for the design’s position, width and height. Changing units keeps its physical size.", type: "select", value: state.units, options: [{ value: "mm", label: "Millimetres (mm)" }, { value: "cm", label: "Centimetres (cm)" }, { value: "in", label: "Inches (in)" }] },
+      { key: "units", section: "Units & grid", sectionDescription: "Units for sizes and positions in Cut, and the grid on the material preview.", label: "Display units", description: "Units used for the design’s position, width and height. Changing units keeps its physical size.", type: "select", value: state.units, options: [{ value: "mm", label: "Millimetres (mm)" }, { value: "cm", label: "Centimetres (cm)" }, { value: "in", label: "Inches (in)" }] },
       { key: "showGrid", label: "Show grid", type: "checkbox", value: preferences.showGrid, description: "Show grid lines on the Cut material preview. Applies immediately; artwork and output stay unchanged.", onChange: (value) => updatePreferences({ showGrid: value }) },
       { key: "gridUnit", label: "Grid unit", description: "Units used for the grid spacing below, independently of the display units.", type: "select", value: gu, options: [{ value: "mm", label: "Millimetres (mm)" }, { value: "cm", label: "Centimetres (cm)" }, { value: "in", label: "Inches (in)" }] },
       { key: "gridX", label: "Grid spacing X", description: "Horizontal distance between vertical grid lines, in the selected grid unit.", type: "number", step: "any", min: 0.001, value: +(state.gridXmm / UNIT[gu]).toFixed(3) },
       { key: "gridY", label: "Grid spacing Y", description: "Vertical distance between horizontal grid lines, in the selected grid unit.", type: "number", step: "any", min: 0.001, value: +(state.gridYmm / UNIT[gu]).toFixed(3) },
-      { key: "invertZoom", section: "Navigation & help", label: "Reverse zoom direction", type: "checkbox", value: preferences.invertZoom, description: "Reverse Cmd/Ctrl + scroll and trackpad pinch zoom in Cut. Panning stays the same. Applies immediately.", onChange: (value) => updatePreferences({ invertZoom: value }) },
+      { key: "invertZoom", section: "Navigation & help", sectionDescription: "Zooming, tooltips and explanations.", label: "Reverse zoom direction", type: "checkbox", value: preferences.invertZoom, description: "Reverse Cmd/Ctrl + scroll and trackpad pinch zoom in Cut. Panning stays the same. Applies immediately.", onChange: (value) => updatePreferences({ invertZoom: value }) },
       { key: "tooltips", label: "Show tooltips", type: "checkbox", value: preferences.tooltips, description: "Show explanations when hovering over or focusing toolbar buttons. Applies immediately.", onChange: (value) => updatePreferences({ tooltips: value }) },
       { key: "hideLaserPreviewIntro", label: "Skip Laser Preview explanation", type: "checkbox", value: preferences.hideLaserPreviewIntro, description: "Turn this off to show the explanation on the next activation. You can also open it from Help.", onChange: value => updatePreferences({ hideLaserPreviewIntro: value }) },
       { key: "tooltipDelay", label: "Tooltip delay", type: "select", value: preferences.tooltipDelay, description: "How long to hover before showing a tooltip. Keyboard help appears sooner. Applies immediately.", showIf: (values) => values.tooltips, options: [{ value: 350, label: "Quick · 0.35 seconds" }, { value: 1000, label: "Normal · 1 second" }, { value: 1800, label: "Relaxed · 1.8 seconds" }], onChange: (value) => updatePreferences({ tooltipDelay: value }) },
+      { key: "shortcuts", section: "Keyboard shortcuts", type: "custom",
+        sectionDescription: "Click a shortcut and press the new keys. Backspace removes it, Escape stops. Changed shortcuts are shown in bold and are saved with Save.",
+        render: (host) => {
+          shortcuts = shortcutsEditor(host, { isMac: drawIsMac });
+          // Enter in the search field filters; it does not save the window.
+          host.querySelector("input")?.addEventListener("keydown", (event) => { if (event.key === "Enter") event.preventDefault(); });
+          settingsButtons(host, [["Reset all to defaults", () => shortcuts.reset(), "shortcutsReset"]]);
+        },
+        read: () => shortcuts.read() },
       ...(mcp ? [
-        { key: "mcp", section: "Automation", label: "Let AI agents draw in modCut (MCP server)", type: "switch", value: mcp.enabled,
+        { key: "mcp", section: "Automation", sectionDescription: "Let other programs on this computer work with modCut.", label: "Let AI agents draw in modCut (MCP server)", type: "switch", value: mcp.enabled,
           description: "Runs a local MCP server so an agent such as Claude Code can read and change the active Draw document. Only programs on this computer with the token below can connect. Every change is an undo step.",
           onChange: async (value) => {
             const status = await window.modcut.setMcpServer(value);
@@ -2268,9 +2318,16 @@ async function openSettings() {
         { key: "mcpCommand", label: "Connect Claude Code", type: "text", readOnly: true, value: mcpCommand(mcp), showIf: (values) => values.mcp,
           description: "Run this command in a terminal on this computer. Keep the token private: it lets a program change your drawings." },
       ] : []),
+      { key: "backup", section: "Backup & transfer", type: "custom",
+        sectionDescription: "Save all your settings in one file: machines, materials, process profiles, preferences, keyboard shortcuts and Draw workspaces. Use it as a backup or to set up modCut the same way on another computer.",
+        render: (host) => settingsButtons(host, [["Export settings…", exportSettings, "settingsExport"], ["Import settings…", closeThen(importSettings), "settingsImport"]]),
+        description: "Export saves what is stored now; save changes in this window first. Import replaces the parts found in the file." },
     ],
   });
   if (!v) return;
+  if (JSON.stringify(v.shortcuts) !== JSON.stringify(keyOverrides())) {
+    try { await saveShortcuts(v.shortcuts); } catch (e) { toast(`Shortcuts were not saved: ${e.message}`, "err"); }
+  }
   setUnits(v.units);
   state.gridUnit = v.gridUnit;
   state.gridXmm = Math.max(0.5, v.gridX * UNIT[v.gridUnit]);

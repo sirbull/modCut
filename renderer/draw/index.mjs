@@ -1722,6 +1722,9 @@ typeOnPath:id=>editText(undefined,null,null,{pathFrom:id}),cursor,contextMenu:(x
     eyedropperModifiers:event=>interactions?.eyedropperModifiers(event),
     pathModifiers:event=>paths?.modifiers(event),
     setTemporaryTool(value){temporary=value;canvas.dataset.tool=temporary?.id || state.ui.tool;canvas.style.cursor=cursor();interactions?.refreshEyedropper();status();},
+  // Shortcuts changed in Preferences: tooltips and panel labels show the new keys.
+  function syncShortcuts(){if(!destroyed)run(()=>{toolbar?.update();panels?.render();status();});}
+  window.addEventListener('modcut-shortcuts-change',syncShortcuts);
     /** Cut > Edit in Draw: the copied Cut objects on a new bed-sized artboard, where they were on the bed. */
     async editFromCut({svg,warning},{width,height}){
       if(!svg)throw new Error(warning||'Nothing in the Cut selection can be edited in Draw.');
@@ -1731,7 +1734,7 @@ typeOnPath:id=>editText(undefined,null,null,{pathFrom:id}),cursor,contextMenu:(x
       if(warning||result.warning)onNotice([warning,result.warning].filter(Boolean).join(' '));
     },
     async import(prepared,name,options={}){const result=await importArtwork(scope,state,prepared,name,layerId(),{...options,alive:()=>!destroyed});select(options.template?[]:result.ids);if(options.fitArtboard)fit();return result;},
-    destroy(){textOpening++;activeText?.destroy();closeFontBrowser();clearTracePreview();for(const stop of traceWorkers)stop();destroyed=true;contextMenu.destroy();rulerInteractions.destroy();laserDialog?.querySelector('[data-x=cancel]')?.click();ownedColorModal?.querySelector('[data-x=cancel]').click();ownedTransformModal?.querySelector('[data-x=cancel]').click();paths.destroy();interactions.destroy();measureLabel.destroy();toolbar.destroy();panels.destroy();unsubscribe();observer.disconnect();window.removeEventListener('modcut-theme-change',syncTheme);window.removeEventListener('modcut-scale-strokes-change',syncScaleStrokes);workspaces.delete(root);withScope(()=>{renderer.destroy();scope.remove();});controls.remove();root.replaceChildren();},
+    destroy(){textOpening++;activeText?.destroy();closeFontBrowser();clearTracePreview();for(const stop of traceWorkers)stop();destroyed=true;contextMenu.destroy();rulerInteractions.destroy();laserDialog?.querySelector('[data-x=cancel]')?.click();ownedColorModal?.querySelector('[data-x=cancel]').click();ownedTransformModal?.querySelector('[data-x=cancel]').click();paths.destroy();interactions.destroy();measureLabel.destroy();toolbar.destroy();panels.destroy();unsubscribe();observer.disconnect();window.removeEventListener('modcut-theme-change',syncTheme);window.removeEventListener('modcut-shortcuts-change',syncShortcuts);window.removeEventListener('modcut-scale-strokes-change',syncScaleStrokes);workspaces.delete(root);withScope(()=>{renderer.destroy();scope.remove();});controls.remove();root.replaceChildren();},
   };
   workspaces.set(root,workspace);refresh();syncTheme();setTool(state.ui.tool);resize();return workspace;
 }

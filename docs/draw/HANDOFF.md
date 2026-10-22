@@ -7,6 +7,11 @@ med Recent, Presets, typeknapper og dragbar glidebryter) del 2 (Within, Along og
 del 3 (annotator på lerretet) er ferdige. Neste er Freeform (del 4): punkter med farge, opasitet
 per punkt og Spread-ring som dras, og «Lines»-modus der punkter bindes sammen av glatte linjer.
 
+**Pågår 2026-10-22: Innstillinger med seksjoner og Properties uten utvalg, i tre deler (STATUS.md 2.42).**
+Del 1 (Innstillinger-vinduet med sider til venstre, hurtigtaster og alt-i-ett eksport/import) er ferdig.
+Neste er del 2: Ruler & Grids, Guides og Snap Options som ikonknapper i Properties når ingenting er
+markert, med kommandoene `guides`, `guides-lock`, `snap-point`, `snap-grid` og `transparency-grid`.
+
 Oppdatert 2026-10-19. Arbeidsgren: `feat/vector-draw` (Claude og Codex jobber der; hent før du starter).
 
 **Høyrepanelet følger nå [RIGHT_PANELS.md](RIGHT_PANELS.md).** Trinn 1 (dokk med Properties over

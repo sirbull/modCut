@@ -2366,3 +2366,14 @@ Brukerønske: kunne justere bare strek eller bare fyll, eller alt, og enkelt kop
 til strek. Omfangsvelger øverst i panelet og Copy to Stroke / Copy to Fill (STATUS.md 2.41 punkt 3).
 431 Draw-tester, i18n og `--draw-recolor` passerer; skjermbilde kontrollert. Committet med egen
 midlertidig indeks, fordi den andre agenten hadde staget linjal-endringer i den delte indeksen.
+
+## 2026-10-22: Innstillinger med seksjoner, del 1 av 3
+
+Brukerønske: Properties uten utvalg skal vise Ruler & Grids, Guides og Snap Options som i Illustrator,
+og Innstillinger skal ha seksjoner til venstre, hurtigtaster og alt-i-ett eksport/import. Delt i tre,
+se STATUS.md 2.42. Del 1: `openModal` har `navigation` (sider til venstre) og felttypen `custom`;
+Innstillinger har sidene Appearance, Units & grid, Navigation & help, Keyboard shortcuts, Automation og
+Backup & transfer. Hurtigtastlisten er `shortcutsEditor`, delt med Edit > Keyboard Shortcuts. Eksportfilen
+tar også med hurtigtaster og lagrede arbeidsområder. 431 Draw-tester og i18n passerer; `--theme` og
+`--draw-mcp` passerer, skjermbilder kontrollert. To andre agenter jobbet samtidig (linjaler og Freeform);
+bare mine hunker i `index.mjs` og `i18n-nb.mjs` er tatt med.

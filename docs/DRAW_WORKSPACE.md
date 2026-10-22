@@ -1530,6 +1530,10 @@ Oversikt over hva som er gjort og gjenstår, inkludert delvis ferdige oppgaver: 
   * [x] Del 1: kjernen (farger, hjul, regler, biblioteker)
   * [x] Del 2: panelet under Window, med E2E (`--draw-recolor`)
   * [x] Del 3: Fill/Stroke/Alt-omfang og kopiering av stilen mellom fyll og strek
+* [ ] Innstillinger med seksjoner og Properties uten utvalg (som Illustrator), STATUS.md 2.42
+  * [x] Del 1: Innstillinger-vinduet med seksjoner til venstre, hurtigtaster og alt-i-ett eksport/import
+  * [ ] Del 2: Properties uten utvalg: Ruler & Grids, Guides og Snap Options som ikonknapper
+  * [ ] Del 3: Smart Guides-seksjon i Innstillinger (et lite, visuelt utvalg)
 * [x] D2.4 Path-kommandoer (Smooth og Split Into Grid gjenstår, se [STATUS.md](draw/STATUS.md))
 * [x] D2.5 SVG eksport/import (mask og filter rasteriseres fortsatt, se [STATUS.md](draw/STATUS.md))
 * [ ] D2.6 PDF-eksport

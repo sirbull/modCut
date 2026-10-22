@@ -60,6 +60,30 @@ export async function runThemeWorkflows(client, port) {
   assert.deepEqual(await client.evaluate("[...document.querySelector('[name=uiScale]').options].map(o=>Number(o.value))"), [0.8, 0.9, 1, 1.1, 1.2]);
   assert.equal(await client.evaluate("document.querySelector('[name=uiScale]').value"), "1");
   await snapshot("light-preferences");
+  // Sections on the left: one page at a time; shortcuts and backup have their own pages.
+  assert.deepEqual(await client.evaluate("[...document.querySelectorAll('.preferences-modal .form-nav__item')].map(b=>b.dataset.section)"),
+    ["Appearance", "Units & grid", "Navigation & help", "Keyboard shortcuts", "Automation", "Backup & transfer"]);
+  assert.equal(await client.evaluate("document.querySelectorAll('.preferences-modal .form-pane:not([hidden])').length"), 1);
+  await client.evaluate("document.querySelector('.form-nav__item[data-section=\"Keyboard shortcuts\"]').click()");
+  assert.ok(await client.evaluate("document.querySelectorAll('.preferences-modal .form-pane:not([hidden]) [data-draw-shortcut]').length") > 100, "the shortcut list shows in Preferences");
+  await snapshot("light-preferences-shortcuts");
+  await client.evaluate("document.querySelector('.form-nav__item[data-section=\"Backup & transfer\"]').click()");
+  assert.ok(await client.evaluate("!!document.querySelector('.form-pane:not([hidden]) [data-settings-export]') && !!document.querySelector('.form-pane:not([hidden]) [data-settings-import]')"));
+  await snapshot("light-preferences-backup");
+  // A shortcut recorded in Preferences is saved with Save, and Reset all brings the defaults back.
+  const recordSelect = `(() => { const b = document.querySelector('[data-draw-shortcut-keys="tool.select"]'); b.click();
+    b.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', code: 'KeyJ', bubbles: true })); return b.textContent; })()`;
+  assert.equal(await client.evaluate(recordSelect), "J");
+  await save();
+  for (let i = 0; i < 50 && await client.evaluate("!!document.querySelector('.preferences-modal')"); i++) await wait(40);
+  assert.deepEqual(await client.evaluate("window.modcut.getDrawShortcuts()"), { "tool.select": ["J"] }, "Save keeps the new shortcut");
+  await preferences();
+  await client.evaluate("document.querySelector('[data-shortcuts-reset]').click()");
+  await save();
+  for (let i = 0; i < 50 && await client.evaluate("!!document.querySelector('.preferences-modal')"); i++) await wait(40);
+  assert.deepEqual(await client.evaluate("window.modcut.getDrawShortcuts()"), {}, "Reset all to defaults");
+  await preferences();
+  await client.evaluate("document.querySelector('.form-nav__item[data-section=\"Appearance\"]').click(); document.querySelector('[name=theme]:checked').focus()");
   await inputHelpers(client).key("ArrowRight");
   assert.equal(await client.evaluate("document.querySelector('[name=theme]:checked').value"), "light", "arrow keys navigate the three appearance options");
   assert.equal(await client.evaluate("window.modcutTheme.preference"), "light");

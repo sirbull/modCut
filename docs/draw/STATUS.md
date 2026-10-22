@@ -1052,6 +1052,39 @@ Tester: `recolor.test.mjs` og `--draw-recolor` (Window-meny, ekte musedrag med C
 drag, svart uendret, regler, Skintones-bibliotek, slider, modus, Reset, angre, Fill-omfang, Copy to Stroke
 to ganger, Stroke-omfang; skjermbilder kontrollert).
 
+### 2.42 Innstillinger med seksjoner og Properties uten utvalg (2026-10-22)
+
+Brukerønske (med skjermbilder fra Illustrator): når ingenting er markert skal Properties vise Ruler &
+Grids, Guides og Snap Options som ikonknapper, med en knapp til Smart Guides-innstillingene.
+Innstillinger-vinduet skal ha seksjoner til venstre for ulike deler av programmet, inkludert
+hurtigtaster, og alt skal kunne lagres og eksporteres i én fil. Brukeren er redd Illustrators
+Smart Guides-dialog er for mye og for lite visuell; vi tar bare med det som virker og gir mening.
+
+1. **Innstillinger-vinduet (ferdig):** `openModal({ navigation: true })` i `renderer/ui.js` gjør hver
+   `section` til en side valgt i en liste til venstre (piltaster flytter, et ugyldig felt viser sin
+   side), med valgfri `sectionDescription` og felttypen `custom` (`render(host)`, `read()` som kan
+   kaste for å holde vinduet åpent). Sider: Appearance, Units & grid, Navigation & help, Keyboard
+   shortcuts, Automation (når MCP finnes) og Backup & transfer. Hurtigtastlisten er den samme som i
+   Edit > Keyboard Shortcuts (`shortcutsEditor` i `ui/shortcuts-dialog.mjs`), lagres med Save, og
+   åpne Draw-faner oppdaterer verktøytips via `modcut-shortcuts-change`. Backup & transfer har Export
+   og Import; eksportfilen har nå også hurtigtaster (`drawShortcuts`) og lagrede arbeidsområder
+   (`drawWorkspaces`, sjekket som arbeidsområdefiler ved import). Import lukker vinduet og åpner det
+   igjen på samme side, så ingen gamle verdier lagres over det importerte.
+2. **Properties uten utvalg (neste):** tre rader med ikonknapper som i Illustrator: Rulers, Grid,
+   Transparency Grid; Show Guides, Lock Guides, Smart Guides; Snap to Point, Snap to Grid, Snap to Pixel;
+   og «Smart Guides Preferences…» som åpner Innstillinger på Smart Guides-siden. Kommandoene
+   `guides`, `guides-lock`, `snap-point`, `snap-grid` og `transparency-grid` har hurtigtaster i
+   keymap, men er ikke laget ennå; `settings.snapping` finnes i dokumentmodellen uten å brukes.
+3. **Smart Guides i Innstillinger (deretter):** et lite utvalg med visuelle brytere: farge på guidene,
+   Alignment Guides, Object Highlighting, Measurement Labels, Spacing Guides og Snapping Tolerance.
+   Transform Tools, Construction Guides (vinkler), Snap to Glyph og Limit Snapping tas ikke med.
+
+Tester: `--theme` sjekker sidene, at bare én side vises, hurtigtastlisten, Export/Import-knappene og at
+en hurtigtast tatt opp i Innstillinger lagres og tilbakestilles; skjermbilder av sidene er kontrollert.
+`--draw-mcp` passerer. `--theme` er tidsfølsom (emulert systemtema og hover-forsinkelse) og feilet 2 av
+5 kjøringer på steder utenfor Innstillinger. `--draw-language` feiler på «Panel names in Norwegian»
+(panelfanene er gruppert annerledes etter panelvinduene), ikke på Innstillinger.
+
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
 | Oppgave | Status |

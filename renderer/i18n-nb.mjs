@@ -645,6 +645,16 @@ export const NB = Object.freeze({
   "Raster images can only be engraved. Use Map by color to keep vector cutting separate.": "Rasterbilder kan bare graveres. Bruk Fordel etter farge for å holde vektorkutting for seg.",
   "Sidecar unavailable": "Hjelpeprosessen er ikke tilgjengelig", "The raster image could not be decoded.": "Rasterbildet kunne ikke dekodes.", "Photo": "Foto",
   "Images in Cut cannot be pasted in Draw yet.": "Bilder i Cut kan ikke limes inn i Draw ennå.", "Output quality limit: {detail}": "Grense for utdatakvalitet: {detail}",
+  // Preferences sections
+  "Sections": "Seksjoner", "Keyboard shortcuts": "Hurtigtaster", "Backup & transfer": "Sikkerhetskopi og overføring",
+  "Reset all to defaults": "Tilbakestill alle til standard", "Saved Draw workspaces": "Lagrede arbeidsområder i Draw", "Shortcuts were not saved: {error}": "Hurtigtastene ble ikke lagret: {error}",
+  "Colours, language and the size of the interface. These apply as soon as you change them.": "Farger, språk og størrelsen på grensesnittet. Endringene brukes med en gang.",
+  "Units for sizes and positions in Cut, and the grid on the material preview.": "Enheter for størrelser og plasseringer i Cut, og rutenettet på materialforhåndsvisningen.",
+  "Zooming, tooltips and explanations.": "Zoom, verktøytips og forklaringer.",
+  "Click a shortcut and press the new keys. Backspace removes it, Escape stops. Changed shortcuts are shown in bold and are saved with Save.": "Klikk en hurtigtast og trykk de nye tastene. Backspace fjerner den, Escape avbryter. Endrede hurtigtaster vises i fet skrift og lagres med Lagre.",
+  "Let other programs on this computer work with modCut.": "La andre programmer på denne datamaskinen jobbe med modCut.",
+  "Save all your settings in one file: machines, materials, process profiles, preferences, keyboard shortcuts and Draw workspaces. Use it as a backup or to set up modCut the same way on another computer.": "Lagre alle innstillingene i én fil: maskiner, materialer, prosessprofiler, innstillinger, hurtigtaster og arbeidsområder i Draw. Bruk den som sikkerhetskopi eller for å sette opp modCut likt på en annen datamaskin.",
+  "Export saves what is stored now; save changes in this window first. Import replaces the parts found in the file.": "Eksport tar med det som er lagret nå, så lagre endringer i dette vinduet først. Import erstatter delene som finnes i filen.",
   "One or more layers use a focus offset, but the selected machine profile has no controlled Z axis enabled.": "Ett eller flere lag bruker fokusforskyvning, men den valgte maskinprofilen har ikke styrt Z-akse slått på.",
   "The selected machine profile has an invalid Z range.": "Den valgte maskinprofilen har et ugyldig Z-område.",
   // Cut window (index.html)

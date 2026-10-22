@@ -2,6 +2,8 @@
 // fields: [{ key, label, type?: "text"|"number"|"select", options?, value?, placeholder?,
 //           min?, max?, showIf?: (values) => boolean,
 //           sync?: (values, previousValues, currentValue) => nextValue|undefined }]
+// navigation: each `section` becomes a page chosen from a list on the left (initialSection opens one).
+// type "custom": render(host) builds the control; read() gives its value on submit and may throw to keep the form open.
 let nextMessageModalId = 1;
 let nextFormId = 1;
 const appearanceIcons = {
@@ -10,7 +12,7 @@ const appearanceIcons = {
   dark: '<path d="M20.5 13A8.5 8.5 0 0 1 11 3.5 8.5 8.5 0 1 0 20.5 13Z"/>',
 };
 
-export function openModal({ title, fields, submitLabel = "Save", className = "" }) {
+export function openModal({ title, fields, submitLabel = "Save", className = "", navigation = false, initialSection = null }) {
   return new Promise((resolve) => {
     const overlay = document.createElement("div");
     overlay.className = "modal-overlay";
@@ -19,13 +21,76 @@ export function openModal({ title, fields, submitLabel = "Save", className = "" 
     const form = overlay.querySelector("form");
     if (className) overlay.querySelector(".modal").classList.add(className);
     const formId = nextFormId++;
+    let nav = null, panes = null, pane = form;
+    const pages = [];
+    if (navigation) {
+      overlay.querySelector(".modal").classList.add("modal--navigation");
+      form.classList.add("form--navigation");
+      nav = document.createElement("nav");
+      nav.className = "form-nav";
+      nav.setAttribute("aria-label", "Sections");
+      panes = document.createElement("div");
+      panes.className = "form-panes";
+      form.append(nav, panes);
+    }
+    const showPage = (name, { focus = false } = {}) => {
+      for (const page of pages) {
+        const on = page.name === name;
+        page.pane.hidden = !on;
+        page.button.setAttribute("aria-current", on ? "page" : "false");
+      }
+      if (focus) pages.find((page) => page.name === name)?.button.focus();
+    };
 
     for (const f of fields) {
-      if (f.section) {
+      if (f.section && navigation) {
+        pane = document.createElement("section");
+        pane.className = "form-pane";
+        pane.dataset.section = f.section;
+        const heading = document.createElement("h3");
+        heading.className = "form-pane__title";
+        heading.textContent = f.section;
+        pane.append(heading);
+        if (f.sectionDescription) {
+          const about = document.createElement("p");
+          about.className = "form-pane__description";
+          about.textContent = f.sectionDescription;
+          pane.append(about);
+        }
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "form-nav__item";
+        button.textContent = f.section;
+        button.dataset.section = f.section;
+        button.addEventListener("click", () => showPage(f.section));
+        nav.append(button);
+        panes.append(pane);
+        pages.push({ name: f.section, pane, button });
+      } else if (f.section) {
         const section = document.createElement("h3");
         section.className = "form-section";
         section.textContent = f.section;
         form.append(section);
+      }
+      if (f.type === "custom") {
+        const host = document.createElement("div");
+        host.className = "field field--custom";
+        host.dataset.field = f.key;
+        if (f.label) {
+          const heading = document.createElement("span");
+          heading.textContent = f.label;
+          host.append(heading);
+        }
+        f.render(host);
+        if (f.description) {
+          const description = document.createElement("small");
+          description.className = "field__description";
+          description.textContent = f.description;
+          host.append(description);
+        }
+        pane.append(host);
+        host._field = f;
+        continue;
       }
       const label = document.createElement(f.type === "segmented" ? "fieldset" : "label");
       label.className = "field";
@@ -103,7 +168,7 @@ export function openModal({ title, fields, submitLabel = "Save", className = "" 
         description.textContent = f.description;
         label.append(description);
       }
-      form.append(label);
+      pane.append(label);
       label._field = f;
     }
 
@@ -147,6 +212,25 @@ export function openModal({ title, fields, submitLabel = "Save", className = "" 
       if (field?.onChange) field.onChange(currentValues()[field.key]);
     });
     applyVisibility();
+    if (navigation && pages.length) {
+      showPage(pages.some((page) => page.name === initialSection) ? initialSection : pages[0].name);
+      // Arrow keys move through the sections; a field that fails validation brings its section forward.
+      nav.addEventListener("keydown", (event) => {
+        const index = pages.findIndex((page) => page.button === document.activeElement);
+        const step = { ArrowDown: 1, ArrowUp: -1 }[event.key];
+        if (index < 0 || !step) return;
+        event.preventDefault();
+        showPage(pages[(index + step + pages.length) % pages.length].name, { focus: true });
+      });
+      form.addEventListener("invalid", (event) => {
+        const owner = event.target.closest(".form-pane");
+        if (owner?.hidden) showPage(owner.dataset.section);
+      }, true);
+    }
+    const error = document.createElement("p");
+    error.className = "form-error";
+    error.setAttribute("role", "alert");
+    form.append(error);
 
     const actions = document.createElement("div");
     actions.className = "modal-actions";
@@ -158,9 +242,15 @@ export function openModal({ title, fields, submitLabel = "Save", className = "" 
     form.addEventListener("submit", (e) => {
       e.preventDefault();
       const v = {};
-      for (const f of fields) {
-        const el = form.elements[f.key];
-        v[f.key] = ["checkbox", "switch"].includes(f.type) ? el.checked : f.type === "number" ? Number(el.value) : el.value;
+      try {
+        for (const f of fields) {
+          if (f.type === "custom") { if (f.read) v[f.key] = f.read(); continue; }
+          const el = form.elements[f.key];
+          v[f.key] = ["checkbox", "switch"].includes(f.type) ? el.checked : f.type === "number" ? Number(el.value) : el.value;
+        }
+      } catch (problem) {
+        error.textContent = problem.message;
+        return;
       }
       close(v);
     });

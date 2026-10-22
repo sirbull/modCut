@@ -156,6 +156,9 @@ the same commit that completes an item.
   on-canvas editing with the Gradient tool are done; Freeform gradients (points and lines) follow.
   Recolor (a colour wheel that turns every colour of the selection together, with harmony
   rules and colour libraries) is in Window > Recolor, for all paint, fills or strokes, with Copy to Stroke/Fill.
+  Preferences has sections on the left (appearance, units, navigation, keyboard shortcuts,
+  automation, backup), and one settings file carries machines, materials, profiles, preferences,
+  shortcuts and workspaces. Ruler, guide and snap toggles in Properties follow.
 - [ ] Phase 3 — Advanced editing: stroke expansion, effects, Image Trace,
   additional editing tools and AI/DXF export.
 - [ ] Phase 4 — Full feature set: Width, Blend, brushes, additional export
