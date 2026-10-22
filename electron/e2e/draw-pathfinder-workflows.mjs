@@ -92,7 +92,7 @@ export async function runDrawPathfinderWorkflows(client) {
   await command('deselect'); assert.equal(await title(), 'No Selection');
   assert.match(await evaluate(`document.querySelector('${root} .draw-doc-info').textContent`), /Artboard 1 · 120 × 80 mm/);
   const guides = () => evaluate(`(async()=>(${active}.state.snapshot().settings.smartGuides))()`), before = await guides();
-  await evaluate(`document.querySelector('${root} [data-draw-field=smart-guides]').click()`);
+  await evaluate(`document.querySelector('${root} [data-draw-view=smart-guides]').click()`);
   assert.equal(await guides(), !before, 'Smart Guides toggles from Properties');
   await command('undo');
 

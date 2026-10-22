@@ -110,5 +110,80 @@ export async function runDrawRulerWorkflows(client) {
     await mouse('mouseReleased', await project(101, 60));
   }
   await action('rulers');
+  await runDrawViewToggleWorkflows(client);
   console.log('PASS Draw rulers: unit menus on both rulers, keyboard, adaptive zoom labels, pointer markers, guide creation/move/cancel/delete, rotated views and unchanged document/history');
+}
+
+/** Properties with nothing selected: Ruler & Grids, Guides and Snap Options toggles, and what each one does. */
+export async function runDrawViewToggleWorkflows(client) {
+  const { evaluate } = client, { drag, mouse } = inputHelpers(client);
+  const workspace = body => evaluate(`(async()=>{const w=${active};${body}})()`);
+  const action = id => workspace(`w.handle(${JSON.stringify(id)});`);
+  const screen = (x, y) => workspace(`const b=w.scope.view.element.getBoundingClientRect();return{x:b.x+${x},y:b.y+${y}};`);
+  const project = (x, y) => workspace(`const b=w.scope.view.element.getBoundingClientRect(),p=w.scope.view.projectToView(new w.scope.Point(${x},${y}));return{x:b.x+p.x,y:b.y+p.y};`);
+  const root = '.draw-project[style*=block]';
+  // The rows show only with nothing selected, as in Illustrator.
+  const toggle = async id => { await action('deselect'); await evaluate(`document.querySelector('${root} [data-draw-view="${id}"]').click()`); };
+  // The panel redraws after the change; wait for it, then report what the button says.
+  const pressed = async (id, expected) => { let value; for (let i = 0; i < 25; i++) { value = await evaluate(`document.querySelector('${root} [data-draw-view="${id}"]')?.getAttribute('aria-pressed')`); if (value === expected) break; await wait(40); } return `${id}:${value}`; };
+  const applied = () => workspace('return w.state.history.entries.filter(e=>e.applied).length;'), history = await applied();
+  await action('deselect'); await workspace("w.state.ui.rulerGuides=[];w.setTool('select');w.withScope(()=>w.renderer.updateView());");
+  assert.deepEqual(await evaluate(`[...document.querySelectorAll('${root} .draw-view-toggles__label')].map(e=>e.textContent)`), ['Ruler & Grids', 'Guides', 'Snap Options']);
+  assert.equal(await evaluate(`document.querySelectorAll('${root} .draw-view-toggle svg').length`), 8);
+  assert.match(await evaluate(`document.querySelector('${root} [data-draw-view=rulers]').dataset.tooltip`), /^Rulers \((Ctrl|Cmd)\+R\)$/);
+  // Rulers and the transparency grid are this view's; the button shows the state.
+  await toggle('rulers'); assert.equal(await workspace('return w.state.ui.rulers;'), true); assert.equal(await pressed('rulers', 'true'), 'rulers:true');
+  await toggle('transparency-grid'); assert.equal(await pressed('transparency-grid', 'true'), 'transparency-grid:true');
+  const checker = await workspace("const g=w.scope.project.getItem({name:'Transparency grid'}),a=w.state.document.data.artboards[0];const r=g.children[0].bounds;return {n:g.children.length,inBoards:!!g.parent,b:{x:r.x,width:r.width},a:{x:a.x,width:a.width}};");
+  assert.equal(checker.n, 1); assert.ok(checker.inBoards, 'drawn under the artwork');
+  assert.ok(Math.abs(checker.b.width - checker.a.width) < .01 && Math.abs(checker.b.x - checker.a.x) < .01, 'covers the artboard ' + JSON.stringify(checker));
+  // Hidden and locked guides cannot be picked up; shown again, they are where they were.
+  await drag(await screen(10, 160), await project(60, 40));
+  const guides = () => workspace('return JSON.stringify(w.state.ui.rulerGuides);'), lineCount = () => workspace("return w.scope.project.getItem({name:'Ruler guides'}).children.length;");
+  const placed = await guides(); assert.equal(await lineCount(), 1, placed + ' ' + await workspace("return JSON.stringify(w.scope.project.getItem({name:'Ruler guides'}).children.map(c=>[c.className,c.data]));"));
+  await toggle('guides'); assert.equal(await pressed('guides', 'false'), 'guides:false'); assert.equal(await lineCount(), 0, 'hidden');
+  await drag(await project(60, 40), await project(90, 40)); assert.equal(await guides(), placed, 'a hidden guide stays put');
+  await toggle('guides'); assert.equal(await lineCount(), 1);
+  await toggle('guides-lock'); assert.equal(await pressed('guides-lock', 'true'), 'guides-lock:true');
+  if (process.argv.includes('--screenshot')) {
+    const clip = await evaluate(`(()=>{const e=document.querySelector('${root} .draw-view-toggles');e.scrollIntoView({block:'center'});const r=e.getBoundingClientRect();return {x:r.x-8,y:r.y-8,width:r.width+16,height:r.height+16,scale:2};})()`);
+    const { writeFile } = await import('node:fs/promises');
+    const { data } = await client.command('Page.captureScreenshot', { format: 'png', clip });
+    await writeFile('view-toggles-panel.png', Buffer.from(data, 'base64'));
+  }
+  await drag(await project(60, 40), await project(90, 40)); assert.equal(await guides(), placed, 'a locked guide stays put');
+  await toggle('guides-lock');
+  // Snap to Grid (10 mm): a rectangle drawn between grid lines lands on them, live while dragging.
+  const last = () => workspace('const l=w.state.document.data.layers.at(-1).children.at(-1);const b=w.renderer.bounds(l.id);return {id:l.id,x:b.x,y:b.y,w:b.width,h:b.height};');
+  const near = (a, b) => Math.abs(a - b) < .05;
+  await toggle('snap-grid'); assert.equal(await pressed('snap-grid', 'true'), 'snap-grid:true');
+  await workspace("w.setTool('rectangle');");
+  await mouse('mouseMoved', await project(13, 12)); await mouse('mousePressed', await project(13, 12), { buttons: 1 });
+  await mouse('mouseMoved', await project(30, 30), { buttons: 1 }); await mouse('mouseMoved', await project(47, 38), { buttons: 1 });
+  if (process.argv.includes('--screenshot')) {
+    const { writeFile } = await import('node:fs/promises');
+    const { data } = await client.command('Page.captureScreenshot', { format: 'png' });
+    await writeFile('view-toggles-proof.png', Buffer.from(data, 'base64'));
+  }
+  await mouse('mouseReleased', await project(47, 38));
+  let box = await last(); assert.ok(near(box.x, 10) && near(box.y, 10) && near(box.w, 40) && near(box.h, 30), JSON.stringify(box));
+  // Moving with the grid on: the box's corner goes to the grid.
+  await workspace("w.setTool('select');"); await drag(await project(30, 25), await project(43, 31));
+  box = await last(); assert.ok(near(box.x, 20) && near(box.y, 20), JSON.stringify(box));
+  // Snap to Point: a new rectangle starts on the first one's corner, and a guide catches its other corner.
+  // Snap to Point is on in new documents, as in Illustrator.
+  await toggle('snap-grid'); assert.equal(await pressed('snap-point', 'true'), 'snap-point:true');
+  await workspace("w.setTool('rectangle');");
+  const zoom = await workspace('return w.scope.view.zoom;'), off = 2 / zoom;
+  await mouse('mouseMoved', await project(20 + off, 20 - off)); await mouse('mousePressed', await project(20 + off, 20 - off), { buttons: 1 });
+  await mouse('mouseMoved', await project(60 + off * 2, 44), { buttons: 1 });
+  assert.ok(await workspace('return w.scope.project.getItems({match:i=>i.dashArray?.length&&i.strokeColor?.toCSS(true)===\'#006b5c\'}).length>0;'), 'the snap shows as guide lines while dragging');
+  await mouse('mouseReleased', await project(60 + off * 2, 44));
+  box = await last(); assert.ok(near(box.x, 20) && near(box.y, 20) && near(box.x + box.w, 60) && near(box.y + box.h, 44), JSON.stringify(box));
+  await toggle('snap-point'); assert.equal(await pressed('snap-point', 'false'), 'snap-point:false');
+  await toggle('transparency-grid'); await toggle('rulers');
+  assert.equal(await workspace("return !!w.scope.project.getItem({name:'Transparency grid'})?.parent;"), false);
+  await workspace("w.state.ui.rulerGuides=[];w.setTool('select');w.withScope(()=>w.renderer.updateView());");
+  while (await applied() > history) await action('undo');
+  console.log('PASS Draw view toggles: Properties rows, rulers, transparency grid, hidden and locked guides, snap to grid (draw and move) and snap to point with live guide lines');
 }

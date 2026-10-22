@@ -4,6 +4,8 @@ import { RULER_SIZE, guideSegment, rulerNumber, rulerScale, rulerTicks, rulerUni
 // View geometry stays outside the model, hit testing and artwork exports.
 export function createViewGuides(scope, state, boards, overlay) {
   const grid = new scope.Group({ insert: false, name: 'View grid' });
+  const checker = new scope.Group({ insert: false, name: 'Transparency grid' });
+  let checkerSignature = '';
   const rulers = new scope.Group({ insert: false, applyMatrix: false, name: 'View rulers' }); overlay.addChild(rulers);
   const guides = new scope.Group({ insert: false, applyMatrix: false, name: 'Ruler guides' }); overlay.addChild(guides);
   const markers = new scope.Group({ insert: false, applyMatrix: false, name: 'Ruler pointer' }); overlay.addChild(markers);
@@ -47,11 +49,37 @@ export function createViewGuides(scope, state, boards, overlay) {
     label.addChild(new scope.Path.Rectangle({ insert: false, rectangle: [x, y, w, h], radius: 3, fillColor: preview.snapped ? '#006B5C' : '#1473E6' }));
     text.point = new scope.Point(x + 6, y + 14); label.addChild(text);
   }
+  // View > Show Transparency Grid: a checkerboard over the artboards, under the artwork, so transparent and white
+  // areas can be told apart. One image per artboard covers only its visible part, at screen resolution.
+  function updateChecker() {
+    const on = !!state.ui?.transparencyGrid, view = scope.view;
+    if (on) boards.addChild(checker); else { checker.remove(); checkerSignature = ''; return; }
+    const signature = JSON.stringify([view.matrix.values, view.viewSize, state.document.data.artboards]);
+    if (signature === checkerSignature) return; checkerSignature = signature;
+    checker.removeChildren();
+    const zoom = view.zoom, cell = 8;
+    const tile = document.createElement('canvas'); tile.width = tile.height = cell * 2;
+    const t = tile.getContext('2d'); t.fillStyle = '#FFFFFF'; t.fillRect(0, 0, cell * 2, cell * 2);
+    t.fillStyle = '#D6D6D6'; t.fillRect(cell, 0, cell, cell); t.fillRect(0, cell, cell, cell);
+    for (const board of state.document.data.artboards) {
+      const rect = new scope.Rectangle(board.x, board.y, board.width, board.height).intersect(view.bounds);
+      if (!(rect.width > 0 && rect.height > 0)) continue;
+      const w = Math.max(1, Math.min(4096, Math.ceil(rect.width * zoom))), h = Math.max(1, Math.min(4096, Math.ceil(rect.height * zoom)));
+      const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+      // Cells count from the artboard corner, so the pattern stays put while panning.
+      const g = canvas.getContext('2d'), pattern = g.createPattern(tile, 'repeat');
+      pattern.setTransform(new DOMMatrix().translate(-((rect.x - board.x) * zoom % (cell * 2)), -((rect.y - board.y) * zoom % (cell * 2))));
+      g.fillStyle = pattern; g.fillRect(0, 0, w, h);
+      const raster = new scope.Raster({ insert: false, canvas }); raster.bounds = rect; raster.data.transparencyGrid = true;
+      checker.addChild(raster);
+    }
+  }
   function updateGuides() {
     guides.removeChildren(); guides.matrix = scope.view.matrix.inverted();
     guides.bringToFront(); rulers.bringToFront();
     let previewSegment = null;
-    for (const guide of [...(state.ui?.rulerGuides ?? []), ...(preview ? [preview] : [])]) {
+    // Hidden guides (View > Guides) stay in the view and come back when shown; a guide being dragged still shows.
+    for (const guide of [...(state.ui?.guidesHidden ? [] : state.ui?.rulerGuides ?? []), ...(preview ? [preview] : [])]) {
       if (guide === preview?.source) continue;
       const segment = guideSegment(scope, guide, state.ui?.rulers ? RULER_SIZE : 0);
       if (!segment) continue;
@@ -71,6 +99,7 @@ export function createViewGuides(scope, state, boards, overlay) {
       pointerColor = foreground;
       const unit = rulerUnit(state);
       const signature = JSON.stringify([view.matrix.values, view.viewSize, board, unit.id, state.ui?.grid, state.ui?.rulers, spacing, foreground, background]);
+      updateChecker();
       if(state.ui?.grid)boards.addChild(grid);else grid.remove();
       updateGuides();
       if (signature === previous) return; previous = signature;
@@ -117,6 +146,6 @@ export function createViewGuides(scope, state, boards, overlay) {
       rulers.addChild(new scope.Path.Rectangle({ insert: false, rectangle: [0, 0, size, size], fillColor: background }));
       rulers.addChild(new scope.PointText({ insert: false, point: [3, 15], content: unit.id, fontSize: 9, fillColor: foreground }));
     },
-    destroy() { grid.remove(); rulers.remove(); guides.remove(); markers.remove(); label.remove(); },
+    destroy() { checker.remove(); grid.remove(); rulers.remove(); guides.remove(); markers.remove(); label.remove(); },
   };
 }

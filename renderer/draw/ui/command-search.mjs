@@ -10,6 +10,8 @@ const LABELS = {
   lock: 'Lock Selection', 'unlock-all': 'Unlock All', hide: 'Hide Selection', 'show-all': 'Show All',
   'edit-text': 'Edit Text', 'create-outlines': 'Create Outlines', 'send-to-cut': 'Send Artboard to Cut', 'export-as': 'Export As', 'export-screens': 'Export for Screens',
   'use-as-template': 'Use as Template', 'toggle-control-bar': 'Control Bar', 'smart-guides': 'Smart Guides',
+  rulers: 'Show Rulers', grid: 'Show Grid', 'transparency-grid': 'Show Transparency Grid', guides: 'Show / Hide Guides', 'guides-lock': 'Lock Guides',
+  'snap-point': 'Snap to Point', 'snap-grid': 'Snap to Grid',
   join: 'Join', average: 'Average', 'offset-path': 'Offset Path', 'outline-stroke': 'Outline Stroke', expand: 'Expand', 'expand-appearance': 'Expand Appearance', 'transform-each': 'Transform Each', 'effect-offset-path': 'Effect: Offset Path', 'effect-round-corners': 'Effect: Round Corners', 'effect-transform': 'Effect: Transform', 'effect-zig-zag': 'Effect: Zig Zag', 'effect-pucker-bloat': 'Effect: Pucker & Bloat', 'effect-roughen': 'Effect: Roughen', 'effect-twist': 'Effect: Twist', 'effect-drop-shadow': 'Effect: Drop Shadow', 'effect-last': 'Apply Last Effect', 'effect-options': 'Last Effect Options', 'split-into-grid': 'Split Into Grid', 'crop-image': 'Crop Image', simplify: 'Simplify', 'reverse-path': 'Reverse Path Direction', 'add-anchors': 'Add Anchor Points',
   'remove-anchors': 'Remove Anchor Points', 'clean-up': 'Clean Up', 'compound-make': 'Make Compound Path', 'compound-release': 'Release Compound Path',
   'clip-make': 'Make Clipping Mask', 'clip-release': 'Release Clipping Mask', 'transform-again': 'Transform Again', 'rotate-dialog': 'Rotate', 'reflect-dialog': 'Reflect',

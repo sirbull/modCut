@@ -9,9 +9,9 @@ ellipse-aspekt for Radial, stiplet Along/Across. Del 4 omfatter: punkter med far
 per punkt og Spread-ring som dras, og «Lines»-modus der punkter bindes sammen av glatte linjer.
 
 **Pågår 2026-10-22: Innstillinger med seksjoner og Properties uten utvalg, i tre deler (STATUS.md 2.42).**
-Del 1 (Innstillinger-vinduet med sider til venstre, hurtigtaster og alt-i-ett eksport/import) er ferdig.
-Neste er del 2: Ruler & Grids, Guides og Snap Options som ikonknapper i Properties når ingenting er
-markert, med kommandoene `guides`, `guides-lock`, `snap-point`, `snap-grid` og `transparency-grid`.
+Del 1 (Innstillinger-vinduet med sider til venstre, hurtigtaster og alt-i-ett eksport/import) og del 2
+(Ruler & Grids, Guides og Snap Options i Properties, med snapping og gjennomsiktighetsrutenett) er ferdige.
+Neste er del 3: Smart Guides-siden i Innstillinger og knappen «Smart Guides Preferences…» i Properties.
 
 Oppdatert 2026-10-19. Arbeidsgren: `feat/vector-draw` (Claude og Codex jobber der; hent før du starter).
 

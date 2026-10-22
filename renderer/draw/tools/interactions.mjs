@@ -7,6 +7,7 @@ import { TRANSFORM_TOOLS,dragTransform,operationMatrix } from '../geom/transform
 import { createEyedropperPreview } from './eyedropper-preview.mjs';
 import { addStop, moveStop, removeStop, vectorGradient } from '../doc/gradient.mjs';
 import { addFreeformPoint, insertLinePoint, removeFreeformPoint, updateFreeformPoint } from '../doc/freeform.mjs';
+import { snapMove, snapPoint } from './snapping.mjs';
 
 // Gradient tool over the annotator: move a handle or stop, or add a stop on the line.
 const gradientCursor=hit=>!hit ? CURSORS.gradient : CURSORS[['line','segment','inside'].includes(hit.part)?'gradient-add':'gradient-move'];
@@ -84,6 +85,27 @@ export function createInteractions(canvas, state, api) {
       }
     }
     return targets;
+  }
+  /** Snap to Point (other points and visible ruler guides) and Snap to Grid, or null when both are off. */
+  function snapping(points) {
+    const s=state.document.data.settings.snapping??{};if(!s.point&&!s.grid)return null;
+    const board=activeArtboard(state),spacing=state.document.data.settings.grid;
+    return {points:s.point?points??[]:[],guides:s.point&&!state.ui.guidesHidden?state.ui.rulerGuides??[]:[],
+      grid:s.grid?{origin:{x:board.x,y:board.y},spacing}:null,tolerance:5/scope.view.zoom};
+  }
+  /** A drawing tool's point after snapping, with the guide lines that show what it snapped to. */
+  function snapAt(p) {
+    const options=gesture?.snap;if(!options)return {point:p,guides:[]};
+    const s=snapPoint({x:p.x,y:p.y},options);return {point:new scope.Point(s.x,s.y),guides:s.guides};
+  }
+  function snapMarks(guides) {
+    const group=new scope.Group();
+    for (const guide of guides) {
+      const b=scope.view.bounds,vertical=guide.axis==='x';
+      const line=new scope.Path.Line(vertical?[guide.value,b.top]:[b.left,guide.value],vertical?[guide.value,b.bottom]:[b.right,guide.value]);
+      line.strokeColor='#006B5C';line.strokeWidth=1/scope.view.zoom;line.dashArray=[4/scope.view.zoom,3/scope.view.zoom];group.addChild(line);
+    }
+    return group;
   }
   function boxPreview(box, matrix=[1,0,0,1,0,0], guides=[]) {
     const group=new scope.Group();
@@ -176,13 +198,15 @@ export function createInteractions(canvas, state, api) {
         state.ui.transformPreviewBox=transformedBox(gesture.box,gesture.matrix);
         renderer.previewTransform(gesture.ids,gesture.matrix,{scaleStrokes:gesture.tool==='scale'?state.ui.scaleStrokes!==false:null});
       }else if (SHAPE_TOOLS.includes(gesture.tool)) {
-        gesture.node=shapeFromDrag(gesture.tool,[gesture.start.x,gesture.start.y],[p.x,p.y],{...api.shapeOptions(),...gesture.modifiers});
+        const snap=snapAt(p),q=snap.point;
+        gesture.node=shapeFromDrag(gesture.tool,[gesture.start.x,gesture.start.y],[q.x,q.y],{...api.shapeOptions(),...gesture.modifiers});
         if(gesture.tool==='star' && gesture.node.params.outerRadius>0 && (event.ctrlKey || event.metaKey)) {
           gesture.innerControl ||= {x:event.clientX,radius:gesture.node.params.outerRadius,ratio:gesture.node.params.innerRadius/gesture.node.params.outerRadius};
           const ratio=Math.max(.02,Math.min(.98,gesture.innerControl.ratio+(event.clientX-gesture.innerControl.x)/150));
           Object.assign(gesture.node.params,{outerRadius:gesture.innerControl.radius,innerRadius:gesture.innerControl.radius*ratio});
         } else gesture.innerControl=null;
         preview=renderer.shapePreview(gesture.node);
+        if(snap.guides.length&&preview){const marks=snapMarks(snap.guides);marks.addChild(preview);preview=marks;}
       } else if (gesture.mode==='paintbrush'||gesture.mode==='blob-brush') {
         // Paintbrush previews a thin line; Blob Brush the round brush at its size.
         const last=gesture.points.at(-1);if(Math.hypot(p.x-last[0],p.y-last[1])>=.5/scope.view.zoom)gesture.points.push([p.x,p.y]);
@@ -271,7 +295,10 @@ export function createInteractions(canvas, state, api) {
         else {
           const delta=p.subtract(gesture.start);if(event.shiftKey) {if(Math.abs(delta.x)>Math.abs(delta.y))delta.y=0;else delta.x=0;}
           let snapped={x:delta.x,y:delta.y,guides:[]};
-          if (state.document.data.settings.smartGuides && gesture.tool==='select') snapped=snapTranslation(gesture.box,[delta.x,delta.y],gesture.targets,4/scope.view.zoom);
+          // Snap to Point and Snap to Grid come before Smart Guides; with the grid on, the grid decides, as in Illustrator.
+          const snap=gesture.tool==='select'&&snapping(gesture.targets),moved=snap&&snapMove(gesture.box,gesture.start,[delta.x,delta.y],snap);
+          if (moved && (moved.x!==delta.x||moved.y!==delta.y)) snapped=moved;
+          else if (state.document.data.settings.smartGuides && gesture.tool==='select') snapped=snapTranslation(gesture.box,[delta.x,delta.y],gesture.targets,4/scope.view.zoom);
           if(event.shiftKey){const axis=Math.abs(delta.x)>Math.abs(delta.y)?'y':'x';snapped[axis]=0;snapped.guides=snapped.guides.filter(g=>g.axis!==axis);}
           guides=snapped.guides;gesture.matrix=[1,0,0,1,snapped.x,snapped.y];
         }
@@ -442,7 +469,10 @@ export function createInteractions(canvas, state, api) {
       gesture.targets=targets();
       const board=[...state.document.data.artboards].reverse().find(a=>p.x>=a.x && p.x<=a.x+a.width && p.y>=a.y && p.y<=a.y+a.height);
       if (board) {state.ui.artboardId=board.id;api.status(p);}
-    } else if (SHAPE_TOOLS.includes(tool)) gesture=base;
+    } else if (SHAPE_TOOLS.includes(tool)) {
+      gesture={...base,snap:snapping(state.document.data.settings.snapping?.point?targets():[])};
+      gesture.start=gesture.end=snapAt(p).point;
+    }
   },events);
   canvas.addEventListener('pointermove',update,events);
   canvas.addEventListener('pointerup',event=>{

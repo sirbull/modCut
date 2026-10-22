@@ -74,7 +74,7 @@ const implementedTools=new Set(['path-eraser','smooth','vertical-type','touch-ty
 const commands=new Set(['undo','redo','delete','select-all','select-artboard','deselect','cancel','fit-artboard','fit-all','actual-size','zoom-in','zoom-out','outline','laser-preview','laser-preview-help','laser-processes',
   'cut','copy','paste','paste-front','paste-back','paste-place','paste-all-artboards','rulers','grid',
   'edit-text','create-outlines','join','average','offset-path','outline-stroke','expand','expand-appearance','transform-each','split-into-grid','crop-image','effect-last','effect-options',...Object.keys(EFFECTS).map(t=>`effect-${t}`),...Object.keys(WARP_STYLES).map(t=>`warp-${t}`),...Object.keys(LIVE_LABELS).map(t=>`live-${t}`),'simplify','reverse-path','add-anchors','remove-anchors','clean-up','compound-make','compound-release','clip-make','clip-release','reset-rotate-view','package','keyboard-shortcuts','workspace-new','workspace-reset','workspace-manage','blend-make','blend-release','blend-expand','blend-options','blend-reverse','blend-replace-spine','blend-reverse-spine','envelope-make','envelope-warp','envelope-release','envelope-expand','mask-make','mask-release','mask-clip','mask-invert','send-to-cut','export-as','export-screens','use-as-template','toggle-control-bar','group','ungroup','bring-forward','send-backward','bring-front','send-back','lock','unlock-all','hide','show-all',
-  'paint-focus','paint-swap','paint-none','paint-solid','paint-gradient','default-paint','smart-guides','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','shear-dialog','toggle-panels','toggle-panels-except-tools','command-search','draw-mode','draw-normal','draw-behind','draw-inside','reselect','select-inverse','select-next-above','select-next-below','save-selection','edit-selection',
+  'paint-focus','paint-swap','paint-none','paint-solid','paint-gradient','default-paint','smart-guides','guides','guides-lock','snap-point','snap-grid','transparency-grid','tool-dialog','transform-again','rotate-dialog','reflect-dialog','scale-dialog','shear-dialog','toggle-panels','toggle-panels-except-tools','command-search','draw-mode','draw-normal','draw-behind','draw-inside','reselect','select-inverse','select-next-above','select-next-below','save-selection','edit-selection',
   ...Object.keys(SAME_MODES).map(m=>`select-same-${m}`),...Object.keys(OBJECT_KINDS).map(k=>`select-object-${k}`),'select-object-direction-handles',
   ...PANEL_DEFINITIONS.map(p=>`panel.${p.id}`),...BUILTIN_WORKSPACES.map(ws=>`workspace-preset.${ws.id}`),'workspace-save','workspace-load',...['left','right','up','down'].flatMap(d=>[`nudge-${d}`,`nudge-large-${d}`,`duplicate-${d}`])]);
 export function createDrawWorkspace(root,{paper=window.paper,state=createProjectDraw(),onError=console.warn,onNotice=()=>{},onImport=()=>{},onSendToCut=null,cutIsEmpty=()=>false,cutClipboard=()=>null,onExport=null,getPreferences=()=>({}),setPreferences=()=>{},getLaserProcesses=()=>null,setLaserProcesses=()=>false,statusHost=null}={}) {
@@ -1581,7 +1581,9 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     if(command==='fit-artboard')return fit();if(command==='fit-all')return fit(null);
     if(command==='zoom-in'||command==='zoom-out')return zoomAt(scope.view.center,command==='zoom-in'?1.25:.8);
     if(command==='actual-size')return zoomAt(scope.view.center,(96/25.4)/scope.view.zoom);
-    if(command==='rulers'||command==='grid'){state.ui[command]=!state.ui[command];renderer.updateView();return;}
+    // View toggles belong to this tab's view; Properties shows their state when nothing is selected.
+    const viewToggle={rulers:'rulers',grid:'grid','transparency-grid':'transparencyGrid',guides:'guidesHidden','guides-lock':'guidesLocked'}[command];
+    if(viewToggle){state.ui[viewToggle]=!state.ui[viewToggle];renderer.updateView();panels?.render();return;}
     if(command==='laser-preview')return void toggleLaserPreview().catch(error=>onError(error.message));
     if(command==='laser-processes')return void editLaserProcesses().catch(error=>onError(error.message));
     if(command==='laser-preview-help'){if(!document.querySelector('.modal-overlay')){void cutPreviewIntroDialog().then(result=>{if(result?.hide)setPreferences({hideLaserPreviewIntro:true});});}return;}
@@ -1613,6 +1615,8 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       state.history.transaction('Delete',()=>{for(const id of selectedIds())state.history.execute(removeNode(id));});return;
     }
     if(command==='smart-guides'){const settings=state.document.data.settings;state.history.execute(updateDocument({settings:{...settings,smartGuides:!settings.smartGuides}}));return;}
+    if(command==='snap-point'||command==='snap-grid'){const settings=state.document.data.settings,key=command.slice(5);
+      state.history.execute(updateDocument({settings:{...settings,snapping:{...settings.snapping,[key]:!settings.snapping?.[key]}}},{label:key==='point'?'Snap to Point':'Snap to Grid'}));return;}
     if(command==='paint-focus'){state.ui.paintFocus=state.ui.paintFocus==='fill'?'stroke':'fill';toolbar.update();return;}
     if(command==='paint-none')return paint(state.ui.paintFocus,null);
     if(command==='paint-gradient'){const kind=state.ui.paintFocus==='stroke'?'stroke':'fill',last=state.ui.lastGradient;
@@ -1732,6 +1736,9 @@ typeOnPath:id=>editText(undefined,null,null,{pathFrom:id}),cursor,contextMenu:(x
   const observer=new ResizeObserver(resize);observer.observe(stage);
   function syncTheme(){const css=getComputedStyle(root);withScope(()=>renderer.setTheme({muted:css.getPropertyValue('--text-muted').trim(),background:css.getPropertyValue('--surface-2').trim()}));}
   window.addEventListener('modcut-theme-change',syncTheme);
+  // Shortcuts changed in Preferences: tooltips and panel labels show the new keys.
+  function syncShortcuts(){if(!destroyed)run(()=>{toolbar?.update();panels?.render();status();});}
+  window.addEventListener('modcut-shortcuts-change',syncShortcuts);
   boardSelect.addEventListener('change',()=>artboards.choose(boardSelect.value,true));
   zoomInput.addEventListener('change',()=>{if(Number.isFinite(zoomInput.valueAsNumber)&&zoomInput.valueAsNumber>=.0001&&zoomInput.valueAsNumber<=10000)zoomAt(scope.view.center,zoomInput.valueAsNumber/100*(96/25.4)/scope.view.zoom);else status();});
   laserButton.addEventListener('click',()=>handle('laser-preview'));processesButton.addEventListener('click',()=>handle('laser-processes'));
@@ -1741,9 +1748,6 @@ typeOnPath:id=>editText(undefined,null,null,{pathFrom:id}),cursor,contextMenu:(x
     eyedropperModifiers:event=>interactions?.eyedropperModifiers(event),
     pathModifiers:event=>paths?.modifiers(event),
     setTemporaryTool(value){temporary=value;canvas.dataset.tool=temporary?.id || state.ui.tool;canvas.style.cursor=cursor();interactions?.refreshEyedropper();status();},
-  // Shortcuts changed in Preferences: tooltips and panel labels show the new keys.
-  function syncShortcuts(){if(!destroyed)run(()=>{toolbar?.update();panels?.render();status();});}
-  window.addEventListener('modcut-shortcuts-change',syncShortcuts);
     /** Cut > Edit in Draw: the copied Cut objects on a new bed-sized artboard, where they were on the bed. */
     async editFromCut({svg,warning},{width,height}){
       if(!svg)throw new Error(warning||'Nothing in the Cut selection can be edited in Draw.');

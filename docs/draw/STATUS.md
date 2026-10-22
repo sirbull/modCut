@@ -1093,12 +1093,23 @@ Smart Guides-dialog er for mye og for lite visuell; vi tar bare med det som virk
    og Import; eksportfilen har nå også hurtigtaster (`drawShortcuts`) og lagrede arbeidsområder
    (`drawWorkspaces`, sjekket som arbeidsområdefiler ved import). Import lukker vinduet og åpner det
    igjen på samme side, så ingen gamle verdier lagres over det importerte.
-2. **Properties uten utvalg (neste):** tre rader med ikonknapper som i Illustrator: Rulers, Grid,
-   Transparency Grid; Show Guides, Lock Guides, Smart Guides; Snap to Point, Snap to Grid, Snap to Pixel;
-   og «Smart Guides Preferences…» som åpner Innstillinger på Smart Guides-siden. Kommandoene
-   `guides`, `guides-lock`, `snap-point`, `snap-grid` og `transparency-grid` har hurtigtaster i
-   keymap, men er ikke laget ennå; `settings.snapping` finnes i dokumentmodellen uten å brukes.
-3. **Smart Guides i Innstillinger (deretter):** et lite utvalg med visuelle brytere: farge på guidene,
+2. **Properties uten utvalg (ferdig):** tre rader med ikonknapper (`panels/view-icons.mjs`, egne
+   ikoner i Tabler-stil) som i Illustrator: Ruler & Grids (Rulers, Grid, Transparency Grid), Guides
+   (vis/skjul, Lock Guides, Smart Guides) og Snap Options (Snap to Point, Snap to Grid). Knappene viser
+   tilstanden (`aria-pressed`) og hurtigtasten i verktøytipset. Kommandoene finnes også i View-menyen og
+   kommandosøket med hurtigtastene fra keymap. Linjaler, rutenett, gjennomsiktighetsrutenett og
+   hjelpelinjer hører til fanens visning (`state.ui`); snapping er dokumentinnstilling
+   (`settings.snapping`, ett angresteg). Skjulte eller låste hjelpelinjer kan ikke flyttes, men nye kan
+   dras ut. Gjennomsiktighetsrutenettet er et sjakkbrett over artboardene og under tegningen, ett bilde
+   per artboard for bare den synlige delen, i skjermoppløsning. Snapping (`tools/snapping.mjs`):
+   Snap to Point fester til andre objekters ankre, hjørner og midtpunkt og til synlige hjelpelinjer
+   innen 5 skjermpiksler; Snap to Grid fester alltid til rutenettet fra artboardets hjørne. Ved flytting
+   fester grepet til punkter, kanter og midte til hjelpelinjer, ellers hjørnet til rutenettet; Snap to
+   Grid overstyrer Smart Guides som i Illustrator. Formverktøyene fester start og slutt. Det man fester
+   til vises som stiplede linjer mens man drar. Snap to Point er på i nye dokumenter (som i Illustrator).
+   Ikke tatt med: Snap to Pixel (lite nytte i mm for laser), og snapping med Pen og Direct Selection.
+   Knappen «Smart Guides Preferences…» kommer i del 3, sammen med siden den åpner.
+3. **Smart Guides i Innstillinger (neste):** et lite utvalg med visuelle brytere: farge på guidene,
    Alignment Guides, Object Highlighting, Measurement Labels, Spacing Guides og Snapping Tolerance.
    Transform Tools, Construction Guides (vinkler), Snap to Glyph og Limit Snapping tas ikke med.
 
@@ -1107,6 +1118,10 @@ en hurtigtast tatt opp i Innstillinger lagres og tilbakestilles; skjermbilder av
 `--draw-mcp` passerer. `--theme` er tidsfølsom (emulert systemtema og hover-forsinkelse) og feilet 2 av
 5 kjøringer på steder utenfor Innstillinger. `--draw-language` feiler på «Panel names in Norwegian»
 (panelfanene er gruppert annerledes etter panelvinduene), ikke på Innstillinger.
+Del 2: `snapping.test.mjs` og `--draw-rulers` (`runDrawViewToggleWorkflows`: radene, verktøytips,
+linjaler, gjennomsiktighetsrutenett under tegningen, skjult og låst hjelpelinje som ikke flyttes, rektangel
+og flytting festet til rutenett med ekte musedrag, rektangel festet til hjørne og hjelpelinje med stiplede
+linjer midt i draget, tilbake til utgangspunktet). Skjermbilder av radene og midt i draget er kontrollert.
 
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 

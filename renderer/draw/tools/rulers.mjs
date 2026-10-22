@@ -15,7 +15,8 @@ export function createRulerInteractions(canvas, state, api) {
   const inside = p => p.x >= (state.ui?.rulers ? RULER_SIZE : 0) && p.y >= (state.ui?.rulers ? RULER_SIZE : 0)
     && p.x <= scope.view.viewSize.width && p.y <= scope.view.viewSize.height;
   function guideAt(p) {
-    if (!inside(p)) return null;
+    // Hidden or locked guides cannot be picked up; new ones can still be pulled from the rulers.
+    if (!inside(p) || state.ui.guidesHidden || state.ui.guidesLocked) return null;
     let nearest = null, distance = 5;
     for (const guide of state.ui.rulerGuides ?? []) {
       const segment = guideSegment(scope, guide, state.ui?.rulers ? RULER_SIZE : 0);

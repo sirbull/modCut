@@ -2399,3 +2399,19 @@ et element i en optgroup. 436 Draw-tester og i18n passerer; `--draw-recolor` pas
 Én tidligere kjøring feilet en gang i Shift-steget og lot seg ikke gjenskape. Obs til neste agent: HEAD sin
 `renderer/draw/index.mjs` har hatt en syntaksfeil siden `a5daf7b` (delvis commit); rettelsen ligger
 ucommittet i den andre agentens arbeidstre.
+
+## 2026-10-22: Innstillinger med seksjoner, del 2 av 3 (Properties uten utvalg)
+
+Ruler & Grids, Guides og Snap Options som ikonknapper i Properties når ingenting er markert, se
+STATUS.md 2.42. Nye kommandoer `transparency-grid`, `guides`, `guides-lock`, `snap-point` og `snap-grid`
+(også i View-menyen og kommandosøket). `tools/snapping.mjs` fester flytting og formverktøy til punkter,
+hjelpelinjer og rutenett, med stiplede linjer mens man drar. `settings.snapping.point` var allerede på
+som standard i dokumentmodellen, men ble ikke brukt; nå virker den, så Snap to Point er på i nye
+dokumenter som i Illustrator. Fallgruver i E2E: Properties viser radene bare uten utvalg (tegnede
+former blir markert), og `history.entries` krymper ikke ved angre (tell `applied`). 437 Draw-tester og
+i18n passerer; `--draw-rulers` passerer med ekte musedrag; skjermbilder kontrollert.
+Retting: del 1 (a5daf7b) la `syncShortcuts`-linjene inne i et objekt i `index.mjs`, så filen ikke kunne
+parses i a5daf7b til og med 7349683. Årsaken var at bare egne hunker ble lagt i indeksen med
+`git diff -U0` og `git apply --unidiff-zero`: uten kontekst havner linjene på feil sted når andre har
+uncommittede endringer lenger opp. Rettet her. Når flere agenter deler arbeidskopien: legg filen i
+indeksen som HEAD pluss egne endringer ved et innholdsanker, og kjør `node --check` på `git show :fil`.

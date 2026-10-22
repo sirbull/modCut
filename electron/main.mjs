@@ -263,6 +263,9 @@ function buildMenu(mode = "cut") {
       { label: "Outline / Preview", accelerator: acceleratorFor("outline", { isMac }), click: () => send("outline") },
       { label: "Reset Rotate View", click: () => send("reset-rotate-view") },
       editItem("Show Rulers","rulers"), editItem("Show Grid","grid"),
+      editItem("Show Transparency Grid","transparency-grid"),
+      { label: "Guides", submenu: [editItem("Show / Hide Guides","guides"), editItem("Lock Guides","guides-lock")] },
+      editItem("Smart Guides","smart-guides"), editItem("Snap to Point","snap-point"), editItem("Snap to Grid","snap-grid"),
       { label: "Control Bar", click: () => send("toggle-control-bar") },
       { role: "togglefullscreen", label: "Full screen" },
       { role: "toggleDevTools", label: "Developer Tools" }];

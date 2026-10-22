@@ -661,6 +661,12 @@ export const NB = Object.freeze({
   "Raster images can only be engraved. Use Map by color to keep vector cutting separate.": "Rasterbilder kan bare graveres. Bruk Fordel etter farge for å holde vektorkutting for seg.",
   "Sidecar unavailable": "Hjelpeprosessen er ikke tilgjengelig", "The raster image could not be decoded.": "Rasterbildet kunne ikke dekodes.", "Photo": "Foto",
   "Images in Cut cannot be pasted in Draw yet.": "Bilder i Cut kan ikke limes inn i Draw ennå.", "Output quality limit: {detail}": "Grense for utdatakvalitet: {detail}",
+  // View toggles in Properties and the View menu
+  "Ruler & Grids": "Linjaler og rutenett", "Guides": "Hjelpelinjer", "Snap Options": "Festealternativer", "Rulers": "Linjaler", "Grid": "Rutenett",
+  "Transparency Grid": "Gjennomsiktighetsrutenett", "Show Transparency Grid": "Vis gjennomsiktighetsrutenett", "Show / Hide Guides": "Vis / skjul hjelpelinjer",
+  "Lock Guides": "Lås hjelpelinjer", "Snap to Point": "Fest til punkt", "Snap to Grid": "Fest til rutenett", "guide": "hjelpelinje",
+  // A control's name with its shortcut, such as "Rulers (Ctrl+R)"
+  "{name} ({shortcut})": "{name} ({shortcut})",
   // Preferences sections
   "Sections": "Seksjoner", "Keyboard shortcuts": "Hurtigtaster", "Backup & transfer": "Sikkerhetskopi og overføring",
   "Reset all to defaults": "Tilbakestill alle til standard", "Saved Draw workspaces": "Lagrede arbeidsområder i Draw", "Shortcuts were not saved: {error}": "Hurtigtastene ble ikke lagret: {error}",

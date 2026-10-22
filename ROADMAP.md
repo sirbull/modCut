@@ -158,7 +158,8 @@ the same commit that completes an item.
   rules and colour libraries) is in Window > Recolor, for all paint, fills or strokes, with Copy to Stroke/Fill, fewer colours and a colour theme picked from artwork.
   Preferences has sections on the left (appearance, units, navigation, keyboard shortcuts,
   automation, backup), and one settings file carries machines, materials, profiles, preferences,
-  shortcuts and workspaces. Ruler, guide and snap toggles in Properties follow.
+  shortcuts and workspaces. With nothing selected, Properties has Illustrator's Ruler & Grids,
+  Guides and Snap Options toggles, with Snap to Point, Snap to Grid and a transparency grid.
 - [ ] Phase 3 — Advanced editing: stroke expansion, effects, Image Trace,
   additional editing tools and AI/DXF export.
 - [ ] Phase 4 — Full feature set: Width, Blend, brushes, additional export
