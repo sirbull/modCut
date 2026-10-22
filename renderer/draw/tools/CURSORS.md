@@ -5,10 +5,13 @@ Run `npm run build:cursors` after changing them. The builder packages all 32
 drawings into `cursor-artwork.mjs`, which ships with the renderer and needs no
 runtime access to the source directory. `npm run test:draw` checks freshness.
 The editable directory is gitignored. When it is absent in a fresh checkout,
-tests use the committed artwork module and skip the local source freshness check.
+the builder uses the committed artwork module and checks its normalized output.
 Toolbar artwork (`S_*.svg`) is separate and is not changed by this build.
 
-The original 64 × 64 viewBox, paths, colors and opacity are preserved. An explicit
+The original 64 × 64 viewBox, paths and colors are preserved. White fills and halos
+are fully opaque (100% opacity), including their enclosing groups. The builder
+normalizes exported opacity so rebuilding cannot restore translucent white.
+The area outside the cursor shapes stays transparent. An explicit
 32 × 32 display size is added so Chromium can use the SVGs as cursor images.
 CSS cursors are synchronous data URLs with platform fallbacks. Selection badges
 are drawn over the new arrow artwork; tools without a supplied replacement keep

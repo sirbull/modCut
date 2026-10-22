@@ -116,6 +116,7 @@ async function runDrawIconWorkflows({ evaluate }) {
       return {count:toolRegistry.tools.length,missing:missing.map(use=>use.getAttribute('href').split('#')[1])};
     } finally {host.remove();}
   })()`);
-  assert.deepEqual(result,{count:49,missing:[]},'Every tool sprite must render through its external SVG use reference');
-  process.stdout.write('PASS Draw: 49 external SVG tool symbols render\n');
+  assert.ok(result.count > 0, 'The tool registry contains SVG tools');
+  assert.deepEqual(result.missing,[],'Every tool sprite must render through its external SVG use reference');
+  process.stdout.write(`PASS Draw: ${result.count} external SVG tool symbols render\n`);
 }

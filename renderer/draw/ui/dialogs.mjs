@@ -306,16 +306,17 @@ export function pencilDialog(defaults={}) {
 }
 export function shapeSizeDialog(tool, defaults = {}) {
   const radial=['polygon','star'].includes(tool), line=tool==='line';
+  const units = defaults.units ?? 'mm';
   const fields=radial ? [
     {key:'radius',label:tool==='star'?'Outer radius (mm)':'Radius (mm)',type:'number',value:20,min:.001,step:'any',required:true},
     {key:'points',label:tool==='star'?'Points':'Sides',type:'number',value:defaults.points ?? (tool==='star'?5:6),min:tool==='star'?2:3,max:100,step:1,required:true},
     ...(tool==='star'?[{key:'ratio',label:'Inner / outer radius',type:'number',value:.5,min:.001,max:.999,step:'any',required:true}]:[]),
   ] : line ? [
-    {key:'lineLength',label:'Length (mm)',type:'number',value:40,min:.001,step:'any',required:true},
+    {key:'lineLength',label:`Length (${units})`,type:'number',value:defaults.lineLength ?? 40,min:.001,step:'any',required:true},
     {key:'angle',label:'Angle (°)',type:'number',value:0,step:.1,required:true},
   ] : [
-    {key:'width',label:'Width (mm)',type:'number',value:40,min:.001,step:'any',required:true},
-    {key:'height',label:'Height (mm)',type:'number',value:30,min:.001,step:'any',required:true},
+    {key:'width',label:`Width (${units})`,type:'number',value:defaults.width ?? 40,min:.001,step:'any',required:true},
+    {key:'height',label:`Height (${units})`,type:'number',value:defaults.height ?? 30,min:.001,step:'any',required:true},
     ...(tool==='rounded-rectangle'?[{key:'cornerRadius',label:'Corner radius (mm)',type:'number',value:5,min:0,step:.01,required:true}]:[]),
   ];
   return openDrawModal({title:'Draw exact shape',submitLabel:'Draw shape',className:'draw-shape-dialog',fields});

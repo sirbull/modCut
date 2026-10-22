@@ -58,7 +58,7 @@ export async function connectToPage(port, title, timeoutMs = 20_000) {
     return `(()=>{const p=(${text}),h=(globalThis.__e2eHeld??=new Set());h.add(p);return p.finally(()=>h.delete(p));})()`;
   };
   const evaluate = async (expression) => {
-    const result = await command("Runtime.evaluate", { expression: held(expression), awaitPromise: true, returnByValue: true });
+    const result = await command("Runtime.evaluate", { expression: held(expression), awaitPromise: true, returnByValue: true }).catch(error=>{throw new Error(`${error.message}: ${expression}`);});
     if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text);
     return result.result.value;
   };

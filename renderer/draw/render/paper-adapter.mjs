@@ -11,7 +11,7 @@ import { shapeSelectionKey } from '../doc/selection.mjs';
 import { scaledStrokeProperties, strokeScalingPolicy } from '../geom/transforms.mjs';
 import { isOutputNode, layerContext, ROOT_CONTEXT } from '../doc/layers.mjs';
 import { arrowShapes } from '../geom/arrows.mjs';
-import { normalizeProfile, variableStrokeRings } from '../geom/width-profile.mjs';
+import { normalizeProfile, variableStrokeRings, widthAt } from '../geom/width-profile.mjs';
 import { gradientStrokeBands } from '../geom/gradient-stroke.mjs';
 import { colorAt, isGradient, opacityAt } from '../doc/gradient.mjs';
 import { freeformPixels, isFreeform } from '../doc/freeform.mjs';
@@ -85,7 +85,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
       }));
     }return result;
   }
-  const anchors=createAnchorOverlay(scope,overlay,state,editPointToWorld,id=>editingNode(id,{logical:['direct-selection','anchor-point','delete-anchor'].includes(state.ui?.tool)}),cornerWidgets);
+  const anchors=createAnchorOverlay(scope,overlay,state,editPointToWorld,id=>editingNode(id,{logical:['direct-selection','anchor-point','delete-anchor','lasso','polygonal-lasso'].includes(state.ui?.tool)}),cornerWidgets,id=>editingNode(id,{logical:false}));
   // Gradient tool: the annotated gradient, drawn on the first painted object (see setGradientTarget).
   const gradientAnnotator=createGradientAnnotator(scope,overlay,state,id=>records.get(id)?.worldMatrix??null,(id,point)=>hit(point)===id);let gradientAnnotation={};
 
@@ -302,6 +302,20 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
       // A freeform gradient is drawn as pixels clipped to the fill, so it goes through the paint stack too.
       || shown(node.appearance?.fills).some(entry => isFreeform(entry.paint)));
   }
+  // Width edits stop at hard corners. A corner's handles follow the intersection of its normals.
+  function pathWidthContext(path) {
+    const frames=[],curves=path.curves??[];let offset=0;
+    for(const [i,curve] of curves.entries()){
+      const previous=curves[i-1]??(path.closed?curves.at(-1):null),out=curve.getNormalAt(0),incoming=previous?.getNormalAt(previous.length);
+      if(out && (!incoming || incoming.dot(out)<1-1e-7)){
+        const normal=incoming&&1+incoming.dot(out)>1e-6?incoming.add(out).divide(1+incoming.dot(out)):out;
+        frames.push({t:offset/path.length,point:curve.point1,normal});
+      }
+      offset+=curve.length;
+    }
+    if(!path.closed&&curves.length){const last=curves.at(-1),normal=last.getNormalAt(last.length);if(normal)frames.push({t:1,point:last.point2,normal});}
+    return {closed:path.closed,corners:frames.map(f=>f.t),frames};
+  }
   /**
    * Points along each subpath of `item` (its own space) with unit normals and length shares: each curve
    * is sampled by length, ends included, so corners keep their anchors (joins come out bevelled).
@@ -319,14 +333,14 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
         }
         before += length;
       }
-      if (path.closed) samples.pop();
-      out.push({ samples, closed: path.closed });
+      if (path.closed&&samples.length) { samples[0].incoming=samples.at(-1).n; samples.pop(); }
+      out.push({ samples, ...pathWidthContext(path) });
     }
     return out;
   }
   /** Variable-width stroke outline of `item`'s geometry as subpaths. */
   function variableStrokeSubpaths(item, stroke) {
-    return strokeSamples(item).flatMap(({ samples, closed }) => variableStrokeRings(samples, stroke.width, stroke.widthProfile, { closed, cap: stroke.cap ?? 'butt' })
+    return strokeSamples(item).flatMap(({ samples, closed, corners }) => variableStrokeRings(samples, stroke.width, stroke.widthProfile, { closed, corners, cap: stroke.cap ?? 'butt', join:stroke.join??'miter',miterLimit:stroke.miterLimit??4 })
       .map(ring => ({ closed: true, segments: ring.map(p => ({ p, in: [0, 0], out: [0, 0] })) })));
   }
   function variableStroke(item, stroke) {
@@ -351,8 +365,8 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
   function gradientStroke(item, stroke) {
     const paint = stroke.paint, opaque = paint.stops.every(s => (s.opacity ?? 1) >= 1) && (stroke.opacity ?? 1) >= 1;
     const group = new scope.Group({ insert: false });
-    for (const { samples, closed } of strokeSamples(item)) {
-      for (const band of gradientStrokeBands(samples, stroke.width, stroke.widthProfile, { mode: paint.strokeMode, closed, cap: stroke.cap ?? 'butt', opaque })) {
+    for (const { samples, closed, corners } of strokeSamples(item)) {
+      for (const band of gradientStrokeBands(samples, stroke.width, stroke.widthProfile, { mode: paint.strokeMode, closed, corners, cap: stroke.cap ?? 'butt', opaque })) {
         const piece = new scope.CompoundPath({ insert: false, fillRule: 'nonzero', children: band.rings.map(ring => new scope.Path({ insert: false, closed: true, segments: ring })) });
         piece.fillColor = color({ type: 'solid', color: colorAt(paint, band.t) }); piece.fillColor.alpha = opacityAt(paint, band.t) * (stroke.opacity ?? 1);
         group.addChild(piece);
@@ -958,7 +972,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
         const children = [...(copy.children ?? [])];
         (original.children ?? []).forEach((child, i) => {
           const childId = child.data?.nodeId;
-          if (child.data?.tracePreview || isTextFrame(child) || childId && !isOutputNode(state.document, childId)) children[i].remove(); else fix(child, children[i]);
+          if (child.data?.tracePreview || child.data?.appearancePreview || isTextFrame(child) || childId && !isOutputNode(state.document, childId)) children[i].remove(); else fix(child, children[i]);
         });
         if (rasterMasks && id && records.get(id)?.maskView && copy.parent) {
           const box = copy.strokeBounds, resolution = Math.min(rasterMasks / 25.4 * 72, 6000 / Math.max(box.width, box.height, 1e-6) * 72);
@@ -967,7 +981,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
       };
       const group = new scope.Group({ insert: false });
       for (const child of artwork.children) {
-        const id = child.data?.nodeId; if (child.data?.tracePreview || isTextFrame(child) || id && !isOutputNode(state.document, id)) continue;
+        const id = child.data?.nodeId; if (child.data?.tracePreview || child.data?.appearancePreview || isTextFrame(child) || id && !isOutputNode(state.document, id)) continue;
         const copy = child.clone({ insert: false, deep: true }); fix(child, copy); group.addChild(copy);
       }
       return resolveClips ? resolveClipping(group) : group;
@@ -1119,19 +1133,30 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
       if (!path.curves?.length || !(path.length > 0)) continue;
       const loc = path.getNearestLocation(local); if (!loc) continue;
       const d = local.getDistance(loc.point); if (best && d >= best.distance) continue;
-      const n = loc.normal ?? path.getNormalAt(loc.offset), away = local.subtract(loc.point);
-      best = { subpath: index, t: loc.offset / path.length, distance: d, side: n && away.dot(n) < 0 ? 'right' : 'left' };
+      const context=pathWidthContext(path),worldPoint=loc.point.transform(record.worldMatrix);
+      const corner=context.frames.find(f=>f.point.transform(record.worldMatrix).getDistance(worldPoint)<=4/scope.view.zoom);
+      const centre=corner?.point??loc.point,n=corner?.normal??loc.normal??path.getNormalAt(loc.offset),away=local.subtract(centre);
+      const world = centre.transform(record.worldMatrix);
+      best = { subpath: index, t: corner?.t??loc.offset / path.length, distance: d, side: n && away.dot(n) < 0 ? 'right' : 'left',
+        point: [world.x, world.y], localPoint: [centre.x, centre.y], normal: n && [n.x, n.y],closed:context.closed,corners:context.corners };
     }
     return best;
   }
   /** World positions of each width point of `stroke` on node `id`: the point on the path and both side ends. */
-  function widthHandles(id, stroke) {
-    const item = items.get(id), record = records.get(id), points = normalizeProfile(stroke?.widthProfile); if (!item || !record?.worldMatrix || !points) return [];
+  function widthHandles(id, stroke, probe = null) {
+    const item = items.get(id), record = records.get(id), points = normalizeProfile(stroke?.widthProfile) ?? []; if (!item || !record?.worldMatrix) return [];
     const out = [];
-    for (const path of (item.children ?? [item]).filter(p => p.curves?.length && p.length > 0)) for (const [index, w] of points.entries()) {
-      const at = Math.min(path.length, w.t * path.length), p = path.getPointAt(at), n = path.getNormalAt(at); if (!p || !n) continue;
-      const world = q => { const r = q.transform(record.worldMatrix); return [r.x, r.y]; };
-      out.push({ index, t: w.t, point: world(p), left: world(p.add(n.multiply(w.left * stroke.width))), right: world(p.add(n.multiply(-w.right * stroke.width))) });
+    for (const [subpath, path] of (item.children ?? [item]).entries()) {
+      if (!path.curves?.length || !(path.length > 0)) continue;
+      const context=pathWidthContext(path),controls = points.map((w,index) => ({ ...w, index })).filter(w=>!path.closed||w.t<1-1e-7||!points.some(p=>p.t<1e-7));
+      if (probe && probe.subpath === subpath && !controls.some(w => Math.abs(w.t-probe.t)<.01)) {
+        const [left,right] = widthAt(points,probe.t,context); controls.push({ t:probe.t, left, right, index:-1, hover:true });
+      }
+      for (const w of controls) {
+        const at = Math.min(path.length, w.t * path.length), p = path.getPointAt(at),frame=context.frames.find(f=>Math.abs(f.t-w.t)<1e-7),n = frame?.normal??path.getNormalAt(at); if (!p || !n) continue;
+        const world = q => { const r = q.transform(record.worldMatrix); return [r.x, r.y]; };
+        out.push({ index:w.index, subpath, t:w.t, hover:!!w.hover, point:world(p), left:world(p.add(n.multiply(w.left * stroke.width))), right:world(p.add(n.multiply(-w.right * stroke.width))) });
+      }
     }
     return out;
   }
@@ -1168,6 +1193,15 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
     setTheme({muted,background=labelBackground}) {labelColor=muted;labelBackground=background;for(const {label,labelRect} of boardItems.values()){label.fillColor=muted;labelRect.fillColor=background;}updateView();},
     shapePreview(node,sourceId=null) { const item=make(node);item.applyMatrix=false;style(item,node,false);item.opacity=.6;
       if(sourceId)item.matrix=records.get(sourceId).worldMatrix.clone();overlay.addChild(item);return item; },
+    /** A live appearance edit uses the actual fills, stroke profiles and world transform. */
+    appearancePreview(node) {
+      const group=new scope.Group({insert:false,name:'Width stroke preview'}),record=records.get(node.id),original=items.get(node.id);
+      group.data.appearancePreview=true;group.applyMatrix=false;group.matrix=original.matrix.clone();
+      const item=make(node);item.applyMatrix=false;style(item,node,false,true);group.addChild(item);
+      for(const piece of [paintStack(item,node,false),arrowGroup(item,node)])if(piece){piece.matrix=new scope.Matrix();group.addChild(piece);}
+      // Stay in the artwork's parent so clipping, stacking and group opacity remain live too.
+      group.insertAbove(record.stack??record.raster??record.arrows??original);return group;
+    },
     pointToWorld,
     editingNode,editPointToWorld,editPointToLocal,cornerWidgets,
     cornerHandle(point){return cornerWidgets().find(c=>c.point.getDistance(point)<=7/scope.view.zoom)??null;},

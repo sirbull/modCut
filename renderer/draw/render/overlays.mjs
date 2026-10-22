@@ -18,6 +18,7 @@ export function createSelectionOverlay(scope, layer, state, bounds, layerColor =
       const accent=state.selection.ids.map(layerColor).find(Boolean) || '#006B5C';
       handles.removeChildren(); hitPoints=[];
       if(['direct-selection','pen','add-anchor','delete-anchor','anchor-point'].includes(state.ui?.tool))rectangle=null;
+      if(['lasso','polygonal-lasso'].includes(state.ui?.tool)&&state.selection.anchors.length)rectangle=null;
       if (!rectangle) { outline?.remove(); outline = null; return; }
       if (!outline || !outline.bounds.equals(rectangle) || outline.data.accent!==accent) {
         outline?.remove();
@@ -26,6 +27,7 @@ export function createSelectionOverlay(scope, layer, state, bounds, layerColor =
         layer.addChild(outline);
       }
       outline.strokeWidth = 1.5 / scope.view.zoom;
+      outline.visible = !state.ui?.tool || ['select','artboard'].includes(state.ui.tool);
       if(['rotate','reflect','scale'].includes(state.ui?.tool)&&!state.document.readOnly){
         const p=state.ui.transformOrigin?new scope.Point(...state.ui.transformOrigin):rectangle.center,r=5/scope.view.zoom;
         const mark=new scope.Path.Circle({center:p,radius:r,strokeColor:accent,fillColor:'#FFFFFF',strokeWidth:1/scope.view.zoom,insert:false});handles.addChild(mark);

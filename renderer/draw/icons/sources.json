@@ -137,9 +137,13 @@
       "sha256": "dccc13330e57c7f8e1c39f3b81c3fbaf6b120fc014fd30ea4e58cf8c87c4450d"
     },
     "pen": {
-      "name": "ballpen",
-      "path": "icons/outline/ballpen.svg",
-      "sha256": "5da53d646949d00fabf278ca9fc6dd0af9dedbf4a5e57883882013857459ebcf"
+      "name": "pen-filled",
+      "path": "renderer/draw/icons/pen.svg",
+      "author": "modCut",
+      "source": "Cur_Pen_1_1@2x.svg in renderer/draw/tools/cursor-artwork.mjs",
+      "description": "Filled nib and cap from the original cursor drawing, rotated to point down-left.",
+      "sha256": "9e7b577c1041dbb7af85fb59224b87a2ac5d48fb519a365fb75014fd7edba5b8",
+      "attribution": "User-drawn original pen cursor artwork"
     },
     "pencil": {
       "name": "pencil",
@@ -248,9 +252,11 @@
       "sha256": "b1fdb4f8f7a274f470997b50c007dcc0a58bd3f2b8cc00d4e816eef56813f98d"
     },
     "width": {
-      "name": "arrows-horizontal",
-      "path": "icons/outline/arrows-horizontal.svg",
-      "sha256": "19e2888a56ff65635092f2f591e2933157007709b63022737d408c293bc801e0"
+      "name": "width",
+      "path": "renderer/draw/icons/width.svg",
+      "author": "modCut",
+      "attribution": "User-drawn original width tool artwork",
+      "sha256": "9d7f2e60cecffd47c247c3330c6577f6b64d77d440426d3a05f64b6ef4ac549f"
     },
     "zoom": {
       "name": "zoom-in",

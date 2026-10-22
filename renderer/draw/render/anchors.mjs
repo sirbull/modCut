@@ -1,5 +1,5 @@
-const pathTools=new Set(['direct-selection','pen','add-anchor','delete-anchor','anchor-point']);
-export function createAnchorOverlay(scope,layer,state,toWorld,getNode=id=>state.document.getNode(id),corners=()=>[]) {
+const pathTools=new Set(['direct-selection','pen','add-anchor','delete-anchor','anchor-point','lasso','polygonal-lasso']);
+export function createAnchorOverlay(scope,layer,state,toWorld,getNode=id=>state.document.getNode(id),corners=()=>[],getOutline=getNode) {
   const group=new scope.Group({insert:false,name:'Path anchors'});layer.addChild(group);
   return {
     update(){
@@ -9,6 +9,11 @@ export function createAnchorOverlay(scope,layer,state,toWorld,getNode=id=>state.
       group.bringToFront();
       const zoom=scope.view.zoom,selected=state.selection.anchors;
       for(const id of state.selection.ids){const node=getNode(id);if(node?.type!=='path')continue;
+        for(const path of getOutline(id)?.subpaths??[]){
+          const segments=path.segments.map(s=>{const p=toWorld(id,s.p);return new scope.Segment(p,
+            toWorld(id,s.p.map((v,i)=>v+s.in[i])).subtract(p),toWorld(id,s.p.map((v,i)=>v+s.out[i])).subtract(p));});
+          group.addChild(new scope.Path({insert:false,name:'Selected path outline',segments,closed:path.closed,strokeColor:'#006B5C',strokeWidth:1/zoom,strokeScaling:false}));
+        }
         node.subpaths.forEach((path,subpath)=>path.segments.forEach((segment,index)=>{
           const p=toWorld(id,segment.p),active=selected.some(a=>a.nodeId===id&&a.subpath===subpath&&a.segment===index);
           if(active)for(const kind of ['in','out']) {

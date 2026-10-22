@@ -10,6 +10,8 @@ import { stackingOrder as objectOrder } from './doc/arrange.mjs';
 import { arrangeCommands, groupCommands, hideCommands, lockCommands, showAllCommands, ungroupCommands, unlockAllCommands } from './doc/arrange.mjs';
 import { PATHFINDER_LABELS, runPathfinder, toSubpaths } from './geom/pathfinder.mjs';
 import { traceScale, ringCorners } from './geom/trace.mjs';
+import { fitOutline } from './geom/fit-outline.mjs';
+import { shapeSelectionKey } from './doc/selection.mjs';
 import { transformEachMatrix, gridCells, distortSubpaths, boxCorners, cropImage } from './geom/transform-each.mjs';
 import { pickRegions, mergeRegions, knifeCut, erase as eraseRegion, areaOf } from './geom/region-ops.mjs';
 import { fillHex, pathfinderCommands, stackingOrder } from './doc/pathfinder-commands.mjs';
@@ -34,7 +36,7 @@ import { BLEND_DEFAULTS, blendOptions, keyPosition, spineCurve } from './geom/bl
 import { WARP_STYLES } from './geom/warp.mjs';
 import { BLOB_DEFAULTS, blobOptions, calligraphicProfile, paintbrushOptions } from './geom/brush.mjs';
 import { createId, createNode } from './doc/schema.mjs';
-import { appearance } from './geometry.mjs';
+import { appearance, transformProperties } from './geometry.mjs';
 import { changeGradient, defaultGradient, isAnyGradient, isGradient, vectorGradient } from './doc/gradient.mjs';
 import { isFreeform, removeFreeformPoint } from './doc/freeform.mjs';
 import { sampleAppearance, applySampleCommands, measure } from './doc/tool-rules.mjs';
@@ -53,7 +55,7 @@ import { EXPORT_FORMATS, rasterSize, svgDocument } from './io/export.mjs';
 import { createExportController } from './export-controller.mjs';
 import { layerOptionsPatch, templateLayerCommands, isOutputNode } from './doc/layers.mjs';
 import { compoundCommands, releaseCompoundCommands, clipCommands, releaseClipCommands } from './doc/compound.mjs';
-import { offsetPaths, flattenPath, outlineStroke, loadGeometry } from './geom/kernel-js.mjs';
+import { offsetPaths, flattenPath, outlineStroke, loadGeometry, unite } from './geom/kernel-js.mjs';
 import { EFFECTS, LIVE_LABELS, effect, hasVectorEffects, livePathfinder, vectorEffects } from './doc/effects.mjs';
 import { cutSubpath } from './geom/path-commands.mjs';
 import { erasePath, smoothRange, sectionPoints } from './geom/path-eraser.mjs';
@@ -109,7 +111,9 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   const fitButton=element('button','btn btn--ghost btn--sm',viewButtons);fitButton.type='button';fitButton.textContent='Fit';fitButton.setAttribute('aria-label','Fit Draw artboards');
   const statusLine=element('div','draw-tool-hint',shell);statusLine.setAttribute('role','status');
   const scope=new paper.PaperScope();try {scope.setup(canvas);} finally {paper.activate();}scope.view.autoUpdate=false;
-  function withScope(fn) {try {scope.activate();return fn();} finally {paper.activate();}}
+  // Nested renderer helpers must return to this Draw scope until the outer operation ends.
+  let scopeDepth=0;
+  function withScope(fn) {scopeDepth++;try {scope.activate();return fn();} finally {if(--scopeDepth)scope.activate();else paper.activate();}}
   function run(fn) {try {return withScope(fn);}catch(error){onError(error.message);}}
   let panels,toolbar,interactions,paths,artboards,temporary=null,destroyed=false,fitted=false,lastPoint=null,ownedTransformModal=null,ownedColorModal=null,textBusy=false,activeText=null,textOpening=0;
   // A late thumbnail (big layers and groups) goes straight into the Layers rows that show it.
@@ -196,7 +200,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       tool.id==='vertical-type' ? 'Click: vertical point text (columns from right to left) · Click existing text: edit' :
       tool.id==='touch-type' ? 'Click a character · Drag: move it · Top-right square: scale · Top circle: rotate' :
       tool.id==='rotate-view' ? `Drag: turn the view (${Math.round(scope.view.rotation)}°) · Shift: 15° steps · View > Reset Rotate View` :
-      tool.id==='width' ? 'Drag a stroke: width there · Drag a width point: resize, its centre slides it · Alt: one side · Double-click a point: edit' :
+      tool.id==='width' ? 'Drag across the stroke: resize · Drag along the stroke: move width point · Alt: one side · Double-click a point: edit' :
       tool.id==='knife' ? 'Drag across filled shapes to cut them (the selection, or every shape)' :
       tool.id==='path-eraser' ? 'Drag along a selected path to erase that part of it' :
       tool.id==='smooth' ? 'Drag along a selected path to smooth it (fewer, rounder curves)' :
@@ -783,42 +787,68 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   }
   /**
    * Width tool. Pressing on a stroked path starts a session: on a width point's side end it resizes that
-   * point, on its centre it slides it along the path, elsewhere it adds a point there. The drag is previewed
+   * point; its centre resizes across the path or slides along it. Elsewhere it adds a point. The drag is previewed
    * and applied on release as one undo step; Alt changes one side only.
    */
   function widthTarget(id){const node=state.document.getNode(id),stroke=node&&shown(node.appearance?.strokes)[0];
     return ['path','shape'].includes(node?.type)&&state.document.isEditable(id)&&stroke?.width>0?{node,stroke}:null;}
   const shown=list=>(list??[]).filter(e=>!e.hidden);
   function widthHandleAt(point){
-    const near=6/scope.view.zoom;
+    const near=6/scope.view.zoom;let best=null,distance=near;
     for(const id of [renderer.hit(point),...selectedIds()].filter(Boolean)){const target=widthTarget(id);if(!target)continue;
-      for(const h of withScope(()=>renderer.widthHandles(id,target.stroke)))for(const part of ['left','right','point'])
-        if(Math.hypot(h[part][0]-point[0],h[part][1]-point[1])<=near)return {id,index:h.index,t:h.t,part};}
-    return null;
+      for(const h of withScope(()=>renderer.widthHandles(id,target.stroke)))for(const part of ['point','left','right']){
+        const d=Math.hypot(h[part][0]-point[0],h[part][1]-point[1]);
+        if(d<distance){best={id,index:h.index,t:h.t,subpath:h.subpath,point:h.point,part};distance=d;}
+      }}
+    return best;
+  }
+  function widthTargetAt(point){
+    const at=id=>{const target=id&&widthTarget(id);if(!target)return null;
+      const location=withScope(()=>renderer.strokeLocation(id,point));
+      return location&&Math.hypot(location.point[0]-point[0],location.point[1]-point[1])<=8/scope.view.zoom?{id,target,location}:null;};
+    return at(renderer.hit(point))??at(withScope(()=>renderer.curveHit(new scope.Point(point),{shapes:true}))?.nodeId);
+  }
+  function widthHandlesAt(point){
+    if(state.document.readOnly)return [];
+    const handle=widthHandleAt(point),hit=widthTargetAt(point),id=handle?.id??hit?.id;
+    const target=id&&widthTarget(id);if(!target)return [];
+    return withScope(()=>renderer.widthHandles(id,target.stroke,hit?.id===id?hit.location:null));
   }
   function widthSession(point){
     if(state.document.readOnly)return null;
-    const handle=widthHandleAt(point);if(handle)return {...handle,side:handle.part==='point'?null:handle.part};
-    const id=renderer.hit(point),target=id&&widthTarget(id);if(!target)return null;
-    const loc=withScope(()=>renderer.strokeLocation(id,point));if(!loc)return null;
-    return {id,index:-1,t:loc.t,part:'new',side:loc.side};
+    const handle=widthHandleAt(point);
+    if(handle)return {...handle,start:point,location:withScope(()=>renderer.strokeLocation(handle.id,handle.point)),side:handle.part==='point'?null:handle.part};
+    const hit=widthTargetAt(point);if(!hit)return null;
+    return {id:hit.id,index:-1,t:hit.location.t,subpath:hit.location.subpath,part:'new',start:point,location:hit.location,side:null};
   }
   /** The profile a Width drag to `point` gives; the document is unchanged until the drag ends. */
   function widthProfileFor(session,point,{alt=false}={}){
     const target=widthTarget(session.id);if(!target)return null;
-    const loc=withScope(()=>renderer.strokeLocation(session.id,point));if(!loc)return null;
-    if(session.part==='point')return {target,points:moveWidthPoint(target.stroke.widthProfile,session.index,loc.t)};
-    return {target,points:setWidthPoint(target.stroke.widthProfile,{t:session.t,index:session.index,share:loc.distance/target.stroke.width,side:alt?session.side:'both'}).points};
+    const loc=withScope(()=>renderer.strokeLocation(session.id,point));if(!loc||!session.location?.normal)return null;
+    const matrix=new scope.Matrix(...renderer.worldMatrix(session.id)).inverted(),local=new scope.Point(point).transform(matrix);
+    const origin=new scope.Point(session.location.localPoint),normal=new scope.Point(session.location.normal),away=local.subtract(origin);
+    const delta=local.subtract(new scope.Point(session.start).transform(matrix)),perpendicular=Math.abs(delta.dot(normal)),along=Math.abs(delta.cross(normal));
+    if(session.part==='point'&&along>perpendicular){const points=moveWidthPoint(target.stroke.widthProfile,session.index,loc.t);
+      return {target,points,index:session.index,t:points[session.index].t};}
+    const signed=away.dot(normal)/normal.dot(normal),side=session.side??(signed<0?'right':'left');
+    const result=setWidthPoint(target.stroke.widthProfile,{t:session.t,index:session.index,share:Math.abs(signed)/target.stroke.width,side:alt?side:'both',closed:session.location.closed,corners:session.location.corners});
+    return {target,...result,t:session.t};
   }
-  /** Live Width drag: the new stroke outline in world space, for the preview. */
+  function widthAppearance({target,points}){
+    const stroke={...target.stroke};if(points)stroke.widthProfile=points;else delete stroke.widthProfile;
+    return {...target.node.appearance,strokes:target.node.appearance.strokes.map(entry=>entry===target.stroke?stroke:entry)};
+  }
+  /** Preview the actual painted stroke and its edge handles without editing history. */
   function widthPreview(session,point,options){
-    const result=widthProfileFor(session,point,options);if(!result)return [];
-    const m=renderer.worldMatrix(session.id),local=withScope(()=>renderer.profiledStroke(session.id,{...result.target.stroke,widthProfile:result.points}))??[];
-    return local.map(sub=>sub.segments.map(g=>[m[0]*g.p[0]+m[2]*g.p[1]+m[4],m[1]*g.p[0]+m[3]*g.p[1]+m[5]]));
+    const result=widthProfileFor(session,point,options);if(!result)return null;
+    const stroke={...result.target.stroke,widthProfile:result.points};
+    return {node:{...result.target.node,appearance:widthAppearance(result)},
+      handles:withScope(()=>renderer.widthHandles(session.id,stroke,{t:result.t,subpath:session.subpath}))
+        .map(h=>({...h,active:h.subpath===session.subpath&&(h.index===result.index||h.hover)}))};
   }
   function widthDrag(session,point,options){
     const result=widthProfileFor(session,point,options);if(!result)return;
-    state.history.execute(updateNode(session.id,{appearance:changeStroke(result.target.node.appearance,{widthProfile:result.points},state.ui)},{label:'Width'}));
+    state.history.execute(updateNode(session.id,{appearance:widthAppearance(result)},{label:'Width'}));
   }
   async function widthPointEdit(point){
     const handle=widthHandleAt(point),target=handle&&widthTarget(handle.id);if(!target)return false;
@@ -826,8 +856,11 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     if(!values||destroyed)return true;
     run(()=>{const current=widthTarget(handle.id);if(!current)return;
       let points=normalizeProfile(current.stroke.widthProfile);
-      points=values.remove?removeWidthPoint(points,handle.index):points.map((p,i)=>i===handle.index?{...p,left:values.left/current.stroke.width,right:values.right/current.stroke.width}:p);
-      state.history.execute(updateNode(handle.id,{appearance:changeStroke(current.node.appearance,{widthProfile:points},state.ui)},{label:'Width Point Edit'}));});
+      const location=withScope(()=>renderer.strokeLocation(handle.id,handle.point)),seam=location?.closed&&(handle.t<1e-6||handle.t>1-1e-6);
+      const chosen=(p,i)=>i===handle.index||seam&&(p.t<1e-6||p.t>1-1e-6);
+      points=values.remove?(seam?normalizeProfile(points.filter((p,i)=>!chosen(p,i))):removeWidthPoint(points,handle.index))
+        :points.map((p,i)=>chosen(p,i)?{...p,left:values.left/current.stroke.width,right:values.right/current.stroke.width}:p);
+      state.history.execute(updateNode(handle.id,{appearance:widthAppearance({target:current,points})},{label:'Width Point Edit'}));});
     return true;
   }
   /** Object > Envelope Distort > Make with Top Object: the topmost object becomes the envelope of the others. */
@@ -1136,9 +1169,16 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     if(activeText)void activeText.done();
     textOpening++;
     if(!implementedTools.has(id) || state.document.readOnly && !['select','hand','zoom'].includes(id))return;
-    if(id!==state.ui.tool&&['direct-selection','anchor-point','delete-anchor'].some(tool=>tool===id||tool===state.ui.tool))state.selection.set(state.selection.ids);
+    const enteringDirect=id==='direct-selection'&&id!==state.ui.tool;
+    if(id==='direct-selection'||id!==state.ui.tool&&['direct-selection','anchor-point','delete-anchor'].some(tool=>tool===id||tool===state.ui.tool))state.selection.set(state.selection.ids);
     if(state.ui.tool==='measure'&&id!=='measure'&&state.ui.measurement)setMeasure(null);
     interactions?.cancel();paths?.finish();toolbar?.close();temporary=null;state.ui.tool=id;canvas.dataset.tool=id;canvas.style.cursor=cursor();
+    if(enteringDirect){
+      const targets=state.selection.ids.flatMap(id=>state.document.getNode(id)?.children?state.document.descendants(id).map(n=>n.id):[id]);
+      const anchors=targets.flatMap(nodeId=>{const original=state.document.getNode(nodeId),node=renderer.editingNode(nodeId);
+        return node?.type==='path'?node.subpaths.flatMap((path,subpath)=>path.segments.map((_,segment)=>({nodeId,subpath,segment,logical:true,...(original.type==='shape'?{shapeKey:shapeSelectionKey(original)}:{})}))):[];});
+      if(anchors.length)state.selection.setAnchors(anchors);
+    }
     if(id==='artboard'){state.ui.dockCollapsed ??= {};state.ui.dockCollapsed.properties=false;state.ui.flyout=null;}
     withScope(()=>renderer.select());toolbar?.update();panels?.render();interactions?.refreshEyedropper();status();
   }
@@ -1351,7 +1391,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       // Live effects are baked in: the parts use the geometry as drawn.
       const own=base(id),drawn=withScope(()=>renderer.effectiveSubpaths(id)),node=drawn?{...own,subpaths:drawn,fillRule:'nonzero'}:own;
       const fills=visible(node.appearance.fills),strokes=visible(node.appearance.strokes).filter(e=>e.width>0),[a,b,c,d]=parentWorld(id),parts=[];
-      const part=(look,subpaths=node.subpaths,fillRule=node.fillRule)=>createNode('path',{name:'',subpaths,fillRule,appearance:{...appearance(null,null),...look}});
+      const part=(look,subpaths=node.subpaths,fillRule=node.fillRule)=>createNode('path',{name:'',subpaths,fillRule,transform:node.transform,appearance:{...appearance(null,null),...look}});
       if(fill&&fills.length>1)for(const entry of fills)parts.push(part({fills:[structuredClone(entry)],strokes:[]}));
       else if(fills.length)parts.push(part({fills:structuredClone(fills),strokes:stroke?[]:structuredClone(strokes)}));
       if(stroke)for(const entry of strokes){
@@ -1359,7 +1399,15 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
         const width=node.strokeScaling===false?entry.width/Math.sqrt(Math.abs(a*d-b*c)||1):entry.width;
         // A width profile is outlined by the renderer, which draws it that way too.
         const dash=entry.dash?{array:entry.dash.array.map(n=>n*width/entry.width),offset:(entry.dash.offset??0)*width/entry.width}:undefined;
-        const subpaths=entry.widthProfile?.length?withScope(()=>renderer.profiledStroke(id,{...entry,width}))??[]:await outlineStroke(node.subpaths,{width,join:entry.join??'miter',cap:entry.cap??'butt',miterLimit:entry.miterLimit??4,dash});
+        let sampled=entry.widthProfile?.length?withScope(()=>renderer.profiledStroke(id,{...entry,width}))??[]:await outlineStroke(node.subpaths,{width,join:entry.join??'miter',cap:entry.cap??'butt',miterLimit:entry.miterLimit??4,dash});
+        if(entry.widthProfile?.length){
+          // Offset sides can cross on tight bends or wide tapers. Keep only the
+          // area actually painted by the stroke, with holes wound the other way.
+          sampled=(await unite([sampled]))[0]??[];
+          const source=doc.getNode(id);
+          if(source.type==='shape')sampled=transformProperties({type:'path',subpaths:sampled},source.transform).subpaths;
+        }
+        const subpaths=withScope(()=>fitOutline(scope,sampled,Math.min(.01,width/200)));
         if(subpaths.length)parts.push(part({fills:[{paint:structuredClone(entry.paint),opacity:entry.opacity??1,blendMode:entry.blendMode??'normal',effects:[]}],strokes:[]},subpaths,'nonzero'));
       }
       else if(!fills.length&&strokes.length)parts.push(part({fills:[],strokes:structuredClone(strokes)}));
@@ -1715,7 +1763,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       select(options.add?[...new Set([...state.selection.ids,...hits])]:[...hits]);return hits.size;},
     freeDistortSession,freeDistortPreview,freeDistort,
     shapeBuilderSession,shapeBuilderPreview,shapeBuilder,knife,eraser,pathEraser,smoothPath,eraserSize:()=>state.ui.eraserSize??3,touchGlyphAt,touchGlyph,touchType:(id,index,change)=>touchType(id,index,change).catch(error=>{if(!destroyed)onError(error.message);}),rotateView,widthSession,widthDrag,widthPreview,widthPointEdit,paintbrush,blobBrush:points=>blobBrush(points).catch(error=>{if(!destroyed)onError(error.message);}),brushSize:()=>(state.ui.blobBrush?.size??BLOB_DEFAULTS.size),blendClick,blendOptions:()=>void blendOptionsCommand(),
-    widthHandles:point=>{const id=renderer.hit(point)??selectedIds()[0],target=id&&widthTarget(id);return target?withScope(()=>renderer.widthHandles(id,target.stroke)):[];},
+    widthHandles:widthHandlesAt,
     rememberGradient,gradientHit:point=>withScope(()=>renderer.gradientHit(point)),gradientProject:point=>withScope(()=>renderer.gradientProject(point)),
     gradientAnnotation:value=>withScope(()=>renderer.setGradientAnnotation(value)),
     /** One annotated gradient (`target` from gradientHit): `edit(current, node)` returns the new gradient. */

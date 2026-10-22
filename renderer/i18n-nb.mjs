@@ -187,7 +187,7 @@ export const NB = Object.freeze({
   "Drag: paint a filled shape that merges with touching shapes of the same colour · Enter: Blob Brush options": "Dra: mal en fylt form som smelter sammen med berørte former i samme farge · Enter: Klattpensel-alternativer",
   "Click: vertical point text (columns from right to left) · Click existing text: edit": "Klikk: loddrett punkttekst (kolonner fra høyre mot venstre) · Klikk eksisterende tekst: rediger",
   "Click a character · Drag: move it · Top-right square: scale · Top circle: rotate": "Klikk et tegn · Dra: flytt det · Firkanten øverst til høyre: skaler · Sirkelen øverst: roter",
-  "Drag a stroke: width there · Drag a width point: resize, its centre slides it · Alt: one side · Double-click a point: edit": "Dra en strek: bredde der · Dra et breddepunkt: endre størrelse, midten flytter det · Alt: én side · Dobbeltklikk et punkt: rediger",
+  "Drag across the stroke: resize · Drag along the stroke: move width point · Alt: one side · Double-click a point: edit": "Dra på tvers av streken: endre bredde · Dra langs streken: flytt breddepunkt · Alt: én side · Dobbeltklikk et punkt: rediger",
   "Drag across filled shapes to cut them (the selection, or every shape)": "Dra over fylte former for å skjære dem (utvalget, eller alle former)",
   "Drag to erase from filled shapes (the selection, or every shape) · Enter: diameter": "Dra for å viske ut fra fylte former (utvalget, eller alle former) · Enter: diameter",
   "Click: objects with a similar fill · Shift: add · Alt: remove · Enter: tolerance": "Klikk: objekter med lignende fyll · Shift: legg til · Alt: fjern · Enter: toleranse",

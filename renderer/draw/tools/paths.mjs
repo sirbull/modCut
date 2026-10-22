@@ -98,7 +98,7 @@ export function createPathInteractions(canvas,state,api) {
       if(hit){const existing=state.selection.anchors,has=existing.some(a=>same(a,hit));
         if(hit.kind==='point')selectAnchors(e.shiftKey?(has?existing.filter(a=>!same(a,hit)):[...existing,hit]):has?existing:[hit]);
         if(!state.selection.anchors.some(a=>same(a,hit)))return;
-        gesture={mode:'direct',hit,start:p,last:p,nodes:[...new Set(state.selection.anchors.map(a=>a.nodeId))].map(editNode),anchors:state.selection.anchors};
+        gesture={mode:'direct',hit,start:p,last:p,singleOnClick:hit.kind==='point'&&!e.shiftKey,nodes:[...new Set(state.selection.anchors.map(a=>a.nodeId))].map(editNode),anchors:state.selection.anchors};
       } else {
         const curve=withScope(()=>renderer.curveHit(p,{shapes:true})),filledId=curve?null:renderer.hit(p),id=curve?.nodeId??filledId,subpath=curve?.subpath??0,node=id&&renderer.editingNode(id);
         if(node?.type==='path'){const path=node.subpaths[subpath];
@@ -229,6 +229,7 @@ export function createPathInteractions(canvas,state,api) {
         selectAnchors([...g.initial,...anchors.filter(a=>!g.initial.some(b=>same(a,b)))]);return;
       }
       if(g.mode==='direct'||g.mode==='corner'){
+        if(g.singleOnClick&&g.last.getDistance(g.start)<=2/scope.view.zoom)selectAnchors([g.hit]);
         const before=g.before??g.nodes,changed=g.result?.filter(node=>JSON.stringify(node.subpaths)!==JSON.stringify(before.find(n=>n.id===node.id).subpaths));
         if(changed?.length&&g.last.getDistance(g.start)>2/scope.view.zoom){const label=g.mode==='corner'?'Round Corners':'Move Anchors';state.history.transaction(label,()=>changed.forEach(node=>commit(node,label)));}api.selectionChanged();return;
       }

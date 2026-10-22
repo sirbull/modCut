@@ -14,8 +14,6 @@
 .toolbar .brand { display: flex; align-items: center; gap: var(--sp-2); font-weight: 800; font-size: var(--fs-lg); }
 .toolbar .brand-logo { width: 28px; height: 28px; display: block; border-radius: 7px; box-shadow: var(--shadow-1); }
 .tb-sep { width: 1px; height: 22px; background: var(--border); margin: 0 var(--sp-1); }
-.toolgroup { display: flex; gap: 4px; }
-.tool-on { background: var(--grad-primary); color: var(--on-brand); }
 .drawsize { position: fixed; z-index: 40; display: flex; gap: 6px; pointer-events: none; }
 .drawsize.hidden { display: none; }
 .app-tooltip { position: fixed; z-index: 200; max-width: min(320px, calc(100vw - 16px)); padding: 7px 10px;
@@ -47,15 +45,13 @@
 /* --- workspace split ---------------------------------------------------- */
 .workspace { display: grid; grid-template-columns: 52px minmax(0, 1fr) 344px; min-height: 0; transition: grid-template-columns .18s ease; }
 .workspace.collapsed { grid-template-columns: 52px minmax(0, 1fr) 0; }
-.cut-tool-rail { display: flex; flex-direction: column; align-items: center; gap: 12px; min-height: 0;
+.cut-tool-rail { display: flex; flex-direction: column; align-items: center; gap: 5px; min-height: 0;
                  padding: 10px 4px; overflow-y: auto; scrollbar-width: thin;
                  background: var(--surface); border-right: 1px solid var(--border); }
-.cut-tool-rail .toolgroup, .cut-tool-rail__view { display: flex; flex-direction: column; gap: 5px; }
-.cut-tool-rail__view { border-top: 1px solid var(--border); padding-top: 12px; }
-.cut-tool-rail .btn { width: 38px; height: 38px; flex: 0 0 38px; padding: 0; justify-content: center; border-radius: var(--rad-2, 6px); }
-.cut-tool-rail .btn svg { width: 22px; height: 22px; }
+.cut-tool-rail .draw-tool-grid { grid-template-columns: 34px; }
+.cut-tool-rail__view { display: grid; grid-template-columns: 34px; gap: 3px; border-top: 1px solid var(--border); padding-top: 10px; margin-top: 5px; }
+.cut-tool-rail__view .draw-icon-button { width: 34px; height: 34px; font: inherit; font-size: var(--fs-xs); }
 .cut-tool-icon { display: block; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.cut-tool-rail .btn:focus-visible { outline: 2px solid var(--brand-mid); outline-offset: 1px; }
 .canvas { position: relative; overflow: hidden; background: var(--surface); }
 .preview-legend { position: absolute; z-index: 11; left: 12px; bottom: 12px; display: flex; gap: 14px; padding: 6px 10px;
                   border: 1px solid var(--border); border-radius: 9px; background: color-mix(in srgb, var(--bg) 94%, transparent);

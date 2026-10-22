@@ -15,7 +15,7 @@ const gradientCursor=hit=>!hit ? CURSORS.gradient : CURSORS[['line','segment','i
 
 export function createInteractions(canvas, state, api) {
   const {scope,renderer,withScope,run}=api, controller=new AbortController(), events={signal:controller.signal};
-  let gesture=null,preview=null,highlight=null;
+  let gesture=null,preview=null,highlight=null,widthPreviewing=false,widthPaintPreview=null;
   const smartPreferences=()=>({...DEFAULT_SMART_GUIDES,...api.preferences()});
   const smartEnabled=()=>state.document.data.settings.smartGuides!==false;
   // Edits a gesture makes while it runs (live gradient drags) must not cancel the gesture itself.
@@ -27,7 +27,7 @@ export function createInteractions(canvas, state, api) {
   // A screen movement in project units, turned back through Rotate View.
   const screenDelta=(dx,dy)=>new scope.Point(dx,dy).rotate(-scope.view.rotation).divide(scope.view.zoom);
   function clearHighlight() {highlight?.remove();highlight=null;}
-  function clearPreview() {clearHighlight();preview?.remove();preview=null;renderer.clearTransformPreview();state.ui.transformPreviewBox=null;}
+  function clearPreview() {clearHighlight();preview?.remove();preview=null;widthPaintPreview?.remove();widthPaintPreview=null;if(widthPreviewing){renderer.setEditPreview();widthPreviewing=false;}renderer.clearTransformPreview();state.ui.transformPreviewBox=null;}
   function highlightObjects(ids) {
     clearHighlight();
     const prefs=smartPreferences();
@@ -175,14 +175,16 @@ export function createInteractions(canvas, state, api) {
     const a=renderer.pointToLocal(touch.id,[start.x,start.y]),b=renderer.pointToLocal(touch.id,[end.x,end.y]);
     return {corners:touch.corners.map(p=>[p[0]+end.x-start.x,p[1]+end.y-start.y]),change:{dx:b.x-a.x,dy:b.y-a.y}};
   }
-  // Width points: a hollow diamond on the path and a dot at each side end.
+  // A circular hover point on the centreline; crossbars reach the actual stroke edges.
   function widthMarkers(handles) {
     if(!handles.length)return null;
-    const w=1/scope.view.zoom,group=new scope.Group();
+    const w=1/scope.view.zoom,group=new scope.Group({name:'Width controls'});
     for(const h of handles){
-      group.addChild(new scope.Path.Line({from:h.left,to:h.right,strokeColor:'#1473E6',strokeWidth:w}));
-      for(const end of [h.left,h.right])group.addChild(new scope.Path.Circle({center:end,radius:3*w,fillColor:'#1473E6'}));
-      const d=new scope.Path.RegularPolygon({center:h.point,sides:4,radius:4*w,fillColor:'#FFFFFF',strokeColor:'#1473E6',strokeWidth:w});group.addChild(d);
+      if(!h.hover||h.active){
+        group.addChild(new scope.Path.Line({name:'Width crossbar',from:h.left,to:h.right,strokeColor:'#1473E6',strokeWidth:w}));
+        for(const end of [h.left,h.right])group.addChild(new scope.Path.Circle({name:'Width side handle',center:end,radius:3*w,fillColor:'#FFFFFF',strokeColor:'#1473E6',strokeWidth:w}));
+      }
+      group.addChild(new scope.Path.Circle({name:h.hover?'Width hover point':'Width point',center:h.point,radius:3.5*w,fillColor:h.active?'#1473E6':'#FFFFFF',strokeColor:'#1473E6',strokeWidth:w}));
     }
     return group;
   }
@@ -274,9 +276,13 @@ export function createInteractions(canvas, state, api) {
       } else if (gesture.mode==='touch-type') {
         gesture.touched=touchChange(gesture.touch,gesture.start,p);preview=touchMarkers(gesture.touched.corners);
       } else if (gesture.mode==='width') {
-        gesture.moved=true;gesture.alt=event.altKey;
-        preview=new scope.CompoundPath({children:api.widthPreview(gesture.session,[p.x,p.y],{alt:event.altKey}).map(ring=>new scope.Path({segments:ring,closed:true})),
-          fillColor:'rgba(20,115,230,.25)',strokeColor:'#1473E6',strokeWidth:1/scope.view.zoom,fillRule:'nonzero'});
+        gesture.moved ||= Math.hypot(event.clientX-gesture.screen[0],event.clientY-gesture.screen[1])>2;gesture.alt=event.altKey;
+        if(gesture.moved){const proposed=api.widthPreview(gesture.session,[p.x,p.y],{alt:event.altKey});
+          if(proposed){widthPaintPreview=renderer.appearancePreview(proposed.node);
+            renderer.setEditPreview([proposed.node]);widthPreviewing=true;
+            preview=widthMarkers(proposed.handles);
+          }
+        }else preview=widthMarkers(api.widthHandles([p.x,p.y]));
       } else if (gesture.mode==='lasso') {
         const last=gesture.points.at(-1);if(Math.hypot(p.x-last[0],p.y-last[1])>=1/scope.view.zoom)gesture.points.push([p.x,p.y]);
         preview=new scope.Path({segments:gesture.points,closed:true,strokeColor:'#1473E6',dashArray:[4/scope.view.zoom,3/scope.view.zoom],strokeWidth:1/scope.view.zoom});
@@ -411,7 +417,8 @@ export function createInteractions(canvas, state, api) {
     }
     if(tool==='width'){
       const session=api.widthSession([p.x,p.y]);if(!session){api.notify?.('Drag on a stroked path to change its width there.');return;}
-      gesture={...base,mode:'width',session};return;
+      api.select([session.id]);gesture={...base,mode:'width',session};
+      withScope(()=>{clearPreview();preview=widthMarkers(api.widthHandles([p.x,p.y]).map(h=>({...h,active:Math.abs(h.t-session.t)<.01&&h.subpath===session.subpath})));scope.view.update();});return;
     }
     if(tool==='free-transform'){
       // Free Distort: grab the nearest corner of the selection box (within 10 screen pixels).
@@ -515,7 +522,7 @@ export function createInteractions(canvas, state, api) {
     }
   },events);
   canvas.addEventListener('pointermove',update,events);
-  canvas.addEventListener('pointerleave',()=>{if(!gesture)withScope(()=>{clearHighlight();scope.view.update();});},events);
+  canvas.addEventListener('pointerleave',()=>{if(!gesture)withScope(()=>{if(api.tool()==='width')clearPreview();else clearHighlight();scope.view.update();});},events);
   window.addEventListener('modcut-preferences-change',()=>withScope(()=>{clearHighlight();scope.view.update();}),events);
   canvas.addEventListener('pointerup',event=>{
     if (!gesture) return;
@@ -579,10 +586,17 @@ export function createInteractions(canvas, state, api) {
         else api.transform(drag.matrix,drag.handle==='rotate' ? 'Rotate' : drag.handle ? 'Resize' : 'Move',{copy:drag.modifiers.alt && !drag.handle});
       }
     });
+    if(drag.mode==='width')update(event);
   },events);
   canvas.addEventListener('pointercancel',cancel,events);canvas.addEventListener('lostpointercapture',()=>{if(gesture&&gesture.mode!=='polygonal-lasso')cancel();},events);
   canvas.addEventListener('dblclick',event=>{
-    if(api.tool()==='polygonal-lasso'){event.preventDefault();finishPolygonalLasso();return;}
+    if(api.tool()==='polygonal-lasso'){
+      event.preventDefault();
+      // The first click on the start point already closed the polygon. Its
+      // second click may have begun a one-point gesture; discard that remnant.
+      if(gesture?.mode==='polygonal-lasso'&&gesture.points.length===1)cancel();else finishPolygonalLasso();
+      return;
+    }
     const label=renderer.artboardLabelHit(point(event));
     if(label){event.preventDefault();renameArtboard(label);return;}
     if(TRANSFORM_TOOLS.includes(api.tool())){event.preventDefault();cancel();void api.transformDialog(api.tool());return;}

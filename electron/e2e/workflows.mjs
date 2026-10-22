@@ -111,10 +111,10 @@ export async function runWorkflows(client, port) {
     await evaluate("window.focus(); document.querySelector('[data-tool=rect]').click()");
     await click({ x: canvas.left + canvas.width * 0.45, y: canvas.top + canvas.height * 0.45 });
     await wait(150);
-    shapeSteps = await evaluate("(() => { const w=document.querySelector('input[name=w]'),h=document.querySelector('input[name=h]'); return w&&h ? {wStep:w.step,hStep:h.step} : null; })()");
+    shapeSteps = await evaluate("(() => { const w=document.querySelector('input[name=width]'),h=document.querySelector('input[name=height]'); return w&&h ? {wStep:w.step,hStep:h.step} : null; })()");
   }
-  assert.deepEqual(shapeSteps, { wStep: "0.01", hStep: "0.01" }, "exact shape dimensions must allow decimals");
-  await evaluate("(() => { const form=document.querySelector('.modal form'); form.elements.w.value='12.34'; form.elements.h.value='5.67'; form.requestSubmit(); })()");
+  assert.deepEqual(shapeSteps, { wStep: "any", hStep: "any" }, "exact shape dimensions must allow decimals");
+  await evaluate("(() => { const form=document.querySelector('.modal form'); form.elements.width.value='12.34'; form.elements.height.value='5.67'; form.requestSubmit(); })()");
   await wait();
   const exactShape = await evaluate("(() => { const item=paper.project.layers[1].children.at(-1),b=item.bounds,c=document.querySelector('.bed-canvas').getBoundingClientRect(),v=paper.view.projectToView(b.topCenter); return {w:b.width,h:b.height,hit:{x:c.left+v.x,y:c.top+v.y}}; })()");
   await runDrawWorkflows(client);

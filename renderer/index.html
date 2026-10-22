@@ -37,18 +37,11 @@
   <main class="workspace" id="workspace">
     <section id="drawWorkspace" class="draw-workspace" aria-label="Draw workspace"></section>
     <aside class="cut-tool-rail" aria-label="Cut tools">
-      <div class="toolgroup" id="tools" role="toolbar" aria-label="Basic tools" aria-orientation="vertical">
-        <button class="btn btn--ghost btn--sm btn--icon tool-on" data-tool="select" aria-label="Move (V)" title="Move (V)"><svg class="cut-tool-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="./draw/icons/sprite.svg#icon-select"></use></svg></button>
-        <button class="btn btn--ghost btn--sm btn--icon" data-tool="node" aria-label="Edit points (A)" title="Edit points (A)"><svg class="cut-tool-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="./draw/icons/sprite.svg#icon-direct-select"></use></svg></button>
-        <button class="btn btn--ghost btn--sm btn--icon" data-tool="pen" aria-label="Pen (P)" title="Pen — Bézier paths; hover an open endpoint to continue it (P)"><svg class="cut-tool-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="./draw/icons/sprite.svg#icon-pen"></use></svg></button>
-        <button class="btn btn--ghost btn--sm btn--icon" data-tool="rect" aria-label="Rectangle (M)" title="Rectangle (M) — drag to draw, or click for an exact size"><svg class="cut-tool-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="./draw/icons/sprite.svg#icon-rect"></use></svg></button>
-        <button class="btn btn--ghost btn--sm btn--icon" data-tool="ellipse" aria-label="Circle / ellipse (C)" title="Circle / ellipse (C) — drag to draw, or click for an exact size"><svg class="cut-tool-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="./draw/icons/sprite.svg#icon-ellipse"></use></svg></button>
-        <button class="btn btn--ghost btn--sm btn--icon" data-tool="line" aria-label="Line (L)" title="Line (L) — drag from start to end"><svg class="cut-tool-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="./draw/icons/sprite.svg#icon-line"></use></svg></button>
-      </div>
+      <div id="tools" role="toolbar" aria-label="Basic tools" aria-orientation="vertical"></div>
       <div class="cut-tool-rail__view" role="group" aria-label="View controls">
-        <button class="btn btn--ghost btn--sm btn--icon" id="zoomOut" aria-label="Zoom out (Cmd/Ctrl+-)" title="Zoom out (Cmd/Ctrl+-)"><svg class="cut-tool-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="7"></circle><path d="M7 10h6M21 21l-6-6"></path></svg></button>
-        <button class="btn btn--ghost btn--sm" id="zoomFit" title="Fit to bed (Cmd/Ctrl+0)">Fit</button>
-        <button class="btn btn--ghost btn--sm btn--icon" id="zoomIn" aria-label="Zoom in (Cmd/Ctrl++)" title="Zoom in (Cmd/Ctrl++)"><svg class="cut-tool-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="./draw/icons/sprite.svg#icon-zoom"></use></svg></button>
+        <button class="draw-icon-button" id="zoomOut" aria-label="Zoom out (Cmd/Ctrl+-)" title="Zoom out (Cmd/Ctrl+-)"><svg class="cut-tool-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="7"></circle><path d="M7 10h6M21 21l-6-6"></path></svg></button>
+        <button class="draw-icon-button" id="zoomFit" title="Fit to bed (Cmd/Ctrl+0)">Fit</button>
+        <button class="draw-icon-button" id="zoomIn" aria-label="Zoom in (Cmd/Ctrl++)" title="Zoom in (Cmd/Ctrl++)"><svg class="cut-tool-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="./draw/icons/sprite.svg#icon-zoom"></use></svg></button>
       </div>
     </aside>
     <section class="canvas" id="stage">

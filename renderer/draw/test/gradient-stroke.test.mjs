@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { gradientStrokeBands } from '../geom/gradient-stroke.mjs';
+import { setWidthPoint } from '../geom/width-profile.mjs';
 import { defaultGradient, opacityAt, setStrokeMode, setGradientType, applyGradientPreset, GRADIENT_PRESETS, updateStop } from '../doc/gradient.mjs';
 import { createDocument, createNode, validateDocument } from '../doc/schema.mjs';
 import { appearance } from '../geometry.mjs';
@@ -9,6 +10,18 @@ import { changeGradient } from '../doc/gradient.mjs';
 // A straight line from (0,0) to (10,0); paper.js normals are the tangent turned to (y, -x), here (0,-1).
 const line = Array.from({ length: 11 }, (_, i) => ({ p: [i, 0], n: [0, -1], t: i / 10 }));
 const xs = (ring) => ring.map((p) => p[0]), ys = (ring) => ring.map((p) => p[1]);
+
+test('gradient bands use the same local closed-corner taper as solid strokes',()=>{
+  const vertices=[[0,0],[100,0],[100,100],[0,100],[0,0]],normals=[[0,-1],[1,0],[0,1],[-1,0]],samples=[];
+  for(let side=0;side<4;side++)for(let j=0;j<=16;j++)samples.push({p:vertices[side].map((v,k)=>v+(vertices[side+1][k]-v)*j/16),n:normals[side],t:(side+j/16)/4});
+  samples.pop();
+  const options={closed:true,corners:[0,.25,.5,.75]},profile=setWidthPoint(null,{t:.75,share:5,...options}).points;
+  for(const mode of ['along','across']){
+    const pixels=gradientStrokeBands(samples,2,profile,{...options,mode,opaque:false}).flatMap(b=>b.rings.flat());
+    const left=pixels.filter(p=>Math.abs(p[1]-75)<1e-8&&p[0]<0);
+    assert.ok(left.length>0);assert.ok(Math.abs(Math.min(...left.map(p=>p[0]))+7.75)<1e-6,`${mode} keeps the linear corner taper`);
+  }
+});
 
 test('along: bands follow the path from start to end, each with its own colour offset', () => {
   const bands = gradientStrokeBands(line, 2, null, { mode: 'along', opaque: false });

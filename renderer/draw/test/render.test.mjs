@@ -22,6 +22,48 @@ function setup(t, children = [], options = {}) {
 }
 const rect = b => [b.x, b.y, b.width, b.height].map(n => Math.round(n * 1e6) / 1e6);
 
+test('only Selection shows a bounding box; Direct Selection traces the actual curves',t=>{
+  const node=createNode('path',{subpaths:[{closed:true,segments:[{p:[20,20],in:[0,0],out:[20,-10]},{p:[60,40],in:[0,-20],out:[0,0]},{p:[20,60],in:[0,0],out:[0,0]}]}]});
+  const {state,scope,renderer}=setup(t,[node]);state.selection.set([node.id]);
+  const saved=state.document.serialize();
+  for(const tool of ['select','direct-selection','width','pen','rotate','gradient','eyedropper','lasso']){
+    state.ui={tool};renderer.select();
+    assert.equal(!!renderer.selectionHandle(new scope.Point(20,60)),tool==='select',`${tool}: bounding handles only with Selection`);
+    const overlay=scope.project.layers.find(l=>l.name==='Selection');
+    const boxes=overlay.children.filter(p=>p.className==='Path'&&p.visible&&p.closed&&p.segments.length===4);
+    assert.equal(boxes.length,tool==='select'?1:0,`${tool}: bounding rectangle visibility`);
+    if(tool==='direct-selection'){
+      const line=scope.project.getItem({name:'Selected path outline'});
+      assert.ok(line);assert.ok(line.segments[0].handleOut.getDistance(new scope.Point(20,-10))<1e-9,'The outline keeps the actual cubic handles');
+    }
+  }
+  assert.equal(state.document.serialize(),saved);
+});
+
+test('lasso tools display selected logical anchors on rounded paths and transformed live shapes',t=>{
+  const plain={closed:true,segments:[[20,20],[60,20],[60,60],[20,60]].map(p=>({p,in:[0,0],out:[0,0]}))};
+  const path=createNode('path',{subpaths:[roundCorners(plain,[1],5)]});
+  const shape=rectangle({params:{x:10,y:5,width:20,height:15,cornerRadius:3},transform:[1.2,.3,0,.8,4,2]});
+  const parent=createNode('group',{transform:[0,1,-1,0,100,10],children:[shape]});
+  const {state,scope,renderer}=setup(t,[path,parent]);
+  const model=state.document.serialize();
+  for(const tool of ['lasso','polygonal-lasso'])for(const node of [path,shape])for(const zoom of [.5,1,3]){
+    state.ui={tool};scope.view.zoom=zoom;
+    state.selection.setAnchors([0,1].map(segment=>({nodeId:node.id,subpath:0,segment,logical:true,...(node.type==='shape'?{shapeKey:shapeSelectionKey(node)}:{})})));
+    renderer.select();
+    const overlay=scope.project.getItem({name:'Path anchors'}),logical=renderer.editingNode(node.id);
+    const boxes=overlay.children.filter(item=>item.className==='Path'&&item.closed&&item.segments.length===4&&item.segments.every(s=>s.handleIn.isZero()&&s.handleOut.isZero()));
+    assert.equal(boxes.length,logical.subpaths[0].segments.length,`${tool} shows anchor boxes`);
+    assert.equal(boxes.filter(box=>box.fillColor.toCSS(true)==='#006b5c').length,2,'Selected anchors have a solid fill');
+    for(const [index,box] of boxes.entries()){
+      assert.ok(Math.abs(box.bounds.width*zoom-7)<1e-8,'Anchor boxes stay screen-sized');
+      assert.ok(box.position.getDistance(renderer.editPointToWorld(node.id,logical.subpaths[0].segments[index].p))<1e-8,'Boxes use logical points and world transforms');
+    }
+    state.selection.clear();renderer.select();assert.equal(overlay.children.length,0,'Clearing selection removes markers');
+  }
+  assert.equal(state.document.serialize(),model,'Selection overlays do not change artwork');
+});
+
 test('all anchor boxes remain above opaque drag previews at every zoom',t=>{
   const node=createNode('path',{appearance:appearance('#FFFFFF','#071411',1),subpaths:[{closed:true,segments:[[20,30],[50,30],[80,40]].map(p=>({p,in:[0,0],out:[0,0]}))}]});
   const {state,scope,renderer}=setup(t,[node]);state.ui={tool:'pen'};

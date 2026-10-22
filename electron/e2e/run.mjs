@@ -50,6 +50,7 @@ import { runDrawRegionToolWorkflows } from './draw-region-tools-workflows.mjs';
 import { runDrawEffectWorkflows } from './draw-effects-workflows.mjs';
 import { runDrawLinkWorkflows } from './draw-links-workflows.mjs';
 import { runDrawWidthWorkflows } from './draw-width-workflows.mjs';
+import { runDrawOutlineWorkflows } from './draw-outline-workflows.mjs';
 import { runDrawBlendWorkflows } from './draw-blend-workflows.mjs';
 import { runDrawWarpMaskWorkflows } from './draw-warp-mask-workflows.mjs';
 import { runDrawBrushWorkflows } from './draw-brush-workflows.mjs';
@@ -67,6 +68,7 @@ import { runDrawWorkspaceFileWorkflows } from './draw-workspace-files-workflows.
 import { runDrawPanelLayoutWorkflows } from './draw-panel-layout-workflows.mjs';
 import { runDrawDockingWorkflows } from './draw-docking-workflows.mjs';
 import { runWorkspaceLayoutWorkflows } from './workspace-layout-workflows.mjs';
+import { runCutToolsWorkflows } from './cut-tools-workflows.mjs';
 
 const port = 9400 + (process.pid % 200);
 const profile = await mkdtemp(join(tmpdir(), "modcut-e2e-profile-"));
@@ -121,6 +123,8 @@ try {
   } else if (process.argv.includes('--draw-panel-layout')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawPanelLayoutWorkflows(first); first.socket.close();
+  } else if (process.argv.includes('--cut-tools')) {
+    await runCutToolsWorkflows(first); first.socket.close();
   } else if (process.argv.includes('--workspace-layout')) {
     await runWorkspaceLayoutWorkflows(first);
     first.socket.close();
@@ -175,6 +179,9 @@ try {
   } else if (process.argv.includes('--draw-blend')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawBlendWorkflows(first);first.socket.close();
+  } else if (process.argv.includes('--draw-outline')) {
+    for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
+    await runDrawOutlineWorkflows(first); first.socket.close();
   } else if (process.argv.includes('--draw-width')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawWidthWorkflows(first);first.socket.close();

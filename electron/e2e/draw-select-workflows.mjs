@@ -79,7 +79,17 @@ export async function runDrawSelectWorkflows(client) {
   await evaluate("document.querySelector('[data-draw-tool=polygonal-lasso]').click()");
   assert.equal(await evaluate(`(async()=>(${active}.state.ui.tool))()`), 'polygonal-lasso');
   const selectedAnchors = () => evaluate(`(async()=>(${active}.state.selection.anchors.map(a=>[a.nodeId,a.segment])))()`);
+  const visibleAnchors = () => evaluate(`(async()=>{const w=${active},v=w.scope.view,c=v.element,scale=c.width/v.viewSize.width;
+    const boxes=w.scope.project.getItem({name:'Path anchors'}).children.filter(p=>p.closed&&p.segments?.length===4&&p.fillColor?.toCSS(true)==='#006b5c');
+    return {count:boxes.length,painted:boxes.filter(box=>{const p=v.projectToView(box.position),pixel=c.getContext('2d').getImageData(Math.round(p.x*scale),Math.round(p.y*scale),1,1).data;return pixel[1]>pixel[0]+30&&pixel[1]>pixel[2];}).length};})()`);
+  const polygonPreviews = () => evaluate(`(async()=>{const w=${active};return w.scope.project.getItems({class:w.scope.Path}).filter(p=>p.dashArray.length&&p.strokeColor?.toCSS(true)==='#1473e6').length;})()`);
   const polygonClicks = async (points, modifiers = 0) => { for(const p of points)await click(await at(...p), modifiers); };
+  const doubleClick = async p => {
+    const position=await at(...p);await mouse('mouseMoved',position);
+    for(const clickCount of [1,2])for(const [type,buttons] of [['mousePressed',1],['mouseReleased',0]])
+      await client.command('Input.dispatchMouseEvent',{type,...position,button:'left',buttons,clickCount});
+    await wait(80);
+  };
   await evaluate(`(async()=>(${active}.select([])))()`);
   await polygonClicks(path);
   assert.deepEqual(await selection(), [], 'Releasing each click keeps the polygon open without changing selection');
@@ -87,6 +97,8 @@ export async function runDrawSelectWorkflows(client) {
   // Hovering elsewhere previews a segment but must not add that position to the final polygon.
   await mouse('mouseMoved', await at(60, 30)); await key('Enter');
   assert.deepEqual(await selectedAnchors(), [[ids.blue, 0], [ids.blue, 1]], 'Enter selects only anchors inside the committed vertices');
+  assert.deepEqual(await visibleAnchors(), {count:2,painted:2}, 'Completed polygon paints both selected anchors on the canvas');
+  if(process.argv.includes('--screenshot'))await writeFile(join(tmpdir(),'modcut-polygonal-lasso-completed.png'),Buffer.from((await client.command('Page.captureScreenshot',{format:'png'})).data,'base64'));
   const lower = [[47, 22], [68, 22], [68, 28], [47, 28]];
   await polygonClicks([...lower, lower[0]], 8); // Shift, close at start
   assert.deepEqual((await selectedAnchors()).map(a=>a[1]).sort(), [0, 1, 2, 3], 'Shift and closing at the first vertex add anchors');
@@ -97,6 +109,16 @@ export async function runDrawSelectWorkflows(client) {
   await polygonClicks([...path, [70, 35]]); await key('Backspace'); await key('Enter');
   assert.deepEqual(await selectedAnchors(), [[ids.blue, 0], [ids.blue, 1]], 'Backspace removes the mistaken last vertex without deleting artwork');
   assert.ok(await evaluate(`(async()=>!!${active}.state.document.getNode('${ids.blue}'))()`));
+  // A full double-click on the final corner closes the polygon and leaves visible selection.
+  await polygonClicks(path.slice(0,-1));await doubleClick(path.at(-1));
+  await mouse('mouseMoved',await at(60,30));
+  assert.deepEqual(await selectedAnchors(), [[ids.blue,0],[ids.blue,1]]);
+  assert.deepEqual(await visibleAnchors(), {count:2,painted:2}, 'Double-click leaves the selected points visibly marked');
+  assert.equal(await polygonPreviews(),0,'Double-click removes the open polygon preview');
+  // On the start point the first click closes already; the second must not start a new polygon.
+  await polygonClicks(path);await doubleClick(path[0]);await mouse('mouseMoved',await at(60,30));
+  assert.deepEqual(await visibleAnchors(), {count:2,painted:2});
+  assert.equal(await polygonPreviews(),0,'Double-clicking the start point leaves no unfinished polygon');
   await polygonClicks(lower); await key('Escape'); await key('Enter');
   assert.deepEqual(await selectedAnchors(), [[ids.blue, 0], [ids.blue, 1]], 'Escape discards an unfinished polygon');
   await polygonClicks(path.slice(0, 2)); await key('Enter');

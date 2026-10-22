@@ -1,12 +1,13 @@
 import { processColorsForDocument } from './draw/view/cut-process.mjs';
-import { createKeymap, keyOverrides, setKeyOverrides, shortcutLabel } from "./draw/keymap.mjs";
+import { createKeymap, keyOverrides, setKeyOverrides, shortcutLabel, matchShortcut } from "./draw/keymap.mjs";
+import { createCutToolbar, CUT_TOOLS, drawToolForCut } from "./ui/cut-tools.mjs";
 import { shortcutsEditor } from "./draw/ui/shortcuts-dialog.mjs";
 import { loadWorkspaces, parseWorkspace, saveWorkspace, serializeWorkspace } from "./draw/ui/workspaces.mjs";
 import { createDrawWorkspace } from "./draw/index.mjs";
 import { drawClipboard } from "./draw/doc/clipboard.mjs";
 import { PROJECT_VERSION, validateProject, createProjectDraw } from "./draw/io/project.mjs";
 import { newDrawDocument } from "./draw/doc/artboards.mjs";
-import { newDocumentDialog, documentSettingsDialog, placeOptionsDialog, saveTemplateDialog } from "./draw/ui/dialogs.mjs";
+import { newDocumentDialog, documentSettingsDialog, placeOptionsDialog, saveTemplateDialog, shapeSizeDialog } from "./draw/ui/dialogs.mjs";
 import { updateDocument, updateArtboard } from "./draw/doc/commands.mjs";
 import { saveTemplate, setupFromDocument, loadStoredList, storeList, TEMPLATES_KEY } from "./draw/doc/presets.mjs";
 import { createBed } from "./bed.js";
@@ -2404,8 +2405,7 @@ $("selMode").addEventListener("click", () => {
   $("selMode").textContent = selWhole ? "Mark whole" : "Mark elements";
 });
 
-// draw tools (select / rectangle / ellipse / line)
-const updateToolButtons = (tool) => [...$("tools").children].forEach((b) => b.classList.toggle("tool-on", b.dataset.tool === tool));
+// Cut shares Draw's toolbar, tool groups, metadata and customized tool shortcuts.
 const selectTool = (tool) => {
   activeTool = tool;
   bed.setTool(tool);
@@ -2413,9 +2413,11 @@ const selectTool = (tool) => {
     const style = bed.getStyle();
     bed.setDrawStyle(distinctVectorColor(style.color, state.colors), style.width);
   }
-  updateToolButtons(tool); refreshProps(); refreshPropsVisibility();
+  cutToolbar.update(); refreshProps(); refreshPropsVisibility();
 };
-$("tools").addEventListener("click", (e) => { const b = e.target.closest("button[data-tool]"); if (b) selectTool(b.dataset.tool); });
+const cutToolbar = createCutToolbar($("tools"), () => activeTool, selectTool);
+window.addEventListener('modcut-shortcuts-change', () => cutToolbar.update());
+$("workspaceToggle").addEventListener('click', () => cutToolbar.close());
 bed.onToolReset(() => syncColorsAndLayers()); // after a draw: sync colours, keep the tool active
 bed.onDrawSize((wMm, hMm, x, y) => {
   const el = $("drawsize");
@@ -2424,13 +2426,12 @@ bed.onDrawSize((wMm, hMm, x, y) => {
   el.style.left = x + 16 + "px"; el.style.top = y + 16 + "px";
   el.classList.remove("hidden");
 });
-bed.onDrawClick(async (type) => {
-  const v = await openModal({ title: `New ${type}`, submitLabel: "Add", fields: [
-    { key: "w", label: `Width (${state.units})`, type: "number", min: 0.01, step: 0.01, required: true, value: toDisp(50) },
-    { key: "h", label: `Height (${state.units})`, type: "number", min: 0.01, step: 0.01, required: true, value: toDisp(50) },
-  ] });
+bed.onDrawClick(async (type, point) => {
+  const units = state.units;
+  const v = await shapeSizeDialog(drawToolForCut(type), { units, width: toDisp(40), height: toDisp(30), lineLength: toDisp(40) });
   if (!v) return;
-  bed.addShape(type, toMm(v.w), toMm(v.h));
+  const mm = value => value * ({ mm: 1, cm: 10, in: 25.4 }[units] || 1);
+  bed.addShape(type, mm(v.width ?? v.lineLength), mm(v.height ?? 0), { point, angle: Number(v.angle ?? 0) });
   syncColorsAndLayers();
 });
 $("pathOrder").addEventListener("change", (e) => { bed.setPathOrder(e.target.value); markDirty(); });
@@ -2532,6 +2533,11 @@ window.addEventListener("keydown", (e) => {
   if (t === "INPUT" || t === "SELECT" || t === "TEXTAREA") return;
   const key = e.key.toLowerCase();
   const mod = e.metaKey || e.ctrlKey;
+  if (document.querySelector('.modal-overlay')) return;
+  if (key === 'escape') { cutToolbar.close(true); bed.cancelInteraction(); return; }
+  const binding = matchShortcut(e, { isMac: /Mac/.test(navigator.platform) });
+  const sharedTool = binding?.command?.startsWith('tool.') && CUT_TOOLS[binding.command.slice(5)];
+  if (sharedTool) { e.preventDefault(); cutToolbar.close(); selectTool(sharedTool); return; }
   if (mod) {
     if (key === "+" || key === "=") {
       e.preventDefault();
@@ -2592,8 +2598,6 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (e.altKey || e.ctrlKey || e.metaKey) return;
-  const tool = { v: "select", a: "node", p: "pen", m: "rect", c: "ellipse", l: "line" }[key];
-  if (tool) selectTool(tool);
 });
 
 // properties (color + stroke width) — for the selection, or defaults for new shapes

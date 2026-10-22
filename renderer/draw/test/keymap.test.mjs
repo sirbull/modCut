@@ -32,6 +32,8 @@ test('key matching respects macOS/Windows modifiers, mode and exact combinations
   assert.equal(command(event('n', { ctrlKey: true }), { isMac: true }), null);
   assert.equal(command(event('n', { metaKey: true })), null);
   assert.equal(command(event('o', { ctrlKey: true, shiftKey: true })), 'create-outlines');
+  assert.equal(command(event('o', { ctrlKey: true, altKey: true })), 'outline-stroke');
+  assert.equal(acceleratorFor('outline-stroke'), 'Ctrl+Alt+O');
   assert.equal(command(event('o', { ctrlKey: true, shiftKey: true }), { workspace: 'cut' }), 'add');
   assert.equal(command(event('o', { ctrlKey: true, shiftKey: true, altKey: true })), null);
   assert.equal(command(event('z', { ctrlKey: true })), 'undo');
