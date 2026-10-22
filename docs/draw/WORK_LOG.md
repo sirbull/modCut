@@ -2347,3 +2347,15 @@ Window > Recolor med hjul, regler, biblioteker, Prominent Colors, modus og slide
 passerer. Skjermbilder kontrollert. Bare Recolor-hunkene i `panels/ui.mjs` er committet; den andre
 agentens Freeform-endringer i samme fil er latt ligge. Brukerønske underveis: Alt/Fill/Stroke-omfang og
 enkel kopiering av justeringen fra fyll til strek (del 3).
+
+## 2026-10-22: Hjelpelinjer, linjalmidte og Ctrl/Cmd +/−
+
+Hjelpelinjer er heltrukne og én skjermpiksel brede på hele piksler ved all zoom. Ved drag snapper de til
+25, 33⅓, 50, 66⅔ og 75 % av aktivt artboard (6 px sone); drar man videre forbi 12 px slipper snappet, og
+samme punkt holdes fritt til pekeren er 30 px unna, så 49 % er lett å treffe. Alt drar fritt. En eksisterende
+guide som gripes hopper ikke til et punkt i nærheten. Verdien vises live i en boks ved linjen (over
+tegningen, unna pekeren, grønn når snappet) og i statusfeltet som % · mm · in med linjalens enhet først.
+Begge linjaler markerer alltid artboardets midte med linje og trekant, i alle enheter. Ctrl/Cmd med + og −
+følger tegnet på tasten, så zoom virker på norsk tastatur (+ på Minus, - på Slash) og numerisk tastatur.
+429 Draw-tester og `--draw-rulers` passerer; skjermbilde midt i drag kontrollert. Den andre agentens
+uncommittede endringer er ikke tatt med.

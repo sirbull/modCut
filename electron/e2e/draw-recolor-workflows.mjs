@@ -80,5 +80,29 @@ export async function runDrawRecolorWorkflows(client) {
   await evaluate(`(async()=>{${active}.state.history.undo();})()`);
   assert.deepEqual(await fills(),beforeSlider,'Undo takes back the slider');
   await until(`!!document.querySelector('${fly} [data-draw-recolor-rule=custom][aria-pressed=true]')`,'Panel restarts after undo');
+  // Scope: give the strokes a colour, then recolor only fills and copy the same adjustment to the strokes.
+  await evaluate(`(async()=>{const w=${active},{updateNode}=await import('./draw/doc/commands.mjs');for(const id of ${JSON.stringify(ids)}){const a=structuredClone(w.state.document.getNode(id).appearance);a.strokes[0].paint.color.values=[.125,.627,.25];w.state.history.execute(updateNode(id,{appearance:a}));}})()`);
+  const strokes=()=>evaluate(`(async()=>{const w=${active},{rgbHex}=await import('./draw/doc/recolor.mjs');return ${JSON.stringify(ids)}.map(id=>rgbHex(w.state.document.getNode(id).appearance.strokes[0].paint.color.values));})()`);
+  await evaluate(`document.querySelector('${fly} [data-draw-recolor-scope=fill]').click()`);
+  await until(`document.querySelectorAll('${fly} [data-draw-recolor-handle]').length===3`,'Fill scope shows the three fills');
+  const fillsBefore=await fills(),strokesBefore=await strokes();
+  c=await wheel();h=await handle(await evaluate(`Number(document.querySelector('${fly} .draw-recolor-handle.is-base').dataset.drawRecolorHandle)`));
+  await mouse('mouseMoved',h);await mouse('mousePressed',h,{buttons:1});await mouse('mouseMoved',turn(h,70),{buttons:1});await mouse('mouseReleased',turn(h,70));
+  assert.ok((await fills()).every((hex,i)=>hex!==fillsBefore[i]),'Fill scope recolors the fills');
+  assert.deepEqual(await strokes(),strokesBefore,'Fill scope leaves the strokes');
+  steps=await applied();
+  await evaluate(`document.querySelector('${fly} [data-draw-recolor=copy]').click()`);
+  const copied=await strokes();assert.ok(copied.every((hex,i)=>hex!==strokesBefore[i]),`Copy to Stroke turns the strokes: ${copied}`);
+  assert.equal(await applied(),steps+1,'Copy is one undo step');
+  await evaluate(`document.querySelector('${fly} [data-draw-recolor=copy]').click()`);
+  assert.deepEqual(await strokes(),copied,'Copying again gives the same strokes, not a second turn');
+  await screenshot('modcut-recolor-fill-scope.png');
+  const fillsNow=await fills();
+  await evaluate(`document.querySelector('${fly} [data-draw-recolor-scope=stroke]').click()`);
+  await until(`document.querySelectorAll('${fly} [data-draw-recolor-handle]').length===1`,'Stroke scope shows the stroke colour');
+  assert.equal(await evaluate(`document.querySelector('${fly} [data-draw-recolor=copy]').textContent`),'Copy to Fill');
+  await evaluate(`document.querySelector('${fly} [data-draw-recolor-rule=complementary]').click()`);
+  assert.deepEqual(await fills(),fillsNow,'Stroke scope keeps the fills');
+  await evaluate(`document.querySelector('${fly} [data-draw-recolor-scope=all]').click()`);
   await restore();
 }

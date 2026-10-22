@@ -8,7 +8,7 @@ import { GRADIENT_PRESETS, addStop, applyGradientPreset, colorHex, defaultGradie
 import { recentGradients as savedRecentGradients } from '../doc/recent-gradients.mjs';
 import { EFFECTS, effectLabel } from '../doc/effects.mjs';
 import { documentInfo } from '../doc/document-info.mjs';
-import { HARMONY_RULES, adjustedColors, collectColors, dragSettings, harmonyRule, hexLab, hexRgb, nearestIndex, neutralSettings, recolorHexes, recolorMap, remapAppearance, rgbLab, wheelLevel, wheelPixel, wheelPoint } from '../doc/recolor.mjs';
+import { HARMONY_RULES, RECOLOR_SCOPES, adjustedColors, collectColors, transferSettings, dragSettings, harmonyRule, hexLab, hexRgb, nearestIndex, neutralSettings, recolorHexes, recolorMap, remapAppearance, rgbLab, wheelLevel, wheelPixel, wheelPoint } from '../doc/recolor.mjs';
 import { RECOLOR_LIBRARIES, recolorLibrary } from '../doc/recolor-libraries.mjs';
 import { TRACE_PRESETS } from '../geom/trace.mjs';
 import { WIDTH_PROFILES, flipAcross, flipAlong, profileName } from '../geom/width-profile.mjs';
@@ -1015,14 +1015,15 @@ export function createPanels(shell, state, api) {
   let recolor = null, recoloring = false;
   const wheelImages = new Map();
   function recolorSession() {
-    const ids = api.paintIds(), key = ids.join(' ');
+    const ids = api.paintIds(), scope = RECOLOR_SCOPES[state.ui.recolorScope] ? state.ui.recolorScope : 'all', key = `${scope}:${ids.join(' ')}`;
     // The panel re-renders inside our own edits, before the session has seen the new document.
     if (recolor && recolor.key === key && (recoloring || recolor.data === state.document.data)) return recolor;
-    const nodes = ids.map(id => state.document.getNode(id)), colors = collectColors(nodes);
-    const previous = recolor?.key === key ? recolor.settings : null, settings = neutralSettings(colors);
+    // Another scope also starts over, so what was done to fills stays when strokes are recoloured.
+    const nodes = ids.map(id => state.document.getNode(id)), kinds = RECOLOR_SCOPES[scope], colors = collectColors(nodes,kinds);
+    const previous = recolor?.ids.join(' ') === ids.join(' ') ? recolor.settings : null, settings = neutralSettings(colors);
     // Selecting other artwork, undo or another edit starts over from the colours as they are now.
     settings.mode = previous?.mode ?? state.ui.recolorMode ?? 'saturation'; settings.linked = previous?.linked ?? true;
-    recolor = { key, ids, colors, settings, sources: new Map(nodes.map(n => [n.id,n.appearance])), data: state.document.data };
+    recolor = { key, ids, scope, kinds, colors, settings, copy: null, sources: new Map(nodes.map(n => [n.id,n.appearance])), data: state.document.data };
     return recolor;
   }
   function recolorLibraryColors(id) {
@@ -1035,6 +1036,20 @@ export function createPanels(shell, state, api) {
     recoloring = true;
     try { if (entries.length) state.history.transaction(label,() => state.history.execute(updateNodes(entries,{ label })),{ mergeKey }); }
     finally { recoloring = false; }
+    session.data = state.document.data;
+  }
+  /**
+   * Copy to Stroke / Fill: the same rule, turn, scale, slider and library on the other paint, one undo step.
+   * Within a session the copy keeps working from the other paint's original colours, so copying again replaces it.
+   */
+  function copyRecolor(session) {
+    const to = session.scope === 'fill' ? 'stroke' : 'fill', kinds = RECOLOR_SCOPES[to];
+    if (!session.copy) {
+      const nodes = session.ids.map(id => state.document.getNode(id)), colors = collectColors(nodes,kinds);
+      if (!colors.length) throw new Error(`The selection has no ${to} colors to copy the recolor to.`);
+      session.copy = { ids: session.ids, kinds, colors, sources: new Map(nodes.map(n => [n.id,n.appearance])) };
+    }
+    applyRecolor({ ...session.copy, settings: transferSettings(session.settings,session.colors,session.copy.colors) },{ label: to === 'fill' ? 'Copy Recolor to Fill' : 'Copy Recolor to Stroke' });
     session.data = state.document.data;
   }
   /** Wheel background: hue around, the wheel's value outward, the other value from the slider; library regions when one is chosen. */
@@ -1068,7 +1083,22 @@ export function createPanels(shell, state, api) {
     const ids = api.paintIds(), ro = state.document.readOnly || !ids.length;
     if (!ids.length) { text(host,'Select artwork to recolor all its colors together.'); return; }
     const session = recolorSession(), { colors, settings } = session;
-    if (!colors.length) { text(host,'The selection has no solid or gradient colors to recolor.'); return; }
+    // What to recolor: all paint, only fills or only strokes; Copy carries the adjustment to the other.
+    const scopeRow = document.createElement('div'); scopeRow.className = 'draw-recolor-scope'; host.append(scopeRow);
+    const scopes = document.createElement('div'); scopes.className = 'draw-segmented'; scopes.setAttribute('role','group'); scopes.setAttribute('aria-label','Recolor');
+    for (const [id,label,tip] of [['all','All','Recolor fills and strokes together'],['fill','Fill','Recolor only fills'],['stroke','Stroke','Recolor only strokes']]) {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'draw-segmented__option'; b.textContent = label;
+      b.dataset.tooltip = tip; b.dataset.drawRecolorScope = id; b.setAttribute('aria-pressed',String(session.scope === id));
+      b.addEventListener('click',() => { state.ui.recolorScope = id; render(); }); scopes.append(b);
+    }
+    scopeRow.append(scopes);
+    if (session.scope !== 'all') {
+      const label = session.scope === 'fill' ? 'Copy to Stroke' : 'Copy to Fill';
+      const copy = button(label,() => { copyRecolor(session); render(); }); copy.dataset.drawRecolor = 'copy'; copy.disabled = ro;
+      copy.dataset.tooltip = session.scope === 'fill' ? 'Give the strokes the same recolor: rule, turn, saturation, brightness and library' : 'Give the fills the same recolor: rule, turn, saturation, brightness and library';
+      scopeRow.append(copy);
+    }
+    if (!colors.length) { text(host,session.scope === 'all' ? 'The selection has no solid or gradient colors to recolor.' : `The selection has no ${session.scope} colors. Choose All or ${session.scope === 'fill' ? 'Stroke' : 'Fill'}.`); return; }
     const change = (fn, label, mergeKey = null) => api.run(() => { fn(session.settings); applyRecolor(session,{ label, mergeKey }); render(); });
     // Color Library and Reset.
     const top = document.createElement('div'); top.className = 'draw-recolor-top'; host.append(top);

@@ -50,24 +50,26 @@ export const HARMONY_RULES = Object.freeze([
 ].map(([id, name, offsets]) => Object.freeze({ id, name, offsets: offsets && Object.freeze(offsets) })));
 export const harmonyRule = (id) => HARMONY_RULES.find((rule) => rule.id === id) ?? HARMONY_RULES[0];
 
-const paintEntries = (node) => [...(node.appearance?.fills ?? []), ...(node.appearance?.strokes ?? [])];
+/** What Recolor changes: all paint, only fills or only strokes. */
+export const RECOLOR_SCOPES = Object.freeze({ all: Object.freeze(['fills', 'strokes']), fill: Object.freeze(['fills']), stroke: Object.freeze(['strokes']) });
+const paintEntries = (node, kinds) => kinds.flatMap((kind) => node.appearance?.[kind] ?? []);
 function paintColors(paint, visit) {
   if (paint?.type === 'solid' && paint.color?.space === 'rgb') visit(rgbHex(paint.color.values));
   else if (isGradient(paint)) for (const stop of paint.stops) if (stop.color?.space === 'rgb') visit(rgbHex(stop.color.values));
 }
 /** Distinct colours of the nodes' fills, strokes and gradient stops, most used first: `[{ hex, weight }]`. */
-export function collectColors(nodes) {
+export function collectColors(nodes, kinds = RECOLOR_SCOPES.all) {
   const counts = new Map();
-  for (const node of nodes) for (const entry of paintEntries(node)) paintColors(entry.paint, (hex) => counts.set(hex, (counts.get(hex) ?? 0) + 1));
+  for (const node of nodes) for (const entry of paintEntries(node, kinds)) paintColors(entry.paint, (hex) => counts.set(hex, (counts.get(hex) ?? 0) + 1));
   return [...counts].map(([hex, weight]) => ({ hex, weight })).sort((a, b) => b.weight - a.weight || a.hex.localeCompare(b.hex));
 }
 /** The appearance with each colour replaced through `map` (hex to hex); opacity and gradient geometry stay. */
-export function remapAppearance(appearance, map) {
+export function remapAppearance(appearance, map, kinds = RECOLOR_SCOPES.all) {
   const next = structuredClone(appearance), swap = (color) => {
     const to = color?.space === 'rgb' && map.get(rgbHex(color.values));
     if (to) color.values = hexRgb(to);
   };
-  for (const entry of [...next.fills, ...next.strokes]) {
+  for (const entry of kinds.flatMap((kind) => next[kind])) {
     if (entry.paint?.type === 'solid') {
       const before = rgbHex(entry.paint.color.values); swap(entry.paint.color);
       // A changed colour no longer matches its global swatch.
@@ -83,6 +85,17 @@ export function neutralSettings(colors = []) {
   const chromatic = colors.findIndex(({ hex }) => hexWheel(hex)[1] > .08);
   return { rule: 'custom', base: Math.max(0, chromatic), rotation: 0, scale: { saturation: 1, brightness: 1 }, adjust: { saturation: 0, brightness: 0 },
     mode: 'saturation', linked: true, overrides: {}, library: null };
+}
+/**
+ * The same adjustment for another set of colours (Copy to Stroke / Fill): rule, rotation, scale, slider, library
+ * and display carry over; the base and per-colour overrides only where the other set has the same colour.
+ */
+export function transferSettings(settings, fromColors, toColors) {
+  const next = { ...structuredClone(settings), base: neutralSettings(toColors).base }, baseHex = fromColors[settings.base]?.hex;
+  const base = toColors.findIndex(({ hex }) => hex === baseHex);
+  if (base >= 0) next.base = base;
+  next.overrides = Object.fromEntries(Object.entries(settings.overrides).filter(([hex]) => toColors.some((c) => c.hex === hex)));
+  return next;
 }
 // Slider: -1 moves every colour's value toward 0, +1 toward 1.
 const adjust = (v, amount) => amount >= 0 ? v + (1 - v) * amount : v * (1 + amount);

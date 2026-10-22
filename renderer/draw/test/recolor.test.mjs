@@ -87,3 +87,27 @@ test('remapping changes colours, keeps opacity and unlinks changed global swatch
   assert.equal(next.fills[0].paint.swatch, undefined); assert.deepEqual(next.strokes[0], a.strokes[0]);
   assert.equal(a.fills[0].paint.swatch, 'sw1', 'the source is not changed');
 });
+
+test('a scope collects and changes only fills or only strokes', async () => {
+  const { RECOLOR_SCOPES } = await import('../doc/recolor.mjs');
+  const nodes = [node('#FF0000', '#0000FF')];
+  assert.deepEqual(collectColors(nodes, RECOLOR_SCOPES.fill).map((c) => c.hex), ['#FF0000']);
+  assert.deepEqual(collectColors(nodes, RECOLOR_SCOPES.stroke).map((c) => c.hex), ['#0000FF']);
+  const map = new Map([['#FF0000', '#00FF00'], ['#0000FF', '#00FF00']]);
+  const fillOnly = remapAppearance(nodes[0].appearance, map, RECOLOR_SCOPES.fill);
+  assert.deepEqual(fillOnly.fills[0].paint.color.values, [0, 1, 0]); assert.deepEqual(fillOnly.strokes[0].paint.color.values, [0, 0, 1]);
+  const strokeOnly = remapAppearance(nodes[0].appearance, map, RECOLOR_SCOPES.stroke);
+  assert.deepEqual(strokeOnly.fills[0].paint.color.values, [1, 0, 0]); assert.deepEqual(strokeOnly.strokes[0].paint.color.values, [0, 1, 0]);
+});
+
+test('copying an adjustment to the other colours keeps the rule and turn, and the base where it matches', async () => {
+  const { transferSettings } = await import('../doc/recolor.mjs');
+  const fills = collectColors([node('#CC3333'), node('#33CC33')]), strokes = collectColors([node('#3333CC'), node('#33CC33')]);
+  const settings = { ...neutralSettings(fills), rule: 'triad', rotation: 40, scale: { saturation: .5, brightness: 1 }, adjust: { saturation: 0, brightness: -.2 }, library: 'web',
+    base: fills.findIndex((c) => c.hex === '#33CC33'), overrides: { '#33CC33': { angle: 10 }, '#CC3333': { angle: 5 } } };
+  const copied = transferSettings(settings, fills, strokes);
+  assert.equal(copied.rule, 'triad'); assert.equal(copied.rotation, 40); assert.equal(copied.scale.saturation, .5); assert.equal(copied.adjust.brightness, -.2); assert.equal(copied.library, 'web');
+  assert.equal(strokes[copied.base].hex, '#33CC33', 'the shared colour stays the base');
+  assert.deepEqual(Object.keys(copied.overrides), ['#33CC33']);
+  assert.equal(settings.rotation, 40, 'the source is not changed');
+});

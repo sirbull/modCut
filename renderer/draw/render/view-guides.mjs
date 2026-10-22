@@ -7,6 +7,7 @@ export function createViewGuides(scope, state, boards, overlay) {
   const rulers = new scope.Group({ insert: false, applyMatrix: false, name: 'View rulers' }); overlay.addChild(rulers);
   const guides = new scope.Group({ insert: false, applyMatrix: false, name: 'Ruler guides' }); overlay.addChild(guides);
   const markers = new scope.Group({ insert: false, applyMatrix: false, name: 'Ruler pointer' }); overlay.addChild(markers);
+  const label = new scope.Group({ insert: false, applyMatrix: false, name: 'Ruler guide label' }); overlay.addChild(label);
   let pointer = null, preview = null, pointerColor = '#435A50';
   let previous = '';
   const line = (parent, from, to, color, width) => parent.addChild(new scope.Path.Line({ insert: false, from, to, strokeColor: color, strokeWidth: width }));
@@ -18,16 +19,47 @@ export function createViewGuides(scope, state, boards, overlay) {
     if (pointer.x >= size && pointer.x <= width) line(markers, [pointer.x, 0], [pointer.x, size], pointerColor, 1);
     if (pointer.y >= size && pointer.y <= height) line(markers, [0, pointer.y], [size, pointer.y], pointerColor, 1);
   }
+  // Solid guides one device pixel wide on whole pixels, so they stay crisp at every zoom level.
+  function crisp([a, b]) {
+    const ratio = scope.view.pixelRatio || 1, width = Math.max(1, Math.round(ratio)) / ratio;
+    const pixel = v => (Math.round(v * ratio - width * ratio / 2) + width * ratio / 2) / ratio;
+    if (Math.abs(a.x - b.x) < 1e-6) { const x = pixel(a.x); return [[x, a.y], [x, b.y], width]; }
+    if (Math.abs(a.y - b.y) < 1e-6) { const y = pixel(a.y); return [[a.x, y], [b.x, y], width]; }
+    return [a, b, width];
+  }
+  // The dragged guide's value beside the line, clear of the pointer and above all artwork.
+  function updateLabel(segment) {
+    label.removeChildren(); label.matrix = scope.view.matrix.inverted(); label.bringToFront();
+    if (!preview?.label || !segment || !pointer) return;
+    const [a, b] = segment, delta = b.subtract(a), inset = state.ui?.rulers ? RULER_SIZE : 0;
+    const t = Math.max(0, Math.min(1, pointer.subtract(a).dot(delta) / (delta.dot(delta) || 1))), at = a.add(delta.multiply(t));
+    const text = new scope.PointText({ insert: false, content: preview.label, fontSize: 11, fontFamily: 'Segoe UI, system-ui, sans-serif', fillColor: '#FFFFFF' });
+    const w = Math.ceil(text.bounds.width) + 12, h = 20, { width, height } = scope.view.viewSize;
+    let x, y;
+    if (Math.abs(delta.x) < Math.abs(delta.y)) {
+      x = at.x + 10; if (x + w > width - 4) x = at.x - 10 - w;
+      y = pointer.y - 22 - h; if (y < inset + 4) y = pointer.y + 26;
+    } else {
+      y = at.y - 10 - h; if (y < inset + 4) y = at.y + 10;
+      x = pointer.x + 22; if (x + w > width - 4) x = pointer.x - 22 - w;
+    }
+    x = Math.round(Math.max(inset + 4, Math.min(width - 4 - w, x))); y = Math.round(Math.max(inset + 4, Math.min(height - 4 - h, y)));
+    label.addChild(new scope.Path.Rectangle({ insert: false, rectangle: [x, y, w, h], radius: 3, fillColor: preview.snapped ? '#006B5C' : '#1473E6' }));
+    text.point = new scope.Point(x + 6, y + 14); label.addChild(text);
+  }
   function updateGuides() {
     guides.removeChildren(); guides.matrix = scope.view.matrix.inverted();
     guides.bringToFront(); rulers.bringToFront();
+    let previewSegment = null;
     for (const guide of [...(state.ui?.rulerGuides ?? []), ...(preview ? [preview] : [])]) {
       if (guide === preview?.source) continue;
       const segment = guideSegment(scope, guide, state.ui?.rulers ? RULER_SIZE : 0);
       if (!segment) continue;
-      const path = line(guides, ...segment, '#1473E6', 1);
-      path.dashArray = [5, 3]; path.data.rulerGuide = true;
+      if (guide === preview) previewSegment = segment;
+      const [from, to, width] = crisp(segment);
+      line(guides, from, to, guide === preview && preview.snapped ? '#006B5C' : '#1473E6', width).data.rulerGuide = true;
     }
+    updateLabel(previewSegment);
     updatePointer();
   }
   return {
@@ -72,10 +104,19 @@ export function createViewGuides(scope, state, boards, overlay) {
             rulers.addChild(text);
           }
         }
+        // The artboard's middle is always marked across the full ruler, whatever the unit or zoom.
+        const first = at(size), slope = (at(end) - first) / (end - size), middle = board[horizontal ? 'width' : 'height'] / 2 / scale;
+        const p = size + (middle - first) / slope;
+        if (Number.isFinite(p) && p >= size && p <= end) {
+          const [from, to, width] = crisp(horizontal ? [new scope.Point(p, 0), new scope.Point(p, size)] : [new scope.Point(0, p), new scope.Point(size, p)]);
+          line(rulers, from, to, '#1473E6', width).data.rulerMiddle = axis;
+          const c = horizontal ? from[0] : from[1], notch = horizontal ? [[c - 4, size], [c + 4, size], [c, size - 5]] : [[size, c - 4], [size, c + 4], [size - 5, c]];
+          rulers.addChild(new scope.Path({ insert: false, segments: notch, closed: true, fillColor: '#1473E6' }));
+        }
       }
       rulers.addChild(new scope.Path.Rectangle({ insert: false, rectangle: [0, 0, size, size], fillColor: background }));
       rulers.addChild(new scope.PointText({ insert: false, point: [3, 15], content: unit.id, fontSize: 9, fillColor: foreground }));
     },
-    destroy() { grid.remove(); rulers.remove(); guides.remove(); markers.remove(); },
+    destroy() { grid.remove(); rulers.remove(); guides.remove(); markers.remove(); label.remove(); },
   };
 }
