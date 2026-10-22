@@ -69,10 +69,41 @@ export async function runDrawGradientWorkflows(client) {
   g=await paint();assert.equal(g.type,'linear');assert.ok(Math.abs(g.angle+90)<1,`Downwards drag: ${g.angle}`);assert.ok(Math.abs(g.length-36)<.5,`Length ${g.length}`);
   assert.equal(await applied(),steps+1,'The whole drag is one undo step');
   const top=await pixel(50,14),bottom=await pixel(50,46);assert.ok([0,1,2].reduce((sum,i)=>sum+Math.abs(top[i]-bottom[i]),0)>250,`The gradient now runs vertically: ${top} ${bottom}`);
+  // Stroke gradients: within (across the box, the default), along and across the stroke, with the panel's Stroke buttons.
+  await evaluate(`(async()=>{${active}.setTool('select')})()`);
+  const line=await evaluate(`(async()=>{const w=${active},{createNode}=await import('./draw/doc/schema.mjs'),{insertNode}=await import('./draw/doc/commands.mjs'),{appearance}=await import('./draw/geometry.mjs'),b=w.state.document.data.artboards[0];
+    const look=appearance(null,'#00FF00',4);look.strokes[0].cap='butt';look.strokes[0].join='miter';
+    const n=createNode('path',{subpaths:[{closed:false,segments:[[10,62],[110,62],[110,74],[10,74]].map(p=>({p:[b.x+p[0],b.y+p[1]],in:[0,0],out:[0,0]}))}],appearance:look});
+    w.state.history.execute(insertNode(w.state.document.data.layers[0].id,n));w.select([n.id]);return n.id;})()`);
+  const strokePaint=()=>evaluate(`(async()=>(${active}.state.document.getNode('${line}').appearance.strokes[0].paint))()`);
+  await evaluate(`document.querySelector('${fly} [data-draw-paint-target=stroke]').click()`);
+  await until(`document.querySelector('${fly} [data-draw-paint-target=stroke]')?.getAttribute('aria-pressed')==='true'`,'Stroke target');
+  assert.ok(await evaluate(`document.querySelector('${fly} [data-draw-gradient-preset][aria-label="White, Black"]')&&!document.querySelector('${fly} [data-draw-gradient-stroke]')`),'No Stroke buttons before the stroke has a gradient');
+  await evaluate(`document.querySelector('${fly} [data-draw-gradient-preset][aria-label="White, Black"]').click()`);
+  await until(`document.querySelector('${fly} [data-draw-gradient-stroke=within]')?.getAttribute('aria-pressed')==='true'`,'Within by default');
+  const lum=p=>p[0]+p[1]+p[2];
+  let topStart=await pixel(14,62),bottomEnd=await pixel(14,74);
+  assert.ok(lum(topStart)>600&&lum(bottomEnd)>600,`Within: both left ends are white: ${topStart} ${bottomEnd}`);
+  steps=await applied();await evaluate(`document.querySelector('${fly} [data-draw-gradient-stroke=along]').click()`);
+  assert.equal((await strokePaint()).strokeMode,'along');assert.equal(await applied(),steps+1);
+  topStart=await pixel(14,62);bottomEnd=await pixel(14,74);const corner=await pixel(108,68);
+  assert.ok(lum(topStart)>600&&lum(bottomEnd)<120,`Along: white at the start, black at the end: ${topStart} ${bottomEnd}`);
+  assert.ok(lum(corner)>200&&lum(corner)<560,`Along: grey halfway: ${corner}`);
+  await evaluate(`document.querySelector('${fly} [data-draw-gradient-stroke=across]').click()`);
+  assert.equal((await strokePaint()).strokeMode,'across');
+  const upper=await pixel(50,60.7),lower=await pixel(50,63.3),far=await pixel(100,60.7);
+  assert.ok(lum(upper)>500&&lum(lower)<250,`Across: the left edge is white, the right edge black: ${upper} ${lower}`);
+  assert.ok(Math.abs(lum(upper)-lum(far))<60,`Across: the same along the stroke: ${upper} ${far}`);
+  await evaluate(`document.querySelector('${fly} [data-draw-paint-target=fill]').click()`);
+  await until(`document.querySelector('${fly} [data-draw-paint-target=fill]')?.getAttribute('aria-pressed')==='true'`,'Fill target');
+  await evaluate(`(async()=>{const w=${active};w.select(['${line}'])})()`);
+  assert.ok(await evaluate(`!document.querySelector('${fly} [data-draw-gradient-stroke]')`),'A fill without a gradient shows no Stroke buttons');
+  await evaluate(`(async()=>{const w=${active};w.select(['${id}'])})()`);
+  assert.ok(await evaluate(`[...document.querySelectorAll('${fly} [data-draw-gradient-stroke]')].every(b=>b.disabled)`),'Stroke buttons are for strokes only');
   // SVG keeps the gradient; Send to Cut uses the first stop as the layer colour.
   assert.match(await evaluate(`(async()=>{const w=${active};return w.exportBoard(w.state.ui.artboardId,'svg')})()`),/linearGradient/);
   assert.match(await evaluate(`(async()=>{const w=${active};return w.cutSvg(w.state.ui.artboardId).svg})()`),/fill="#FFF3B0"/);
   await evaluate(`(async()=>{const w=${active};w.setTool('select');w.handle('cancel')})()`);
   await restore();
-  console.log('PASS Draw gradients: Period applies white to black with one undo step, Properties names it, Recent and Presets, panel stops (add, colour, mouse drag, click to add, drag off to delete, reverse), type buttons, presets keep the vector, Gradient tool drag as one step, PNG pixels, SVG gradient, first stop for Cut');
+  console.log('PASS Draw gradients: Period applies white to black with one undo step, Properties names it, Recent and Presets, panel stops (add, colour, mouse drag, click to add, drag off to delete, reverse), type buttons, stroke within/along/across with pixels, presets keep the vector, Gradient tool drag as one step, PNG pixels, SVG gradient, first stop for Cut');
 }

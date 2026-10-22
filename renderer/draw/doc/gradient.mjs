@@ -63,10 +63,12 @@ export function reverseGradient(g) {
   return sorted({ ...structuredClone(g), stops: g.stops.map((s) => ({ ...structuredClone(s), offset: 1 - s.offset })) });
 }
 /** Linear or radial, keeping stops; the vector is refitted to the box. */
-export function setGradientType(g, type, box) { return { ...defaultGradient(box, { type, stops: g.stops, angle: type === 'linear' ? g.angle : 0 }) }; }
+export function setGradientType(g, type, box) { return keepMode(g, defaultGradient(box, { type, stops: g.stops, angle: type === 'linear' ? g.angle : 0 })); }
+// Refitting a gradient keeps how a stroke takes it.
+const keepMode = (from, to) => from?.strokeMode ? { ...to, strokeMode: from.strokeMode } : to;
 export function setGradientAngle(g, angle, box) {
   if (!Number.isFinite(angle)) throw new Error('Enter an angle.');
-  return defaultGradient(box, { type: 'linear', stops: g.stops, angle: ((angle % 360) + 540) % 360 - 180 });
+  return keepMode(g, defaultGradient(box, { type: 'linear', stops: g.stops, angle: ((angle % 360) + 540) % 360 - 180 }));
 }
 /** The first fill or stroke takes a gradient; a missing stroke gets the default width. */
 export function changeGradient(original, kind, gradient, defaults = {}) {
@@ -112,8 +114,24 @@ export const GRADIENT_PRESETS = Object.freeze([
  */
 export function applyGradientPreset(current, preset, box) {
   if (current?.type === preset.type) return { ...structuredClone(current), stops: structuredClone(preset.stops) };
-  return defaultGradient(box, { type: preset.type, stops: preset.stops, angle: preset.type === 'linear' ? preset.angle ?? 0 : 0 });
+  return keepMode(current, defaultGradient(box, { type: preset.type, stops: preset.stops, angle: preset.type === 'linear' ? preset.angle ?? 0 : 0 }));
 }
 /** Type and stops only, for Recent and swatches; two gradients with the same look share a key. */
 export function gradientLook(g) { return { type: g.type, stops: sorted(g).stops.map((s) => structuredClone(s)), angle: g.angle ?? 0 }; }
 export const gradientKey = (g) => JSON.stringify([g.type, sorted(g).stops.map((s) => [colorHex(s.color), Math.round(s.offset * 1000), Math.round((s.opacity ?? 1) * 1000)])]);
+/** Stop opacity at `offset`, between the stops around it. */
+export function opacityAt(g, offset) {
+  const s = sorted(g).stops, t = clamp(offset), o = (stop) => stop.opacity ?? 1;
+  if (t <= s[0].offset) return o(s[0]);
+  if (t >= s.at(-1).offset) return o(s.at(-1));
+  const i = s.findIndex((stop) => stop.offset >= t), a = s[i - 1], b = s[i];
+  return o(a) + (o(b) - o(a)) * (t - a.offset) / ((b.offset - a.offset) || 1);
+}
+export const STROKE_MODES = Object.freeze(['within', 'along', 'across']);
+/** How a stroke takes its gradient: within (across the object's box, the default), along or across the stroke. */
+export function setStrokeMode(g, mode) {
+  if (!STROKE_MODES.includes(mode)) throw new Error('Choose within, along or across the stroke.');
+  const next = structuredClone(g);
+  if (mode === 'within') delete next.strokeMode; else next.strokeMode = mode;
+  return next;
+}

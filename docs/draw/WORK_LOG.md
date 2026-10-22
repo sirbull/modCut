@@ -2306,3 +2306,14 @@ Norske oversettelser lagt til. `--draw-gradient` bruker nå synlig panelvindu
 (`.draw-panel-window:not([hidden])`), siden flere `.draw-flyout` kan finnes etter panelvinduene.
 408 Draw-tester, renderer-tester, i18n og kontrast passerer; `--draw-gradient` passerer med ekte
 musedrag. Skjermbilde av panelet er kontrollert visuelt. Neste: del 2, gradient på strek.
+
+## 2026-10-22: Gradienter som i Illustrator, del 2 av 4 (gradient på strek)
+
+Stroke-raden i Gradient-panelet: Apply gradient within / along / across stroke. `paint.strokeMode`
+i modell og validering; Along/Across tegnes som fargebånd i paint stack (`geom/gradient-stroke.mjs`,
+samme sampling som breddeprofiler, som nå er felles `strokeSamples`). Caps i endefarger for Along,
+square-forlengelse for Across; ugjennomsiktige bånd overlapper for å unngå skjøter. Nye ikoner.
+Brukerønsker underveis for del 4: Spread-ring som dras, opasitet per punkt og «Lines»-modus.
+412 Draw-tester og i18n passerer; `--draw-gradient` passerer med pikselkontroll av alle tre modi,
+og skjermbilder av Along og Across er kontrollert. `--draw-laser-paints` feiler på Windows også
+uten disse endringene (skriver til `/tmp`), ikke en regresjon herfra.

@@ -981,14 +981,25 @@ Radial og Freeform, og gradient på strek (Within, Along og Across stroke). Arbe
    det (markeres før slipp), piltaster flytter valgt stopp (Shift: 10 %), Delete sletter. Snu og
    søppelbøtte står ved linjen; Color, Opacity og Location for valgt stopp under.
    Drag havner i Recent når de slippes, også Gradient-verktøyets drag.
-2. **Strek (neste):** Within, Along og Across stroke.
+2. **Strek (ferdig):** Gradient-panelet har en Stroke-rad med tre knapper, «Apply gradient within / along /
+   across stroke», aktiv når Stroke er valgt og streken har en gradient. Within er som før (gradienten
+   over objektets boks). Along og Across tegnes som fargebånd (`geom/gradient-stroke.mjs`) gjennom
+   paint stack, med samme sampling som breddeprofiler, så de virker også sammen med breddeprofil.
+   Along følger banen fra start til slutt (lukkede baner rundt), med butt, square og round caps i
+   endefargene. Across går fra venstre kant til høyre; square caps forlenger båndene, round caps tegnes
+   square. Ugjennomsiktige bånd overlapper litt så ingen skjøter vises. Modellen: `paint.strokeMode`
+   (`along` eller `across`, Within er fravær), beholdes ved typebytte, vinkel og presets.
+   Begrensninger: stiplede streker tegnes heltrukne i Along/Across, hjørner blir avfaset, og PDF/EPS,
+   Outline Stroke og Send to Cut bruker første stopps farge som før.
 3. **Annotator på lerretet** for Linear og Radial: endepunkter og stopp dras direkte på objektet.
 4. **Freeform:** punkter i fyllet som legges til, flyttes og fargelegges, med myk overgang mellom
    alle punktene; hvert punkt har en stiplet ring med håndtak som dras for å endre spredning (Spread).
 
-Tester: `gradient.test.mjs` (flytte stopp forbi andre, presets, Recent med ødelagt lagring) og
+Tester: `gradient-stroke.test.mjs` (bånd langs og på tvers, lukkede baner, caps, strokeMode i
+modell og validering), `gradient.test.mjs` (flytte stopp forbi andre, presets, Recent med ødelagt lagring) og
 `--draw-gradient` (ekte musedrag på glidebryteren, klikk for å legge til, dra av for å slette, ett
-angresteg per drag, Recent og Presets, typeknapper, PNG-piksler, SVG og Send to Cut).
+angresteg per drag, Recent og Presets, typeknapper, Within/Along/Across med pikselkontroll, PNG,
+SVG og Send to Cut).
 
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 

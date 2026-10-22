@@ -339,6 +339,8 @@ export const NB = Object.freeze({
   "Location (%)": "Plassering (%)", "Add stop": "Legg til stopp", "Add Gradient Stop": "Legg til fargestopp", "Delete stop": "Slett stopp", "Delete Gradient Stop": "Slett fargestopp",
   "Reverse": "Snu", "Reverse Gradient": "Snu fargeovergang",
   "Presets": "Forhåndsvalg", "Recent gradient {n}": "Nylig fargeovergang {n}", "Type:": "Type:", "Gradient type": "Type fargeovergang", "Linear gradient": "Lineær fargeovergang", "Radial gradient": "Radiell fargeovergang",
+  "Stroke:": "Strek:", "Apply gradient to stroke": "Bruk fargeovergang på strek", "Apply gradient within stroke": "Bruk fargeovergang innenfor strek", "Apply gradient along stroke": "Bruk fargeovergang langs strek",
+  "Apply gradient across stroke": "Bruk fargeovergang på tvers av strek", "Choose Stroke to apply a gradient within, along or across it.": "Velg Strek for å bruke en fargeovergang innenfor, langs eller på tvers av den.",
   "Reverse gradient": "Snu fargeovergangen", "Click to add a stop": "Klikk for å legge til et stopp", "Move Gradient Stop": "Flytt fargestopp", "Gradient Preset": "Forhåndsvalgt fargeovergang",
   "White, Black": "Hvit, svart", "Black, Transparent": "Svart, gjennomsiktig", "Sunset": "Solnedgang", "Sky": "Himmel", "Mint": "Mint", "Steel": "Stål", "Spectrum": "Spektrum",
   "White, Black (radial)": "Hvit, svart (radiell)", "Fade to transparent": "Ton ut til gjennomsiktig", "Ember": "Glør",

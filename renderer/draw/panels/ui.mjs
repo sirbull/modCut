@@ -4,7 +4,7 @@ import { strokePreview } from './stroke-icons.mjs';
 import { insertNode, updateDocument, updateNode } from '../doc/commands.mjs';
 import { createId } from '../doc/schema.mjs';
 import { textDefaults, textValues } from '../doc/text.mjs';
-import { GRADIENT_PRESETS, addStop, applyGradientPreset, colorHex, defaultGradient, gradientCss, gradientKey, gradientPreviewCss, isGradient, moveStop, removeStop, reverseGradient, setGradientAngle, setGradientType, updateStop } from '../doc/gradient.mjs';
+import { GRADIENT_PRESETS, addStop, applyGradientPreset, colorHex, defaultGradient, gradientCss, gradientKey, gradientPreviewCss, isGradient, moveStop, removeStop, reverseGradient, setStrokeMode, setGradientAngle, setGradientType, updateStop } from '../doc/gradient.mjs';
 import { recentGradients as savedRecentGradients } from '../doc/recent-gradients.mjs';
 import { EFFECTS, effectLabel } from '../doc/effects.mjs';
 import { documentInfo } from '../doc/document-info.mjs';
@@ -1048,6 +1048,18 @@ export function createPanels(shell, state, api) {
       const apply = button(`Apply Gradient to ${target === 'fill' ? 'Fill' : 'Stroke'}`,() => api.command('paint-gradient')); apply.dataset.drawGradientApply = ''; apply.disabled = ro; host.append(apply);
       text(host,'Choose a preset or a type, or apply the last gradient you used (white to black the first time).'); return;
     }
+    // Stroke: how a stroke takes the gradient, as in Illustrator (only for strokes).
+    const strokeRow = document.createElement('div'); strokeRow.className = 'draw-gradient-head draw-gradient-stroke'; host.append(strokeRow);
+    const strokeLabel = document.createElement('span'); strokeLabel.textContent = 'Stroke:';
+    const modes = document.createElement('div'); modes.className = 'draw-segmented draw-gradient-types'; modes.setAttribute('role','group'); modes.setAttribute('aria-label','Apply gradient to stroke');
+    for (const [id,label] of [['within','Apply gradient within stroke'],['along','Apply gradient along stroke'],['across','Apply gradient across stroke']]) {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'draw-segmented__option draw-stroke-option'; b.append(icon(panelSpriteHref(`gradient-stroke-${id}`)));
+      b.setAttribute('aria-label',label); b.dataset.tooltip = target === 'stroke' ? label : 'Choose Stroke to apply a gradient within, along or across it.'; b.dataset.drawGradientStroke = id;
+      b.setAttribute('aria-pressed',String(target === 'stroke' && (g.strokeMode ?? 'within') === id)); b.disabled = ro || target !== 'stroke';
+      b.addEventListener('click',() => api.run(() => edit(current => (current.strokeMode ?? 'within') === id ? null : setStrokeMode(current,id),label)));
+      modes.append(b);
+    }
+    strokeRow.append(strokeLabel,modes);
     if (g.type === 'linear') { const row = document.createElement('div'); row.className = 'draw-fields'; host.append(row); field(row,'Angle (°)',g.angle,value => edit((current,box) => setGradientAngle(current,value,box),'Gradient Angle'),{ min:-360, max:360, key:'gradient-angle', disabled: ro }); }
     // The slider: one marker per stop. Click the bar to add a stop there; drag a marker to move it,
     // or down off the bar to delete it. A drag is one undo step.

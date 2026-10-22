@@ -152,8 +152,8 @@ the same commit that completes an item.
   Copy and paste work between Cut and Draw in both directions; Paste takes the newest copy.
   Unsupported non-vector glyphs and overset text block incomplete text output.
   Gradients are being extended to match Illustrator in four parts: the Gradient panel with
-  Recent, Presets and a draggable stop slider is done; stroke modes (within, along, across),
-  on-canvas editing and Freeform gradients follow.
+  Recent, Presets and a draggable stop slider and the stroke modes (within, along, across)
+  are done; on-canvas editing and Freeform gradients (points and lines) follow.
 - [ ] Phase 3 — Advanced editing: stroke expansion, effects, Image Trace,
   additional editing tools and AI/DXF export.
 - [ ] Phase 4 — Full feature set: Width, Blend, brushes, additional export

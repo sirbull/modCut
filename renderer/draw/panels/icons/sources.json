@@ -461,6 +461,24 @@
       "author": "modCut",
       "path": "gradient-reverse.svg",
       "sha256": "18bf37fceb8df89219b4bb9733db1757a80163e22cd622410179f6f547cf163d"
+    },
+    "gradient-stroke-within": {
+      "name": "gradient-stroke-within",
+      "author": "modCut",
+      "path": "gradient-stroke-within.svg",
+      "sha256": "aa8f7ec5ca0ce0348b5ba11931521ac44757c216cbb814659c43351d82dc4e74"
+    },
+    "gradient-stroke-along": {
+      "name": "gradient-stroke-along",
+      "author": "modCut",
+      "path": "gradient-stroke-along.svg",
+      "sha256": "4b3daa664e77fbd7659d0a82e413e82767f0a88783fa221c368f78c4330ca330"
+    },
+    "gradient-stroke-across": {
+      "name": "gradient-stroke-across",
+      "author": "modCut",
+      "path": "gradient-stroke-across.svg",
+      "sha256": "87417c7a5b4ebd2da69efd8eb93b787a9450869a64efd61fe029af3ea5563c9c"
     }
   }
 }

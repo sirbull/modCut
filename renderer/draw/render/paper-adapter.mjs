@@ -11,6 +11,8 @@ import { scaledStrokeProperties, strokeScalingPolicy } from '../geom/transforms.
 import { isOutputNode, layerContext, ROOT_CONTEXT } from '../doc/layers.mjs';
 import { arrowShapes } from '../geom/arrows.mjs';
 import { normalizeProfile, variableStrokeRings } from '../geom/width-profile.mjs';
+import { gradientStrokeBands } from '../geom/gradient-stroke.mjs';
+import { colorAt, isGradient, opacityAt } from '../doc/gradient.mjs';
 import { blendStepCount, matchShapes, interpolateShapes, stepPositions, lerpColor, spineCurve, placeOnSpine, keyPosition } from '../geom/blend.mjs';
 import { PT_TO_MM, textValues } from '../doc/text.mjs';
 import { applyVectorEffects, hasVectorEffects, dropShadow, livePathfinder, pixelEffects, scribbleOf, vectorEffects, withGroupEffects } from '../doc/effects.mjs';
@@ -288,15 +290,17 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
   // More than one visible fill or stroke: a paint stack draws every entry, the item itself only holds geometry.
   // A stroke with a width profile is drawn as a filled outline, so it always goes through the paint stack.
   const profiled = (node, entry) => ['path', 'shape'].includes(node.type) && !!normalizeProfile(entry?.widthProfile);
+  // A gradient along or across a stroke is drawn as coloured bands, so it goes through the paint stack too.
+  const banded = (node, entry) => ['path', 'shape'].includes(node.type) && isGradient(entry?.paint) && ['along', 'across'].includes(entry.paint.strokeMode);
   function stacked(node) {
     return !node.children && node.type !== 'image' && (shown(node.appearance?.fills).length > 1 || shown(node.appearance?.strokes).length > 1
-      || shown(node.appearance?.strokes).some(entry => profiled(node, entry)));
+      || shown(node.appearance?.strokes).some(entry => profiled(node, entry) || banded(node, entry)));
   }
   /**
-   * Variable-width stroke outline of `item`'s geometry (its own space) as subpaths: each curve is sampled
-   * by length, ends included, so corners keep their anchors (joins come out bevelled).
+   * Points along each subpath of `item` (its own space) with unit normals and length shares: each curve
+   * is sampled by length, ends included, so corners keep their anchors (joins come out bevelled).
    */
-  function variableStrokeSubpaths(item, stroke) {
+  function strokeSamples(item) {
     const out = [];
     for (const path of (item.children ?? [item]).filter(p => p.curves?.length && p.length > 0)) {
       const total = path.length, samples = [];
@@ -310,17 +314,35 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
         before += length;
       }
       if (path.closed) samples.pop();
-      for (const ring of variableStrokeRings(samples, stroke.width, stroke.widthProfile, { closed: path.closed, cap: stroke.cap ?? 'butt' }))
-        out.push({ closed: true, segments: ring.map(p => ({ p, in: [0, 0], out: [0, 0] })) });
+      out.push({ samples, closed: path.closed });
     }
     return out;
   }
+  /** Variable-width stroke outline of `item`'s geometry as subpaths. */
+  function variableStrokeSubpaths(item, stroke) {
+    return strokeSamples(item).flatMap(({ samples, closed }) => variableStrokeRings(samples, stroke.width, stroke.widthProfile, { closed, cap: stroke.cap ?? 'butt' })
+      .map(ring => ({ closed: true, segments: ring.map(p => ({ p, in: [0, 0], out: [0, 0] })) })));
+  }
   function variableStroke(item, stroke) {
+    if (banded({ type: 'path' }, stroke)) return gradientStroke(item, stroke);
     const piece = new scope.CompoundPath({ insert: false, fillRule: 'nonzero',
       children: variableStrokeSubpaths(item, stroke).map(s => new scope.Path({ insert: false, closed: true, segments: s.segments.map(g => g.p) })) });
     piece.fillColor = color(stroke.paint, stroke.opacity ?? 1);
     if (piece.fillColor && stroke.paint?.type === 'solid') piece.fillColor.alpha = stroke.opacity ?? 1;
     return piece;
+  }
+  /** A gradient along or across the stroke: one filled band per colour step (dashes are not applied). */
+  function gradientStroke(item, stroke) {
+    const paint = stroke.paint, opaque = paint.stops.every(s => (s.opacity ?? 1) >= 1) && (stroke.opacity ?? 1) >= 1;
+    const group = new scope.Group({ insert: false });
+    for (const { samples, closed } of strokeSamples(item)) {
+      for (const band of gradientStrokeBands(samples, stroke.width, stroke.widthProfile, { mode: paint.strokeMode, closed, cap: stroke.cap ?? 'butt', opaque })) {
+        const piece = new scope.CompoundPath({ insert: false, fillRule: 'nonzero', children: band.rings.map(ring => new scope.Path({ insert: false, closed: true, segments: ring })) });
+        piece.fillColor = color({ type: 'solid', color: colorAt(paint, band.t) }); piece.fillColor.alpha = opacityAt(paint, band.t) * (stroke.opacity ?? 1);
+        group.addChild(piece);
+      }
+    }
+    return group;
   }
   function style(item, node, asOutline = outlineFor(node.id), stackOwned = false) {
     item.opacity = asOutline ? 1 : node.opacity * (node.type === 'image' ? records.get(node.id)?.context.dim ?? 1 : 1);
@@ -355,7 +377,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
     group.opacity = node.opacity; group.data.baseOpacity = node.opacity; group.blendMode = node.blendMode;
     const entries = [...shown(node.appearance.fills).map(e => ['fills', e]), ...shown(node.appearance.strokes).map(e => ['strokes', e])];
     for (const [kind, entry] of entries) {
-      if (kind === 'strokes' && profiled(node, entry)) { const piece = variableStroke(item, entry); piece.blendMode = entry.blendMode ?? 'normal'; group.addChild(piece); continue; }
+      if (kind === 'strokes' && (profiled(node, entry) || banded(node, entry))) { const piece = variableStroke(item, entry); piece.blendMode = entry.blendMode ?? 'normal'; group.addChild(piece); continue; }
       const piece = item.clone({ insert: false }); piece.matrix = new scope.Matrix();
       style(piece, { ...node, opacity: 1, blendMode: 'normal', appearance: { ...node.appearance, fills: kind === 'fills' ? [entry] : [], strokes: kind === 'strokes' ? [entry] : [] } }, false);
       piece.blendMode = entry.blendMode ?? 'normal'; group.addChild(piece);

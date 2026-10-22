@@ -103,6 +103,7 @@ export function validateDocument(doc, { trusted = null } = {}) {
       vector(value.origin, 2, `${path}.origin`);
       number(value.angle, `${path}.angle`); number(value.length, `${path}.length`, Number.MIN_VALUE);
       number(value.aspect, `${path}.aspect`, Number.MIN_VALUE);
+      if (value.strokeMode !== undefined) enumeration(value.strokeMode, ['within', 'along', 'across'], `${path}.strokeMode`);
     }
   }
   function appearance(value, path) {

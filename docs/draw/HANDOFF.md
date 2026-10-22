@@ -3,8 +3,9 @@
 **Start med [STATUS.md](STATUS.md)**: én side med hva som er gjort og hva som gjenstår.
 
 **Pågår 2026-10-22: gradienter som i Illustrator, i fire deler (STATUS.md 2.40).** Del 1 (Gradient-panelet
-med Recent, Presets, typeknapper og dragbar glidebryter) er ferdig. Neste er del 2: Within, Along og Across
-stroke; deretter annotator på lerretet (del 3) og Freeform med punkter og Spread-ring (del 4).
+med Recent, Presets, typeknapper og dragbar glidebryter) og del 2 (Within, Along og Across stroke) er
+ferdige. Neste er annotator på lerretet (del 3), deretter Freeform (del 4): punkter med farge, opasitet
+per punkt og Spread-ring som dras, og «Lines»-modus der punkter bindes sammen av glatte linjer.
 
 Oppdatert 2026-10-19. Arbeidsgren: `feat/vector-draw` (Claude og Codex jobber der; hent før du starter).
 
