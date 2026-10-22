@@ -4,7 +4,7 @@ import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 
 export function createSidecar({ command = "java", args = [], cwd, timeoutMs = 35000 } = {}) {
-  const proc = spawn(command, args, { cwd, stdio: ["pipe", "pipe", "inherit"] });
+  const proc = spawn(command, args, { cwd, stdio: ["pipe", "pipe", "inherit"], windowsHide: true });
   const pending = new Map();
   let nextId = 1;
   let stopped = false;

@@ -46,9 +46,29 @@ function updatePreferences(values) {
   localStorage.setItem(PREFERENCES_KEY, JSON.stringify(preferences));
   window.paper.activate();
   bed.setViewPreferences(preferences);
+  syncProcessPreview();
   applyLanguage();
   window.dispatchEvent(new Event("modcut-preferences-change"));
 }
+// Process preview: draw the artwork as the laser will treat it, per active layer.
+function syncProcessPreview() {
+  $("processPreview").checked = preferences.processPreview;
+  $("previewLegend").classList.toggle("hidden", !preferences.processPreview);
+  for (const [key, name] of [["processPreviewCut", "cut"], ["processPreviewScore", "score"], ["processPreviewEngrave", "engrave"]]) {
+    $("previewLegend").style.setProperty(`--preview-${name}`, preferences[key]);
+  }
+  $("previewLegend").classList.toggle("preview-legend--solid-score", !preferences.processPreviewScoreDashed);
+  bed.setProcessPreview({
+    enabled: preferences.processPreview,
+    specs: activeLayers().map((l) => ({ key: state.mappingMode === "color" ? l.key : null, color: state.mappingMode === "color" ? l.color : null, op: l.op })),
+    cut: preferences.processPreviewCut, score: preferences.processPreviewScore, engrave: preferences.processPreviewEngrave,
+    scoreDashed: preferences.processPreviewScoreDashed,
+  });
+}
+// The offline Dummy machine never moves a Z axis, so focus offsets cannot block it.
+const isDummyMachine = () => machine().driver === "Dummy";
+const focusBlocksJob = (ops) => !isDummyMachine() && !isEpilogDriver(machine().driver) && !machine().zAxis?.enabled
+  && ops.some((op) => (Number(op.zOffset) || 0) !== 0);
 const OPS = OPERATIONS;
 const DITHERS = RASTER_MODES;
 const clampSpeedPct = (v) => Math.max(1, Math.min(100, Number(v) || 1));
@@ -1465,6 +1485,7 @@ function renderLayers() {
     color: state.mappingMode === "color" ? layer.color : null,
     visible: isOutputLayer(layer),
   })));
+  syncProcessPreview();
 }
 function moveLayer(index, offset) {
   const target = index + offset;
@@ -1705,6 +1726,7 @@ async function runJob(label) {
         maxFeed: machine().maxFeed || 12000,
         zAxis: machine().zAxis,
         softwareFocus: epilog,
+        ignoreFocus: isDummyMachine(),
         maxRasterSamples: rasterSampleLimitForMachine(),
       });
       jobs.push({
@@ -1800,6 +1822,8 @@ async function startSimulate() {
         maxFeed: machine().maxFeed || 12000,
         zAxis: machine().zAxis,
         softwareFocus: epilog,
+        // Focus only moves Z; the simulation shows XY, so it never blocks on it.
+        ignoreFocus: true,
         maxRasterSamples: rasterSampleLimitForMachine(),
       });
       if (buildVersion !== simBuildVersion) return;
@@ -1816,7 +1840,9 @@ async function startSimulate() {
     $("simPlay").textContent = "⏸";
     $("simProg").textContent = "0%";
     setSimSpeed(1);
-    toast("Simulating the generated machine program — red dot follows the beam.", "info");
+    toast(focusBlocksJob(specs)
+      ? `Simulating without focus offsets: ${machine().name} has no controlled Z axis, so sending this job will be blocked until the layers' Focus offset is 0 or Z is enabled.`
+      : "Simulating the generated machine program — red dot follows the beam.", "info");
   } catch (error) {
     toast("Simulation could not build the machine program: " + error.message, "err");
   } finally {
@@ -2292,6 +2318,11 @@ async function openSettings(section = null) {
       { key: "gridUnit", label: "Grid unit", description: "Units used for the grid spacing below, independently of the display units.", type: "select", value: gu, options: [{ value: "mm", label: "Millimetres (mm)" }, { value: "cm", label: "Centimetres (cm)" }, { value: "in", label: "Inches (in)" }] },
       { key: "gridX", label: "Grid spacing X", description: "Horizontal distance between vertical grid lines, in the selected grid unit.", type: "number", step: "any", min: 0.001, value: +(state.gridXmm / UNIT[gu]).toFixed(3) },
       { key: "gridY", label: "Grid spacing Y", description: "Vertical distance between horizontal grid lines, in the selected grid unit.", type: "number", step: "any", min: 0.001, value: +(state.gridYmm / UNIT[gu]).toFixed(3) },
+      { key: "processPreviewCut", section: "Process preview", sectionDescription: "Colours used by the Preview switch next to Simulate, which shows what is cut, scored and engraved. Display only; the job is unchanged.",
+        label: "Cut lines", type: "color", value: preferences.processPreviewCut, description: "Colour of paths cut through. Applies immediately.", onChange: (value) => updatePreferences({ processPreviewCut: value }) },
+      { key: "processPreviewScore", label: "Score lines", type: "color", value: preferences.processPreviewScore, description: "Colour of paths scored on the surface. Applies immediately.", onChange: (value) => updatePreferences({ processPreviewScore: value }) },
+      { key: "processPreviewScoreDashed", label: "Dashed score lines", type: "checkbox", value: preferences.processPreviewScoreDashed, description: "Draw score lines dashed, so they stand apart from cut lines even in similar colours.", onChange: (value) => updatePreferences({ processPreviewScoreDashed: value }) },
+      { key: "processPreviewEngrave", label: "Engraved areas", type: "color", value: preferences.processPreviewEngrave, description: "Colour of engraved fills and strokes. Engraved images are shown in grayscale. Applies immediately.", onChange: (value) => updatePreferences({ processPreviewEngrave: value }) },
       { key: "invertZoom", section: "Navigation & help", sectionDescription: "Zooming, tooltips and explanations.", label: "Reverse zoom direction", type: "checkbox", value: preferences.invertZoom, description: "Reverse Cmd/Ctrl + scroll and trackpad pinch zoom in Cut. Panning stays the same. Applies immediately.", onChange: (value) => updatePreferences({ invertZoom: value }) },
       { key: "tooltips", label: "Show tooltips", type: "checkbox", value: preferences.tooltips, description: "Show explanations when hovering over or focusing toolbar buttons. Applies immediately.", onChange: (value) => updatePreferences({ tooltips: value }) },
       { key: "hideLaserPreviewIntro", label: "Skip Laser Preview explanation", type: "checkbox", value: preferences.hideLaserPreviewIntro, description: "Turn this off to show the explanation on the next activation. You can also open it from Help.", onChange: value => updatePreferences({ hideLaserPreviewIntro: value }) },
@@ -2756,6 +2787,7 @@ $("splitJobs").addEventListener("change", (event) => {
     ? "Jobs will be sent as one file per operation type."
     : "Cut, Score and Engrave will be sent together in one file.", "info");
 });
+$("processPreview").addEventListener("change", (event) => updatePreferences({ processPreview: event.target.checked }));
 
 // simulate controls
 $("simPlay").addEventListener("click", () => {
@@ -2842,6 +2874,7 @@ refreshMachines(state.machineId);
 bed.setGrid(state.gridXmm, state.gridYmm);
 initializeDocumentTabs();
 bed.setViewPreferences(preferences);
+syncProcessPreview();
 void restoreRecoverySession().then((restored) => { if (!restored) scheduleRecovery(); });
 refreshProps();
 refreshPropsVisibility();

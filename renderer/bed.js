@@ -666,6 +666,67 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     drawOverlay();
     view.update();
   }
+  // --- process preview: what each active layer does to its artwork --------
+  // Display only. Colours are swapped while the design layer draws and restored
+  // right after, so hit testing, export and job output keep the real artwork.
+  let processPreview = null; // { specs: [{ key, color, op }], cut, score, engrave, scoreDashed }
+  function setProcessPreview(value) {
+    processPreview = value?.enabled ? value : null;
+    // No item changed, so Paper would skip the redraw without this flag.
+    view._needsUpdate = true;
+    view.update();
+  }
+  function processOpsFor(item) {
+    const ops = new Set();
+    for (const spec of processPreview.specs) {
+      const match = spec.key ? logicalLayerKey(item) === spec.key
+        : spec.color ? logicalColor(item) === String(spec.color).toLowerCase() : true;
+      if (match) ops.add(spec.op);
+    }
+    return ops;
+  }
+  const drawDesignLayer = designLayer.draw;
+  designLayer.draw = function (ctx, ...args) {
+    if (!processPreview) return drawDesignLayer.call(this, ctx, ...args);
+    const restore = [];
+    const patch = (item, props) => {
+      const old = {};
+      for (const key of Object.keys(props)) old[key] = item[key];
+      restore.push(() => Object.assign(item, old));
+      Object.assign(item, props);
+    };
+    try {
+      for (const item of laserItems()) {
+        if (!item.visible) continue;
+        const ops = processOpsFor(item);
+        const engrave = ops.has("Engrave");
+        const line = ops.has("Cut") ? "Cut" : ops.has("Score") ? "Score" : null;
+        if (item.className === "Raster") {
+          // Cut and Score trace vector paths only; images are engraved or skipped.
+          if (!engrave) { patch(item, { visible: false }); continue; }
+          const original = item.draw;
+          patch(item, { opacity: 1, blendMode: "normal", draw: function (c, ...rest) {
+            c.save();
+            try { c.filter = "grayscale(1)"; return original.call(this, c, ...rest); } finally { c.restore(); }
+          } });
+          continue;
+        }
+        if (!engrave && !line) { patch(item, { visible: false }); continue; }
+        // Engrave reproduces the painted footprint (fill and stroke width);
+        // Cut and Score follow the centre path whatever its paint.
+        const props = { opacity: 1, blendMode: "normal", fillColor: engrave && item.fillColor ? processPreview.engrave : null };
+        if (line) Object.assign(props, {
+          strokeColor: line === "Cut" ? processPreview.cut : processPreview.score, strokeWidth: 1.5, strokeScaling: false,
+          dashArray: line === "Score" && processPreview.scoreDashed ? [6, 4] : [],
+        });
+        else props.strokeColor = item.strokeColor ? processPreview.engrave : null;
+        patch(item, props);
+      }
+      return drawDesignLayer.call(this, ctx, ...args);
+    } finally {
+      for (let i = restore.length - 1; i >= 0; i--) restore[i]();
+    }
+  };
   function updateRasterSettings(partial) {
     const raster = selectedRaster();
     if (!raster) return null;
@@ -2167,7 +2228,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   const fmt = (n) => (Math.round(n * 1000) / 1000).toFixed(3).replace(/\.?0+$/, "");
   const feedFromPct = (pct, maxFeed = 12000) => Math.round((Math.max(1, Math.min(100, pct || 1)) / 100) * maxFeed);
   const powerToS = (power) => Math.round(Math.max(0, Math.min(100, power || 0)) * 10);
-  async function buildGcodeJob(specs, { maxFeed = 12000, zAxis = null, softwareFocus = false, maxRasterSamples = MAX_RASTER_SAMPLES } = {}) {
+  async function buildGcodeJob(specs, { maxFeed = 12000, zAxis = null, softwareFocus = false, ignoreFocus = false, maxRasterSamples = MAX_RASTER_SAMPLES } = {}) {
     const quality = outputQuality(specs, { maxRasterSamples });
     if (quality.blocked) throw new Error("Output quality limit: " + quality.problems.join(" "));
     // This is intentionally applied before *all* job generation. Simulation,
@@ -2175,8 +2236,11 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     const effectiveSpecs = quality.rasterAutoAdjusted
       ? specs.map((spec) => spec.op === "Engrave" ? { ...spec, dpi: Math.max(1, Number(spec.dpi || 300) * quality.rasterDpiScale) } : spec)
       : specs;
-    const machineFocusOffset = zAxis?.enabled ? Number(zAxis.globalOffset) || 0 : 0;
-    const requestedZ = specs.map((spec) => combinedFocusOffset(machineFocusOffset, spec.zOffset));
+    // ignoreFocus builds the XY program at Z 0 without focus checks: for
+    // simulation and the offline Dummy machine, where no Z axis moves.
+    const machineFocusOffset = !ignoreFocus && zAxis?.enabled ? Number(zAxis.globalOffset) || 0 : 0;
+    const focusAt = (offset) => ignoreFocus ? 0 : combinedFocusOffset(machineFocusOffset, offset);
+    const requestedZ = specs.map((spec) => focusAt(spec.zOffset));
     if (requestedZ.some((offset) => offset !== 0) && !zAxis?.enabled && !softwareFocus) {
       throw new Error("One or more layers use a focus offset, but the selected machine profile has no controlled Z axis enabled.");
     }
@@ -2184,7 +2248,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       const outside = requestedZ.find((offset) => offset < -12.6 || offset > 12.6);
       if (outside != null) throw new Error(`Epilog software focus ${outside} mm is outside the supported range -12.6…12.6 mm.`);
     }
-    if (zAxis?.enabled) {
+    if (zAxis?.enabled && !ignoreFocus) {
       const minZ = Number(zAxis.min), maxZ = Number(zAxis.max);
       if (!Number.isFinite(minZ) || !Number.isFinite(maxZ) || minZ > 0 || maxZ < 0 || minZ >= maxZ) throw new Error("The selected machine profile has an invalid Z range.");
       const outside = requestedZ.find((offset) => offset < minZ || offset > maxZ);
@@ -2207,7 +2271,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     const zFeed = Math.max(1, Number(zAxis?.feed) || 300);
     for (const seg of softwareFocus ? [] : segs) {
       if (!seg.pts || seg.pts.length < 2) continue;
-      const nextZ = combinedFocusOffset(machineFocusOffset, seg.zOffset);
+      const nextZ = focusAt(seg.zOffset);
       if (!softwareFocus && nextZ !== currentZ) {
         lines.push("M5");
         lines.push(`G1 Z${fmt(nextZ)} F${Math.round(zFeed)} ; set combined focus position with laser off`);
@@ -2264,7 +2328,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
         power: Number(segment.power) || 0,
         speed: Number(segment.speed) || 1,
         frequency: Number(segment.freq) || 5000,
-        focus: combinedFocusOffset(machineFocusOffset, segment.zOffset),
+        focus: focusAt(segment.zOffset),
         operation: segment.op,
         color: segment.color,
         raster: !!segment.raster,
@@ -2545,7 +2609,8 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     groupSelected, ungroupSelected, arrangeSelected, copySelection, pasteSelection, duplicateSelection, clipboardSVG, clipboardTime: () => clipboardTime,
     canUngroup, selectAll, deleteSelection,
     setGrid, setViewPreferences, setTool, setPathOrder, getColors, addShape, finishDrawing,
-    setDrawStyle, applyStyle, getStyle, setLayerVisibility,
+    setDrawStyle, applyStyle, getStyle, setLayerVisibility, setProcessPreview,
+    processPreviewEnabled: () => !!processPreview,
     getSelectionInfo: () => ({ hasRaster: selectionHasRaster(), singleRaster: isSingleRasterSelection(), rasterCount: selectedRasterTargets().length, count: selected.size }),
     getRasterSettings, getRasterMode, setRasterModes, beginRasterEdit, updateRasterSettings, endRasterEdit, resetRasterSettings,
     getRasterEditorPayload, applyEngravingRecipe,

@@ -37,15 +37,30 @@ const closeAllowed = new WeakSet();
 const closePending = new WeakSet();
 const rendererGone = new WeakSet();
 const isE2E = process.env.MODCUT_E2E === "1";
+// E2E windows open invisible and unfocused so the desktop remains usable;
+// MODCUT_E2E_FOREGROUND=1 brings the window up front for watching a run.
+const e2eBackground = isE2E && process.env.MODCUT_E2E_FOREGROUND !== "1";
 const e2eImportResults = [];
 const e2eExports = [];
 const gunzipAsync = promisify(gunzip);
 let fonts,googleFonts;
 
+// A covered window must keep painting, or rAF-driven tests stall.
+if (e2eBackground) app.commandLine.appendSwitch("disable-features", "CalculateNativeWinOcclusion");
+
 // Keep local development and an installed build from sharing Chromium state,
 // recovery files, and machine settings. E2E supplies its own user-data-dir.
 if (!app.isPackaged && !isE2E) {
   app.setPath("userData", join(app.getPath("appData"), "modcut-development"));
+}
+
+// Shows a window transparent, click-through and unfocused, but on the taskbar.
+// It keeps rendering like a visible window; clicking it there reveals the run.
+function showInBackground(window) {
+  window.setOpacity(0);
+  window.setIgnoreMouseEvents(true);
+  window.showInactive();
+  window.once("focus", () => { window.setOpacity(1); window.setIgnoreMouseEvents(false); });
 }
 
 function createWindow() {
@@ -59,6 +74,7 @@ function createWindow() {
       preload: join(__dirname, "preload.cjs"),
       contextIsolation: true,
       sandbox: false,
+      backgroundThrottling: !e2eBackground,
     },
   });
   win = nextWindow;
@@ -76,7 +92,8 @@ function createWindow() {
     if (isMac) app.focus({ steal: true });
     nextWindow.focus();
   };
-  if (isE2E) nextWindow.webContents.once("did-finish-load", showAndFocus);
+  if (e2eBackground) nextWindow.webContents.once("did-finish-load", () => showInBackground(nextWindow));
+  else if (isE2E) nextWindow.webContents.once("did-finish-load", showAndFocus);
   else nextWindow.once("ready-to-show", showAndFocus);
   void nextWindow.loadFile(join(root, "renderer", "index.html"));
   return nextWindow;
@@ -439,6 +456,7 @@ app.whenReady().then(async () => {
         preload: join(__dirname, "preload.cjs"),
         contextIsolation: true,
         sandbox: false,
+        backgroundThrottling: !e2eBackground,
       },
     });
     const session = { window: editorWindow, parent, promise, resolve: resolveResult, settled: false };
@@ -449,7 +467,10 @@ app.whenReady().then(async () => {
       session.settled = true;
       session.resolve(result ?? null);
     };
-    editorWindow.once("ready-to-show", () => { editorWindow.show(); editorWindow.focus(); });
+    editorWindow.once("ready-to-show", () => {
+      if (e2eBackground) return showInBackground(editorWindow);
+      editorWindow.show(); editorWindow.focus();
+    });
     editorWindow.webContents.once("did-finish-load", () => editorWindow.webContents.send("image-editor-init", payload));
     editorWindow.on("closed", () => {
       imageEditorSessions.delete(editorContentsId);

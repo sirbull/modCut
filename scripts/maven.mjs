@@ -9,6 +9,7 @@ const result = spawnSync(wrapper, args, {
   cwd: root,
   stdio: "inherit",
   shell: process.platform === "win32",
+  windowsHide: true,
 });
 
 if (result.error) {

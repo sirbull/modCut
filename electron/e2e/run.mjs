@@ -62,6 +62,7 @@ import { runDrawArtboardUIWorkflows } from './draw-artboard-ui-workflows.mjs';
 import { runWorkflows, verifyRecoveredSession } from "./workflows.mjs";
 import { runThemeWorkflows } from "./theme-workflows.mjs";
 import { runBackgroundWorkflows } from "./background-workflows.mjs";
+import { runCutPreviewWorkflows } from "./cut-preview-workflows.mjs";
 import { runDrawWorkspaceFileWorkflows } from './draw-workspace-files-workflows.mjs';
 import { runDrawPanelLayoutWorkflows } from './draw-panel-layout-workflows.mjs';
 import { runDrawDockingWorkflows } from './draw-docking-workflows.mjs';
@@ -82,7 +83,7 @@ function launch() {
   delete env.ELECTRON_RUN_AS_NODE;
   child = spawn(command, args, {
     cwd: process.cwd(), env, stdio: ["ignore", "pipe", "pipe"],
-    detached: process.platform !== "win32",
+    detached: process.platform !== "win32", windowsHide: true,
   });
   child.stdout.on("data", (chunk) => { output += chunk; });
   child.stderr.on("data", (chunk) => { output += chunk; });
@@ -122,6 +123,9 @@ try {
     await runDrawPanelLayoutWorkflows(first); first.socket.close();
   } else if (process.argv.includes('--workspace-layout')) {
     await runWorkspaceLayoutWorkflows(first);
+    first.socket.close();
+  } else if (process.argv.includes("--cut-preview")) {
+    await runCutPreviewWorkflows(first, { screenshot: process.argv.find((a) => a.startsWith("--screenshot="))?.slice(13) });
     first.socket.close();
   } else if (process.argv.includes("--background")) {
     await runBackgroundWorkflows(first, port);

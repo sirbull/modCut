@@ -52,6 +52,11 @@
       </div>
     </aside>
     <section class="canvas" id="stage">
+      <div class="preview-legend hidden" id="previewLegend" aria-label="Process preview legend">
+        <span><i class="preview-legend__line preview-legend__line--cut"></i>Cut</span>
+        <span><i class="preview-legend__line preview-legend__line--score"></i>Score</span>
+        <span><i class="preview-legend__fill"></i>Engrave</span>
+      </div>
       <div class="simbar hidden" id="simbar">
         <button class="btn btn--ghost btn--sm btn--icon" id="simPlay" title="Play/pause">⏸</button>
         <button class="btn btn--ghost btn--sm btn--icon" id="simRestart" title="Restart simulation" aria-label="Restart simulation">↺</button>
@@ -212,6 +217,11 @@
     <span class="tb-sep"></span>
     <span class="fn-label">File name</span>
     <div class="fn-wrap"><input class="input filename" id="filename" value="job" spellcheck="false"><span class="fn-ext" id="fnExt">.gcode</span></div>
+    <label class="action-toggle" title="Show the artwork as the laser treats it: cut lines, score lines and engraved areas in their own colours. Change the colours in Preferences → Process preview. Display only; the job is unchanged.">
+      <input type="checkbox" id="processPreview">
+      <span class="action-toggle__switch" aria-hidden="true"></span>
+      <span>Preview</span>
+    </label>
     <button class="btn btn--secondary btn--sm" id="simulate" title="Preview the toolpath in job order. Waiting paths are faint; completed paths become darker in their layer color. Adjust speed 1×–50×.">Simulate</button>
     <button class="btn btn--secondary btn--sm" id="frame" title="Trace the job's outline with the beam OFF, so you can check placement on the material before running. It does not cut.">Frame</button>
     <span class="job-state" id="jobState"></span>

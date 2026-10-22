@@ -57,6 +57,15 @@
 .cut-tool-icon { display: block; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .cut-tool-rail .btn:focus-visible { outline: 2px solid var(--brand-mid); outline-offset: 1px; }
 .canvas { position: relative; overflow: hidden; background: var(--surface); }
+.preview-legend { position: absolute; z-index: 11; left: 12px; bottom: 12px; display: flex; gap: 14px; padding: 6px 10px;
+                  border: 1px solid var(--border); border-radius: 9px; background: color-mix(in srgb, var(--bg) 94%, transparent);
+                  box-shadow: var(--shadow-1); color: var(--text); font: 600 var(--fs-xs) var(--font-sans); pointer-events: none; }
+.preview-legend.hidden { display: none; }
+.preview-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.preview-legend__line { width: 22px; height: 0; border-top: 2px solid var(--preview-cut); }
+.preview-legend__line--score { border-top: 2px dashed var(--preview-score); }
+.preview-legend--solid-score .preview-legend__line--score { border-top-style: solid; }
+.preview-legend__fill { width: 14px; height: 10px; border-radius: 2px; background: var(--preview-engrave); }
 .group-nav { position: absolute; z-index: 12; top: 12px; left: 12px; display: flex; align-items: center; gap: 8px;
              max-width: calc(100% - 24px); padding: 6px 10px 6px 6px; border: 1px solid var(--border);
              border-radius: 9px; background: color-mix(in srgb, var(--bg) 94%, transparent); box-shadow: var(--shadow-1);
