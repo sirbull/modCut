@@ -1,6 +1,7 @@
 /* modCut workspace layout. Imports design tokens; adds only app-specific structure. */
 
-.app { height: 100vh; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto auto; }
+/* One column as wide as the window: no row may widen the app past it (that scrolled the whole page sideways). */
+.app { height: 100vh; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto auto; }
 
 /* --- toolbar ------------------------------------------------------------ */
 .toolbar { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center;
@@ -150,9 +151,14 @@
 .row-add .select { flex: 1; }
 
 /* --- bottom action bar -------------------------------------------------- */
-.actionbar { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-4);
+/* Items keep their text on one line; in a narrow window the bar wraps to a second row instead of overflowing. */
+.actionbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-4);
              background: var(--bg); border-top: 1px solid var(--border); }
+.actionbar > * { flex-shrink: 0; white-space: nowrap; }
+.actionbar :is(.input, .select, .btn) { box-sizing: border-box; height: 30px; padding-block: 0; }
 .actionbar .spacer { flex: 1; }
+/* On a wrapped second row the main action stays at the right (on one row the spacer already takes the room). */
+.actionbar .btn--primary { margin-left: auto; }
 .actionbar .est { font: 600 var(--fs-sm) var(--font-mono); color: var(--brand-deep); }
 .actionbar .fn-label { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); }
 .fn-wrap { display: flex; align-items: center; }
@@ -160,7 +166,12 @@
 .fn-ext { font: 500 var(--fs-sm) var(--font-mono); color: var(--text-muted); margin-left: 3px; }
 .units { display: flex; align-items: center; gap: 6px; }
 .units > span { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); }
-.units .select { width: auto; padding: 5px 8px; }
+.units .select { width: auto; padding-inline: 8px; }
+/* Narrow windows: the field labels give way (screen readers still read them) and the file name narrows. */
+@media (max-width: 1100px) {
+  .units > span, .actionbar .fn-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .actionbar .filename { width: 110px; }
+}
 .action-toggle { display: inline-flex; align-items: center; gap: 7px; color: var(--text-muted); font-size: var(--fs-xs); cursor: pointer; white-space: nowrap; }
 .action-toggle input { position: absolute; inline-size: 1px; block-size: 1px; opacity: 0; pointer-events: none; }
 .action-toggle__switch { width: 32px; height: 18px; border-radius: var(--r-pill); background: var(--border); position: relative; flex: none; transition: background .12s ease; }

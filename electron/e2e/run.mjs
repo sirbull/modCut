@@ -70,6 +70,7 @@ import { runDrawPanelLayoutWorkflows } from './draw-panel-layout-workflows.mjs';
 import { runDrawDockingWorkflows } from './draw-docking-workflows.mjs';
 import { runWorkspaceLayoutWorkflows } from './workspace-layout-workflows.mjs';
 import { runCutToolsWorkflows } from './cut-tools-workflows.mjs';
+import { runUiAuditWorkflows } from './ui-audit-workflows.mjs';
 
 const port = 9400 + (process.pid % 200);
 const profile = await mkdtemp(join(tmpdir(), "modcut-e2e-profile-"));
@@ -124,6 +125,10 @@ try {
   } else if (process.argv.includes('--draw-panel-layout')) {
     for(let attempt=0;attempt<100;attempt++) {if(await first.evaluate("!!document.querySelector('.doc-tab.is-active')"))break;await wait(100);}
     await runDrawPanelLayoutWorkflows(first); first.socket.close();
+  } else if (process.argv.includes('--ui-audit')) {
+    const [width, height] = process.argv.find(a => a.startsWith('--ui-audit-size='))?.slice(16).split('x').map(Number) ?? [];
+    await runUiAuditWorkflows(first, { out: process.argv.find(a => a.startsWith('--ui-audit-out='))?.slice(15), strict: process.argv.includes('--ui-audit-strict'), width, height });
+    first.socket.close();
   } else if (process.argv.includes('--cut-tools')) {
     await runCutToolsWorkflows(first); first.socket.close();
   } else if (process.argv.includes('--workspace-layout')) {

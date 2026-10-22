@@ -225,8 +225,9 @@ body[data-workspace="draw"] .draw-status {display:flex;}
 .draw-canvas[data-tool="zoom"] { cursor: zoom-in; }
 .draw-canvas:is([data-tool="rectangle"],[data-tool="rounded-rectangle"],[data-tool="ellipse"],[data-tool="line"],[data-tool="polygon"],[data-tool="star"],[data-tool="artboard"]) { cursor: crosshair; }
 body[data-workspace="draw"] :is(#tools,#zoomOut,#zoomFit,#zoomIn,#selMode,#togglePanel,.toolbar .tb-sep) { display: none; }
-@media (max-width:960px) { .draw-shell {grid-template-columns:90px minmax(0,1fr) 44px 240px;} .draw-shell--panels-hidden {grid-template-columns:90px minmax(0,1fr);} .draw-position {display:none;} }
-@media (max-width:700px) { .draw-shell {grid-template-columns:90px minmax(0,1fr) 40px 200px;} .draw-shell--panels-hidden {grid-template-columns:90px minmax(0,1fr);} .draw-panel {padding:10px;} }
+/* Narrow windows: the same five columns as above (tools, canvas, dock before the rail, rail, dock), with a narrower rail. */
+@media (max-width:960px) { .draw-shell {grid-template-columns:90px minmax(0,1fr) var(--draw-dock-before-width,0px) 44px var(--draw-dock-width,286px);} .draw-shell--panels-hidden {grid-template-columns:90px minmax(0,1fr);} }
+@media (max-width:700px) { .draw-shell {grid-template-columns:90px minmax(0,1fr) var(--draw-dock-before-width,0px) 40px var(--draw-dock-width,286px);} .draw-shell--panels-hidden {grid-template-columns:90px minmax(0,1fr);} .draw-panel {padding:10px;} }
 
 #workspaceToggle {
   box-sizing: border-box;
@@ -292,7 +293,7 @@ body[data-workspace="draw"] .statusbar .spacer { display: none; }
 .draw-new-doc__row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
 .draw-new-doc__field { display: flex; flex-direction: column; gap: 4px; min-width: 0; font-size: var(--fs-xs); color: var(--text-muted); }
 .draw-new-doc__field[hidden] { display: none; }
-.draw-new-doc__field :is(.input, .select) { width: 100%; box-sizing: border-box; }
+.draw-new-doc__field :is(.input, .select) { width: 100%; box-sizing: border-box; padding-inline: 8px; }
 .draw-new-doc__orientation { display: flex; gap: 4px; }
 .draw-new-doc__orient { width: 38px; height: 36px; padding: 0; display: grid; place-items: center; border: 1px solid var(--border); border-radius: var(--r-input); background: var(--bg); color: var(--text-muted); cursor: pointer; }
 .draw-new-doc__orient svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; }
@@ -465,7 +466,7 @@ body.draw-scrubbing, body.draw-scrubbing * { cursor: ew-resize !important; user-
 .draw-layer-delete:disabled { opacity: 0 !important; }
 .draw-dock-section[data-draw-dock="layers"]:not(.is-collapsed) .draw-dock-body { display: flex; flex-direction: column; padding-bottom: 0; }
 .draw-dock-section[data-draw-dock="layers"] .draw-layer-list { flex: 1 1 auto; overflow: auto; min-height: 0; }
-.draw-layer-bar { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: 6px -14px 0; padding: 4px 10px 4px 14px; border-top: 1px solid var(--border); background: var(--surface); position: sticky; bottom: 0; }
+.draw-layer-bar { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: 6px -10px 0; padding: 4px 10px; border-top: 1px solid var(--border); background: var(--surface); position: sticky; bottom: 0; }
 .draw-layer-count { font-size: var(--fs-xs); color: var(--text-muted); white-space: nowrap; }
 /* Layer Options dialog (name, named color + swatch, two columns of options). */
 .draw-layer-dialog__color { display: grid; grid-template-columns: minmax(0, 1fr) 44px; gap: 8px; align-items: center; }
