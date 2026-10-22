@@ -104,5 +104,31 @@ export async function runDrawRecolorWorkflows(client) {
   await evaluate(`document.querySelector('${fly} [data-draw-recolor-rule=complementary]').click()`);
   assert.deepEqual(await fills(),fillsNow,'Stroke scope keeps the fills');
   await evaluate(`document.querySelector('${fly} [data-draw-recolor-scope=all]').click()`);
+  // Colors: 2 merges like colours into two handles; Auto brings every colour back.
+  const handles=()=>evaluate(`document.querySelectorAll('${fly} [data-draw-recolor-handle]').length`);
+  const all=await handles();assert.ok(all>=3,`All colours have handles: ${all}`);
+  await evaluate(`(()=>{const s=document.querySelector('${fly} [data-draw-field=recolor-count]');s.value='2';s.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  assert.equal(await handles(),2,'Colors 2 shows two handles');
+  assert.equal(await evaluate(`document.querySelectorAll('${fly} [data-draw-recolor-color]').length`),2,'and two prominent colours');
+  await screenshot('modcut-recolor-two-colors.png');
+  await evaluate(`(()=>{const s=document.querySelector('${fly} [data-draw-field=recolor-count]');s.value='';s.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  assert.equal(await handles(),all,'Auto shows every colour again');
+  // Color Theme Picker: click unselected artwork on the canvas; its colours become the library, the selection stays.
+  await evaluate(`(async()=>{const w=${active},{shapeFromDrag}=await import('./draw/tools/shapes.mjs'),{insertNode}=await import('./draw/doc/commands.mjs'),b=w.state.document.data.artboards[0];
+    const n=shapeFromDrag('rectangle',[b.x+2,b.y+64],[b.x+30,b.y+77],{fill:'#8040C0',stroke:'#F0A000',strokeWidth:1});w.state.history.execute(insertNode(w.state.document.data.layers[0].id,n));})()`);
+  const at=(x,y)=>evaluate(`(async()=>{const w=${active},b=w.state.document.data.artboards[0],p=w.scope.view.projectToView(new w.scope.Point(b.x+${x},b.y+${y})),r=w.scope.view.element.getBoundingClientRect();return {x:r.x+p.x,y:r.y+p.y}})()`);
+  await evaluate(`document.querySelector('${fly} [data-draw-recolor=theme-picker]').click()`);
+  assert.equal(await evaluate(`document.querySelector('${fly} [data-draw-recolor=theme-picker]').textContent`),'Cancel Picking');
+  await client.command('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});await client.command('Input.dispatchKeyEvent',{type:'keyUp',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});
+  await until(`document.querySelector('${fly} [data-draw-recolor=theme-picker]').textContent==='Color Theme Picker'`,'Esc cancels picking');
+  await evaluate(`document.querySelector('${fly} [data-draw-recolor=theme-picker]').click()`);
+  const target=await at(15,70);await mouse('mouseMoved',target);
+  assert.equal(await evaluate(`(async()=>(${active}.scope.view.element.style.cursor===(await import('./draw/tools/cursors.mjs')).CURSORS.eyedropper))()`),true,'Eyedropper cursor over the canvas while picking');
+  await mouse('mousePressed',target,{buttons:1});await mouse('mouseReleased',target);
+  await until(`document.querySelector('${fly} [data-draw-field=recolor-library]').value==='theme'`,'Picked Theme is the library');
+  assert.equal(await evaluate(`(async()=>(${active}.state.selection.ids.length))()`),3,'Picking leaves the selection');
+  for(const hex of await fills())assert.ok(['#8040C0','#F0A000'].includes(hex),`${hex} is a picked colour`);
+  await screenshot('modcut-recolor-theme.png');
+  await evaluate(`document.querySelector('${fly} [data-draw-recolor=reset]').click()`);
   await restore();
 }

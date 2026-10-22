@@ -59,7 +59,7 @@ import { cutSubpath } from './geom/path-commands.mjs';
 import { erasePath, smoothRange, sectionPoints } from './geom/path-eraser.mjs';
 import { bakeCorners } from './geom/corners.mjs';
 import { addAnchorPoints, removeAnchorPoints, reverseSubpaths, averagePoints, joinSubpaths, closeSubpath, cleanUpTargets, mapSubpath } from './geom/path-commands.mjs';
-import { toolCursor } from './tools/cursors.mjs';
+import { CURSORS, toolCursor } from './tools/cursors.mjs';
 import { alignReference, alignOffsets, distributeOffsets, spacingOffsets } from './geom/align.mjs';
 import { pointText, pathText, textValues, textProperties, textToOutlines, textDefaults, textStyleValues, DEFAULT_CHARACTER, PT_TO_MM, characterAt, styleRange, textContent } from './doc/text.mjs';
 import { hasTextLayout } from './doc/text-layout.mjs';
@@ -1143,8 +1143,18 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     withScope(()=>renderer.select());toolbar?.update();panels?.render();interactions?.refreshEyedropper();status();
   }
   function openPanel(id) {toolbar?.close();panels.open(id,{floating:true});}
+  // Recolor's Color Theme Picker: the next click on the canvas reports the artwork under it instead of acting; Esc cancels. Returns cancel.
+  function pickArtwork(done) {
+    const finish=id=>{canvas.removeEventListener('pointerdown',down,true);canvas.removeEventListener('pointermove',move,true);window.removeEventListener('keydown',key,true);canvas.style.cursor=cursor();if(id!==undefined)done(id);};
+    const move=event=>{event.stopImmediatePropagation();canvas.style.cursor=CURSORS.eyedropper;};
+    const down=event=>{if(event.button!==0)return;event.preventDefault();event.stopImmediatePropagation();
+      const r=canvas.getBoundingClientRect();finish(withScope(()=>renderer.hit(scope.view.viewToProject(new scope.Point(event.clientX-r.left,event.clientY-r.top))))??null);};
+    const key=event=>{if(event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();finish(null);}};
+    canvas.addEventListener('pointerdown',down,true);canvas.addEventListener('pointermove',move,true);window.addEventListener('keydown',key,true);canvas.style.cursor=CURSORS.eyedropper;
+    return ()=>finish();
+  }
   artboards=createArtboardController(state,{refresh,fit,bounds:id=>renderer.bounds(id),localMatrix:(id,m)=>renderer.localMatrix(id,m)});
-  panels=createPanels(shell,state,{run,select,selectedIds,paintIds,paint,editPaint,bounds:()=>renderer.selectionBounds(),fit,artboards,setTool,navigatorImage,navigatorView,navigateTo,
+  panels=createPanels(shell,state,{run,select,selectedIds,paintIds,pickArtwork,paint,editPaint,bounds:()=>renderer.selectionBounds(),fit,artboards,setTool,navigatorImage,navigatorView,navigateTo,
     // Glyphs panel: into the open text editor at the cursor; else open the editor for the selected text first.
     async insertGlyph(ch){
       if(!activeText){const id=selectedIds().find(i=>state.document.getNode(i)?.type==='text');if(!id)throw new Error('Select a text object, or start typing with the Type tool, to insert a glyph.');await editText(undefined,id);}

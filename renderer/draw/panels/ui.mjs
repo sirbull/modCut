@@ -8,10 +8,10 @@ import { createId } from '../doc/schema.mjs';
 import { textDefaults, textValues } from '../doc/text.mjs';
 import { GRADIENT_PRESETS, addStop, applyGradientPreset, colorHex, defaultGradient, gradientCss, gradientKey, gradientPreviewCss, isGradient, moveStop, removeStop, reverseGradient, setStrokeMode, setGradientAngle, setGradientType, updateStop } from '../doc/gradient.mjs';
 import { recentGradients as savedRecentGradients } from '../doc/recent-gradients.mjs';
+import { HARMONY_RULES, RECOLOR_SCOPES, adjustedColors, collectColors, colorGroups, paletteFromPixels, transferSettings, dragSettings, harmonyRule, hexLab, hexRgb, nearestIndex, neutralSettings, recolorHexes, recolorMap, remapAppearance, rgbLab, wheelLevel, wheelPixel, wheelPoint } from '../doc/recolor.mjs';
+import { RECOLOR_LIBRARIES, recolorLibrary } from '../doc/recolor-libraries.mjs';
 import { EFFECTS, effectLabel } from '../doc/effects.mjs';
 import { documentInfo } from '../doc/document-info.mjs';
-import { HARMONY_RULES, RECOLOR_SCOPES, adjustedColors, collectColors, transferSettings, dragSettings, harmonyRule, hexLab, hexRgb, nearestIndex, neutralSettings, recolorHexes, recolorMap, remapAppearance, rgbLab, wheelLevel, wheelPixel, wheelPoint } from '../doc/recolor.mjs';
-import { RECOLOR_LIBRARIES, recolorLibrary } from '../doc/recolor-libraries.mjs';
 import { TRACE_PRESETS } from '../geom/trace.mjs';
 import { WIDTH_PROFILES, flipAcross, flipAlong, profileName } from '../geom/width-profile.mjs';
 import { addStyleCommand, applyStyleCommands, graphicStyles, removeStyleCommand, styleFrom } from '../doc/graphic-styles.mjs';
@@ -68,7 +68,10 @@ export function createPanels(shell, state, api) {
       if (state.document.readOnly) text(host,state.warning || 'Read-only document');
       PANEL_CONTENT[id](host);
     }, refresh: () => render() });
-  function close() { if (panelWindows.cancel()) return true; if (state.ui.layerMenu) { state.ui.layerMenu = false; render(); return true; } return panelWindows.close(); }
+  function close() {
+    // Esc ends Recolor's theme picking before it closes anything.
+    if (recolorPick) { recolorPick(); recolorPick = null; render(); return true; }
+    if (panelWindows.cancel()) return true; if (state.ui.layerMenu) { state.ui.layerMenu = false; render(); return true; } return panelWindows.close(); }
   function open(id, { floating = false } = {}) {
     // Contextual actions can still take the user straight to the Artboard tool and its Properties.
     if (id === 'artboards') {
@@ -1014,7 +1017,7 @@ export function createPanels(shell, state, api) {
    * them all; Ctrl/Cmd also moves them in and out; Shift (or unlinked) moves only that colour. Harmony rules,
    * colour libraries and the slider act on the session's original colours, so each gesture is one undo step.
    */
-  let recolor = null, recoloring = false;
+  let recolor = null, recoloring = false, recolorPick = null;
   const wheelImages = new Map();
   function recolorSession() {
     const ids = api.paintIds(), scope = RECOLOR_SCOPES[state.ui.recolorScope] ? state.ui.recolorScope : 'all', key = `${scope}:${ids.join(' ')}`;
@@ -1048,6 +1051,7 @@ export function createPanels(shell, state, api) {
     const to = session.scope === 'fill' ? 'stroke' : 'fill', kinds = RECOLOR_SCOPES[to];
     if (!session.copy) {
       const nodes = session.ids.map(id => state.document.getNode(id)), colors = collectColors(nodes,kinds);
+    if (id === 'theme') return state.ui.recolorTheme?.colors ?? null;
       if (!colors.length) throw new Error(`The selection has no ${to} colors to copy the recolor to.`);
       session.copy = { ids: session.ids, kinds, colors, sources: new Map(nodes.map(n => [n.id,n.appearance])) };
     }
@@ -1073,6 +1077,23 @@ export function createPanels(shell, state, api) {
     const svg = document.createElementNS('http://www.w3.org/2000/svg','svg'); svg.setAttribute('viewBox','0 0 24 24'); svg.setAttribute('aria-hidden','true');
     const dot = ([x,y], r = 1.9) => `<circle cx="${(12 + x).toFixed(2)}" cy="${(12 + y).toFixed(2)}" r="${r}" fill="currentColor" stroke="none"/>`;
     const at = (angle, r) => [Math.cos(angle * Math.PI / 180) * r,-Math.sin(angle * Math.PI / 180) * r];
+  /** The picked artwork's colours (an image's dominant ones) become the Picked Theme library. */
+  async function pickTheme(session, id) {
+    if (!id) { render(); return; }
+    const top = [state.document.getNode(id),...state.document.ancestors(id)].filter(n => n.type !== 'layer').at(-1), image = top.type === 'image' ? top : null;
+    let colors;
+    if (image) {
+      const asset = state.document.data.assets[image.assetId];
+      if (!asset) throw new Error('The image is not available to pick colors from.');
+      const img = new Image(); img.src = `data:${asset.mimeType};base64,${asset.data}`; await img.decode();
+      const k = Math.min(1,96 / Math.max(img.width,img.height)), c = document.createElement('canvas'); c.width = Math.max(1,Math.round(img.width * k)); c.height = Math.max(1,Math.round(img.height * k));
+      const g = c.getContext('2d'); g.drawImage(img,0,0,c.width,c.height); colors = paletteFromPixels(g.getImageData(0,0,c.width,c.height).data,6);
+    } else colors = collectColors([top,...(top.children ? state.document.descendants(top.id) : [])]).map(c => c.hex);
+    if (!colors.length) throw new Error('That artwork has no colors to pick.');
+    state.ui.recolorTheme = { colors };
+    if (recolor === session && session.data === state.document.data) { session.settings.library = 'theme'; applyRecolor(session,{ label: 'Recolor Theme' }); }
+    render();
+  }
     let body = '<circle cx="12" cy="12" r="9" stroke-opacity=".35"/>';
     if (!rule.offsets) body += [[-4,-3],[4,-4],[2,4]].map(p => dot(p)).join('');
     else if (rule.offsets.length === 1) body += `<path d="M12 12L${12 + at(90,7)[0]} ${12 + at(90,7)[1]}"/>` + [3,5.5,8].map(r => dot(at(90,r),rule.id === 'shades' ? 1.2 + r / 8 : 1.6)).join('');
@@ -1133,17 +1154,37 @@ export function createPanels(shell, state, api) {
     const svg = document.createElementNS('http://www.w3.org/2000/svg','svg'); svg.setAttribute('viewBox','-1 -1 2 2'); svg.tabIndex = ro ? -1 : 0;
     svg.setAttribute('role','application'); svg.setAttribute('aria-label','Color wheel: drag a color to turn all colors. Ctrl or Cmd: also in and out. Shift: only that color. Arrow keys turn and scale.');
     svg.dataset.drawRecolorWheel = '';
+    // Picked Theme comes after Document Swatches, before the library groups.
+    if (state.ui.recolorTheme) library.options[1].after(new Option('Picked Theme','theme',false,settings.library === 'theme'));
     wrapEl.append(canvas,svg);
     const link = iconButton(settings.linked ? 'Unlink harmony colors' : 'Link harmony colors',settings.linked ? 'link' : 'unlink',() => change(s => { s.linked = !s.linked; },'Recolor Link'),'draw-layer-action draw-recolor-link');
     link.setAttribute('aria-pressed',String(settings.linked)); link.dataset.drawRecolor = 'link'; link.disabled = ro; wrapEl.append(link);
+    // Colors: Auto keeps every colour; a number merges like colours into that many.
+    const countRow = document.createElement('label'); countRow.className = 'draw-field draw-recolor-library';
+    const countName = document.createElement('span'); countName.textContent = 'Colors';
+    const count = document.createElement('select'); count.className = 'draw-select'; count.dataset.drawField = 'recolor-count'; count.disabled = ro;
+    count.append(new Option('Auto','',false,!settings.count));
+    for (let n = 1; n < colors.length; n++) count.append(new Option(String(n),String(n),false,settings.count === n));
+    count.addEventListener('change',() => change(s => { s.count = Number(count.value) || null; },'Recolor Colors'));
+    countRow.append(countName,count); top.append(countRow);
+    // Color Theme Picker: click artwork on the canvas to use its colours as the library.
+    const picker = button(recolorPick ? 'Cancel Picking' : 'Color Theme Picker',() => {
+      if (recolorPick) { recolorPick(); recolorPick = null; render(); return; }
+      recolorPick = api.pickArtwork(id => { recolorPick = null; pickTheme(session,id).catch(error => { api.run(() => { throw error; }); render(); }); });
+      render();
+    });
+    picker.dataset.drawRecolor = 'theme-picker'; picker.disabled = ro; picker.setAttribute('aria-pressed',String(!!recolorPick));
+    picker.dataset.tooltip = recolorPick ? 'Click artwork on the canvas to take its colors. Esc cancels.' : 'Click artwork on the canvas to use its colors as the color library';
+    top.append(picker);
     const prominent = document.createElement('div');
     const paintWheel = () => {
       const s = session.settings, image = wheelImage(s.mode,wheelLevel(s),s.library);
       canvas.width = image.width; canvas.height = image.height; canvas.getContext('2d').putImageData(image,0,0);
       canvas.classList.toggle('is-library',!!s.library);
       const out = recolorHexes(colors,s,recolorLibraryColors(s.library)), places = adjustedColors(colors,s).map(w => wheelPoint(w,s.mode));
-      // Base last, so it stays on top.
-      const order = [...colors.keys()].sort((a,b) => (a === s.base) - (b === s.base));
+      // One handle a group (Colors), base last so it stays on top.
+      const group = colorGroups(colors,s.count), baseIndex = group[s.base] ?? s.base;
+      const order = [...colors.keys()].filter(i => group[i] === i).sort((a,b) => (a === baseIndex) - (b === baseIndex));
       svg.innerHTML = order.map(i => `<line x1="0" y1="0" x2="${places[i][0]}" y2="${places[i][1]}" class="draw-recolor-spoke"/>`).join('') + '<circle r=".035" class="draw-recolor-centre"/>' + order.map(i => {
         const [x,y] = places[i], base = i === s.base;
         return `<g class="draw-recolor-handle${base ? ' is-base' : ''}" data-draw-recolor-handle="${i}" transform="translate(${x} ${y})">${base ? '<circle r=".095" class="draw-recolor-ring"/>' : ''}<circle r="${base ? .07 : .055}" fill="${out[i]}"/></g>`;
@@ -1158,8 +1199,8 @@ export function createPanels(shell, state, api) {
       prominent.replaceChildren();
       colors.forEach(({ hex, weight },i) => {
         const b = document.createElement('button'); b.type = 'button'; b.className = 'draw-recolor-color'; b.style.flexGrow = String(weight); b.style.background = out[i];
-        b.dataset.drawRecolorColor = hex; b.disabled = ro; b.setAttribute('aria-pressed',String(i === session.settings.base));
-        b.setAttribute('aria-label',`${hex} becomes ${out[i]}${i === session.settings.base ? ' (base color)' : ''}`); b.dataset.tooltip = `${hex} → ${out[i]}: click to make it the base color`;
+        b.dataset.drawRecolorColor = hex; b.disabled = ro; b.setAttribute('aria-pressed',String(i === baseIndex));
+        b.setAttribute('aria-label',`${hex}${more} becomes ${out[i]}${i === baseIndex ? ' (base color)' : ''}`); b.dataset.tooltip = `${hex}${more} → ${out[i]}: click to make it the base color`;
         b.addEventListener('click',() => change(s => { s.base = i; },'Recolor Base Color')); prominent.append(b);
       });
     }

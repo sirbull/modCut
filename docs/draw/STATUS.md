@@ -1061,11 +1061,19 @@ color.adobe.com, fargebiblioteker («templates»), og brightness/saturation-modu
    ett angresteg. Kopien regnes fra den andre malingens opprinnelige farger i økten, så ny kopiering etter
    mer justering erstatter forrige kopi i stedet for å dreie to ganger.
 
-Ikke laget ennå: Colors-antall (redusere til N farger) og Color Theme Picker.
+4. **Colors og Color Theme Picker (ferdig):** **Colors** (Auto, 1 ... N) slår like farger sammen
+   (`colorGroups`: vektet k-means i Lab, startet med mest brukte farge og deretter de mest ulike; gruppens
+   farge er det mest brukte medlemmet). Medlemmene får gruppens fargetone og metning, men beholder egen
+   lysstyrke, så skyggelegging består. Ett håndtak og ett Prominent-felt per gruppe; regler og overstyring
+   gjelder gruppen. **Color Theme Picker** slår på plukkmodus (pipettemarkør, knappen blir Cancel Picking):
+   neste klikk på lerretet avskjæres (`pickArtwork` i `index.mjs`, capture-lyttere på lerretet) og fargene
+   fra objektet, eller hele den øverste gruppen, blir **Picked Theme** i Color Library. For bilder brukes
+   de dominerende pikselfargene (`paletteFromPixels`, seks farger). Esc avbryter via panelets `close()`,
+   siden appens Esc-lytter kommer før pickerens egen.
 
 Tester: `recolor.test.mjs` og `--draw-recolor` (Window-meny, ekte musedrag med Ctrl og Shift, live under
 drag, svart uendret, regler, Skintones-bibliotek, slider, modus, Reset, angre, Fill-omfang, Copy to Stroke
-to ganger, Stroke-omfang; skjermbilder kontrollert).
+to ganger, Stroke-omfang, Colors 2 og Auto, temavelger med Esc, pipettemarkør og klikk; skjermbilder kontrollert).
 
 ### 2.42 Innstillinger med seksjoner og Properties uten utvalg (2026-10-22)
 

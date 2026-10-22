@@ -2390,3 +2390,12 @@ var aktiv; ingen feil etter det.
 Den andre agenten har uncommittede endringer i ui.mjs, i18n-nb.mjs og index.mjs. Denne commiten er
 bygget som HEAD + bare Freeform-endringene. Merk: HEAD (a5daf7b) har en syntaksfeil i index.mjs
 (`syncShortcuts` midt i et uttrykk); rettelsen ligger uncommittet hos den andre agenten.
+
+## 2026-10-22: Recolor, del 4 (Colors og Color Theme Picker)
+
+Colors (Auto, 1 ... N) og Color Theme Picker, se STATUS.md 2.41 punkt 4. Funnet underveis: Esc nådde
+appens avbryt-kommando før pickerens egen lytter, og et alternativ i Color Library kan ikke settes inn før
+et element i en optgroup. 436 Draw-tester og i18n passerer; `--draw-recolor` passerte tre ganger på rad.
+Én tidligere kjøring feilet en gang i Shift-steget og lot seg ikke gjenskape. Obs til neste agent: HEAD sin
+`renderer/draw/index.mjs` har hatt en syntaksfeil siden `a5daf7b` (delvis commit); rettelsen ligger
+ucommittet i den andre agentens arbeidstre.

@@ -111,3 +111,31 @@ test('copying an adjustment to the other colours keeps the rule and turn, and th
   assert.deepEqual(Object.keys(copied.overrides), ['#33CC33']);
   assert.equal(settings.rotation, 40, 'the source is not changed');
 });
+
+test('Colors reduces to fewer colours: groups by likeness, keeps each brightness, one handle a group', async () => {
+  const { colorGroups } = await import('../doc/recolor.mjs');
+  const colors = collectColors([node('#D02020'), node('#D02020'), node('#901818'), node('#2040D0'), node('#3050E0')]);
+  assert.deepEqual(colorGroups(colors, null), colors.map((_, i) => i), 'Auto keeps every colour');
+  const group = colorGroups(colors, 2), at = (hex) => colors.findIndex((c) => c.hex === hex);
+  assert.equal(group[at('#901818')], at('#D02020'), 'dark red joins red, the most used');
+  assert.equal(group[at('#3050E0')], group[at('#2040D0')]); assert.notEqual(group[at('#2040D0')], at('#D02020'));
+  assert.equal(new Set(group).size, 2);
+  const settings = { ...neutralSettings(colors), count: 2 }, wheels = wheelColors(colors, settings), red = hexWheel('#D02020');
+  const dark = wheels[at('#901818')];
+  assert.ok(circular(dark[0], red[0]) < 1e-6 && Math.abs(dark[1] - red[1]) < 1e-9, 'the group hue and saturation');
+  assert.ok(Math.abs(dark[2] - hexWheel('#901818')[2]) < 1e-9, 'its own brightness');
+  const turned = wheelColors(colors, { ...settings, rotation: 30 });
+  assert.ok(circular(turned[at('#901818')][0], red[0] + 30) < 1e-6, 'the group turns together');
+  assert.deepEqual(colorGroups(colors, 2), group, 'deterministic');
+});
+
+test('the theme picker finds the dominant colours of pixels', async () => {
+  const { paletteFromPixels } = await import('../doc/recolor.mjs');
+  const px = []; const put = (rgb, n) => { for (let i = 0; i < n; i++) px.push(...rgb, 255); };
+  put([250, 10, 10], 60); put([245, 14, 12], 20); put([10, 10, 250], 30); put([20, 200, 20], 10); put([0, 0, 0], 0);
+  px.push(255, 255, 0, 0); // transparent is skipped
+  const palette = paletteFromPixels(new Uint8ClampedArray(px), 3);
+  assert.equal(palette.length, 3);
+  assert.ok(hexWheel(palette[0])[0] < 20 || hexWheel(palette[0])[0] > 340, `red covers most: ${palette}`);
+  assert.ok(!palette.some((hex) => hexWheel(hex)[0] > 50 && hexWheel(hex)[0] < 110 && hexWheel(hex)[1] > .5 && hexWheel(hex)[2] > .9 && hex.startsWith('#FF')), 'no transparent yellow');
+});

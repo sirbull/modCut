@@ -155,7 +155,7 @@ the same commit that completes an item.
   Recent, Presets and a draggable stop slider, the stroke modes (within, along, across),
   on-canvas editing with the Gradient tool and Freeform gradients (points and lines) are done.
   Recolor (a colour wheel that turns every colour of the selection together, with harmony
-  rules and colour libraries) is in Window > Recolor, for all paint, fills or strokes, with Copy to Stroke/Fill.
+  rules and colour libraries) is in Window > Recolor, for all paint, fills or strokes, with Copy to Stroke/Fill, fewer colours and a colour theme picked from artwork.
   Preferences has sections on the left (appearance, units, navigation, keyboard shortcuts,
   automation, backup), and one settings file carries machines, materials, profiles, preferences,
   shortcuts and workspaces. Ruler, guide and snap toggles in Properties follow.

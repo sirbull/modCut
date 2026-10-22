@@ -82,7 +82,7 @@ Ferdige trinn committes og pushes på `feat/vector-draw`. GitHub-tilgangen er re
 
 **Recolor (STATUS.md 2.41) er ferdig:** del 1 (kjernen, `doc/recolor.mjs`, `doc/recolor-libraries.mjs`) og del 2 (panelet,
 `recolorPanel` i `panels/ui.mjs`, E2E `--draw-recolor`) og del 3 (All/Fill/Stroke, Copy to Stroke/Fill) er ferdige.
-Gjenstår: Colors-antall og Color Theme Picker.
+Colors-antall og Color Theme Picker er også ferdige (STATUS.md 2.41 punkt 4).
 
 Fase 0 og fase 1 er fullført. Export As, **D2.1a/b punkttekst med systemfonter, shaping og
 Create Outlines** og **D2.1c rektangulær områdetekst med linjebryting** er ferdige.

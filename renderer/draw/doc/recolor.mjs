@@ -84,7 +84,7 @@ export function remapAppearance(appearance, map, kinds = RECOLOR_SCOPES.all) {
 export function neutralSettings(colors = []) {
   const chromatic = colors.findIndex(({ hex }) => hexWheel(hex)[1] > .08);
   return { rule: 'custom', base: Math.max(0, chromatic), rotation: 0, scale: { saturation: 1, brightness: 1 }, adjust: { saturation: 0, brightness: 0 },
-    mode: 'saturation', linked: true, overrides: {}, library: null };
+    mode: 'saturation', linked: true, overrides: {}, library: null, count: null };
 }
 /**
  * The same adjustment for another set of colours (Copy to Stroke / Fill): rule, rotation, scale, slider, library
@@ -104,9 +104,9 @@ const adjust = (v, amount) => amount >= 0 ? v + (1 - v) * amount : v * (1 + amou
  * Harmony hues: the base keeps its hue; the other chromatic colours, in order of hue from the base, fill the
  * rule's slots evenly (so even colours of one hue spread across the rule) and keep a little of their spread.
  */
-function harmonyHues(wheels, base, offsets) {
+function harmonyHues(wheels, base, offsets, group) {
   const baseAngle = wheels[base]?.[0] ?? 0, slots = [...offsets].sort((a, b) => wrap(a) - wrap(b));
-  const order = wheels.map((w, i) => [i, wrap(w[0] - baseAngle)]).filter(([i]) => i !== base && wheels[i][1] > .08).sort((a, b) => a[1] - b[1] || a[0] - b[0]);
+  const order = wheels.map((w, i) => [i, wrap(w[0] - baseAngle)]).filter(([i]) => i !== base && group[i] === i && wheels[i][1] > .08).sort((a, b) => a[1] - b[1] || a[0] - b[0]);
   const groups = slots.map(() => []), hues = new Map([[base, baseAngle]]);
   // With fewer colours than slots, skip the base's slot so each colour gets a hue of its own.
   const skip = slots.length > 1 && order.length < slots.length ? 1 : 0;
@@ -117,16 +117,51 @@ function harmonyHues(wheels, base, offsets) {
   });
   return hues;
 }
+/**
+ * Fewer colours (Colors: 2, 3, ...): the colour each colour joins, by index. Weighted k-means in Lab, seeded with
+ * the most used colour and then the most different ones; a group's colour is its most used member. `null`: Auto.
+ */
+export function colorGroups(colors, count = null) {
+  if (!count || count >= colors.length) return colors.map((_, i) => i);
+  const cluster = clusterLab(colors.map(({ hex, weight }) => ({ lab: hexLab(hex), weight })), count), reps = new Map();
+  cluster.forEach((c, i) => { const r = reps.get(c); if (r === undefined || colors[i].weight > colors[r].weight) reps.set(c, i); });
+  return cluster.map((c) => reps.get(c));
+}
+const d2 = (a, b) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
+/** Cluster per item for `[{ lab, weight }]` into at most `k` clusters; deterministic. */
+export function clusterLab(items, k) {
+  if (k >= items.length) return items.map((_, i) => i);
+  const centres = [[...items.reduce((best, item) => item.weight > best.weight ? item : best).lab]];
+  while (centres.length < k) {
+    let far = items[0], distance = -1;
+    for (const item of items) { const d = Math.min(...centres.map((c) => d2(c, item.lab))); if (d > distance || (d === distance && item.weight > far.weight)) { distance = d; far = item; } }
+    centres.push([...far.lab]);
+  }
+  let assign = [];
+  for (let round = 0; round < 12; round++) {
+    const next = items.map(({ lab }) => nearestIndex(lab, centres));
+    if (next.every((c, i) => c === assign[i])) break;
+    assign = next;
+    centres.forEach((centre, c) => {
+      let w = 0; const sum = [0, 0, 0];
+      items.forEach((item, i) => { if (assign[i] === c) { w += item.weight; item.lab.forEach((v, j) => { sum[j] += v * item.weight; }); } });
+      if (w) centres[c] = sum.map((v) => v / w);
+    });
+  }
+  return assign;
+}
 /** Each colour's place on the wheel before the slider and library: `[angle, saturation, brightness]`. */
 export function wheelColors(colors, settings) {
-  const wheels = colors.map(({ hex }) => hexWheel(hex)), rule = harmonyRule(settings.rule);
-  const hues = rule.offsets ? harmonyHues(wheels, settings.base, rule.offsets) : null, baseWheel = wheels[settings.base];
+  // With fewer colours, each takes its group's hue and saturation and keeps its own brightness, so shading stays.
+  const own = colors.map(({ hex }) => hexWheel(hex)), group = colorGroups(colors, settings.count), rule = harmonyRule(settings.rule);
+  const wheels = own.map(([, , b], i) => [own[group[i]][0], own[group[i]][1], b]), base = group[settings.base] ?? settings.base;
+  const hues = rule.offsets ? harmonyHues(wheels, base, rule.offsets, group) : null, baseWheel = wheels[base];
   return wheels.map(([a, s, b], i) => {
-    let angle = hues?.get(i) ?? a, sat = s;
+    let angle = hues?.get(group[i]) ?? a, sat = s;
     if (rule.id === 'shades' && baseWheel && s > .08) sat = baseWheel[1];
     angle += settings.rotation;
     sat *= settings.scale.saturation; let bri = b * settings.scale.brightness;
-    const o = settings.overrides[colors[i].hex];
+    const o = settings.overrides[colors[group[i]].hex];
     if (o) { angle += o.angle ?? 0; sat += o.saturation ?? 0; bri += o.brightness ?? 0; }
     return [wrap(angle), clamp(sat), clamp(bri)];
   });
@@ -168,6 +203,22 @@ export function dragSettings(start, colors, index, from, to, { radial = false, s
   next.rotation = signed(start.rotation + turn);
   if (radial) next.scale[key] = clamp(start.scale[key] * (r0 > .02 ? r1 / r0 : 1), 0, 4);
   return next;
+}
+
+/**
+ * Color Theme Picker for images: the `count` dominant colours of RGBA pixels, most covering first. Pixels are
+ * binned (5 bits a channel), transparent ones skipped, and the bins clustered; each colour is its cluster's largest bin.
+ */
+export function paletteFromPixels(data, count = 6) {
+  const bins = new Map();
+  for (let i = 0; i < data.length; i += 4) { if (data[i + 3] < 128) continue; const key = (data[i] >> 3) << 10 | (data[i + 1] >> 3) << 5 | data[i + 2] >> 3; bins.set(key, (bins.get(key) ?? 0) + 1); }
+  const items = [...bins].sort((a, b) => b[1] - a[1] || a[0] - b[0]).slice(0, 512).map(([key, weight]) => {
+    const rgb = [key >> 10, key >> 5 & 31, key & 31].map((v) => (v * 8 + 4) / 255);
+    return { hex: rgbHex(rgb), lab: rgbLab(rgb), weight };
+  });
+  const cluster = clusterLab(items, count), best = new Map(), total = new Map();
+  cluster.forEach((c, i) => { total.set(c, (total.get(c) ?? 0) + items[i].weight); if (!best.has(c)) best.set(c, items[i].hex); });
+  return [...best].sort((a, b) => total.get(b[0]) - total.get(a[0])).map(([, hex]) => hex);
 }
 
 /** CIE Lab for nearest-colour matching (sRGB, D65). */
