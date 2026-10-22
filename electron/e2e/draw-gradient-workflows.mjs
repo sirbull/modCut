@@ -4,13 +4,15 @@ import { activeDraw as active,enterDraw,rememberTabs,submitNewDrawDialog } from 
 
 /** D2.3 gradients: Period applies one, the Gradient panel edits it, the Gradient tool drags it, export and Cut follow. */
 export async function runDrawGradientWorkflows(client) {
-  const {evaluate}=client,{drag}=inputHelpers(client),restore=await rememberTabs(evaluate);
+  const {evaluate}=client,{drag,click,mouse}=inputHelpers(client),restore=await rememberTabs(evaluate);
   await enterDraw(evaluate);await evaluate("document.querySelector('#newDoc').click()");
   await submitNewDrawDialog(evaluate,{preset:'custom',width:120,height:80,name:'Gradient proof'});
-  const root='.draw-project[style*=block]',fly=`${root} .draw-flyout`;
-  const until=async(expression,label)=>{for(let i=0;i<100;i++){if(await evaluate(expression))return;await wait(50);}assert.fail(`Timed out: ${label}`);};
+  await evaluate("localStorage.removeItem('modcut_recent_gradients')");
+  const root='.draw-project[style*=block]',fly=`${root} .draw-panel-window:not([hidden])`;
+  const until=async(expression,label)=>{for(let i=0;i<100;i++){if(await evaluate(expression))return;await wait(50);}assert.fail(`Timed out: ${label} ${await evaluate(`(()=>{const f=document.querySelector('${fly}');return (f?.hidden)+' '+(f?.innerText??'').slice(0,400)+' ERR '+(document.querySelector('.toast,[role=alert]')?.textContent??'')})()`)}`);};
   const applied=()=>evaluate(`(async()=>(${active}.state.history.entries.filter(e=>e.applied).length))()`);
   const at=(x,y)=>evaluate(`(async()=>{const w=${active},b=w.state.document.data.artboards[0],p=w.scope.view.projectToView(new w.scope.Point(b.x+${x},b.y+${y})),r=w.scope.view.element.getBoundingClientRect();return {x:r.x+p.x,y:r.y+p.y}})()`);
+  const centre=selector=>evaluate(`(()=>{const r=document.querySelector('${fly} ${selector}').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2,left:r.left,width:r.width,bottom:r.bottom}})()`);
   const id=await evaluate(`(async()=>{const w=${active},{shapeFromDrag}=await import('./draw/tools/shapes.mjs'),{insertNode}=await import('./draw/doc/commands.mjs'),b=w.state.document.data.artboards[0];
     const n=shapeFromDrag('rectangle',[b.x+10,b.y+10],[b.x+90,b.y+50],{fill:'#FF0000',stroke:null,strokeWidth:.5});w.state.history.execute(insertNode(w.state.document.data.layers[0].id,n));w.select([n.id]);return n.id;})()`);
   const paint=()=>evaluate(`(async()=>(${active}.state.document.getNode('${id}').appearance.fills[0].paint))()`);
@@ -19,10 +21,13 @@ export async function runDrawGradientWorkflows(client) {
   // Period applies white to black across the object and opens the Gradient panel; one undo step.
   let steps=await applied();
   await evaluate("window.dispatchEvent(new KeyboardEvent('keydown',{key:'.',code:'Period',bubbles:true,cancelable:true}))");
-  await until(`!document.querySelector('${fly}').hidden&&!!document.querySelector('${fly} [data-draw-field=gradient-type]')`,'Gradient panel');
+  await until(`!!document.querySelector('${fly} [data-draw-gradient-type=linear][aria-pressed=true]')`,'Gradient panel');
   let g=await paint();assert.equal(g.type,'linear');assert.equal(g.stops.length,2);assert.equal(await applied(),steps+1);
   const left=await pixel(12,30),right=await pixel(88,30);assert.ok(left[0]>230&&right[0]<25,`White to black: ${left} ${right}`);
   assert.match(await evaluate(`document.querySelector('${root} [data-draw-open=fill]').textContent`),/linear gradient/,'Properties names the gradient');
+  // Recent shows the gradient just applied; Presets list the built-in gradients.
+  assert.equal(await evaluate(`document.querySelectorAll('${fly} [data-draw-gradient-preset^=recent-]').length`),1,'One recent gradient');
+  assert.ok(await evaluate(`document.querySelectorAll('${fly} [data-draw-gradient-preset^=preset-]').length`)>=8,'Preset tiles');
   // Panel: add a stop, colour it, reverse, then radial.
   await evaluate(`document.querySelector('${fly} [data-draw-gradient-action=add]').click()`);
   g=await paint();assert.equal(g.stops.length,3);assert.equal(g.stops[1].offset,.5);
@@ -30,21 +35,44 @@ export async function runDrawGradientWorkflows(client) {
   await evaluate(`(()=>{const c=document.querySelector('${fly} [data-draw-field=gradient-stop-color]');c.value='#ff0000';c.dispatchEvent(new Event('change',{bubbles:true}));})()`);
   g=await paint();assert.deepEqual(g.stops[1].color.values,[1,0,0]);
   const middle=await pixel(50,30);assert.ok(middle[0]>200&&middle[1]<40,`The red stop shows in the middle: ${middle}`);
+  // Slider with the mouse: drag the red stop to 25 % (one undo step, live), click the bar at 75 % to add, drag a stop off to delete.
+  let bar=await centre('.draw-gradient-bar'),marker=await centre('[data-draw-gradient-stop="1"]');
+  steps=await applied();
+  await mouse('mouseMoved',marker);await mouse('mousePressed',marker,{buttons:1});
+  await mouse('mouseMoved',{x:bar.left+bar.width*.35,y:marker.y},{buttons:1});
+  g=await paint();assert.ok(Math.abs(g.stops[1].offset-.35)<.03,`Live while dragging: ${g.stops[1].offset}`);
+  await mouse('mouseMoved',{x:bar.left+bar.width*.25,y:marker.y},{buttons:1});await mouse('mouseReleased',{x:bar.left+bar.width*.25,y:marker.y});
+  g=await paint();assert.ok(Math.abs(g.stops[1].offset-.25)<.03,`Dragged stop: ${g.stops[1].offset}`);assert.deepEqual(g.stops[1].color.values,[1,0,0]);
+  assert.equal(await applied(),steps+1,'A stop drag is one undo step');
+  await click({x:bar.left+bar.width*.75,y:bar.y});
+  g=await paint();assert.equal(g.stops.length,4,'Clicking the bar adds a stop');assert.ok(g.stops.some(s=>Math.abs(s.offset-.75)<.03));
+  marker=await centre('[data-draw-gradient-stop="2"]');steps=await applied();
+  await mouse('mouseMoved',marker);await mouse('mousePressed',marker,{buttons:1});
+  await mouse('mouseMoved',{x:marker.x,y:marker.y+60},{buttons:1});
+  assert.ok(await evaluate(`!!document.querySelector('${fly} .draw-gradient-stop.is-removing')`),'Marked for removal while away from the bar');
+  await mouse('mouseReleased',{x:marker.x,y:marker.y+60});
+  g=await paint();assert.equal(g.stops.length,3,'Dragging a stop off deletes it');assert.equal(await applied(),steps+1);
+  assert.ok(await evaluate(`document.querySelectorAll('${fly} [data-draw-gradient-preset^=recent-]').length`)>=2,'Drags reach Recent when they end');
   await evaluate(`document.querySelector('${fly} [data-draw-gradient-action=reverse]').click()`);
   g=await paint();assert.deepEqual(g.stops[0].color.values,[0,0,0],'Reverse puts black first');
-  await evaluate(`(()=>{const s=document.querySelector('${fly} [data-draw-field=gradient-type]');s.value='radial';s.dispatchEvent(new Event('change',{bubbles:true}));})()`);
-  g=await paint();assert.equal(g.type,'radial');
+  await evaluate(`document.querySelector('${fly} [data-draw-gradient-type=radial]').click()`);
+  g=await paint();assert.equal(g.type,'radial');assert.equal(g.stops.length,3,'Type keeps the stops');
+  // A preset of the same type keeps the vector; Sunset gives three stops.
+  const before=g.origin;await evaluate(`document.querySelector('${fly} [data-draw-gradient-preset][aria-label="Sunset"]').click()`);
+  g=await paint();assert.equal(g.type,'linear');assert.equal(g.stops.length,3);assert.deepEqual(g.stops[0].color.values.map(v=>Math.round(v*255)),[255,230,0]);
+  await evaluate(`document.querySelector('${fly} [data-draw-gradient-preset][aria-label="Ember"]').click()`);
+  g=await paint();assert.equal(g.type,'radial');assert.deepEqual(g.origin,before,'Ember is fitted around the centre');
   // The Gradient tool: one drag sets a vertical gradient as one undo step.
   await evaluate(`(async()=>{${active}.setTool('gradient')})()`);
-  await evaluate(`(()=>{const s=document.querySelector('${fly} [data-draw-field=gradient-type]');s.value='linear';s.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  await evaluate(`document.querySelector('${fly} [data-draw-gradient-type=linear]').click()`);
   steps=await applied();await drag(await at(50,12),await at(50,48));
   g=await paint();assert.equal(g.type,'linear');assert.ok(Math.abs(g.angle+90)<1,`Downwards drag: ${g.angle}`);assert.ok(Math.abs(g.length-36)<.5,`Length ${g.length}`);
   assert.equal(await applied(),steps+1,'The whole drag is one undo step');
-  const top=await pixel(50,14),bottom=await pixel(50,46);assert.ok(Math.abs(top[0]-bottom[0])>150||Math.abs(top[2]-bottom[2])>150,`The gradient now runs vertically: ${top} ${bottom}`);
+  const top=await pixel(50,14),bottom=await pixel(50,46);assert.ok([0,1,2].reduce((sum,i)=>sum+Math.abs(top[i]-bottom[i]),0)>250,`The gradient now runs vertically: ${top} ${bottom}`);
   // SVG keeps the gradient; Send to Cut uses the first stop as the layer colour.
   assert.match(await evaluate(`(async()=>{const w=${active};return w.exportBoard(w.state.ui.artboardId,'svg')})()`),/linearGradient/);
-  assert.match(await evaluate(`(async()=>{const w=${active};return w.cutSvg(w.state.ui.artboardId).svg})()`),/fill="#000000"/);
+  assert.match(await evaluate(`(async()=>{const w=${active};return w.cutSvg(w.state.ui.artboardId).svg})()`),/fill="#FFF3B0"/);
   await evaluate(`(async()=>{const w=${active};w.setTool('select');w.handle('cancel')})()`);
   await restore();
-  console.log('PASS Draw gradients: Period applies white to black with one undo step, Properties names it, panel stops (add, colour, reverse), radial, Gradient tool drag as one step, PNG pixels, SVG gradient, first stop for Cut');
+  console.log('PASS Draw gradients: Period applies white to black with one undo step, Properties names it, Recent and Presets, panel stops (add, colour, mouse drag, click to add, drag off to delete, reverse), type buttons, presets keep the vector, Gradient tool drag as one step, PNG pixels, SVG gradient, first stop for Cut');
 }

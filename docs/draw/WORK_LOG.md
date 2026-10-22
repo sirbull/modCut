@@ -2294,3 +2294,15 @@ krasj/restart og alle preview-/Cut-raster-sammenligninger. Logg: /tmp/modcut-scr
 Plan, restliste, README, ROADMAP, STATUS og HANDOFF er oppdatert før commit/push.
 Gruppe-/kompositteffekter, pixeleffekter/dithering, avanserte overføringsvalg og
 Engrave as seen gjenstår og er ikke ferdigmerket.
+
+## 2026-10-22: Gradienter som i Illustrator, del 1 av 4 (Gradient-panelet)
+
+Brukerønske: Gradient-panelet og -verktøyet som Illustrators, med Recent og Presets, Linear/Radial/
+Freeform og gradient på strek (Within/Along/Across stroke). Delt i fire deler, se STATUS.md 2.40.
+Del 1 er ferdig: Recent (localStorage, ti siste, drag registreres ved slipp) og Presets (innebygde
+pluss dokumentets gradientswatches), miniatyr, Type-knapper med egne ikoner, glidebryter der stopp
+dras live som ett angresteg, klikk på linjen legger til, dra ned av linjen sletter, piltaster/Delete.
+Norske oversettelser lagt til. `--draw-gradient` bruker nå synlig panelvindu
+(`.draw-panel-window:not([hidden])`), siden flere `.draw-flyout` kan finnes etter panelvinduene.
+408 Draw-tester, renderer-tester, i18n og kontrast passerer; `--draw-gradient` passerer med ekte
+musedrag. Skjermbilde av panelet er kontrollert visuelt. Neste: del 2, gradient på strek.

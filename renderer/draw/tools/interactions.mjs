@@ -410,7 +410,7 @@ export function createInteractions(canvas, state, api) {
       }else if(drag.mode==='measure') {
         if(drag.end)api.setMeasure([drag.start.x,drag.start.y],[drag.end.x,drag.end.y]);
       }else if(drag.mode==='gradient') {
-        if(!moved)api.command('paint-gradient');
+        if(!moved)api.command('paint-gradient');else api.rememberGradient();
       }else if(drag.mode==='text-frame') {
         const rectangle=drag.rectangle,frame=moved&&rectangle?.width>=.1&&rectangle?.height>=.1?rectangle:null;
         void api.editText(frame?frame.topLeft:drag.start,null,frame?{width:frame.width,height:frame.height}:drag.tool==='area-type'?{width:60,height:30}:null);

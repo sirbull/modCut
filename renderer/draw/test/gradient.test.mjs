@@ -45,3 +45,37 @@ test('type and paint changes keep stops; gradients validate in a document', () =
   const data = createDocument({ layers: [createNode('layer', { children: [createNode('path', { appearance: look })] })] });
   assert.deepEqual(validateDocument(data), []);
 });
+
+test('moving a stop past another keeps track of it; presets keep the vector of the same type', async () => {
+  const { moveStop, applyGradientPreset, GRADIENT_PRESETS, gradientPreviewCss, gradientKey } = await import('../doc/gradient.mjs');
+  let g = updateStop(addStop(defaultGradient(box)), 1, { color: '#FF0000' });
+  const moved = moveStop(g, 0, .9); assert.equal(moved.index, 1); assert.equal(colorHex(moved.gradient.stops[1].color), '#FFFFFF');
+  assert.equal(moveStop(g, 0, -1).gradient.stops[0].offset, 0, 'clamped');
+  const sunset = GRADIENT_PRESETS.find((p) => p.id === 'sunset').gradient, sky = vectorGradient(defaultGradient(box), [0, 0], [0, -10]);
+  const same = applyGradientPreset(sky, sunset, box); assert.deepEqual(same.origin, [0, 0]); assert.equal(same.angle, 90); assert.equal(same.stops.length, 3);
+  const radial = applyGradientPreset(sky, GRADIENT_PRESETS.find((p) => p.gradient.type === 'radial').gradient, box);
+  assert.equal(radial.type, 'radial'); near(radial.origin, [30, 30]);
+  assert.equal(applyGradientPreset(null, sunset, box).length, 40, 'no gradient yet: fitted to the box');
+  assert.match(gradientPreviewCss(radial), /^radial-gradient\(circle closest-side, /);
+  assert.equal(gradientKey(same), gradientKey(sunset), 'the key ignores geometry');
+  for (const p of GRADIENT_PRESETS) {
+    const look = changeGradient(appearance('#FF0000', null), 'fill', applyGradientPreset(null, p.gradient, box));
+    assert.deepEqual(validateDocument(createDocument({ layers: [createNode('layer', { children: [createNode('path', { appearance: look })] })] })), [], p.id);
+  }
+});
+
+test('recent gradients: most recent first, no duplicates, limited, and they survive bad storage', async () => {
+  const { recentGradients, rememberRecentGradient, RECENT_GRADIENT_LIMIT } = await import('../doc/recent-gradients.mjs');
+  const store = new Map(), storage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) };
+  const a = defaultGradient(box), b = setGradientType(a, 'radial', box);
+  rememberRecentGradient(a, [], storage); let list = rememberRecentGradient(b, [], storage);
+  assert.deepEqual(list.map((g) => g.type), ['radial', 'linear']);
+  list = rememberRecentGradient(vectorGradient(a, [0, 0], [5, 5]), [], storage);
+  assert.deepEqual(list.map((g) => g.type), ['linear', 'radial'], 'the same look moves to the front');
+  assert.equal(list[0].origin, undefined, 'only the look is kept');
+  for (let i = 0; i < 15; i++) list = rememberRecentGradient(updateStop(a, 0, { offset: i / 20 }), [], storage);
+  assert.equal(list.length, RECENT_GRADIENT_LIMIT);
+  store.set('modcut_recent_gradients', '{bad'); assert.deepEqual(recentGradients([a], storage).map((g) => g.type), ['linear']);
+  const broken = { getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); } };
+  assert.equal(rememberRecentGradient(b, [a], broken).length, 2);
+});

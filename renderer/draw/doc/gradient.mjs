@@ -81,3 +81,39 @@ export function gradientHex(paint) { return isGradient(paint) ? colorHex([...pai
 export function gradientCss(g) {
   return `linear-gradient(to right, ${sorted(g).stops.map((s) => { const [r, gg, b] = s.color.values.map((v) => Math.round(clamp(v) * 255)); return `rgba(${r}, ${gg}, ${b}, ${s.opacity ?? 1}) ${Math.round(s.offset * 1000) / 10}%`; }).join(', ')})`;
 }
+/** Move one stop to `offset`; returns the gradient and the stop's index after reordering. */
+export function moveStop(g, index, offset) {
+  const next = updateStop(g, index, { offset }), moved = g.stops[index], at = clamp(offset);
+  return { gradient: next, index: Math.max(0, next.stops.findIndex((s) => s.offset === at && colorHex(s.color) === colorHex(moved.color) && (s.opacity ?? 1) === (moved.opacity ?? 1))) };
+}
+/** CSS for a preset tile: linear left to right, radial from the centre. */
+export function gradientPreviewCss(g) {
+  const css = gradientCss(g);
+  return g.type === 'radial' ? css.replace(/^linear-gradient\(to right, /, 'radial-gradient(circle closest-side, ') : css;
+}
+const presetStops = (list) => list.map(([hex, offset, opacity]) => ({ offset, color: rgb(hex), ...(opacity !== undefined && opacity < 1 ? { opacity } : {}) }));
+/** Built-in gradients, as Illustrator's Document Library. */
+export const GRADIENT_PRESETS = Object.freeze([
+  ['white-black', 'White, Black', 'linear', [['#FFFFFF', 0], ['#000000', 1]]],
+  ['black-transparent', 'Black, Transparent', 'linear', [['#000000', 0], ['#000000', 1, 0]]],
+  ['sunset', 'Sunset', 'linear', [['#FFE600', 0], ['#FF8A00', .5], ['#E5243B', 1]]],
+  ['sky', 'Sky', 'linear', [['#A8E0FF', 0], ['#1473E6', 1]]],
+  ['mint', 'Mint', 'linear', [['#E3F7EF', 0], ['#00A07A', 1]]],
+  ['violet', 'Violet', 'linear', [['#FF7EB3', 0], ['#6A3DE8', 1]]],
+  ['steel', 'Steel', 'linear', [['#5A6270', 0], ['#E6E9EE', .45], ['#9AA2AE', .55], ['#3C424C', 1]]],
+  ['spectrum', 'Spectrum', 'linear', [['#FF0000', 0], ['#FFFF00', .2], ['#00FF00', .4], ['#00FFFF', .6], ['#0000FF', .8], ['#FF00FF', 1]]],
+  ['white-black-radial', 'White, Black (radial)', 'radial', [['#FFFFFF', 0], ['#000000', 1]]],
+  ['glow', 'Fade to transparent', 'radial', [['#FFFFFF', 0], ['#FFFFFF', 1, 0]]],
+  ['ember', 'Ember', 'radial', [['#FFF3B0', 0], ['#FF8A00', .45], ['#7A1010', 1]]],
+].map(([id, name, type, stops]) => Object.freeze({ id, name, gradient: Object.freeze({ type, stops: presetStops(stops), angle: 0 }) })));
+/**
+ * A preset or recent gradient on an object: the same type keeps its vector and only takes the stops,
+ * another type is fitted to the box.
+ */
+export function applyGradientPreset(current, preset, box) {
+  if (current?.type === preset.type) return { ...structuredClone(current), stops: structuredClone(preset.stops) };
+  return defaultGradient(box, { type: preset.type, stops: preset.stops, angle: preset.type === 'linear' ? preset.angle ?? 0 : 0 });
+}
+/** Type and stops only, for Recent and swatches; two gradients with the same look share a key. */
+export function gradientLook(g) { return { type: g.type, stops: sorted(g).stops.map((s) => structuredClone(s)), angle: g.angle ?? 0 }; }
+export const gradientKey = (g) => JSON.stringify([g.type, sorted(g).stops.map((s) => [colorHex(s.color), Math.round(s.offset * 1000), Math.round((s.opacity ?? 1) * 1000)])]);

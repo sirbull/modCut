@@ -4,7 +4,8 @@ import { strokePreview } from './stroke-icons.mjs';
 import { insertNode, updateDocument, updateNode } from '../doc/commands.mjs';
 import { createId } from '../doc/schema.mjs';
 import { textDefaults, textValues } from '../doc/text.mjs';
-import { addStop, colorHex, defaultGradient, gradientCss, isGradient, removeStop, reverseGradient, setGradientAngle, setGradientType, updateStop } from '../doc/gradient.mjs';
+import { GRADIENT_PRESETS, addStop, applyGradientPreset, colorHex, defaultGradient, gradientCss, gradientKey, gradientPreviewCss, isGradient, moveStop, removeStop, reverseGradient, setGradientAngle, setGradientType, updateStop } from '../doc/gradient.mjs';
+import { recentGradients as savedRecentGradients } from '../doc/recent-gradients.mjs';
 import { EFFECTS, effectLabel } from '../doc/effects.mjs';
 import { documentInfo } from '../doc/document-info.mjs';
 import { TRACE_PRESETS } from '../geom/trace.mjs';
@@ -31,6 +32,7 @@ export function icon(href) {
   return svg;
 }
 const LAYER_ROW_LIMIT = 200;
+const CHECKER = 'repeating-conic-gradient(#FFFFFF 0% 25%, #CFCFCF 0% 50%)';
 
 export function createPanels(shell, state, api) {
   const isMac = /Mac/.test(navigator.platform);
@@ -1001,46 +1003,113 @@ export function createPanels(shell, state, api) {
     if (current === 'justify' && node?.kind !== 'area') text(host,'Justified lines need area text; point text and text on a path align left.');
     if (node?.kind === 'onPath') text(host,'On a path, alignment places the text between the start offset and the end of the path.');
   }
-  /** Gradient: type, angle, stops (colour, location, opacity), add, delete and reverse, on the focused fill or stroke. */
+  /** Gradient, as Illustrator's panel: Recent and Presets, type, the stop slider (drag, click to add, drag off to delete), stop colour, opacity and location. */
+  let stopDrag = null;
   function gradientPanel(host) {
     const target = state.ui.paintFocus === 'stroke' ? 'stroke' : 'fill', ro = state.document.readOnly;
     paintTargets(host,target);
     const node = state.document.getNode(api.paintIds()[0]);
+    const entry = node && (target === 'fill' ? node.appearance.fills : node.appearance.strokes)[0], g = isGradient(entry?.paint) ? entry.paint : null;
+    const edit = (fn, label, mergeKey = null) => api.gradient(target,fn,{ label, mergeKey });
+    const focusedStops = () => state.document.getNode(api.paintIds()[0]).appearance[target === 'fill' ? 'fills' : 'strokes'][0].paint.stops;
+    // Recent and Presets (built-in, then the document's gradient swatches): a click applies to the selection.
+    const tiles = (title, key, list) => {
+      if (!list.length) return;
+      const heading = document.createElement('h3'); heading.className = 'draw-panel__section'; heading.textContent = title; host.append(heading);
+      const row = document.createElement('div'); row.className = 'draw-gradient-presets'; row.setAttribute('role','group'); row.setAttribute('aria-label',title);
+      list.forEach(({ name, gradient },i) => {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'draw-gradient-preset'; b.style.backgroundImage = `${gradientPreviewCss(gradient)}, ${CHECKER}`;
+        b.setAttribute('aria-label',name); b.dataset.tooltip = name; b.dataset.drawGradientPreset = `${key}-${i}`; b.disabled = ro || !node;
+        b.setAttribute('aria-pressed',String(!!g && gradientKey(g) === gradientKey(gradient)));
+        b.addEventListener('click',() => api.run(() => { edit((current,box) => applyGradientPreset(current,gradient,box),'Gradient Preset'); state.ui.gradientStop = 0; }));
+        row.append(b);
+      });
+      host.append(row);
+    };
+    tiles('Recent','recent',savedRecentGradients(state.ui.recentGradients).map((gradient,i) => ({ name: `Recent gradient ${i + 1}`, gradient })));
+    tiles('Presets','preset',[...GRADIENT_PRESETS,...(state.document.data.swatches ?? []).filter(s => s.gradient).map(s => ({ name: s.name, gradient: s.gradient }))]);
     if (!node) { text(host,'Select artwork to give its fill or stroke a gradient.'); return; }
-    const entry = (target === 'fill' ? node.appearance.fills : node.appearance.strokes)[0], g = isGradient(entry?.paint) ? entry.paint : null;
+    // Thumbnail and type; a type button also gives a solid fill or stroke a gradient.
+    const head = document.createElement('div'); head.className = 'draw-gradient-head'; host.append(head);
+    const thumb = document.createElement('span'); thumb.className = 'draw-gradient-thumb'; thumb.setAttribute('aria-hidden','true');
+    if (g) thumb.style.backgroundImage = `${gradientPreviewCss(g)}, ${CHECKER}`; else thumb.classList.add('is-empty');
+    const types = document.createElement('div'); types.className = 'draw-segmented draw-gradient-types'; types.setAttribute('role','group'); types.setAttribute('aria-label','Gradient type');
+    for (const [id,label] of [['linear','Linear gradient'],['radial','Radial gradient']]) {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'draw-segmented__option draw-stroke-option'; b.append(icon(panelSpriteHref(`gradient-type-${id}`)));
+      b.setAttribute('aria-label',label); b.dataset.tooltip = label; b.dataset.drawGradientType = id; b.setAttribute('aria-pressed',String(g?.type === id)); b.disabled = ro;
+      b.addEventListener('click',() => api.run(() => {
+        const last = state.ui.lastGradient;
+        edit((current,box) => current ? (current.type === id ? null : setGradientType(current,id,box)) : defaultGradient(box,{ type: id, stops: last?.stops ?? null, angle: id === 'linear' ? last?.angle ?? 0 : 0 }),'Gradient Type');
+      }));
+      types.append(b);
+    }
+    const typeLabel = document.createElement('span'); typeLabel.textContent = 'Type:'; head.append(thumb,typeLabel,types);
     if (!g) {
       const apply = button(`Apply Gradient to ${target === 'fill' ? 'Fill' : 'Stroke'}`,() => api.command('paint-gradient')); apply.dataset.drawGradientApply = ''; apply.disabled = ro; host.append(apply);
-      text(host,'Applies the last gradient you used, or white to black, across each selected object.'); return;
+      text(host,'Choose a preset or a type, or apply the last gradient you used (white to black the first time).'); return;
     }
-    const edit = (fn, label, mergeKey = null) => api.gradient(target,fn,{ label, mergeKey });
-    const row = document.createElement('div'); row.className = 'draw-fields'; host.append(row);
-    const typeRow = document.createElement('label'); typeRow.className = 'draw-field'; const typeName = document.createElement('span'); typeName.textContent = 'Type';
-    const type = document.createElement('select'); type.className = 'select'; type.dataset.drawField = 'gradient-type'; type.disabled = ro;
-    for (const [value,label] of [['linear','Linear'],['radial','Radial']]) type.append(new Option(label,value));
-    type.value = g.type; type.addEventListener('change',() => api.run(() => edit((current,box) => setGradientType(current,type.value,box),'Gradient Type')));
-    typeRow.append(typeName,type); row.append(typeRow);
-    if (g.type === 'linear') field(row,'Angle (°)',g.angle,value => edit((current,box) => setGradientAngle(current,value,box),'Gradient Angle'),{ min:-360, max:360, key:'gradient-angle', disabled: ro });
-    // The gradient bar with one marker per stop; the selected stop is edited below.
+    if (g.type === 'linear') { const row = document.createElement('div'); row.className = 'draw-fields'; host.append(row); field(row,'Angle (°)',g.angle,value => edit((current,box) => setGradientAngle(current,value,box),'Gradient Angle'),{ min:-360, max:360, key:'gradient-angle', disabled: ro }); }
+    // The slider: one marker per stop. Click the bar to add a stop there; drag a marker to move it,
+    // or down off the bar to delete it. A drag is one undo step.
     const stops = g.stops, selected = Math.min(state.ui.gradientStop ?? 0, stops.length - 1);
-    const bar = document.createElement('div'); bar.className = 'draw-gradient-bar'; bar.style.background = gradientCss(g); bar.setAttribute('role','group'); bar.setAttribute('aria-label','Gradient stops');
+    const slider = document.createElement('div'); slider.className = 'draw-gradient-slider'; host.append(slider);
+    const reverse = iconButton('Reverse gradient','gradient-reverse',() => edit(current => reverseGradient(current),'Reverse Gradient')); reverse.dataset.drawGradientAction = 'reverse'; reverse.disabled = ro;
+    const bar = document.createElement('div'); bar.className = 'draw-gradient-bar'; bar.style.backgroundImage = `${gradientCss(g)}, ${CHECKER}`; bar.setAttribute('role','group'); bar.setAttribute('aria-label','Gradient stops');
+    bar.dataset.tooltip = 'Click to add a stop';
+    const remove = iconButton('Delete stop','trash',() => { edit(current => removeStop(current,selected),'Delete Gradient Stop'); state.ui.gradientStop = Math.max(0,selected - 1); }); remove.dataset.drawGradientAction = 'delete'; remove.disabled = ro || stops.length <= 2;
+    slider.append(reverse,bar,remove);
+    bar.addEventListener('pointerdown',event => {
+      if (ro || event.button !== 0 || event.target !== bar) return;
+      const r = bar.getBoundingClientRect(), at = Math.min(1,Math.max(0,(event.clientX - r.left) / (r.width || 1)));
+      api.run(() => { edit(current => addStop(current,at),'Add Gradient Stop'); state.ui.gradientStop = Math.max(0,focusedStops().findIndex(s => s.offset === at)); render(); });
+    });
     stops.forEach((stop,i) => {
       const marker = document.createElement('button'); marker.type = 'button'; marker.className = 'draw-gradient-stop'; marker.style.left = `${stop.offset * 100}%`;
       marker.style.setProperty('--stop-color',colorHex(stop.color) ?? '#000000'); marker.dataset.drawGradientStop = String(i);
       marker.setAttribute('aria-label',`Stop ${i + 1} at ${Math.round(stop.offset * 100)} %`); marker.setAttribute('aria-pressed',String(i === selected));
-      marker.addEventListener('click',() => { state.ui.gradientStop = i; render(); }); bar.append(marker);
+      if (stopDrag?.removing && stopDrag.index === i) marker.classList.add('is-removing');
+      marker.addEventListener('click',() => { state.ui.gradientStop = i; render(); });
+      // Arrow keys move the stop (Shift: 10 %); Delete removes it.
+      marker.addEventListener('keydown',event => {
+        if (ro || !['ArrowLeft','ArrowRight','Delete','Backspace'].includes(event.key)) return; event.preventDefault();
+        if (event.key === 'Delete' || event.key === 'Backspace') { if (stops.length > 2) { state.ui.gradientStop = i; api.run(() => { edit(current => removeStop(current,i),'Delete Gradient Stop'); state.ui.gradientStop = Math.max(0,i - 1); }); } return; }
+        const step = (event.shiftKey ? 10 : 1) * (event.key === 'ArrowLeft' ? -1 : 1) / 100;
+        api.run(() => { let index = i; edit(current => { const moved = moveStop(current,i,stop.offset + step); index = moved.index; return moved.gradient; },'Move Gradient Stop',`gradient-key-${i}`); state.ui.gradientStop = index; });
+        queueMicrotask(() => host.querySelector(`[data-draw-gradient-stop="${state.ui.gradientStop}"]`)?.focus());
+      });
+      marker.addEventListener('pointerdown',event => {
+        if (ro || event.button !== 0) return; event.preventDefault();
+        state.ui.gradientStop = i;
+        stopDrag = { index: i, startX: event.clientX, startY: event.clientY, moved: false, removing: false, rect: bar.getBoundingClientRect(), mergeKey: `gradient-stop-${Date.now()}` };
+        const move = e => {
+          const drag = stopDrag; if (!drag) return;
+          if (!drag.moved && Math.hypot(e.clientX - drag.startX,e.clientY - drag.startY) < 3) return;
+          drag.moved = true;
+          // Far below the bar the stop is marked for removal; it goes when released there.
+          const removing = stops.length > 2 && e.clientY > drag.rect.bottom + 28;
+          const at = Math.min(1,Math.max(0,(e.clientX - drag.rect.left) / (drag.rect.width || 1)));
+          if (!removing) api.run(() => { let index = drag.index; edit(current => { const moved = moveStop(current,drag.index,at); index = moved.index; return moved.gradient; },'Move Gradient Stop',drag.mergeKey); drag.index = index; state.ui.gradientStop = index; });
+          if (removing !== drag.removing) { drag.removing = removing; render(); }
+        };
+        const up = () => {
+          window.removeEventListener('pointermove',move); window.removeEventListener('pointerup',up); window.removeEventListener('pointercancel',up);
+          const drag = stopDrag; stopDrag = null; if (!drag) return;
+          if (drag.removing) api.run(() => { edit(current => removeStop(current,drag.index),'Delete Gradient Stop',drag.mergeKey); state.ui.gradientStop = Math.max(0,drag.index - 1); });
+          if (drag.moved) api.rememberGradient(target);
+          render();
+        };
+        window.addEventListener('pointermove',move); window.addEventListener('pointerup',up); window.addEventListener('pointercancel',up);
+      });
+      bar.append(marker);
     });
-    host.append(bar);
     const stop = stops[selected], fields = document.createElement('div'); fields.className = 'draw-fields'; host.append(fields);
     field(fields,'Color',colorHex(stop.color)?.toLowerCase() ?? '#000000',value => edit(current => updateStop(current,selected,{ color: value.toUpperCase() }),'Gradient Stop'),{ type:'color', key:'gradient-stop-color', disabled: ro });
-    field(fields,'Location (%)',stop.offset * 100,value => { edit(current => updateStop(current,selected,{ offset: value / 100 }),'Gradient Stop',`gradient-location-${selected}`);
-      state.ui.gradientStop = [...state.document.getNode(api.paintIds()[0]).appearance[target === 'fill' ? 'fills' : 'strokes'][0].paint.stops].findIndex(s => Math.abs(s.offset - Math.min(1,Math.max(0,value / 100))) < 1e-9); },{ min:0, max:100, key:'gradient-stop-location', disabled: ro });
     field(fields,'Opacity (%)',(stop.opacity ?? 1) * 100,value => edit(current => updateStop(current,selected,{ opacity: value / 100 }),'Gradient Stop',`gradient-opacity-${selected}`),{ min:0, max:100, key:'gradient-stop-opacity', disabled: ro });
+    field(fields,'Location (%)',stop.offset * 100,value => { let index = selected; edit(current => { const moved = moveStop(current,selected,value / 100); index = moved.index; return moved.gradient; },'Gradient Stop',`gradient-location-${selected}`); state.ui.gradientStop = index; },{ min:0, max:100, key:'gradient-stop-location', disabled: ro });
     const actions = document.createElement('div'); actions.className = 'draw-gradient-actions'; host.append(actions);
-    const add = iconButton('Add stop','plus',() => { edit(current => addStop(current),'Add Gradient Stop'); }); add.dataset.drawGradientAction = 'add';
-    const remove = iconButton('Delete stop','trash',() => { edit(current => removeStop(current,selected),'Delete Gradient Stop'); state.ui.gradientStop = Math.max(0,selected - 1); }); remove.dataset.drawGradientAction = 'delete'; remove.disabled = ro || stops.length <= 2;
-    const reverse = button('Reverse',() => edit(current => reverseGradient(current),'Reverse Gradient')); reverse.dataset.drawGradientAction = 'reverse';
-    add.disabled = reverse.disabled = ro; actions.append(add,remove,reverse);
-    text(host,g.type === 'linear' ? 'Angle turns the gradient around the object\'s centre. Drag with the Gradient tool to set it exactly.' : 'Radial gradients run from the centre outward.');
+    const add = iconButton('Add stop','plus',() => { edit(current => addStop(current),'Add Gradient Stop'); }); add.dataset.drawGradientAction = 'add'; add.disabled = ro;
+    actions.append(add);
+    text(host,g.type === 'linear' ? 'Click the slider to add a stop; drag a stop down off it to delete. Drag across the artwork with the Gradient tool (G) to set the direction.' : 'Radial gradients run from the centre outward. Click the slider to add a stop; drag a stop down off it to delete.');
   }
   /** History: every undo step, oldest first; clicking a step undoes or redoes to it. Steps after the current one are greyed out. */
   function historyPanel(host) {

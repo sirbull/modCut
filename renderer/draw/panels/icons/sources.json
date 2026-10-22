@@ -443,6 +443,24 @@
       "author": "modCut",
       "path": "gradient-preview.svg",
       "sha256": "c4fa6e31e36bc51bb90a8357baf2154ea434ad9388c7fa76ad7c981fc6bf5d9f"
+    },
+    "gradient-type-linear": {
+      "name": "gradient-type-linear",
+      "author": "modCut",
+      "path": "gradient-type-linear.svg",
+      "sha256": "f4fc58d0b667269ea29f8e65681bda7f184037d8e5ca48167b40701cdb56d7c0"
+    },
+    "gradient-type-radial": {
+      "name": "gradient-type-radial",
+      "author": "modCut",
+      "path": "gradient-type-radial.svg",
+      "sha256": "c572d2023d33d253c022debf9556ae8ca0dec42c0553185ef0618432371b5093"
+    },
+    "gradient-reverse": {
+      "name": "gradient-reverse",
+      "author": "modCut",
+      "path": "gradient-reverse.svg",
+      "sha256": "18bf37fceb8df89219b4bb9733db1757a80163e22cd622410179f6f547cf163d"
     }
   }
 }

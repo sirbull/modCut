@@ -2,6 +2,7 @@ import { createProjectDraw } from './io/project.mjs';
 import { createDrawRenderer } from './render.mjs';
 import { createPanels } from './panels/ui.mjs';
 import { recentColors, rememberRecentColor } from './doc/recent-colors.mjs';
+import { rememberRecentGradient } from './doc/recent-gradients.mjs';
 import { colorPickerDialog } from './ui/dialogs.mjs';
 import { copyNodes, drawClipboard, invert as invertMatrix, pasteCommands } from './doc/clipboard.mjs';
 import { multiply as multiplyMatrix } from './doc/arrange.mjs';
@@ -952,7 +953,14 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       if(next){last=next;state.history.execute(updateNode(id,{appearance:changeGradient(node.appearance,kind,next,state.ui)},{label}));}
     }},{mergeKey});
     if(last)state.ui.lastGradient={type:last.type,stops:structuredClone(last.stops),angle:last.angle};
+    // Drags (merged edits) reach Recent once they end, through rememberGradient.
+    if(last&&!mergeKey)state.ui.recentGradients=rememberRecentGradient(last,state.ui.recentGradients);
     panels?.render();
+  }
+  /** Recent gradients take the focused fill or stroke of the first selected object, after a drag. */
+  function rememberGradient(kind=state.ui.paintFocus==='stroke'?'stroke':'fill') {
+    const node=state.document.getNode(paintIds()[0]),entry=node&&(kind==='stroke'?node.appearance.strokes:node.appearance.fills)[0];
+    if(isGradient(entry?.paint)){state.ui.recentGradients=rememberRecentGradient(entry.paint,state.ui.recentGradients);panels?.render();}
   }
   /** Installed font families for the Character panel; loads once and re-renders the panels when ready. */
   let fontFamilyList=null;
@@ -1146,7 +1154,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       state.history.transaction('Stroke',()=>{for(const id of ids)state.history.execute(updateNode(id,{appearance:changeStroke(state.document.getNode(id).appearance,props,state.ui)}));},{mergeKey});},
     paintFocus(kind){state.ui.paintFocus=kind;toolbar?.update();panels?.render();},
     thumbnail:id=>withScope(()=>renderer.thumbnail(id)),
-    gradient:(kind,edit,options)=>gradient(kind,edit,options),
+    gradient:(kind,edit,options)=>gradient(kind,edit,options),rememberGradient,
     textStyle:(changes,label)=>textStyle(changes,label).catch(error=>{if(!destroyed)onError(error.message);}),
     fontFamilies,setScaleStrokes,
     command:id=>handle(id),
@@ -1685,7 +1693,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     freeDistortSession,freeDistortPreview,freeDistort,
     shapeBuilderSession,shapeBuilderPreview,shapeBuilder,knife,eraser,pathEraser,smoothPath,eraserSize:()=>state.ui.eraserSize??3,touchGlyphAt,touchGlyph,touchType:(id,index,change)=>touchType(id,index,change).catch(error=>{if(!destroyed)onError(error.message);}),rotateView,widthSession,widthDrag,widthPreview,widthPointEdit,paintbrush,blobBrush:points=>blobBrush(points).catch(error=>{if(!destroyed)onError(error.message);}),brushSize:()=>(state.ui.blobBrush?.size??BLOB_DEFAULTS.size),blendClick,blendOptions:()=>void blendOptionsCommand(),
     widthHandles:point=>{const id=renderer.hit(point)??selectedIds()[0],target=id&&widthTarget(id);return target?withScope(()=>renderer.widthHandles(id,target.stroke)):[];},
-    gradientVector(from,to,mergeKey){const kind=state.ui.paintFocus==='stroke'?'stroke':'fill',last=state.ui.lastGradient;
+    rememberGradient,gradientVector(from,to,mergeKey){const kind=state.ui.paintFocus==='stroke'?'stroke':'fill',last=state.ui.lastGradient;
       gradient(kind,(current,box,node)=>{const a=renderer.pointToLocal(node.id,from),b=renderer.pointToLocal(node.id,to);
         return vectorGradient(current??defaultGradient(box,last?{type:last.type,stops:last.stops}:{}),[a.x,a.y],[b.x,b.y]);},{label:'Gradient',mergeKey});},
 typeOnPath:id=>editText(undefined,null,null,{pathFrom:id}),cursor,contextMenu:(x,y)=>contextMenu.open(x,y),

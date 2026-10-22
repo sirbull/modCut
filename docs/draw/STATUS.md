@@ -967,6 +967,29 @@ områdetekst eller tekst på bane.
 
 Gjenstår i fase 5: AVIF-eksport (Chromium kan ikke kode AVIF fra lerret).
 
+### 2.40 Gradienter som i Illustrator, del 1 av 4: Gradient-panelet (2026-10-22)
+
+Brukerønske: Gradient-panelet og -verktøyet skal ligne Illustrators, med Recent og Presets, Linear,
+Radial og Freeform, og gradient på strek (Within, Along og Across stroke). Arbeidet er delt i fire:
+
+1. **Panelet (ferdig):** fanen viser **Recent** (siste ti gradienter, delt mellom dokumenter og lagret
+   mellom omstarter, `doc/recent-gradients.mjs`) og **Presets** (elleve innebygde, `GRADIENT_PRESETS`,
+   pluss dokumentets gradientswatches). Klikk bruker gradienten på utvalget; samme type beholder
+   vektoren og tar bare stoppene. Under: miniatyr, **Type**-knapper (Linear, Radial; gir også et
+   ensfarget fyll eller strek en gradient), vinkel, og **glidebryteren**: dra et stopp (live, ett
+   angresteg), klikk på linjen for å legge til et stopp der, dra et stopp ned fra linjen for å slette
+   det (markeres før slipp), piltaster flytter valgt stopp (Shift: 10 %), Delete sletter. Snu og
+   søppelbøtte står ved linjen; Color, Opacity og Location for valgt stopp under.
+   Drag havner i Recent når de slippes, også Gradient-verktøyets drag.
+2. **Strek (neste):** Within, Along og Across stroke.
+3. **Annotator på lerretet** for Linear og Radial: endepunkter og stopp dras direkte på objektet.
+4. **Freeform:** punkter i fyllet som legges til, flyttes og fargelegges, med myk overgang mellom
+   alle punktene; hvert punkt har en stiplet ring med håndtak som dras for å endre spredning (Spread).
+
+Tester: `gradient.test.mjs` (flytte stopp forbi andre, presets, Recent med ødelagt lagring) og
+`--draw-gradient` (ekte musedrag på glidebryteren, klikk for å legge til, dra av for å slette, ett
+angresteg per drag, Recent og Presets, typeknapper, PNG-piksler, SVG og Send to Cut).
+
 ## 3. Hovedplanen (fra DRAW_WORKSPACE.md kapittel 23)
 
 | Oppgave | Status |
