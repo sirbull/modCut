@@ -63,3 +63,53 @@ export function guideSegment(scope, guide, inset = 0) {
   }
   return low <= high ? [origin.add(direction.multiply(low)), origin.add(direction.multiply(high))] : null;
 }
+
+/** Artboard fractions a dragged guide is drawn to. */
+export const GUIDE_SNAPS = Object.freeze([1 / 4, 1 / 3, 1 / 2, 2 / 3, 3 / 4]);
+
+/**
+ * Magnetic guide snapping that lets go when the pointer keeps pushing: a fraction within `zone`
+ * snaps, pulling past `release` frees it, and a freed fraction stays free until the pointer is
+ * `rearm` away again, so values just beside it (49 %) are easy to reach.
+ */
+export function createGuideSnapper({ zone = 6, release = 12, rearm = 30 } = {}) {
+  let snapped = null; const freed = new Set();
+  const distanceOf = (raw, board, axis, pixel) => fraction =>
+    Math.abs(raw - (board[axis] + fraction * board[axis === 'x' ? 'width' : 'height'])) * pixel;
+  return {
+    /** Starting from an existing guide keeps its value: it is held on the fraction it sits on, never pulled to a nearby one. */
+    reset(start) {
+      snapped = null; freed.clear(); if (!start) return;
+      const distance = distanceOf(start.value, start.board, start.axis, start.pixel);
+      for (const fraction of GUIDE_SNAPS) if (distance(fraction) <= zone) {
+        if (distance(fraction) < .5 && snapped === null) snapped = fraction; else freed.add(fraction);
+      }
+    },
+    /** `raw` and the result are world values; `pixel` is screen pixels per world unit. */
+    snap(raw, board, axis, pixel, enabled = true) {
+      const origin = board[axis], length = board[axis === 'x' ? 'width' : 'height'], distance = distanceOf(raw, board, axis, pixel);
+      for (const fraction of freed) if (distance(fraction) > rearm) freed.delete(fraction);
+      if (snapped !== null && distance(snapped) > release) { freed.add(snapped); snapped = null; }
+      if (!enabled) { snapped = null; return { value: raw, fraction: null }; }
+      if (snapped === null) {
+        const near = GUIDE_SNAPS.filter(f => !freed.has(f) && distance(f) <= zone).sort((a, b) => distance(a) - distance(b))[0];
+        snapped = near ?? null;
+      }
+      return snapped === null ? { value: raw, fraction: null } : { value: origin + snapped * length, fraction: snapped };
+    },
+  };
+}
+
+/** A guide's position from the artboard origin as percent, millimetres and inches. */
+export function guideReadout(guide, board) {
+  const horizontal = guide.axis === 'x', mm = guide.value - board[guide.axis];
+  const percent = mm / board[horizontal ? 'width' : 'height'] * 100;
+  const values = { '%': `${Number(percent.toFixed(2))} %`, mm: `${mm.toFixed(1)} mm`, in: `${(mm / 25.4).toFixed(3)} in` };
+  return { axis: horizontal ? 'X' : 'Y', percent, mm, inches: mm / 25.4, values };
+}
+
+/** Status text with the ruler unit first, then the others. */
+export function guideReadoutText(guide, board, unitId = 'mm') {
+  const { axis, values } = guideReadout(guide, board), first = values[unitId] ? unitId : 'mm';
+  return `Guide ${axis}  ${[values[first], ...Object.entries(values).filter(([id]) => id !== first).map(([, text]) => text)].join(' · ')}`;
+}
