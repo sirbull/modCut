@@ -1524,7 +1524,7 @@ Oversikt over hva som er gjort og gjenstår, inkludert delvis ferdige oppgaver: 
 * [x] D2.3 Gradienter og Swatches (PDF-shading gjenstår, se [STATUS.md](draw/STATUS.md))
   * [x] Gradienter som i Illustrator, del 1: Gradient-panelet med Recent, Presets og dragbare stopp (STATUS.md 2.40)
   * [x] Del 2: gradient på strek, Within, Along og Across stroke (stiplet Along/Across gjenstår)
-  * [ ] Del 3: gradient-annotator på lerretet for Linear og Radial
+  * [x] Del 3: gradient-annotator på lerretet for Linear og Radial (ellipse-aspekt for Radial gjenstår)
   * [ ] Del 4: Freeform-gradient med punkter (Spread-ring, opasitet per punkt) og linjer mellom punkter
 * [ ] Recolor (Recolor Artwork med fargehjul, harmoniregler og fargebiblioteker), STATUS.md 2.41
   * [x] Del 1: kjernen (farger, hjul, regler, biblioteker)

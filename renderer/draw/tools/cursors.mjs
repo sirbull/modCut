@@ -28,6 +28,10 @@ export const CURSORS = Object.freeze({
   scissors: custom('Scissors_1_1', 1, 1),
   'group-select': custom('DirectSelectAdd_1_1', 1, 1, 'default'),
   // Width: crosshair with a tapering stroke and its width arrows.
+  // Gradient annotator: move a stop or handle, add a stop on the line, or delete a stop dragged off it.
+  'gradient-move': arrow(true, `<rect x='16' y='19' width='12' height='6' rx='1' fill='white' stroke='#111' stroke-width='1.3'/><rect x='16' y='19' width='6' height='6' fill='#111'/>`),
+  'gradient-add': url(`${cross(10,10,7)}<rect x='14' y='20' width='14' height='7' rx='1' fill='white' stroke='#111' stroke-width='1.4'/><path d='M21 13v6M18 16h6' stroke='white' stroke-width='4'/><path d='M21 13v6M18 16h6' stroke='#111' stroke-width='1.6'/>`,10,10,'copy'),
+  'gradient-remove': url(`${cross(10,10,7)}<rect x='14' y='20' width='14' height='7' rx='1' fill='white' stroke='#111' stroke-width='1.4'/><path d='M18 16h6' stroke='white' stroke-width='4'/><path d='M18 16h6' stroke='#111' stroke-width='1.6'/>`,10,10,'not-allowed'),
   width: url(`${cross(10,10,7)}<path d='M14 24c4-5 9-7 14-7v4c-5 0-9 2-14 7z' fill='white' stroke='#111' stroke-width='1.3' stroke-linejoin='round'/>`,10,10,'crosshair'),
   paintbrush: custom('Brush_2_16', 2, 16),
   'blob-brush': url(`<circle cx='16' cy='16' r='9' fill='none' stroke='white' stroke-width='3'/><circle cx='16' cy='16' r='9' fill='none' stroke='#111' stroke-width='1.4'/>${cross(16,16,3)}`,16,16,'crosshair'),

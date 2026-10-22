@@ -5,17 +5,24 @@ import { resizeMatrix, rotationMatrix, transformedBox, snapTranslation } from '.
 import { activeArtboard } from '../doc/artboards.mjs';
 import { TRANSFORM_TOOLS,dragTransform,operationMatrix } from '../geom/transforms.mjs';
 import { createEyedropperPreview } from './eyedropper-preview.mjs';
+import { addStop, moveStop, removeStop, vectorGradient } from '../doc/gradient.mjs';
+
+// Gradient tool over the annotator: move a handle or stop, or add a stop on the line.
+const gradientCursor=hit=>!hit ? CURSORS.gradient : CURSORS[hit.part==='line'?'gradient-add':'gradient-move'];
 
 export function createInteractions(canvas, state, api) {
   const {scope,renderer,withScope,run}=api, controller=new AbortController(), events={signal:controller.signal};
   let gesture=null,preview=null;
+  // Edits a gesture makes while it runs (live gradient drags) must not cancel the gesture itself.
+  let ownEdits=0;
+  const live=fn=>{ownEdits++;try{return run(fn);}finally{ownEdits--;}};
   let nameEditor=null;
   const point=event=>{const b=canvas.getBoundingClientRect();return scope.view.viewToProject(new scope.Point(event.clientX-b.left,event.clientY-b.top));};
   const eyedropperPreview=createEyedropperPreview(canvas,{active:()=>api.tool()==='eyedropper',current:()=>state.ui[state.ui.paintFocus==='stroke'?'stroke':'fill']});
   // A screen movement in project units, turned back through Rotate View.
   const screenDelta=(dx,dy)=>new scope.Point(dx,dy).rotate(-scope.view.rotation).divide(scope.view.zoom);
   function clearPreview() {preview?.remove();preview=null;renderer.clearTransformPreview();state.ui.transformPreviewBox=null;}
-  function cancel() {const editor=nameEditor;nameEditor=null;editor?.remove();const previous=gesture;gesture=null;if(previous)canvas.style.cursor=api.cursor();if(previous?.mode==='free-transform')api.freeDistortPreview(null);withScope(()=>{clearPreview();if(TRANSFORM_TOOLS.includes(previous?.tool))api.transforms.setOrigin(previous.originBefore);renderer.updateView();});api.status();}
+  function cancel() {const editor=nameEditor;nameEditor=null;editor?.remove();const previous=gesture;gesture=null;if(previous)canvas.style.cursor=api.cursor();if(previous?.mode==='free-transform')api.freeDistortPreview(null);if(previous?.mode==='gradient-edit')api.gradientAnnotation(null);withScope(()=>{clearPreview();if(TRANSFORM_TOOLS.includes(previous?.tool))api.transforms.setOrigin(previous.originBefore);renderer.updateView();});api.status();}
   function applyLasso({points,modifiers}) {
     api.lasso(points,modifiers.alt&&modifiers.mod?{objects:true,add:modifiers.shift}:{add:modifiers.shift,subtract:modifiers.alt});
   }
@@ -131,7 +138,8 @@ export function createInteractions(canvas, state, api) {
         : tool==='artboard' && renderer.artboardLabelHit(p) ? 'text'
         : handle==='rotate' ? CURSORS.rotate : handle ? CURSORS[RESIZE_CURSORS[handle]]
         : tool==='select' && renderer.hit(p) ? CURSORS[event.altKey ? 'select-copy' : 'select-anchor']
-        : tool==='zoom' && event.altKey ? CURSORS['zoom-out'] : api.cursor();
+        : tool==='zoom' && event.altKey ? CURSORS['zoom-out']
+        : tool==='gradient' ? gradientCursor(api.gradientHit([p.x,p.y])) : api.cursor();
       if(tool==='width')withScope(()=>{clearPreview();preview=widthMarkers(api.widthHandles([p.x,p.y]));scope.view.update();});
       if(tool==='touch-type')withScope(()=>{clearPreview();const t=state.ui.touchType;preview=touchMarkers(t&&api.touchGlyph(t.id,t.index)?.corners);scope.view.update();});
       return;
@@ -216,12 +224,29 @@ export function createInteractions(canvas, state, api) {
         let end=p;
         if(event.shiftKey){const d=p.subtract(gesture.start),a=Math.round(Math.atan2(d.y,d.x)/(Math.PI/4))*Math.PI/4;end=gesture.start.add(new scope.Point(Math.cos(a),Math.sin(a)).multiply(d.length));}
         gesture.end=end;api.setMeasure([gesture.start.x,gesture.start.y],[end.x,end.y]);
+      } else if (gesture.mode==='gradient-edit') {
+        const {hit}=gesture,local=renderer.pointToLocal(hit.id,[p.x,p.y]);
+        if(hit.part==='origin'){
+          const origin=[gesture.startOrigin[0]+local.x-gesture.startLocal.x,gesture.startOrigin[1]+local.y-gesture.startLocal.y];
+          live(()=>api.gradientEditOne(hit,current=>({...structuredClone(current),origin}),'Move Gradient',gesture.mergeKey));
+        }else if(hit.part==='end'){
+          // Shift: 45° steps on screen, from the origin.
+          let end=p;const from=new scope.Point(gesture.startOrigin).transform(new scope.Matrix(...renderer.worldMatrix(hit.id)));
+          if(event.shiftKey){const d=p.subtract(from),a=Math.round(Math.atan2(d.y,d.x)/(Math.PI/4))*Math.PI/4;end=from.add(new scope.Point(Math.cos(a),Math.sin(a)).multiply(d.length));}
+          const to=renderer.pointToLocal(hit.id,[end.x,end.y]);
+          live(()=>api.gradientEditOne(hit,current=>vectorGradient(current,current.origin,[to.x,to.y]),'Gradient',gesture.mergeKey));
+        }else if(hit.part==='stop'){
+          const projected=api.gradientProject([p.x,p.y]),removing=gesture.stopCount>2&&projected.distance>30;
+          if(!removing)live(()=>{let index=hit.index;api.gradientEditOne(hit,current=>{const moved=moveStop(current,hit.index,projected.offset);index=moved.index;return moved.gradient;},'Move Gradient Stop',gesture.mergeKey);hit.index=index;state.ui.gradientStop=index;});
+          gesture.removing=removing;api.gradientAnnotation(removing?{removing:hit.index}:null);
+          canvas.style.cursor=CURSORS[removing?'gradient-remove':'gradient-move'];
+        }
       } else if (gesture.mode==='gradient') {
         let end=p;
         if(event.shiftKey){const d=p.subtract(gesture.start),a=Math.round(Math.atan2(d.y,d.x)/(Math.PI/4))*Math.PI/4;end=gesture.start.add(new scope.Point(Math.cos(a),Math.sin(a)).multiply(d.length));}
         preview=new scope.Group([new scope.Path.Line({from:gesture.start,to:end,strokeColor:'#071411',strokeWidth:3/scope.view.zoom}),new scope.Path.Line({from:gesture.start,to:end,strokeColor:'#FFFFFF',strokeWidth:1/scope.view.zoom}),
           new scope.Path.Circle({center:gesture.start,radius:4/scope.view.zoom,fillColor:'#FFFFFF',strokeColor:'#071411',strokeWidth:1/scope.view.zoom}),new scope.Path.Rectangle({point:end.subtract(3.5/scope.view.zoom),size:7/scope.view.zoom,fillColor:'#071411'})]);
-        if(gesture.start.getDistance(end)>1e-6){gesture.end=end;api.run(()=>api.gradientVector([gesture.start.x,gesture.start.y],[end.x,end.y],gesture.mergeKey));}
+        if(gesture.start.getDistance(end)>1e-6){gesture.end=end;live(()=>api.gradientVector([gesture.start.x,gesture.start.y],[end.x,end.y],gesture.mergeKey));}
       } else if (gesture.mode==='text-frame' || gesture.mode==='marquee' || gesture.mode==='new-artboard') {
         gesture.rectangle=new scope.Rectangle(gesture.start,p);preview=boxPreview(gesture.rectangle);
         if(gesture.mode==='text-frame')preview.data.textFrame=true;
@@ -328,6 +353,19 @@ export function createInteractions(canvas, state, api) {
       return;
     }
     if(tool==='gradient') {
+      // On the annotator: drag the origin (moves the gradient), the end (direction and length) or a stop
+      // (along the line; far off it deletes the stop). Clicking the line adds a stop there and drags it.
+      const hit=api.gradientHit([p.x,p.y]);
+      if(hit){
+        const mergeKey=`gradient-edit-${Date.now()}`,node=state.document.getNode(hit.id),entry=(hit.kind==='stroke'?node.appearance.strokes:node.appearance.fills)[0];
+        gesture={...base,mode:'gradient-edit',hit:{...hit},mergeKey,startOrigin:[...entry.paint.origin],startLocal:renderer.pointToLocal(hit.id,[p.x,p.y]),stopCount:entry.paint.stops.length};
+        if(hit.part==='line')live(()=>{
+          let index=0;api.gradientEditOne(hit,current=>{const next=addStop(current,hit.offset);index=next.stops.findIndex(s=>s.offset===Math.min(1,Math.max(0,hit.offset)));return next;},'Add Gradient Stop',mergeKey);
+          gesture.hit={...hit,part:'stop',index};gesture.stopCount++;gesture.added=true;api.gradientStop(index);
+        });
+        else if(hit.part==='stop')api.gradientStop(hit.index);
+        return;
+      }
       // Drag sets the gradient vector on the selection; clicking an object selects it first.
       if(!api.paintIds().length){const hit=renderer.hit(p),t=hit&&targetId(hit);if(t)api.select([t]);}
       if(!api.paintIds().length){api.notify?.('Select artwork, then drag across it with the Gradient tool.');return;}
@@ -409,6 +447,10 @@ export function createInteractions(canvas, state, api) {
         if(drag.points.length>2)applyLasso(drag);else if(!drag.modifiers.shift)api.select([]);
       }else if(drag.mode==='measure') {
         if(drag.end)api.setMeasure([drag.start.x,drag.start.y],[drag.end.x,drag.end.y]);
+      }else if(drag.mode==='gradient-edit') {
+        api.gradientAnnotation(null);
+        if(drag.removing)run(()=>{api.gradientEditOne(drag.hit,current=>removeStop(current,drag.hit.index),'Delete Gradient Stop',drag.mergeKey);api.gradientStop(Math.max(0,drag.hit.index-1));});
+        if(moved||drag.added)api.rememberGradient(drag.hit.kind);
       }else if(drag.mode==='gradient') {
         if(!moved)api.command('paint-gradient');else api.rememberGradient();
       }else if(drag.mode==='text-frame') {
@@ -452,7 +494,7 @@ export function createInteractions(canvas, state, api) {
     else {scope.view.center=scope.view.center.add(screenDelta(event.deltaX,event.deltaY));withScope(()=>renderer.updateView({viewOnly:true}));api.status();}
   },{...events,passive:false});
   window.addEventListener('blur',cancel,events);
-  return {cancel,busy:()=>!!gesture,refreshEyedropper:eyedropperPreview.refresh,eyedropperModifiers:eyedropperPreview.modifiers,
+  return {cancel,busy:()=>!!gesture,editing:()=>ownEdits>0,refreshEyedropper:eyedropperPreview.refresh,eyedropperModifiers:eyedropperPreview.modifiers,
     handle(command) {
       if(gesture?.mode!=='polygonal-lasso')return false;
       if(command==='tool-dialog'){finishPolygonalLasso();return true;}

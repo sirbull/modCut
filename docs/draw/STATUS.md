@@ -991,14 +991,24 @@ Radial og Freeform, og gradient på strek (Within, Along og Across stroke). Arbe
    (`along` eller `across`, Within er fravær), beholdes ved typebytte, vinkel og presets.
    Begrensninger: stiplede streker tegnes heltrukne i Along/Across, hjørner blir avfaset, og PDF/EPS,
    Outline Stroke og Send to Cut bruker første stopps farge som før.
-3. **Annotator på lerretet** for Linear og Radial: endepunkter og stopp dras direkte på objektet.
+3. **Annotator på lerretet (ferdig):** med Gradient-verktøyet (G) vises gradientens vektor på første
+   objekt i utvalget (fyll eller strek etter fokus): sirkel i starten, firkant i enden, stiplet sirkel
+   for Radial, og én markør per stopp 12 px ved siden av linjen (så første og siste stopp ikke ligger
+   under håndtakene). Dra sirkelen for å flytte hele gradienten, firkanten for retning og lengde
+   (Shift: 45°), en stoppmarkør langs linjen, eller langt bort fra linjen for å slette den (markeres og
+   pekeren viser sletting før slipp). Klikk på linjen legger til et stopp og drar det videre i samme
+   gest. Alt er live og ett angresteg per drag; valgt stopp deles med panelet. Egne pekere for flytt,
+   legg til og slett (`render/gradient-annotator.mjs`).
+   Rettet samtidig: en dokumentendring avbrøt pågående gest, så Gradient-verktøyets drag bare fulgte
+   første musebevegelse. Gestens egne live-endringer avbryter den ikke lenger (`interactions.editing()`).
 4. **Freeform:** punkter i fyllet som legges til, flyttes og fargelegges, med myk overgang mellom
    alle punktene; hvert punkt har en stiplet ring med håndtak som dras for å endre spredning (Spread).
 
 Tester: `gradient-stroke.test.mjs` (bånd langs og på tvers, lukkede baner, caps, strokeMode i
 modell og validering), `gradient.test.mjs` (flytte stopp forbi andre, presets, Recent med ødelagt lagring) og
 `--draw-gradient` (ekte musedrag på glidebryteren, klikk for å legge til, dra av for å slette, ett
-angresteg per drag, Recent og Presets, typeknapper, Within/Along/Across med pikselkontroll, PNG,
+angresteg per drag, Recent og Presets, typeknapper, annotator med ekte musedrag (legg til, flytt,
+slett, ende- og startdrag, pekere, live over flere bevegelser), Within/Along/Across med pikselkontroll, PNG,
 SVG og Send to Cut).
 
 ### 2.41 Recolor (Recolor Artwork med fargehjul), del 1 av 3: kjernen (2026-10-22)

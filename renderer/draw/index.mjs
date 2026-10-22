@@ -164,6 +164,8 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
   const paintIds=()=>[...new Set(selectedIds().flatMap(id=>{
     const node=state.document.getNode(id);return node.children ? state.document.descendants(id).map(n=>n.id) : [id];
   }))].filter(id=>['path','shape','text'].includes(state.document.getNode(id)?.type) && state.document.isEditable(id));
+  // The Gradient tool annotates the focused fill or stroke of the first painted object.
+  renderer.setGradientTarget(()=>{const id=paintIds()[0];return id?{id,kind:state.ui.paintFocus==='stroke'?'stroke':'fill'}:null;});
   const transforms=createTransformController(state,{selectedIds,bounds:()=>renderer.selectionBounds(),localMatrix:(id,m)=>renderer.localMatrix(id,m),worldMatrix:id=>renderer.worldMatrix(id),select,update:()=>withScope(()=>renderer.select())});
   function syncPaint() {
     const node=state.document.getNode(paintIds()[0]);if(!node)return;
@@ -182,7 +184,7 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
       tool.id==='pen' ? 'Click: corner · Drag: curve · Alt+drag: smooth anchor or bend segment · Space: move anchor · Enter/Esc: finish' :
       ['type','area-type'].includes(tool.id) ? 'Click: '+(tool.id==='type'?'point text':'area text')+' · Drag: text frame · Click existing text: edit' :
       tool.id==='type-on-path' ? 'Click a path or shape: type along it · Click existing text: edit' :
-      tool.id==='gradient' ? 'Drag across the selection: gradient direction and length · Shift: 45° steps · Click: apply gradient' :
+      tool.id==='gradient' ? 'Drag across the selection: gradient direction and length · On the gradient: drag its ends and stops, click the line to add a stop · Shift: 45° steps' :
       tool.id==='eyedropper' ? 'Click: copy appearance to the selection · Alt: apply the selection\'s appearance · Shift: colour under the pointer' :
       tool.id==='measure' ? (state.ui.measurement?measurementText(state.ui.measurement):'Drag: distance and angle · Shift: 45° steps') :
       tool.id==='free-transform' ? 'Drag a corner of the selection: free distort (the other corners stay) · Shift: perspective' :
@@ -943,9 +945,9 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     state.history.transaction('Scissors',()=>commands.forEach(c=>state.history.execute(c)));select(ids);
   }
   /** Gradient edits on the first fill or stroke of each selected object; `edit(current, localBox)` returns the new gradient. */
-  function gradient(kind,edit,{label='Gradient',mergeKey=null}={}) {
+  function gradient(kind,edit,{label='Gradient',mergeKey=null,only=null}={}) {
     if(state.document.readOnly)return;
-    const ids=paintIds();if(!ids.length)throw new Error('Select artwork to apply a gradient.');
+    const ids=only??paintIds();if(!ids.length)throw new Error('Select artwork to apply a gradient.');
     let last=null;
     state.history.transaction(label,()=>{for(const id of ids){
       const node=state.document.getNode(id),entry=(kind==='stroke'?node.appearance.strokes:node.appearance.fills)[0];
@@ -1693,14 +1695,19 @@ export function createDrawWorkspace(root,{paper=window.paper,state=createProject
     freeDistortSession,freeDistortPreview,freeDistort,
     shapeBuilderSession,shapeBuilderPreview,shapeBuilder,knife,eraser,pathEraser,smoothPath,eraserSize:()=>state.ui.eraserSize??3,touchGlyphAt,touchGlyph,touchType:(id,index,change)=>touchType(id,index,change).catch(error=>{if(!destroyed)onError(error.message);}),rotateView,widthSession,widthDrag,widthPreview,widthPointEdit,paintbrush,blobBrush:points=>blobBrush(points).catch(error=>{if(!destroyed)onError(error.message);}),brushSize:()=>(state.ui.blobBrush?.size??BLOB_DEFAULTS.size),blendClick,blendOptions:()=>void blendOptionsCommand(),
     widthHandles:point=>{const id=renderer.hit(point)??selectedIds()[0],target=id&&widthTarget(id);return target?withScope(()=>renderer.widthHandles(id,target.stroke)):[];},
-    rememberGradient,gradientVector(from,to,mergeKey){const kind=state.ui.paintFocus==='stroke'?'stroke':'fill',last=state.ui.lastGradient;
+    rememberGradient,gradientHit:point=>withScope(()=>renderer.gradientHit(point)),gradientProject:point=>withScope(()=>renderer.gradientProject(point)),
+    gradientAnnotation:value=>withScope(()=>renderer.setGradientAnnotation(value)),
+    /** One annotated gradient (`target` from gradientHit): `edit(current, node)` returns the new gradient. */
+    gradientEditOne(target,edit,label,mergeKey){gradient(target.kind,(current,box,node)=>current&&edit(current,node),{label,mergeKey,only:[target.id]});},
+    gradientStop(index){state.ui.gradientStop=index;panels?.render();withScope(()=>renderer.updateView({viewOnly:true}));},
+    gradientVector(from,to,mergeKey){const kind=state.ui.paintFocus==='stroke'?'stroke':'fill',last=state.ui.lastGradient;
       gradient(kind,(current,box,node)=>{const a=renderer.pointToLocal(node.id,from),b=renderer.pointToLocal(node.id,to);
         return vectorGradient(current??defaultGradient(box,last?{type:last.type,stops:last.stops}:{}),[a.x,a.y],[b.x,b.y]);},{label:'Gradient',mergeKey});},
 typeOnPath:id=>editText(undefined,null,null,{pathFrom:id}),cursor,contextMenu:(x,y)=>contextMenu.open(x,y),
     tool:()=>temporary?.id || state.ui.tool,zoomOut:()=>!!temporary?.zoomOut,preferences:getPreferences,closeMenus:()=>{contextMenu.close();toolbar.close();},notify:message=>onError(message)});
   // Offset Path effects draw once the polygon library is loaded; until then they are skipped.
   loadGeometry().then(()=>{if(!destroyed)refresh();}).catch(()=>{});
-  const unsubscribe=state.subscribe(()=>{contextMenu.close();rulerInteractions.cancel();interactions.cancel();paths.documentChanged();refresh();if(state.ui.isolation&&!isolation())isolationChanged();else renderIsolationBar();});
+  const unsubscribe=state.subscribe(()=>{contextMenu.close();rulerInteractions.cancel();if(!interactions.editing())interactions.cancel();paths.documentChanged();refresh();if(state.ui.isolation&&!isolation())isolationChanged();else renderIsolationBar();});
   function resize(){const {width,height}=stage.getBoundingClientRect();if(width<=0||height<=0)return;
     withScope(()=>{scope.view.viewSize=new scope.Size(width,height);if(!fitted){renderer.fit();fitted=true;}renderer.updateView();});status();}
   const observer=new ResizeObserver(resize);observer.observe(stage);

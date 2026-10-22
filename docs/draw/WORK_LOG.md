@@ -2327,3 +2327,15 @@ RYB-hjul, regler, drag-innstillinger, slider, Lab-snapping, remap av appearance)
 `doc/recolor-libraries.mjs` (egne paletter). `recolor.test.mjs` passerer (9 tester).
 Neste: del 2, panelet. En annen agent jobber samtidig med gradient-annotatoren (del 3 av gradienter);
 de filene er ikke tatt med i Recolor-commitene.
+
+## 2026-10-22: Gradienter som i Illustrator, del 3 av 4 (annotator på lerretet)
+
+Gradient-annotator for Linear/Radial med Gradient-verktøyet: start (flytt alt), ende (retning/lengde,
+Shift 45°), stoppmarkører ved siden av linjen (dra, dra av for å slette), klikk på linjen legger til
+og drar. Live, ett angresteg per drag, pekere for flytt/legg til/slett. Funnet og rettet: dokument-
+abonnementet avbrøt alle gester ved hver endring, så Gradient-verktøyets drag bare fulgte første
+bevegelse; gestens egne endringer er nå unntatt (`interactions.editing()`). E2E dekker nå drag over
+flere bevegelser. 421 Draw-tester og i18n passerer; `--draw-gradient` passerte flere ganger etter
+rettingen. Skjermbilde av annotatoren midt i et drag er kontrollert.
+En annen agent har samtidig uncommittede endringer (linjaler, keymap, recolor, guideReadout i
+index.mjs); de er ikke tatt med i denne commiten.

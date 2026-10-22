@@ -4,6 +4,7 @@ import { createSelectionOverlay } from './overlays.mjs';
 import { createViewGuides } from './view-guides.mjs';
 import { activeArtboard } from '../doc/artboards.mjs';
 import { createAnchorOverlay } from './anchors.mjs';
+import { createGradientAnnotator } from './gradient-annotator.mjs';
 import { transformProperties } from '../geometry.mjs';
 import { editablePath,cornerGeometry,roundCorners } from '../geom/corners.mjs';
 import { shapeSelectionKey } from '../doc/selection.mjs';
@@ -84,6 +85,8 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
     }return result;
   }
   const anchors=createAnchorOverlay(scope,overlay,state,editPointToWorld,id=>editingNode(id,{logical:['direct-selection','anchor-point','delete-anchor'].includes(state.ui?.tool)}),cornerWidgets);
+  // Gradient tool: the annotated gradient, drawn on the first painted object (see setGradientTarget).
+  const gradientAnnotator=createGradientAnnotator(scope,overlay,state,id=>records.get(id)?.worldMatrix??null);let gradientAnnotation={};
 
   function color(paint, opacity = 1) {
     if (paint?.type === 'linear' || paint?.type === 'radial') {
@@ -827,7 +830,7 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
     });
     // One draw per frame, however many updates an action makes (D4.6). Paper's own requestUpdate only
     // draws with autoUpdate on, which this view does not use.
-    selection.update(); anchors.update(); viewGuides.update({foreground:labelColor,background:labelBackground}); requestDraw(viewOnly);
+    selection.update(); anchors.update(); gradientAnnotator.update(gradientAnnotation); viewGuides.update({foreground:labelColor,background:labelBackground}); requestDraw(viewOnly);
   }
   /**
    * Drawing (D4.6). Updates are drawn once per frame. When a full draw is slow (a big document) its frame is
@@ -1120,7 +1123,10 @@ export function createDrawRenderer(scope, state, { onImageLoad = () => {}, onThu
   }
   /** The width-profiled stroke `entry` of node `id` as filled outline subpaths in the node's own space (Outline Stroke). */
   const profiledStroke = (id, entry) => { const item = items.get(id); return item ? variableStrokeSubpaths(item, entry) : null; };
-  return { render, select: updateView, updateView, requestDraw, bounds, painted: id => paintedBounds.get(id)?.clone() ?? bounds(id), profiledStroke, blendSteps, liveSteps, envelopeSteps, strokeLocation, widthHandles, selectionBounds, hit, items, setOutline, setLaserPreview(value){const next=!!value,changed=next!==laserPreview;if(!next&&!changed)return;laserPreview=next;lastFrame=null;if(changed)setOutline(outline);scope.view._needsUpdate=true;requestDraw();}, get laserPreview(){return laserPreview;}, laserIntent(id){return laserPreviewIntent(state.document,id,getLaserProcesses());}, thumbnail, exportArtwork, clippedSubpaths, clipToRect, effectiveSubpaths, booleanOperand, selectionHandle:point=>selection.hit(point),
+  return { render, select: updateView,
+    setGradientTarget: fn => gradientAnnotator.setTarget(fn), gradientHit: point => gradientAnnotator.hit(point), gradientProject: point => gradientAnnotator.project(point),
+    /** Annotator state during a drag (a stop marked for removal); redraws at once. */
+    setGradientAnnotation(value) { gradientAnnotation = value ?? {}; gradientAnnotator.update(gradientAnnotation); scope.view.update(); }, updateView, requestDraw, bounds, painted: id => paintedBounds.get(id)?.clone() ?? bounds(id), profiledStroke, blendSteps, liveSteps, envelopeSteps, strokeLocation, widthHandles, selectionBounds, hit, items, setOutline, setLaserPreview(value){const next=!!value,changed=next!==laserPreview;if(!next&&!changed)return;laserPreview=next;lastFrame=null;if(changed)setOutline(outline);scope.view._needsUpdate=true;requestDraw();}, get laserPreview(){return laserPreview;}, laserIntent(id){return laserPreviewIntent(state.document,id,getLaserProcesses());}, thumbnail, exportArtwork, clippedSubpaths, clipToRect, effectiveSubpaths, booleanOperand, selectionHandle:point=>selection.hit(point),
     artboardAddHandles:()=>artboardAddPoints.map(h=>({...h,point:h.point.clone()})),
     artboardAddHit:point=>artboardAddPoints.find(h=>h.point.getDistance(point)<=12/scope.view.zoom) ?? null,
     artboardLabelHit:point=>[...boardItems].reverse().find(([,r])=>r.label.visible&&r.labelRect.bounds.contains(point))?.[0] ?? null,

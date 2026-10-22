@@ -165,7 +165,7 @@ export const NB = Object.freeze({
   "Click: reference point · Drag: transform · Shift: constrain · Alt: copy · Enter: dialog": "Klikk: referansepunkt · Dra: transformer · Shift: begrens · Alt: kopi · Enter: dialog",
   "Click: corner · Drag: curve · Alt+drag: smooth anchor or bend segment · Space: move anchor · Enter/Esc: finish": "Klikk: hjørne · Dra: kurve · Alt+dra: gjør anker mykt eller bøy linje · Mellomrom: flytt anker · Enter/Esc: ferdig",
   "Click a path or shape: type along it · Click existing text: edit": "Klikk en bane eller form: skriv langs den · Klikk eksisterende tekst: rediger",
-  "Drag across the selection: gradient direction and length · Shift: 45° steps · Click: apply gradient": "Dra over utvalget: retning og lengde på fargeovergangen · Shift: trinn på 45° · Klikk: bruk fargeovergang",
+  "Drag across the selection: gradient direction and length · On the gradient: drag its ends and stops, click the line to add a stop · Shift: 45° steps": "Dra over utvalget: retning og lengde på fargeovergangen · På fargeovergangen: dra endene og stoppene, klikk på linjen for å legge til et stopp · Shift: trinn på 45°",
   "Click: copy appearance to the selection · Alt: apply the selection\'s appearance · Shift: colour under the pointer": "Klikk: kopier utseendet til utvalget · Alt: bruk utvalgets utseende · Shift: fargen under pekeren",
   "Click: copy appearance to the selection · Alt: apply the selection's appearance · Shift: colour under the pointer": "Klikk: kopier utseendet til utvalget · Alt: bruk utvalgets utseende · Shift: fargen under pekeren",
   "Drag: distance and angle · Shift: 45° steps": "Dra: avstand og vinkel · Shift: trinn på 45°",

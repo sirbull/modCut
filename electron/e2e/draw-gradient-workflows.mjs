@@ -65,10 +65,48 @@ export async function runDrawGradientWorkflows(client) {
   // The Gradient tool: one drag sets a vertical gradient as one undo step.
   await evaluate(`(async()=>{${active}.setTool('gradient')})()`);
   await evaluate(`document.querySelector('${fly} [data-draw-gradient-type=linear]').click()`);
-  steps=await applied();await drag(await at(50,12),await at(50,48));
+  // Several moves: the gradient follows each one live (a document change must not end the drag).
+  steps=await applied();await mouse('mouseMoved',await at(50,12));await mouse('mousePressed',await at(50,12),{buttons:1});
+  await mouse('mouseMoved',await at(50,30),{buttons:1});g=await paint();assert.ok(Math.abs(g.length-18)<.5,`Live after the first move: ${g.length}`);
+  await mouse('mouseMoved',await at(50,48),{buttons:1});g=await paint();assert.ok(Math.abs(g.length-36)<.5,`Live after the second move: ${g.length}`);
+  await mouse('mouseReleased',await at(50,48));
   g=await paint();assert.equal(g.type,'linear');assert.ok(Math.abs(g.angle+90)<1,`Downwards drag: ${g.angle}`);assert.ok(Math.abs(g.length-36)<.5,`Length ${g.length}`);
   assert.equal(await applied(),steps+1,'The whole drag is one undo step');
   const top=await pixel(50,14),bottom=await pixel(50,46);assert.ok([0,1,2].reduce((sum,i)=>sum+Math.abs(top[i]-bottom[i]),0)>250,`The gradient now runs vertically: ${top} ${bottom}`);
+  // The annotator on the artwork: the vector from (50,12) to (50,48) with its stops, live while dragging.
+  const annotator=()=>evaluate(`(async()=>{const w=${active},g=w.scope.project.getItems({name:'Gradient annotator'})[0];return g?g.children.length:0})()`);
+  await until(`(async()=>{const w=${active},g=w.scope.project.getItems({name:'Gradient annotator'})[0];return !!g&&g.children.length>0})()`,'Annotator shown');
+  // Stop markers sit 12 px beside the line; for this downward vector that is to the left on screen.
+  const stopMarker=async(x,y)=>{const q=await at(x,y);return {x:q.x-12,y:q.y};};
+  const cursor=()=>evaluate(`(async()=>${active}.scope.view.element.style.cursor)()`);
+  await mouse('mouseMoved',await at(50,30));assert.match(await cursor(),/copy\s*$/,'Over the line: the add-stop cursor');
+  await mouse('mouseMoved',await at(50,48));assert.match(await cursor(),/default\s*$/,'Over a handle: the move cursor');
+  const count=(await paint()).stops.length;
+  // Click the line: a stop at 25 %, then drag it to 75 % in the same gesture (one undo step).
+  steps=await applied();
+  await mouse('mouseMoved',await at(50,21));await mouse('mousePressed',await at(50,21),{buttons:1});
+  g=await paint();assert.equal(g.stops.length,count+1,'Clicking the line adds a stop');
+  await mouse('mouseMoved',await at(51,30),{buttons:1});
+  g=await paint();assert.ok(g.stops.some(s=>Math.abs(s.offset-.5)<.03),`Live while dragging on the artwork: ${g.stops.map(s=>s.offset)} ${await evaluate("[...document.querySelectorAll('.toast,[role=alert],[role=status]')].map(e=>e.textContent).join('|')")}`);
+  await mouse('mouseMoved',await at(51,39),{buttons:1});await mouse('mouseReleased',await at(51,39));
+  g=await paint();assert.equal(g.stops.length,count+1);assert.ok(g.stops.some(s=>Math.abs(s.offset-.75)<.03),`Stop dragged to 75 %: ${g.stops.map(s=>s.offset)}`);
+  assert.equal(await applied(),steps+1,'Add and drag is one undo step');
+  assert.equal(await evaluate(`(async()=>${active}.state.ui.gradientStop)()`),g.stops.findIndex(s=>Math.abs(s.offset-.75)<.03),'The new stop is selected, as in the panel');
+  // Drag it off the line: marked while away, deleted on release.
+  steps=await applied();
+  await mouse('mouseMoved',await stopMarker(50,39));await mouse('mousePressed',await stopMarker(50,39),{buttons:1});
+  await mouse('mouseMoved',await at(75,39),{buttons:1});
+  assert.match(await cursor(),/not-allowed\s*$/,'The delete cursor while off the line');
+  await mouse('mouseReleased',await at(75,39));
+  g=await paint();assert.equal(g.stops.length,count,'Dragging a stop off the line deletes it');assert.equal(await applied(),steps+1);
+  // The end square: direction and length; the origin circle moves the whole gradient.
+  await drag(await at(50,48),await at(80,12));
+  g=await paint();assert.ok(Math.abs(g.angle)<1,`End drag sets the angle: ${g.angle}`);assert.ok(Math.abs(g.length-30)<.6,`and the length: ${g.length}`);
+  const end=[g.origin[0]+Math.cos(g.angle*Math.PI/180)*g.length,g.origin[1]-Math.sin(g.angle*Math.PI/180)*g.length];
+  await drag(await at(50,12),await at(40,22));
+  g=await paint();const moved=[g.origin[0]+Math.cos(g.angle*Math.PI/180)*g.length,g.origin[1]-Math.sin(g.angle*Math.PI/180)*g.length];
+  assert.ok(Math.abs(moved[0]-end[0]+10)<.5&&Math.abs(moved[1]-end[1]-10)<.5,`The origin drag moves the whole vector: ${end} → ${moved}`);
+  assert.ok(await annotator()>0,'The annotator follows the edits');
   // Stroke gradients: within (across the box, the default), along and across the stroke, with the panel's Stroke buttons.
   await evaluate(`(async()=>{${active}.setTool('select')})()`);
   const line=await evaluate(`(async()=>{const w=${active},{createNode}=await import('./draw/doc/schema.mjs'),{insertNode}=await import('./draw/doc/commands.mjs'),{appearance}=await import('./draw/geometry.mjs'),b=w.state.document.data.artboards[0];
