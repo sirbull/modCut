@@ -64,7 +64,28 @@ export function createPanels(shell, state, api) {
   dock.properties.section.append(propertiesFooter);
   // Control bar stays above the canvas; the other panels have movable window chrome.
   const controlBar = document.createElement('div'); controlBar.className = 'draw-control-bar'; controlBar.setAttribute('role','toolbar'); controlBar.setAttribute('aria-label','Control bar');
-  shell.append(controlBar,rail,panels);
+  // Groups that do not fit move, from the end, into a menu behind » at the right, as in Illustrator's Control panel.
+  const controlMore = document.createElement('button'); controlMore.type = 'button'; controlMore.className = 'draw-layer-action draw-cb-more'; controlMore.textContent = '»';
+  controlMore.setAttribute('aria-label','More controls'); controlMore.dataset.tooltip = 'More controls'; controlMore.setAttribute('aria-haspopup','true'); controlMore.setAttribute('aria-expanded','false');
+  const controlOverflow = document.createElement('div'); controlOverflow.className = 'draw-cb-overflow'; controlOverflow.setAttribute('role','group'); controlOverflow.setAttribute('aria-label','More controls'); controlOverflow.hidden = true;
+  const showControlOverflow = open => {
+    controlOverflow.hidden = !open; controlMore.setAttribute('aria-expanded',String(open)); if (!open) return;
+    const bar = controlBar.getBoundingClientRect(), box = shell.getBoundingClientRect();
+    controlOverflow.style.top = `${bar.bottom - box.top}px`; controlOverflow.style.right = `${box.right - bar.right}px`;
+  };
+  controlMore.addEventListener('click',() => showControlOverflow(controlOverflow.hidden));
+  const closeControlOverflow = event => { if (!controlOverflow.hidden && !controlOverflow.contains(event.target) && !controlMore.contains(event.target)) showControlOverflow(false); };
+  document.addEventListener('pointerdown',closeControlOverflow,true);
+  controlOverflow.addEventListener('keydown',event => { if (event.key === 'Escape') { event.stopPropagation(); showControlOverflow(false); controlMore.focus(); } });
+  function fitControlBar() {
+    controlBar.append(...controlOverflow.children,controlMore); controlMore.hidden = true;
+    if (controlBar.hidden || controlBar.scrollWidth <= controlBar.clientWidth + 1) { showControlOverflow(false); return; }
+    controlMore.hidden = false;
+    for (let group = controlMore.previousElementSibling; controlBar.scrollWidth > controlBar.clientWidth + 1 && group?.classList.contains('draw-cb-group'); group = controlMore.previousElementSibling) controlOverflow.prepend(group);
+    if (!controlOverflow.children.length) { controlMore.hidden = true; showControlOverflow(false); } else if (!controlOverflow.hidden) showControlOverflow(true);
+  }
+  const controlBarSize = new ResizeObserver(() => fitControlBar()); controlBarSize.observe(controlBar);
+  shell.append(controlBar,controlOverflow,rail,panels);
   const panelWindows = createPanelWindows({ shell, rail, panels, dock, state,
     icon: name => icon(panelSpriteHref(name)), renderContent(id,host) {
       if (state.document.readOnly) text(host,state.warning || 'Read-only document');
@@ -672,7 +693,9 @@ export function createPanels(shell, state, api) {
     swatch.dataset.tooltip = 'Double-click to edit';
     swatch.classList.toggle('is-none',!hex);
     swatch.addEventListener('dblclick',() => { void api.editPaint(target); });
-    const none = button('None',() => api.paint(target,null)); none.dataset.drawField = 'color-none'; none.disabled = disabled; none.setAttribute('aria-pressed',String(!hex));
+    const none = button('',() => api.paint(target,null)); none.className = 'draw-swatch is-none draw-color-none';
+    none.setAttribute('aria-label','Transparent'); none.title = 'Transparent';
+    none.dataset.drawField = 'color-none'; none.disabled = disabled; none.setAttribute('aria-pressed',String(!hex));
     const modeSelect = document.createElement('select'); modeSelect.className = 'draw-select'; modeSelect.dataset.drawField = 'color-mode'; modeSelect.setAttribute('aria-label','Color mode');
     for (const [value,spec] of Object.entries(COLOR_MODES)) modeSelect.append(new Option(spec.name,value,false,value === mode));
     modeSelect.addEventListener('change',() => { state.ui.colorMode = modeSelect.value; render(); });
@@ -1717,12 +1740,13 @@ export function createPanels(shell, state, api) {
     scaleStrokes.checked = state.ui.scaleStrokes !== false;
     propertiesFooter.hidden = state.ui.tool === 'artboard';
     // A slider drag or color-picker session updates the canvas live; rebuilding would interrupt it.
-    if (liveEdit && [...panelWindows.bodies(),primary,controlBar].some(host => host.contains(document.activeElement))) return;
+    if (liveEdit && [...panelWindows.bodies(),primary,controlBar,controlOverflow].some(host => host.contains(document.activeElement))) return;
     liveEdit = false;
     primary.replaceChildren(); dock.layers.body.replaceChildren();
     if (state.document.readOnly) text(primary,state.warning || 'Read-only document');
     propertiesPanel(primary); layerPanel(dock.layers.body);
-    controlBar.replaceChildren(); controlBar.hidden = state.ui.controlBar === false; if (!controlBar.hidden) controlBarContent(controlBar);
+    controlOverflow.replaceChildren(); controlBar.replaceChildren(); controlBar.hidden = state.ui.controlBar === false; if (!controlBar.hidden) controlBarContent(controlBar);
+    fitControlBar();
     panelWindows.render();
     if (!panelWindows.bodies().some(host => host.dataset.drawPanelBody === 'image-trace')) api.clearTracePreview();
   }
@@ -1808,5 +1832,5 @@ export function createPanels(shell, state, api) {
       if (!show) continue; const b = button(label,action); b.dataset.drawCb = key; b.disabled = ro; actions.append(b);
     }
   }
-  render(); return { render, open, close, updateInfo, destroy() { panelWindows.destroy(); } };
+  render(); return { render, open, close, updateInfo, destroy() { controlBarSize.disconnect(); document.removeEventListener('pointerdown',closeControlOverflow,true); panelWindows.destroy(); } };
 }

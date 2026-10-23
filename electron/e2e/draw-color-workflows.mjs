@@ -125,7 +125,9 @@ export async function runDrawColorWorkflows(client) {
   await click('.draw-color-dialog [data-x=cancel]');
   await until('window.__screenAborted === true');
   await evaluate("window.EyeDropper=window.__nativeEyeDropper;delete window.__nativeEyeDropper");
-  if (nativeEyeDropper) {
+  // Allow the OS overlay check to be omitted where background windows cannot open it.
+  const checkNativeEyeDropper = nativeEyeDropper && !process.argv.includes('--skip-native-eyedropper');
+  if (checkNativeEyeDropper) {
     await openPicker(stroke);
     await click('[data-color-eyedropper]'); await wait(700);
     assert.equal(await evaluate("document.querySelector('.draw-color-dialog').dataset.sampling"),'true','Native screen pipette opens in Electron');
@@ -137,14 +139,48 @@ export async function runDrawColorWorkflows(client) {
   assert.deepEqual((await node()).appearance.strokes,[],'Picker None removes the paint entry');
   assert.equal((await node()).opacity,1,'None never changes opacity');
   await command('undo');
+
+  // Properties uses the same picker, including transparent fill/stroke and detached Cancel.
+  for (const kind of ['fill','stroke']) {
+    const entries = kind === 'fill' ? 'fills' : 'strokes', other = kind === 'fill' ? 'strokes' : 'fills';
+    const before = await node(), beforeDepth = await depth();
+    const prop = `${root} [data-draw-field=prop-${kind}]`;
+    await click(prop); await until("!!document.querySelector('.draw-color-dialog')");
+    assert.equal(await evaluate("document.querySelector('[data-color-none]').getAttribute('aria-label')"),'Transparent');
+    assert.match(await evaluate("getComputedStyle(document.querySelector('[data-color-none]')).backgroundImage"),/135deg/,'The red slash rises from bottom left to top right');
+    assert.equal(await evaluate("getComputedStyle(document.querySelector('[data-color-none]')).backgroundColor"),'rgb(255, 255, 255)');
+    await click('[data-color-none]');
+    assert.deepEqual(await node(),before,'Transparent preview leaves artwork untouched');
+    await click('.draw-color-dialog [data-x=cancel]');
+    assert.deepEqual(await node(),before,'Cancel preserves the paint');
+    await click(prop); await until("!!document.querySelector('.draw-color-dialog')"); await click('[data-color-none]');
+    await evaluate("document.querySelector('.draw-color-dialog form').requestSubmit()"); await wait(30);
+    assert.deepEqual((await node()).appearance[entries],[],`Properties transparent removes ${kind}`);
+    assert.deepEqual((await node()).appearance[other],before.appearance[other],'The other paint is retained');
+    assert.equal((await node()).opacity,before.opacity,'Object opacity is retained');
+    assert.equal(await depth(),beforeDepth+1,'Transparent is a single undo step');
+    assert.equal(await evaluate(`document.querySelector('${prop}').classList.contains('is-none')`),true);
+    await click(prop); await until("!!document.querySelector('.draw-color-dialog')");
+    assert.equal(await evaluate("document.querySelector('[data-color-none]').getAttribute('aria-pressed')"),'true','Reopening preserves transparent selection');
+    await click('.draw-color-dialog [data-x=cancel]');
+    await command('undo'); assert.deepEqual(await node(),before,'Undo restores the paint');
+  }
   await click(`${root} [data-paint-action=paint-none]`);
   assert.deepEqual((await node()).appearance.strokes,[],'Toolbar None removes stroke');
   assert.ok((await node()).appearance.fills.length,'The fill is retained');
   await command('undo');
 
   await command('panel.color');
+  const panelBeforeNone = await node(), panelNoneDepth = await depth();
+  await click(`${root} [data-draw-field=color-none]`);
+  assert.deepEqual((await node()).appearance.strokes,[],'Color panel transparent removes the stroke');
+  assert.deepEqual((await node()).appearance.fills,panelBeforeNone.appearance.fills,'Color panel transparent retains the fill');
+  assert.equal(await depth(),panelNoneDepth+1);
+  assert.equal(await evaluate(`document.querySelector('${root} [data-draw-field=color-none]').getAttribute('aria-pressed')`),'true');
+  await shot('modcut-draw-color-transparent.png');
+  await command('undo'); assert.deepEqual(await node(),panelBeforeNone,'Color panel transparent can be undone');
   assert.equal(await evaluate(`document.querySelector('${root} [data-draw-field=color-mode]').value`),'hsb','HSB is the default');
-  const panelPlane = `${root} .draw-flyout .draw-color-plane`;
+  const panelPlane = `${root} [data-draw-panel-body=color] .draw-color-plane`;
   const beforeDrag = await depth(); box = await geometry(panelPlane);
   await drag({x:box.x+box.width*.3,y:box.y+box.height*.25},{x:box.x+box.width*.8,y:box.y+box.height*.2});
   assert.equal(await depth(),beforeDrag+1,'A plane drag is one undo step');
@@ -155,8 +191,8 @@ export async function runDrawColorWorkflows(client) {
   await command('undo'); assert.equal(hex((await node()).appearance.strokes[0].paint),firstColor);
   // Hue selection while white keeps the chosen hue for the next saturation drag.
   await evaluate(`(()=>{const i=document.querySelector('${root} [data-draw-field=color-hex]');i.value='FFFFFF';i.dispatchEvent(new Event('change',{bubbles:true}));})()`);
-  await evaluate(`(()=>{const i=document.querySelector('${root} .draw-flyout [data-color-hue]');i.focus();i.value='120';i.dispatchEvent(new Event('input',{bubbles:true}));i.dispatchEvent(new Event('change',{bubbles:true}));})()`);
-  assert.equal(await evaluate(`+document.querySelector('${root} .draw-flyout [data-color-hue]').value`),120,'Hue survives white');
+  await evaluate(`(()=>{const i=document.querySelector('${root} [data-draw-panel-body=color] [data-color-hue]');i.focus();i.value='120';i.dispatchEvent(new Event('input',{bubbles:true}));i.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  assert.equal(await evaluate(`+document.querySelector('${root} [data-draw-panel-body=color] [data-color-hue]').value`),120,'Hue survives white');
   assert.equal(await evaluate(`+document.querySelector('${root} [data-draw-field=color-hsb-0]').value`),120,'HSB field retains the chosen hue too');
   box = await geometry(panelPlane); await drag({x:box.x+box.width*.95,y:box.y+2},{x:box.x+box.width-1,y:box.y+1});
   const green = (await node()).appearance.strokes[0].paint.color.values;
@@ -167,5 +203,5 @@ export async function runDrawColorWorkflows(client) {
   await command('deselect'); await click(fill); await click(`${root} [data-paint-action=paint-none]`);
   assert.equal(await evaluate(`(async()=>${active}.state.ui.fill)()`),null,'None also works for new artwork defaults');
   await restore();
-  console.log(`PASS Draw color: compact dialog, vertical hue, recent colors, screen pipette (native: ${nativeEyeDropper}), cancel, one-step commit and independent drag undo`);
+  console.log(`PASS Draw color: compact dialog, transparent fill/stroke in Properties and Color, vertical hue, recent colors, screen pipette (native checked: ${checkNativeEyeDropper}), cancel, one-step commit and independent drag undo`);
 }

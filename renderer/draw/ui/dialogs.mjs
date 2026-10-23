@@ -85,7 +85,7 @@ export function colorPickerDialog(initial, recent = []) {
   });
   const palette = document.createElement('div'); palette.className = 'draw-swatch-row draw-color-dialog__swatches';
   palette.setAttribute('role','group'); palette.setAttribute('aria-label','Recent Colors');
-  const none = document.createElement('button'); none.type = 'button'; none.className = 'draw-swatch is-none'; none.setAttribute('aria-label','None'); none.dataset.colorNone = '';
+  const none = document.createElement('button'); none.type = 'button'; none.className = 'draw-swatch is-none draw-color-none'; none.setAttribute('aria-label','Transparent'); none.title = 'Transparent'; none.dataset.colorNone = '';
   none.addEventListener('click',() => { chosen = null; sync(); }); palette.append(none);
   for (const value of [...new Set(recent)].filter(Boolean).slice(0,10)) {
     const chip = document.createElement('button'); chip.type = 'button'; chip.className = 'draw-swatch'; chip.style.setProperty('--swatch',value); chip.setAttribute('aria-label',value);

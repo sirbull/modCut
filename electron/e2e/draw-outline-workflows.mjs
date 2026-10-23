@@ -58,6 +58,31 @@ export async function runDrawOutlineWorkflows(client){
   assert.equal(band.kids,2,'Existing fill stays separate from the outlined stroke');assert.equal(band.fill,'#ffffff');assert.equal(band.stroke,'#c00000');
   assert.equal(band.rings,2);assert.equal(band.empty,true,'The stroke outline does not include the white background');
   assert.ok(band.difference<.02,`Transformed Width shape keeps its appearance: ${JSON.stringify(band)}`);
+  await evaluate("document.querySelector('#newDoc').click()");
+  await submitNewDrawDialog(evaluate,{preset:'custom',width:140,height:100,name:'Rounded outline anchor proof'});
+  const corners=await evaluate(`(async()=>{const w=${active},{createNode}=await import('./draw/doc/schema.mjs'),{insertNode}=await import('./draw/doc/commands.mjs'),{appearance}=await import('./draw/geometry.mjs');
+    const b=w.state.document.data.artboards[0],results=[];
+    for(const spec of [{radius:10,width:2,join:'miter'},{radius:0,width:5,join:'round'}]){
+      const look=appearance(null,'#071411',spec.width);look.strokes[0].join=spec.join;
+      const n=createNode('shape',{shape:'rect',params:{x:b.x+15+results.length*65,y:b.y+20,width:40,height:50,cornerRadius:spec.radius},appearance:look});
+      w.state.history.execute(insertNode(w.state.document.data.layers[0].id,n));w.select([n.id]);
+      const pixels=async()=>{const img=new Image();img.src=w.exportBoard(b.id,'png',{ppi:200,background:'white'});await img.decode();const c=document.createElement('canvas');c.width=img.width;c.height=img.height;const g=c.getContext('2d');g.drawImage(img,0,0);return g.getImageData(0,0,c.width,c.height).data;};
+      const saved=w.state.document.serialize(),before=await pixels();await w.handle('outline-stroke');
+      for(let i=0;i<100&&w.state.document.getNode(n.id);i++)await new Promise(r=>setTimeout(r,20));
+      const made=w.state.document.getNode(w.state.selection.ids[0]),after=await pixels();let diff=0,ink=0;
+      for(let i=0;i<before.length;i+=4){diff+=Math.abs(before[i]-after[i]);ink+=255-before[i];}
+      results.push({radius:spec.radius,type:made.type,counts:made.subpaths.map(s=>s.segments.length),difference:diff/ink});
+      w.handle('undo');if(w.state.document.serialize()!==saved)throw Error('Rounded outline undo changed the source');
+      w.handle('redo');if(!w.state.document.getNode(made.id))throw Error('Rounded outline redo failed');w.select([made.id]);
+    }
+    w.setTool('direct-selection');return results;})()`);
+  for(const result of corners){
+    assert.equal(result.type,'path');assert.equal(result.counts.length,2);
+    assert.ok(result.counts.every(n=>n<=12),`At most three anchors per rounded corner: ${JSON.stringify(result)}`);
+    assert.ok(result.difference<.02,`Rounded outline keeps its appearance: ${JSON.stringify(result)}`);
+  }
+  await capture('modcut-outline-rounded-corners.png');
   await restore();
+  console.log('PASS Draw rounded Outline Stroke: '+JSON.stringify(corners));
   console.log('PASS Draw curved Outline Stroke: shortcut, '+proof.raw+' samples → '+result.anchors+' anchors, pixel difference '+result.difference.toFixed(4)+', undo/redo, Direct Selection and repeated A');
 }

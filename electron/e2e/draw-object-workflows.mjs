@@ -117,7 +117,9 @@ export async function runDrawObjectWorkflows(client) {
   assert.equal(await evaluate(`(async()=>(${active}.state.history.undoLabel))()`), 'Flip Horizontal');
   assert.deepEqual(await evaluate(`(async()=>{const b=${active}.renderer.bounds('${a}');return[b.x,b.y,b.width,b.height].map(v=>+v.toFixed(3))})()`), before, 'Flip around the centre keeps the bounds');
   await command('undo');
-  await evaluate(`(()=>{const i=document.querySelector('${root} [data-draw-dock=properties] [data-draw-field=prop-fill]');i.value='#ff0000';i.dispatchEvent(new Event('change',{bubbles:true}))})()`);
+  await evaluate(`document.querySelector('${root} [data-draw-dock=properties] [data-draw-field=prop-fill]').click()`);
+  await evaluate(`(()=>{const i=document.querySelector('[data-color-hex]');i.value='ff0000';i.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('.draw-color-dialog form').requestSubmit()})()`);
+  await wait(30);
   const fill = (await model()).layers[0].children.find(n => n.id === a).appearance.fills[0].paint.color.values.map(v => Math.round(v * 255));
   assert.deepEqual(fill, [255, 0, 0], 'Fill colour from Properties'); await command('undo');
   await evaluate(`document.querySelector('${root} [data-draw-dock=properties] [data-draw-prop-align=right]').click()`);

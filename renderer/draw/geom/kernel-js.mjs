@@ -215,7 +215,9 @@ export async function outlineStroke(path, { width, join = 'miter', cap = 'butt',
   validatePath(path);
   const lib = await clipper(), ints = (points) => points.map(([x, y]) => ({ X: Math.round(x * SCALE), Y: Math.round(y * SCALE) }));
   // Small dots and round caps also need a relative tolerance to retain their circular silhouette.
-  const engine = new lib.ClipperOffset(Math.max(1, miterLimit), Math.min(tolerance, width / 1000) * SCALE), dots = [];
+  // Clipper's final step to an arc endpoint can be longer than its regular
+  // steps. Reserve half the tolerance so refitting the arc stays within it.
+  const engine = new lib.ClipperOffset(Math.max(1, miterLimit), Math.min(tolerance, width / 1000) / 2 * SCALE), dots = [];
   const joinType = { miter: lib.JoinType.jtMiter, round: lib.JoinType.jtRound, bevel: lib.JoinType.jtSquare }[join];
   const endType = { butt: lib.EndType.etOpenButt, round: lib.EndType.etOpenRound, square: lib.EndType.etOpenSquare }[cap];
   for (const contour of dashedContours(flattenPath(path, tolerance / 4), dash)) {
