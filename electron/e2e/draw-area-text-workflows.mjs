@@ -1,0 +1,32 @@
+﻿import assert from 'node:assert/strict';
+import {inputHelpers,wait} from './cdp.mjs';
+import {activeDraw as active,enterDraw,rememberTabs,submitNewDrawDialog} from './draw-test-helpers.mjs';
+import {inlineReady,inlineSet,finishInline} from './draw-inline-helpers.mjs';
+export async function runDrawAreaTextWorkflows(client){
+  const {evaluate}=client,{drag,key}=inputHelpers(client),restore=await rememberTabs(evaluate);
+  await enterDraw(evaluate);await evaluate("document.querySelector('#newDoc').click()");await submitNewDrawDialog(evaluate,{preset:'custom',width:120,height:100,name:'Area text proof'});
+  const at=(x,y)=>evaluate(`(async()=>{const w=${active},b=w.state.document.data.artboards[0],p=w.scope.view.projectToView(new w.scope.Point(b.x+${x},b.y+${y})),r=w.scope.view.element.getBoundingClientRect();return {x:r.x+p.x,y:r.y+p.y}})()`);
+  const snapshot=()=>evaluate(`(async()=>${active}.state.document.serialize())()`),before=await snapshot();
+  await key('t');await drag(await at(12,12),await at(57,75));await inlineReady(evaluate);
+  assert.equal(await snapshot(),before);
+  await inlineSet(evaluate,{text:'Horten ÆØÅ og modCut med automatisk linjebryting.\nAndre avsnitt.',fontSize:18,leading:22,frameWidth:45,frameHeight:63});
+  const node=await evaluate(`(async()=>{const w=${active};return w.state.document.getNode(w.state.selection.ids[0])})()`);
+  assert.equal(node.kind,'area');assert.deepEqual(node.frame,{width:45,height:63});assert.ok(node.layout.lineWidths.length>2);assert.ok(node.layout.lineWidths.every(w=>w<=45+1e-8));assert.equal(node.layout.overflow,false);
+  await finishInline(evaluate);const saved=await snapshot();
+  await evaluate(`(async()=>${active}.handle('undo'))()`);assert.equal(await snapshot(),before);
+  await evaluate(`(async()=>{const w=${active};w.handle('redo');w.select(['${node.id}']);w.handle('edit-text')})()`);await inlineReady(evaluate);
+  await inlineSet(evaluate,{frameHeight:1});assert.equal(await evaluate(`(async()=>${active}.state.document.getNode('${node.id}').layout.visibleLines)()`),0);
+  await finishInline(evaluate);await evaluate(`(async()=>${active}.handle('create-outlines'))()`);await wait(70);
+  assert.equal(await evaluate(`(async()=>${active}.state.document.getNode('${node.id}').type)()`),'text','Overset is protected');
+  assert.ok(await evaluate(`(async()=>${active}.cutSvg(${active}.state.ui.artboardId).errors.length>0)()`));
+  await evaluate(`(async()=>${active}.handle('undo'))()`);assert.equal(await snapshot(),saved);
+  await evaluate(`(async()=>${active}.handle('edit-text'))()`);await inlineReady(evaluate);await inlineSet(evaluate,{frameWidth:85});await finishInline(evaluate);
+  assert.ok(await evaluate(`(async()=>${active}.state.document.getNode('${node.id}').layout.lineWidths.length<${node.layout.lineWidths.length})()`));
+  await evaluate(`(async()=>{const w=${active},{updateNode}=await import('./draw/doc/commands.mjs');w.state.history.execute(updateNode(w.state.document.data.layers[0].id,{transform:[1,.12,.08,1,4,3]}));w.select(['${node.id}']);w.setTool('type')})()`);
+  assert.ok(await evaluate(`(async()=>{const w=${active},p=w.renderer.pointToWorld('${node.id}',[80,60]);return w.renderer.hit(p)==='${node.id}'})()`));
+  const png=await evaluate(`(async()=>{const w=${active};return w.exportBoard(w.state.ui.artboardId,'png',{ppi:72})})()`);
+  await evaluate(`(async()=>${active}.handle('create-outlines'))()`);for(let i=0;i<100&&await evaluate(`(async()=>${active}.state.document.getNode('${node.id}').type!=='group')()`);i++)await wait(30);
+  assert.equal(await evaluate(`(async()=>${active}.state.document.getNode('${node.id}').type)()`),'group');
+  const difference=await evaluate(`(async()=>{const w=${active},urls=[${JSON.stringify(png)},w.exportBoard(w.state.ui.artboardId,'png',{ppi:72})],pixels=[];for(const url of urls){const image=new Image();image.src=url;await image.decode();const c=document.createElement('canvas');c.width=image.width;c.height=image.height;const g=c.getContext('2d');g.drawImage(image,0,0);pixels.push(g.getImageData(0,0,c.width,c.height).data);}let sum=0;for(let i=0;i<pixels[0].length;i++)sum+=Math.abs(pixels[0][i]-pixels[1][i]);return sum/pixels[0].length})()`);
+  assert.ok(difference<.1);await restore();console.log('PASS inline area text: live frames/reflow, overset protection, affine hit testing, export/outlines and undo');
+}

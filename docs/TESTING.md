@@ -127,6 +127,13 @@ units, travel limits and clearance have been verified physically.
 
 ### Project tabs acceptance test
 
+Run `npm run test:e2e:layout` for the shared Cut/Draw header and tool-rail checks.
+With one document open, its tab should share the top row with the file actions.
+Narrow the window or open more documents: the whole tab strip should move to a
+second row, scrolling horizontally when needed. Widen the window or close tabs:
+the strip should return to the top row. Cut's basic tools and zoom controls should
+stay on the left, while Draw retains its full tool rail.
+
 1. Open three tabs with **New** or the plus button. Give each tab different
    geometry, layer operations, raster controls and material selections.
 2. Switch tabs by clicking and with **Cmd/Ctrl+Tab**. Each project must restore

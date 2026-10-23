@@ -5,3 +5,6 @@ dist/
 build/runtime/
 *.log
 .DS_Store
+
+# Local Illustrator references and editable cursor drawings
+/ICONS/illustrator/

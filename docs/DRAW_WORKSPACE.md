@@ -1,7 +1,9 @@
 # modCut Draw: vektoreditor i modCut
 
-> Status: spesifikasjon og byggeplan. Ingen kode er skrevet ennå.
-> Sist oppdatert: 2026-10-14.
+**Ny agent:** Start med [overleveringen](draw/HANDOFF.md) for gjeldende stoppunkt, teststatus og lokale kjøreinstruksjoner.
+
+> Status: Fase 0–5 er gjennomført i grunnform. Laser Preview-basisversjonen er ferdigstilt med grønn npm test på 5a03cca; senere utvidelser har egen teststatus; avanserte begrensninger og øvrige funksjonshull føres separat. Oppdatert oversikt og rekkefølge: [draw/STATUS.md](draw/STATUS.md).
+> Sist oppdatert: 2026-10-15.
 > Målgruppe: utviklere og kodeagenter (Claude Code og Codex) som skal bygge løsningen.
 
 Dette dokumentet er den autoritative planen for Draw, en egen tegneseksjon i modCut.
@@ -109,11 +111,13 @@ To MCP-servere er **valgfrie** hjelpemidler under utviklingen. Ingen av dem er e
 ### 3.1 Bytte mellom Cut og Draw
 
 * I hovedverktøylinjen (`renderer/index.html`, `header.toolbar`) legges en knapp
-  **Draw** med klassen `btn btn--primary btn--sm` (CTA, `--grad-primary`), plassert rett etter
+  **Draw** med klassen `btn btn--primary btn--sm` (CTA, ensfarget `--brand-fill`), plassert rett etter
   `Import`/`Add`-gruppen. Ikon: pennespiss (`draw`), tekst "Draw", tooltip
   `Draw: vektoreditor (Shift+Cmd/Ctrl+D)` hvis tasten er ledig, ellers kun klikk og menyvalg
   `View > Draw workspace`.
-* Når Draw er aktiv, byttes knappen til **Cut** (`btn--secondary`) som tar brukeren tilbake.
+* Når Draw er aktiv, byttes knappens tekst og ikon til **Cut**, som tar brukeren tilbake.
+  Knappen beholder `btn--primary`, hvitt ikon og fast bredde (104 px) i begge moduser.
+  Ikon og tekst midtstilles samlet; bakgrunnen er ensfarget grønn uten gradient i lyst og mørkt tema.
   Ved siden av vises **Send til Cut** som `btn--primary` når minst ett artboard er valgt.
 * Bytte er øyeblikkelig og taper ingen tilstand. Hver prosjektfane husker sist brukte modus.
 * `body` får `data-workspace="cut"` eller `data-workspace="draw"`. All synlighet styres med CSS
@@ -149,10 +153,18 @@ To MCP-servere er **valgfrie** hjelpemidler under utviklingen. Ingen av dem er e
   eller høyreklikk åpner en flyout, Alt+klikk sykler gjennom variantene.
   Nederst: Fill/Stroke-boks med swap (Shift+X), default (D), og Color/Gradient/None (`<`, `>`, `/`).
   Deretter Draw Normal/Behind/Inside og Screen Mode.
+  Nåværende layout har ett synlig valg per verktøygruppe; aktiv variant utelates fra
+  flyouten. På korte vinduer brukes to kompakte kolonner. Uimplementerte verktøy
+  vises deaktivert med fasen i tooltip; de kjører ingen plassholderlogikk.
 * **Kontrollinje** (Illustrators Control bar / Properties): viser kontekstuelle felt: fill,
   stroke, vekt, opacity, X/Y/B/H, og knapper som Image Trace, Expand, Create Outlines,
   Align. Ingen knapp her skal finnes kun her; alt finnes også i meny eller panel.
-* **Paneler til høyre**: dokkbare, kollapsbare, rekkefølge kan dras. Hvert panel kan åpnes fra
+* **Paneler til høyre**: ett valgt panel vises om gangen, med én knapp per panel i
+  ikonrekken. Layers skal ikke samtidig være et permanent ekstra panel.
+  Properties viser utvalg/navn, opacity og formparametre; posisjon/størrelse,
+  fill og stroke redigeres i henholdsvis Transform, Color og Stroke. Dette
+  erstatter gjentatte redigeringsfelt i Properties etter eierens ønske.
+  Senere: dokkbare, kollapsbare paneler der rekkefølge kan dras. Hvert panel kan åpnes fra
   `Window`-menyen og med Illustrator-tasten (F7 Layers, osv.). Tab skjuler alle paneler,
   Shift+Tab skjuler alle unntatt verktøylinjen.
 * **Statuslinje**: zoomprosent (redigerbar), aktivt artboard (nedtrekk og pil), verktøyhint
@@ -174,10 +186,11 @@ To MCP-servere er **valgfrie** hjelpemidler under utviklingen. Ingen av dem er e
 
 * Ett ikonsett i `renderer/draw/icons/`, én SVG-fil per ikon, 24 x 24 viewBox, `currentColor`,
   samme strektykkelse og hjørneradius på alle.
-* Grunnlag: **Material Symbols Outlined** (Apache-2.0), som allerede brukes i Cut. Der Material
-  mangler et fagspesifikt ikon (Direct Selection, Add/Delete Anchor, Anchor Point, Shape Builder,
-  Width, Pathfinder-operasjonene, Outline Stroke, Image Trace, Artboard), tegnes egne ikoner
-  i samme stil. Egne ikoner kan tegnes i Draw når fase 2 er ferdig (dogfooding).
+* Grunnlag for Draw: **Tabler Icons outline** (MIT), låst til `@tabler/icons` 3.49.0.
+  Bruk bibliotekets eksisterende SVG-er med 2-enheters strek. Fagspesifikke verktøy
+  bruker nærmeste passende biblioteksymbol og tydelig tooltip; ikke tegn egne ikoner.
+  `icons/sources.json` dokumenterer kilde, versjon og hash. Lisensen følger ikonene.
+  Eierens godkjente Draw/Cut-ikoner i CTA-knappen fra `ICONS` beholdes.
 * Et byggeskript `scripts/build-icons.mjs` lager en SVG-sprite `renderer/draw/icons/sprite.svg`.
   Verktøylinjen refererer `<use href="#icon-pen">`.
 * Ikonnavnene står i verktøytabellen i kapittel 6 og er bindende for `toolRegistry`.
@@ -301,8 +314,9 @@ interface GeometryKernel {
 * `PathData` = `{ closed: boolean, segments: [{ p:[x,y], in:[dx,dy], out:[dx,dy] }] }[]` (en
   compound path er en liste av subpaths). Fill rule lagres separat (`nonzero`/`evenodd`).
 * Kjernen er **ren funksjon**: samme input gir samme output. Det gjør golden tests mulig.
-* `kernel.mjs` velger implementasjon: wasm hvis den lastes, ellers JS-fallback, og logger
-  valget én gang. Begge implementasjonene kjører samme testsuite.
+* `kernel.mjs` bruker implementasjonen valgt i D0.3 og logger valget én gang per
+  instans. Nå brukes JS-fallback; den avviste WASM-spiken lastes ikke automatisk.
+  En senere godkjent WASM-backend skal kjøre samme testsuite.
 * Kall som tar over 50 ms viser en ikke-blokkerende fremdriftsindikator. Kall kan avbrytes.
 
 ### 4.4 Rendering
@@ -317,6 +331,74 @@ interface GeometryKernel {
 * Overlays tegnes i eget Paper-lag i skjermpiksler (konstant størrelse uansett zoom).
 * Ytelsesmål: 5 000 paths med til sammen 200 000 ankre skal panorere og zoome i minst 50 fps
   på en vanlig bærbar (M1/Ryzen 5). Utenfor skjerm skal items deaktiveres (viewport culling).
+
+### 4.4.1 Cut optimized — forhåndsvisning mens man tegner (D5.1)
+
+**Status 2026-10-19: førsteversjon ferdigstilt som Laser Preview; samlet npm test passerer.** Navn og fargevalg er
+oppdatert etter brukerens godkjenning. Se [`draw/cut-optimized.md`](draw/cut-optimized.md)
+for kontrakt, verifisering og eksplisitte grenser.
+
+* **View > Laser Preview**, avkrysbart, og en synlig knapp ved Outline. Vanlig fargevisning
+  er standard for nye brukere; brukerens siste valg huskes mellom økter. Visningen er per fane.
+* Hvitt artboard; heltrukne røde, skjermfaste linjer for **Cut**, stiplede røde for **Score**,
+  svarte malte områder for **vektorgravering** og gråtonebilder for **Grayscale-gravering**.
+  Tegnforklaringen bruker både linjemønster og tekst, slik at farge ikke er eneste skille.
+* Cut bruker vektorens malte alfa-silhuett, ikke fyllfargens mørkhet. Forhåndsvisningen følger
+  dette. Den lover ikke graveringsdybde, materialresultat eller kjørerekkefølge.
+* Faktiske prosesslag fra **samme fanes Cut** bestemmer operasjonen. Fargen identifiserer
+  laget; den gjetter aldri Cut/Score/Engrave. **Laser processes** lar brukeren eksplisitt
+  konfigurere prosessvalgene. Dette endrer Cut-innstillingene og markerer prosjektet endret.
+  Eksplisitte Draw-prosessvalg beholdes også når Cut er tom, ved fanebytte og ved filåpning.
+* Uavklarte prosesser eller utseender vises med ravfarget prikkontur eller dempet bilde og
+  teller i tegnforklaringen. Første versjon merker avanserte kompositter, uekspanderte effekter,
+  klippede malingsstacker, avansert tekstutseende og rasterdithering uavklart. Ikke vis dette som en eksakt simulering.
+* Skjult, ikke-utskrivbart og Ignore blir ikke presentert som output. Template-lag er dempet
+  referanse. Tegning, redigering, markører og håndtak fortsetter å virke med visningen aktiv.
+* Selve av/på-valget endrer bare visning: modell, originalfarger, Cut-design, eksport,
+  dirty-status og historikk beholdes. Outline og Laser Preview utelukker hverandre; av/på
+  gjenoppretter forrige Outline-visning. Pixel Preview har ingen implementert separat modus her.
+
+**Forklaring:** Første aktivering åpner et tilgjengelig introvindu med **Continue**, **Cancel**
+og **Don’t show this again** / **Ikke vis dette igjen**. Continue aktiverer visningen; Cancel
+beholder forrige visning og lagrer ingen avkrysning. Uten avkrysning vises forklaringen igjen
+ved neste aktivering. Med avkrysning huskes valget per bruker, også etter normal appomstart.
+**Help > Laser Preview explained…** åpner forklaringen igjen, og **Preferences > Skip Laser
+Preview explanation** lar brukeren tilbakestille den. Nye tekster finnes på engelsk og bokmål.
+
+**Fremdrift, første versjon:**
+
+* [x] Krav, prosesskobling og delte regler med Cut/Send to Cut.
+* [x] Ren visningspolicy og midlertidig renderprojeksjon uten endret output.
+* [x] Meny, knapp, tegnforklaring, prosessvalg og Outline-samspill.
+* [x] Forklaringsdialog, Cancel, varig brukerpreferanse, Help/Preferences og oversettelser.
+* [x] Stabilisering: objektvis forklaring av uavklart prosess/utseende, med råd og målrettet Electron-verifisering.
+* [x] Isolert IO/recovery→Laser Preview-kontroll; rettet testkjørerens timer som kunne avslutte ny app.
+* [x] Stiplede enkeltstreker og pilspisser ved vektorgravering følger faktisk heltrukken Cut-output;
+  67 306 canvas-/Cut-rasterpunkter uten avvik (kantpiksler utelatt), inkludert affine foreldre og fast mm-strekbredde.
+* [x] Enhetstester og målrettet Electron med ekte piksler, musegest, uendret SVG/modell/historikk,
+  prosessvalg, filåpning/fanebytte og ekte normal appomstart.
+* [x] Breddeprofiler og flere fyll/streker på vanlige baner/former: første synlige maling
+  og konstant bredde som standard Cut-overføring, 66 912 sammenlignede punkter uten avvik.
+  Klippede stacker og lagret Outline Stroke-overføring markeres fortsatt uavklart.
+* [x] Klipping kontrollert mot Cut: vanlig fylt vektorgravering støttes; strokebredde,
+  hele bilder, Cut/Score-grenser og klippet tekst får eksplisitt uavklart-status og råd.
+* [x] Samlet `npm test` på endelig appkode: Java/bridge/main/renderer/Draw/kontrast og
+  hele Cut-/Draw-E2E inkludert krasjgjenoppretting og alle preview-sammenligninger.
+* [x] Round Corners, Zig Zag, Offset Path og Transform på enkeltstående baner/former:
+  Cut/Score-visning og 66 587 sammenlignede gravering-/Cut-rasterpunkter uten avvik.
+  349 Draw-tester og målrettet recovery passerer; full npm test er ikke gjentatt etter utvidelsen.
+* [x] Pucker & Bloat, Roughen, Twist, Free Distort og Warp på enkeltobjekter;
+  66 798 Cut-raster-/canvaspunkter uten avvik og målrettet recovery passerer.
+* [x] Scribble på enkeltobjekter: fyllbasert prosess og egen strekbredde, hull, stacker,
+  affine foreldre og fast mm-bredde; 64 315 Cut-raster-/canvaspunkter uten avvik.
+  Rettet forbindelser gjennom hull og previewens grense for spisse strekhjørner.
+  353 Draw-tester og ny samlet npm test passerer, inkludert hele Cut-/Draw-E2E,
+  IO/autosave, faktisk krasj/restart og alle preview-sammenligninger.
+* [ ] Full støtte for de utseendene som nå vises uavklart; spesifiseres som egne deloppgaver.
+* [ ] «Engrave as seen» som output-valg, full rasterprosess/DPI-simulering og bevegelsesrekkefølge.
+
+Plan, STATUS og WORK_LOG oppdateres ved hvert ferdige deltrinn, med faktisk kjørte kontroller
+og restpunkter. Ikke bruk ferdigmerking av første versjon som dokumentasjon for utsatte funksjoner.
 
 ### 4.5 Integrasjon med resten av modCut
 
@@ -409,6 +491,7 @@ Kolonnen **Ikon** er navnet i `renderer/draw/icons/`. Hurtigtaster er Illustrato
 | Group Selection | (flyout under A) | `group-select` | Hvert klikk velger ett gruppenivå opp. | 2 |
 | Magic Wand | Y | `magic-wand` | Velg objekter med lik fill, stroke, vekt, opacity eller blend mode, med toleranse. | 3 |
 | Lasso | Q | `lasso` | Frihånds utvalg av ankre. | 3 |
+| Polygonal Lasso | Shift+Q | `polygonal-lasso` | Klikk hjørner for å velge ankre. Dobbeltklikk, Enter eller klikk startpunktet lukker. Backspace fjerner siste punkt, Esc avbryter. | 3 |
 | Artboard | Shift+O | `artboard` | Lag, flytt, skaler, dupliser (Alt+dra), slett artboards. Presets i kontrollinjen. | 1 |
 
 ### 6.2 Tegning og paths
@@ -605,7 +688,7 @@ Paneler leser modell og utvalg, og skriver kun via Commands.
 
 | Panel | Tast | Innhold | Fase |
 |---|---|---|---|
-| Properties | (alltid) | Kontekstuelt: Transform, Appearance-sammendrag, Quick Actions (Image Trace, Expand, Outline Stroke, Create Outlines, Send til Cut). | 1 |
+| Properties | (panelvalg) | Utvalg/navn, opacity og live formparametre. Redigeringsfeltene fra Transform, Color og Stroke gjentas ikke her. Senere: kontekstuelle Quick Actions uten ekstra kopier av paneler. | 1 |
 | Layers | F7 | Tre med lag, underlag og objekter. Øye (synlighet), lås, valgsirkel, dra for å flytte, Alt+klikk øye = solo. Dobbeltklikk lag = Layer Options (navn, farge, Template, Lock, Show, Print, Preview, Dim Images to %). Lag nytt lag, nytt underlag, slett, Collect in New Layer, Release to Layers, Locate Object. | 1 |
 | Artboards | (i Window) | Liste, rekkefølge, navn, Rearrange All, Fit to Artwork Bounds, Fit to Selected Art, Duplicate, Delete, og **Send til Cut** per artboard. | 1 |
 | Color | F6 | RGB, HSB, CMYK, Grayscale, Hex. Fargespekter. | 1 |
@@ -662,7 +745,7 @@ via preload. Menyen i Draw:
   Effects Settings, Distort & Transform, Path (Offset Path, Outline Object, Outline Stroke),
   Pathfinder, Rasterize, Stylize (Drop Shadow, Feather, Inner Glow, Outer Glow, Round Corners,
   Scribble), Blur (Gaussian Blur), Warp. Se 10.7.
-* **View**: Outline/Preview, Pixel Preview, Zoom, Fit Artboard, Fit All, Actual Size, Hide/Show
+* **View**: Outline/Preview, Pixel Preview, Cut Optimized (D5.1, planlagt), Zoom, Fit Artboard, Fit All, Actual Size, Hide/Show
   Edges, Artboards, Bounding Box, Transparency Grid, Rulers, Guides, Smart Guides, Grid, Snap
   to Grid/Point/Pixel, New View (fase 5), **Cut workspace**.
 * **Window**: alle paneler fra kapittel 8, Workspace (Reset, lagre eget oppsett i fase 4).
@@ -688,8 +771,10 @@ Hver underseksjon har **akseptkriterier** (AK). En oppgave er ikke ferdig før A
   innhold hvis "Move/Copy Artwork with Artboard" er på (standard på), Delete sletter.
 * Artboard-navn vises over hvert artboard. Aktivt artboard har tykkere ramme.
 * Maks 1 000 artboards (som Illustrator). Maks størrelse 5 779 x 5 779 mm (227 x 227 in).
-* AK: 3 artboards kan lages, omdøpes, flyttes med innhold, omorganiseres og angres. Eksport
-  av "artboard 2" gir nøyaktig dette artboardets mål.
+* AK i D1.2: 3 artboards kan lages, omdøpes, flyttes med innhold, omorganiseres og angres.
+  Valgt artboard beholder egne mål og verdenskoordinater gjennom rendering og lagring.
+* Oppfølging i eksportoppgavene D2.5–D2.7: eksport av "artboard 2" skal gi nøyaktig
+  dette artboardets mål. Dette krever eksportfunksjonene som etter planen kommer i fase 2.
 
 ### 10.2 Utvalg og transformasjon
 
@@ -789,11 +874,27 @@ Effekter ligger i `appearance.effects` og kan redigeres, slås av og omorganiser
 
 ### 10.8 Tekst
 
+Implementert D2.1b: Fontkit 2.0.4 i main-prosessen brukes foreløpig i stedet for HarfBuzz/FontFace.
+Main sender fontmetadata og beregnet glyfgeometri, ikke fontfiler. Utlegget lagres med teksten og
+brukes direkte til visning, eksport og Create Outlines, slik at alle bruker de samme glyfposisjonene.
+Fontembedding og de øvrige tekstfunksjonene nedenfor gjenstår; se [status](draw/STATUS.md#27-systemfonter-shaping-og-create-outlines-d21b-2026-10-16).
+
+Implementert D2.1c: Type-drag og Area Type lager rektangulære tekstrammer. Edit Text har
+bredde/høyde i mm med live linjebryting; fontmål og leading avgjør hvilke linjer som får plass.
+Overløp bevarer teksten og markeres med rødt pluss. Eksport bruker synlige glyfer, mens Create
+Outlines krever at all tekst får plass. Reflow med canvas-håndtak, tekst i vilkårlige former,
+lenkede rammer og språkavhengig orddeling gjenstår; se [status](draw/STATUS.md#28-rektangulær-områdetekst-d21c-2026-10-16).
+
+Brukerbestilt tillegg: Google Fonts-katalog med nedlasting av komplette fonter/lisenser, lokal
+cache, versjonslåste referanser, numeriske vekter, variable akser og navngitte instanser.
+Send to Cut bruker glyfkonturene automatisk og lar Draw-teksten forbli redigerbar. Manglende
+konturer og overløp blokkerer sending; se [status](draw/STATUS.md#29-google-fonts-og-automatisk-tekst-til-cut-brukerønske-2026-10-16).
+
 * Fonter: main-prosessen lister systemfonter (filbaner, familie, stil) og leser fontfiler på
   forespørsel. Renderer bruker `FontFace` for visning og HarfBuzz for shaping og glyfkonturer.
   Fonter som brukes i dokumentet kan bygges inn (`assets`) hvis lisensen tillater det
   (`fsType`-sjekk), ellers vises advarsel ved åpning på maskin uten fonten.
-* Punkttekst, områdetekst med automatisk bryting, tekst på path.
+* Punkttekst, områdetekst med automatisk bryting, tekst på path (ferdig, se [status](draw/STATUS.md); klammer og Type on a Path Options gjenstår).
 * Character: font, stil, størrelse, leading, kerning (metrics, optical = ut, manuell),
   tracking, horisontal/vertikal skalering, baseline shift, All Caps, Small Caps, understrek.
 * Paragraph: venstre, senter, høyre, justert (med siste linje), innrykk, avstand før/etter.
@@ -833,8 +934,8 @@ Effekter ligger i `appearance.effects` og kan redigeres, slås av og omorganiser
   `renderer/tiffimport.js` og raster-dekodingen fra Cut). PDF/SVG/AI plasseres som vektor
   (kapittel 12).
 * Place-dialogen har avkrysning **Template**. Når den er på (eller når brukeren slipper et
-  bilde med Alt), opprettes et nytt template-lag over aktivt lag med bildet: låst, dimmet
-  50 %, `printable: false`, `reference: true`.
+  bilde med Alt), opprettes et nytt template-lag under aktivt lag med bildet (som Illustrator): låst,
+  dimmet 50 %, `printable: false`. Malen beholdes til neste Place i samme økt.
 * Høyreklikk på bilde: Bruk som referanse (flytt til template-lag), Juster opacity, Lås,
   Image Trace, Crop Image, Embed/Unlink, Show in Folder.
 * Link vs. embed: standard er **embed** (dokumentet skal være portabelt som `.modcut` i dag).
@@ -990,9 +1091,12 @@ artboard -> resolveScene({ artboards:[id] }, { forCut: true, strokes, rasterEffe
 * Store binærdata (bilder, fonter) lagres i `draw.assets` som base64 med sha256-nøkkel og
   deles hvis samme bilde brukes flere ganger. Hvis filen blir over 50 MB, foreslå
   "Link i stedet for embed" (fase 4).
-* Versjon 3-filer åpnes som før, med tomt Draw-dokument. Version 4-filer åpnet i eldre modCut:
-  den eldre appen ignorerer `draw` og viser en advarsel om at tegnedata ikke kan redigeres
-  (legg inn sjekken i `app.js` nå, i fase 0, slik at den finnes i neste release).
+* Versjon 1–3-filer åpnes som før, med tomt Draw-dokument. Ukjent Draw-versjon i en
+  støttet prosjektfil åpnes skrivebeskyttet med advarsel; originaldata beholdes ved lagring.
+  Prosjektversjoner nyere enn 4 avvises før arbeidsflaten endres.
+* Allerede utgitte eldre modCut-versjoner kan ikke få en advarsel retroaktivt. De kan
+  ignorere `draw` og miste det ved ny lagring. V4-prosjekter må lagres i denne eller
+  en nyere versjon. Kompatibilitetssjekken gjelder denne versjonen og senere utgaver.
 * `migrate.mjs` har en migreringsfunksjon per Draw-versjon og tester for hver.
 * Autosave/recovery serialiserer `draw` inkrementelt (maks hvert 2. sekund ved endring).
 * Eget eksportformat **`.modcut-draw`** er ikke nødvendig; `.modcut` holder. Alle vanlige
@@ -1015,7 +1119,8 @@ artboard -> resolveScene({ artboards:[id] }, { forCut: true, strokes, rasterEffe
 | **harfbuzzjs** | MIT (HarfBuzz: "Old MIT") | Tekstshaping | wasm, i renderer. |
 | **opentype.js** eller **fontkit** | MIT | Glyfkonturer, fontmetadata | Velg én i D2.1. |
 | **imagetracerjs** | Unlicense (public domain) | Fallback for Image Trace | Ren JS, i worker. |
-| **Material Symbols** | Apache-2.0 | Ikoner | Allerede brukt. |
+| **Material Symbols** | Apache-2.0 | Eksisterende Cut-ikoner | Allerede brukt. |
+| **Tabler Icons outline** | MIT | Draw-ikoner | 3.49.0, lokalt SVG-utvalg med kilder og lisens. |
 | **UTIF.js** | MIT | TIFF | Finnes allerede. |
 | **Inkscape** | GPL-2.0+ | **Kun referanse**: oppførsel, testfiler vi lager selv, testorakel via CLI i CI | Aldri kopier kode. |
 | **Potrace** | GPL-2.0 | **Ikke** bruk (lisens). | Bruk VectorCraft `trace` eller imagetracerjs. |
@@ -1042,6 +1147,11 @@ og spørsmålet tas opp igjen før fase 4:
    passerer `qpdf --check`.
 5. Crate-API-ene kan pakkes inn uten å forke mer enn 200 linjer av upstream.
 6. Bygget kjører i CI på Linux, macOS og Windows (`.github/workflows/ci.yml`).
+
+D0.3-resultat (2026-10-14): bygget lykkes uten upstream-patcher, men WASM er
+15,58 MB rått / 5,35 MB gzip og overskrider kriterium 1. **JS-fallback velges for
+fase 1–3.** Manuell PDF-kontroll og CI på tre operativsystemer er uverifisert.
+Full målerapport og begrensninger: [`draw/spike-vectorcraft.md`](draw/spike-vectorcraft.md).
 
 ---
 
@@ -1155,6 +1265,9 @@ modCut kan senere eksponere en egen MCP-server (via main-prosessen) med kommando
 `draw.createArtboard`, `draw.applyCommand`, `draw.export`, `draw.sendToCut`. Fordi all mutasjon
 allerede går gjennom Commands, er dette en tynn adapter. Ikke en del av fase 1 til 4.
 
+**Gjort (fase 5):** Preferences > Automation starter en lokal MCP-server med token; verktøyene og
+sikkerheten er beskrevet i [STATUS.md](draw/STATUS.md) 2.38.
+
 ---
 
 ## 18. Byggeplan: faser og oppgaver
@@ -1163,7 +1276,22 @@ Hver oppgave har id, avhengigheter, filer den eier, og akseptkriterier. En agent
 oppgave per PR. Oppgaver i samme fase uten avhengighet til hverandre kan kjøres parallelt
 av forskjellige agenter fordi de eier ulike filer.
 
-### Fase 0: Fundament (ingen synlig funksjon ennå)
+### Faseoversikt
+
+| Fase | Leveranse | Status |
+|---|---|---|
+| 0 — Fundament | Workspace-bytte, dokumentmodell, geometri-kjerne, keymap og lagring. | Fullført: D0.1–D0.6. Draw-data lagres i `.modcut` v4 og krasjgjenopprettes per fane. |
+| 1 — Grunnleggende tegning | Artboards, markering, Pen, former, lag, bitmap-referanser og Send til Cut v1. | Påbegynt: D1.1–D1.7 fullført; D1.8 er neste. |
+| 2 — Illustrator-kjernen | Tekst, Pathfinder, gradienter, import/eksport og Send til Cut v2. | Ikke startet. |
+| 3 — Avansert redigering og trace | Outline Stroke, effekter, Image Trace, flere redigeringsverktøy og AI/DXF-eksport. | Ikke startet. |
+| 4 — Fullpakke | Width, Blend, brushes, flere effekter/eksportformater og ytelsespass. | Ikke startet. |
+| 5 — Polering og ekstra | Lokalisering, ekstra tekstverktøy, trykkfunksjoner og valgfri MCP-server. | Utsatt til fase 0–4 er ferdige. |
+
+Fasene følges i rekkefølge som leveransemilepæler. Oppgaveavhengighetene i tabellene under
+styrer hva som kan bygges underveis. En fase markeres først ferdig når alle oppgavene i
+fasen og relevante kvalitetskrav i kapittel 19 er oppfylt. Detaljert status føres i kapittel 23.
+
+### Fase 0: Fundament (ingen tegneverktøy ennå)
 
 | Id | Oppgave | Avhenger av | Eier filer | Ferdig når |
 |---|---|---|---|---|
@@ -1239,6 +1367,26 @@ Vertical Type, Touch Type, Glyphs-panel, Scribble, Package, PDF/X-4, bleed og me
 AVIF/GIF-eksport, PLT-eksport, EPS-import, egendefinerte hurtigtaster, modCut MCP-server,
 lokalisering (norsk/engelsk, samme system som resten av appen).
 
+### Laser Preview og gravering som vist
+
+Laser Preview er implementert i første versjon; se D5.1 i kapittel 4.4.1.
+«Engrave as seen» (å flate ut transparens/blending til graveringsbilder ved Send to Cut)
+er fortsatt planlagt, ikke implementert. Dette er en egen output-endring og skal ikke
+blandes sammen med den rene visningsmodusen.
+
+### Planlagt senere: flere språk (ikke startet)
+
+Norsk grensesnitt er ikke et krav, men siden lokaliseringen finnes (se [STATUS.md](draw/STATUS.md) 2.39),
+skal den holdes ved like og utvides med **tysk, fransk og spansk**. Ikke start før eieren sier fra. Arbeidet:
+
+* En katalog per språk (`renderer/i18n-de.mjs`, `i18n-fr.mjs`, `i18n-es.mjs`) med samme nøkler som den norske,
+  registrert i `CATALOGS` og `LANGUAGES` i `renderer/i18n.mjs`, og i `resolveLanguage` (de, fr, es).
+* Menyunntak som «Cut» (Edit > Cut mot laseroperasjonen) i `MENU_WORDS` i `electron/main.mjs` for hvert språk.
+* En test som sjekker at hver katalog har de samme nøklene som den norske og samme plassholdere.
+* Faguttrykk fra Illustrators egne utgaver på disse språkene der det finnes, og gjennomlesing av noen som kan språket.
+* E2E: `--draw-language` utvides med ett nytt språk om gangen.
+* Tekster som blir lengre (tysk særlig) må sjekkes i paneler, verktøylinje og dialoger.
+
 ---
 
 ## 19. Testing og kvalitetskrav
@@ -1280,8 +1428,9 @@ Denne seksjonen er skrevet direkte til kodeagentene.
 
 1. **Les først**: dette dokumentet, `README.md`, `ROADMAP.md`, `design/tokens.css` og filene
    oppgaven nevner. Ikke les hele `bed.js` hvis oppgaven ikke trenger det; den er stor.
-2. **Én oppgave, én gren, én PR.** Grennavn: `draw/<oppgave-id>-<kort-navn>`, f.eks.
-   `draw/D1.5-pen-tool`. PR-tittel starter med oppgave-id.
+2. **Felles arbeidsgren: `feat/vector-draw`.** Alle Draw-oppgaver bygges videre på
+   denne grenen, etter eierens ønske. Ikke opprett nye grener per deloppgave. Hold
+   oppgavene avgrenset og oppdater status etter hvert trinn.
 3. **Hold deg innenfor "Eier filer".** Trenger du å endre en fil en annen oppgave eier, gjør
    minst mulig endring og skriv det i PR-beskrivelsen.
 4. **Ikke endre** `renderer/bed.js` utover API-et beskrevet i 14.2, og ikke endre
@@ -1308,8 +1457,8 @@ Forslag til prompt for en agent:
 ```text
 Du jobber i repoet sirbull/modCut. Les docs/DRAW_WORKSPACE.md, spesielt kapittel 2, 4, 20
 og oppgave <ID> i kapittel 18. Implementer kun oppgave <ID>. Hold deg til filene oppgaven eier.
-Skriv tester, kjør `npm run test:draw` og `npm test`, oppdater statussjekklisten, og lag én PR
-fra grenen draw/<ID>-<navn>.
+Skriv tester, kjør `npm run test:draw` og `npm test`, og oppdater statussjekklisten.
+Arbeid videre på fellesgrenen feat/vector-draw; ikke opprett en ny gren for oppgaven.
 ```
 
 ---
@@ -1347,43 +1496,425 @@ fra grenen draw/<ID>-<navn>.
 
 ## 23. Statussjekkliste
 
-Oppdateres i samme PR som fullfører oppgaven.
+* [x] D5.1 Laser Preview — første versjon implementert og målrettet verifisert; se grenser og oppfølging i 4.4.1.
 
-* [ ] D0.1 Workspace-bytte
-* [ ] D0.2 Dokumentmodell og historikk
-* [ ] D0.3 VectorCraft-spike
-* [ ] D0.4 GeometryKernel og worker
-* [ ] D0.5 Keymap og verktøyregister
-* [ ] D0.6 `.modcut` v4
-* [ ] D1.1 Render-adapter
-* [ ] D1.2 Artboards
-* [ ] D1.3 Selection, Hand, Zoom
-* [ ] D1.4 Direct Selection
-* [ ] D1.5 Pen og ankerverktøy
-* [ ] D1.6 Former
-* [ ] D1.7 Rotate, Reflect, Scale
-* [ ] D1.8 Grunnpaneler
-* [ ] D1.9 Kontrollinje og statuslinje
-* [ ] D1.10 Group, Arrange, Clipboard
-* [ ] D1.11 Place bitmap og template-lag
-* [ ] D1.12 Send til Cut v1
-* [ ] D2.1 Tekst
-* [ ] D2.2 Pathfinder, Compound, Clipping
-* [ ] D2.3 Gradienter og Swatches
-* [ ] D2.4 Path-kommandoer
-* [ ] D2.5 SVG eksport/import
+Oppdateres når oppgaven fullføres. Løpende arbeidslogg: [`draw/WORK_LOG.md`](draw/WORK_LOG.md).
+Oversikt over hva som er gjort og gjenstår, inkludert delvis ferdige oppgaver: [`draw/STATUS.md`](draw/STATUS.md).
+
+* [x] D0.1 Workspace-bytte
+* [x] D0.2 Dokumentmodell og historikk
+* [x] D0.3 VectorCraft-spike
+* [x] D0.4 GeometryKernel og worker
+* [x] D0.5 Keymap og verktøyregister
+* [x] D0.6 `.modcut` v4
+* [x] D1.1 Render-adapter
+* [x] D1.2 Artboards
+* [x] D1.3 Selection, Hand, Zoom
+* [x] D1.4 Direct Selection — ankre/håndtak, live corners og automatisk shape-expansion
+* [x] D1.5 Pen og ankerverktøy
+* [x] D1.6 Former
+* [x] D1.7 Rotate, Reflect, Scale med Copy og Transform Again
+* [x] D1.8 Grunnpaneler — Properties, Layers/template-lag, Transform, Align, Color, Stroke og Fill/Stroke-boks
+* [x] D1.9 Kontrollinje og statuslinje
+* [x] D1.10 Group, Arrange, Clipboard
+* [x] D1.11 Place bitmap og template-lag (høyreklikkmeny, Crop Image og Links gjenstår, se [STATUS.md](draw/STATUS.md))
+* [x] D1.12 Send til Cut v1 (se [STATUS.md](draw/STATUS.md) for hva v1 dekker)
+* [x] D2.1 Tekst (Small Caps, understreking, optisk kerning og redigering direkte på lerretet gjenstår, se [STATUS.md](draw/STATUS.md))
+* [x] Type-menyen: Size, Glyphs, punkt-/områdetekst, Change Case, Smart Punctuation, spesialtegn, plassholdertekst og retning (STATUS.md 2.43)
+* [x] Appearance i Properties og fx-effektmenyen som i Illustrator, med Convert to Shape og Mosaic (STATUS.md 2.44)
+* [x] D2.2 Pathfinder, Compound, Clipping (lagklipping gjenstår, se [STATUS.md](draw/STATUS.md))
+* [x] D2.3 Gradienter og Swatches (PDF-shading gjenstår, se [STATUS.md](draw/STATUS.md))
+  * [x] Gradienter som i Illustrator, del 1: Gradient-panelet med Recent, Presets og dragbare stopp (STATUS.md 2.40)
+  * [x] Del 2: gradient på strek, Within, Along og Across stroke (stiplet Along/Across gjenstår)
+  * [x] Del 3: gradient-annotator på lerretet for Linear og Radial (ellipse-aspekt for Radial gjenstår)
+  * [x] Del 4: Freeform-gradient med punkter (Spread-ring, opasitet per punkt) og linjer mellom punkter
+* [x] Recolor (Recolor Artwork med fargehjul, harmoniregler og fargebiblioteker), STATUS.md 2.41
+  * [x] Del 1: kjernen (farger, hjul, regler, biblioteker)
+  * [x] Del 2: panelet under Window, med E2E (`--draw-recolor`)
+  * [x] Del 3: Fill/Stroke/Alt-omfang og kopiering av stilen mellom fyll og strek
+  * [x] Del 4: Colors (redusere til N farger) og Color Theme Picker
+* [x] Innstillinger med seksjoner og Properties uten utvalg (som Illustrator), STATUS.md 2.42
+  * [x] Del 1: Innstillinger-vinduet med seksjoner til venstre, hurtigtaster og alt-i-ett eksport/import
+  * [x] Del 2: Properties uten utvalg: Ruler & Grids, Guides og Snap Options som ikonknapper, med snapping (Pen og Snap to Pixel gjenstår)
+  * [x] Del 3: visuell Smart Guides-side og direkteknapp i Properties; farge, justering, objektkontur,
+    målemerker, lik avstand og toleranse virker live og lagres som app-preferanser (`--draw-rulers`)
+* [x] D2.4 Path-kommandoer (Smooth og Split Into Grid gjenstår, se [STATUS.md](draw/STATUS.md))
+* [x] D2.5 SVG eksport/import (mask og filter rasteriseres fortsatt, se [STATUS.md](draw/STATUS.md))
 * [ ] D2.6 PDF-eksport
-* [ ] D2.7 Raster-eksport
-* [ ] D2.8 Pencil, Shear, Eyedropper m.fl.
-* [ ] D2.9 Transparency, History, Info, kommandosøk
-* [ ] D2.10 Send til Cut v2
-* [ ] D3.1 Outline Stroke og Expand
-* [ ] D3.2 Appearance og effekter
-* [ ] D3.3 Image Trace
-* [ ] D3.4 Shape Builder, Eraser, Knife m.fl.
-* [ ] D3.5 Magic Wand, Lasso, Select-meny
-* [ ] D3.6 Free Transform, Transform Each, Split Into Grid
-* [ ] D3.7 AI- og DXF-eksport
-* [ ] D3.8 Links, Crop Image, Document Info, Rediger i Draw
-* [ ] D4.1 til D4.6 Fullpakke
-* [ ] Fase 5
+* [x] D2.7 Raster-eksport (PNG, JPEG, WebP og Export for Screens, se [STATUS.md](draw/STATUS.md))
+* [x] D2.8 Pencil, Shear, Eyedropper m.fl.
+* [x] D2.9 Transparency, History, Info, kommandosøk (snapshots i History gjenstår, se [STATUS.md](draw/STATUS.md))
+* [x] D2.10 Send til Cut v2 (varsel om objekter utenfor bedet gjenstår, se [STATUS.md](draw/STATUS.md))
+* [x] D3.1 Outline Stroke og Expand (effekter, stiplede streker og pilspisser gjenstår, se [STATUS.md](draw/STATUS.md))
+* [x] D3.2 Appearance og effekter (Glow, Feather, Blur og gruppeeffekter gjenstår, se [STATUS.md](draw/STATUS.md))
+* [x] D3.3 Image Trace (live trace gjenstår, se [STATUS.md](draw/STATUS.md))
+* [x] D3.4 Shape Builder, Eraser, Knife m.fl. (Path Eraser gjenstår, se [STATUS.md](draw/STATUS.md))
+* [x] D3.5 Magic Wand, Lasso, Select-meny (se [STATUS.md](draw/STATUS.md))
+* [x] D3.6 Free Transform, Transform Each, Split Into Grid (perspektiv gjenstår, se [STATUS.md](draw/STATUS.md))
+* [x] D3.7 AI- og DXF-eksport (Illustrators private AI-data gjenstår, se [STATUS.md](draw/STATUS.md))
+* [x] D3.8 Links, Crop Image, Document Info, Rediger i Draw (lenkede bilder og beskjæringshåndtak gjenstår, se [STATUS.md](draw/STATUS.md))
+* [x] D4.1 Width og width profiles (gradient langs strek og stiplet profil gjenstår, se [STATUS.md](draw/STATUS.md))
+* [x] D4.2 Blend (spine gjort; tekst som nøkkel og direkte redigering av ryggraden gjenstår, se [STATUS.md](draw/STATUS.md))
+* [x] D4.3 Warp, Live Pathfinder og opacity masks (Rasterize-effekt og Envelope gjenstår, se [STATUS.md](draw/STATUS.md))
+* [x] D4.4 Paintbrush og Blob Brush (art-, scatter- og pattern-pensler gjenstår, se [STATUS.md](draw/STATUS.md))
+* [x] D4.5 EPS/TIFF, Graphic Styles, Navigator, Rotate View og Asset Export (se [STATUS.md](draw/STATUS.md) 2.32)
+* [x] D4.6 Ytelsespass (se [STATUS.md](draw/STATUS.md) 2.33)
+* [x] Fase 5 (PLT, GIF, Package, hurtigtaster, Glyphs, Scribble, Touch Type, Vertical Type, PDF/X-4, EPS-import, MCP-server og lokalisering; AVIF venter på Chromium; se [STATUS.md](draw/STATUS.md) 2.34 til 2.39)
+
+### Implementasjonsnotater D0.1
+
+* Draw/Cut-knapp, lazy canvas og eget PaperScope per prosjektfane, CSS via
+  `data-workspace`, validert IPC og en Draw-meny uten Cut-akseleratorer er implementert.
+* Ingen Draw-hurtigtast innføres før den sentrale keymap-motoren i D0.5.
+* Smale integrasjonsendringer i `renderer/app.js` knytter modus og opprydding til
+  prosjektfanene og hindrer at Draw-taster/menyvalg endrer skjult Cut-innhold.
+* E2E i `electron/e2e/draw-workflows.mjs` kjøres gjennom eksisterende suite og
+  kontrollerer canvas, menyer, modus per fane samt uendret Cut-geometri, zoom og lag.
+  Kan også kjøres isolert med `npm run test:e2e:draw`.
+* Tegneverktøy, Send til Cut og lagring av Draw-data/modus på disk kommer i senere oppgaver.
+
+Verifisering 2026-10-14: `npm run test:e2e:draw` passerer. Sidecar-, bridge-, main-,
+renderer- og kontrastsjekkene i `npm test` passerer. Hele E2E-suiten er foreløpig
+ikke grønn: bildebeskjæring feiler også på uendret HEAD (`439379e`); en annen lokal
+kjøring stoppet i Cut-testen for Backspace. Ingen endring i disse funksjonene inngår i D0.1.
+
+### Implementasjonsnotater D0.2
+
+* `renderer/draw/doc/` har versjon 1 av Draw-modellen, defaults og validering,
+  immutable snapshots, indeksert nodeoppslag, artboards og utvalg med ankermarkering
+  og navngitte utvalg. Ingen DOM, Paper.js eller nye avhengigheter.
+* Struktur- og egenskapsendringer går via Commands. Kandidatdokumenter valideres
+  før commit. Paths krever identitetsmatrise; transformasjon av ankre kommer med verktøyene.
+* History støtter undo/redo, nested synkrone transaksjoner med rollback, sammenslåing
+  med eksplisitt `mergeKey`, endringsvarsler og saved/dirty-grenser. Historikken lagrer
+  endrede felt/subtrær, ikke et helt dokument for hvert angresteg.
+* Lasting fyller manglende defaults og rapporterer reparasjoner. Ugyldige subtrær
+  holdes utenfor et skrivebeskyttet dokument i safe mode; originaldata følger rapporten.
+  Ukjente versjoner og ikke-JSON-data avvises. Uversjonerte utkast tolkes som v1;
+  det finnes ingen eldre Draw-versjon å migrere fra ennå.
+* API og brukseksempel: [`draw/document-model.md`](draw/document-model.md).
+* UI-integrasjon, filformat v4, autosave og recovery ble koblet inn i D0.6 (se under).
+
+Verifisering 2026-10-14: `npm run test:draw` passerer 16 tester og måler 100 %
+linjedekning i alle seks `doc/`-modulene (krav: minst 95 %). Property-testen bruker
+fast seed og 1 000 blandede kommandoer; hvert mellomsteg og sluttdokumentet blir
+identiske etter undo/redo. Hele `npm test` kjørte sidecar-, bridge-, main-, renderer-,
+Draw- og kontrastsjekkene grønt, men stoppet i den tidligere påviste E2E-feilen
+«dragging a crop edge must update the crop» i bildeeditoren.
+
+### Implementasjonsnotater D0.3
+
+* Pinnet VectorCraft 0.11.0 ved commit `0a33cff3f6e2a1e9e672f4c3816f58cd8d3d032e`;
+  egen eksperimentell crate og reproduserbart byggeskript, uten upstream-endringer.
+* 30 foreløpige boolean-referanser, tracing av to 2 MP-bilder i ekte Web Worker
+  og PDF-eksport/parsing er målt. Resultater for alle seks kriterier, inkludert
+  eksplisitt uverifiserte krav, står i [`draw/spike-vectorcraft.md`](draw/spike-vectorcraft.md).
+* Beslutning: JS-fallback i D0.4, fordi WASM-størrelsen overstiger budsjettet.
+  Spiken regnes ferdig som evaluering; VectorCraft er ikke godkjent som kernel.
+* `THIRD_PARTY_NOTICES.md` er opprettet én oppgave tidligere enn planlagt, fordi
+  lisensreglene krever notat ved innføring av eksperimentets avhengigheter.
+* Ingen runtime-integrasjon, ingen ny Rust-CI og ingen endring av Cut i denne oppgaven.
+
+### Implementasjonsnotater D0.4
+
+* Promise-basert `GeometryKernel` med modul-worker og ren JS-fallback er implementert
+  i `renderer/draw/geom/kernel*.mjs`, uten DOM/Paper.js eller dokumentmutasjoner.
+  `flatten` og `boolean('unite')` virker; øvrige metoder avviser med `NOT_IMPLEMENTED`.
+* Kall tar en kopi av inngangsdata ved innsending og støtter AbortSignal, kø, 10 s
+  timeout og gjenoppretting etter worker-feil. Aktiv avbryting terminerer workeren;
+  senere kall/kø kan bruke en ny. Busy-hook varsler etter 50 ms, og ryddes ved alle utfall.
+* Fallbacken bruker eksakt pinnet `clipper-lib@6.4.2` (Boost 1.0, med Tom Wu/JSBN-notis)
+  og egen adaptiv Bézier-flattening. Dette er Clipper 6 i ren JS, ikke Clipper2/WASM:
+  valgt som et lite, avhengighetsfritt skjelett med nonzero/evenodd-støtte uten bundler.
+  Kurver approksimeres, og backendmetadata merker dette eksplisitt.
+* Standard toleranse er 0,001 mm; union bruker heltallsskala 1 000 000 per mm.
+  12 foreløpige union-referanser fra D0.3 passerer. Manuelt godkjente Pathfinder-goldens
+  og full støtte for geometrioperasjoner kommer i senere oppgaver.
+* Lisensnotater/-tekster, npm-lock og pakking er oppdatert. Smale endringer utenfor
+  kernel-filene gjelder avhengigheten og pakkeoppsettet samt eksisterende Draw-E2E.
+* API, presisjon, grenser og feilkoder: [`draw/geometry-kernel.md`](draw/geometry-kernel.md).
+  Ingen tegneverktøy, modell-UI-integrasjon eller nytt statuspanel er lagt til i D0.4.
+
+Verifisering 2026-10-14: `npm run test:draw` passerer 42 tester, inkludert reelle
+Node-workers, 12 union-referanser, timeout, aktiv/kø-avbryting, restart, protokollfeil
+og busy-hendelser. `npm run test:e2e:draw` passerer med ekte Web Worker i Electron
+og uendret Cut-tilstand. Hele `npm test` passerer i denne kjøringen, også full E2E
+med native Close/Quit og krasjgjenoppretting. Tidligere dokumenterte E2E-feil er
+historiske observasjoner; det påstås ikke at D0.4 har rettet bildeeditoren eller Cut.
+
+### Implementasjonsnotater D0.5
+
+* `keymap.mjs` har 148 oppføringer og konfliktkontroll for Draw/globale kontekster,
+  Cmd/Ctrl, fysisk tegnsetting, ISO-alternativ for Line, tekstfelt, IME og AltGraph.
+  Space/Mod/Alt-overstyringer avsluttes ved slipp, blur og modusbytte.
+* `tools/registry.mjs` beskriver alle 49 verktøy med binding-id, gruppe, fase og
+  valgfri verktøyklasse. Manglende implementasjoner er utilgjengelige, ikke dummy-verktøy.
+* 49 24×24 SVG-ikoner fra Tabler Icons outline 3.49.0 (MIT), med currentColor
+  og 2-enheters strek. Originale forsøk er erstattet etter eierens ønske om et
+  ikonbibliotek. Kilder/hash/lisens er bevart lokalt; `npm run build:icons`
+  verifiserer kildene og bygger deterministisk sprite uten nettverk.
+* Smal integrasjon i `renderer/app.js` og `electron/main.mjs`: støttede Draw-
+  felleskommandoer og menyakseleratorer bruker tabellen. `Mod+Shift+O` utløser
+  fortsatt Add i Cut, men er reservert til Create Outlines i Draw. Add i Draw har
+  derfor ingen akselerator. Cut-implementasjonen og eierens CTA-stil er bevart.
+* Native Preferences i Draw følger `Mod+K`; `Mod+Comma` er også en renderer-alias.
+  Ingen workspace-hurtigtast legges til siden `Mod+Shift+D` allerede er reservert.
+* Hurtigtastoversikt-/toolbar-data er klare, men nye tegneverktøy og deres UI
+  aktiveres først i sine planlagte oppgaver. API: [`draw/keymap-and-tools.md`](draw/keymap-and-tools.md).
+
+Verifisering 2026-10-14: 52 Draw-tester passerer og måler 100 % linjedekning i
+keymap og register. Ingen kontekstkonflikter er funnet. Draw-E2E passerer med
+hurtigtast for ny fane, kontroll av native akselerator og rendering av alle
+49 eksterne SVG-symboler. Hele `npm test` passerer sidecar/bridge/main/renderer/
+Draw/kontrast, men stopper i den tidligere påviste bildebeskjæringstesten
+«dragging a crop edge must update the crop». Neste oppgave er D0.6.
+
+
+### Implementasjonsnotater D0.6
+
+* `.modcut` v4 legger til `draw` og valgt `workspace`. Cut-feltene beholder samme
+  struktur. V1–v3 åpnes med et nytt, tomt Draw-dokument; åpning endrer ikke kildefilen.
+* `draw/io/project.mjs` eier per-fane DrawDocument, History og Selection uavhengig
+  av lazy canvas/PaperScope. Uendrede, immutable modell-snapshots gjenbrukes ved autosave.
+  History og Selection er midlertidige og lagres ikke. Recovery-filen skrives fortsatt
+  som ett komplett, atomisk JSON-snapshot; dette er ikke en differensiell filjournal.
+* Recovery beholder alle faners Draw-data, workspace og separate Cut/Draw-dirty-flagg.
+  Draw-endringer samles i et intervall på inntil 2 sekunder uten debounce-sult ved
+  kontinuerlig redigering. Cut beholder 350 ms debounce med samme øvre ventetid.
+* Lukk/avslutt og import/erstatt kontrollerer samlet dirty-status. Async lagring markerer
+  bare faktisk skrevet Draw-historikktilstand og Cut-revisjon som lagret, også ved fanebytte.
+  En pending savepoint stopper coalescing over lagringsgrensen. Avbrutt/feilet lagring
+  markerer ikke dokumentet som lagret. Autosave fortsetter etter avbrutt Close/Quit.
+* Ugyldig/ukjent Draw-skjema gir skrivebeskyttet visning og kompatibilitetsadvarsel.
+  Originaldata beholdes ved lagring og recovery. Begrensningen for eldre utgitte apper
+  er beskrevet i kapittel 15 og [`draw/project-io.md`](draw/project-io.md).
+* Smale støtteendringer utenfor dokument-IO: History har snapshot-savepoints,
+  Draw-shell mottar modelltilstand, og `electron/project-store.mjs` skriver prosjektfiler
+  via unik temp-fil + rename. `recovery-store.mjs` køer writes/clear for å unngå tmp-fil-race.
+  Ingen endringer i `bed.js` eller sidecar; ingen ny avhengighet eller ny arbeidsgren.
+
+Verifisering 2026-10-14: 58 Draw-tester passerer med 100 % linjedekning i prosjekt-IO
+og doc-modulene. 11 main-tester passerer, inkludert atomisk prosjektlagring og samtidige
+recovery-operasjoner. Draw-E2E lagrer/åpner tomme og befolkede dokumenter, sjekker v3,
+ukjent Draw-versjon uten datatap, dirty-grenser, native Close/Quit, kontinuerlig autosave
+og to faner gjennom faktisk SIGKILL/restart. Hele `npm test` passerte denne gangen,
+inkludert eksisterende Cut-E2E og krasjgjenoppretting. Tidligere crop-feil er historiske
+observasjoner, ikke rettelser i D0.6. Fase 0 er ferdig; neste oppgave er D1.1.
+
+### Implementasjonsnotater D1.1
+
+Render-adapteren i `renderer/draw/render/paper-adapter.mjs` beholder uendret
+geometri og gruppebarn, differensierer artboards og oppdaterer utseende og
+transformasjoner separat. Culling følger alle eksisterende visningskontroller;
+modellbaserte verdensrammer beholder korrekt utvalgsstørrelse utenfor skjermen.
+Outline / Preview nås med Ctrl/Cmd+Y, View-menyen og Outline-knappen. Bilder vises
+som rammer i Outline og beholder kildepikslene i Preview. Markerings-overlayet
+ligger separat i `render/overlays.mjs`.
+
+67 Draw-enhetstester og komplett Draw-E2E passerer på Windows, inkludert sen
+bildeinnlasting, Cut-scope, prosjektlagring og faktisk krasjgjenoppretting.
+Full `npm test` passerer sidecar, bridge, main, renderer, Draw og kontrast, men
+stopper på den tidligere dokumenterte crop-E2E-feilen. Windows-tilpasninger for
+ikonlinjeskift og testens fillesing er dokumentert i
+[`draw/WORK_LOG.md`](draw/WORK_LOG.md). Ytelsesmålet i 4.4 er fortsatt umålt og
+følges opp i D4.6. Neste oppgave er D1.2.
+
+### Implementasjonsnotater — verktøylinje, D1.2, D1.3 og D1.6
+
+Alle 49 verktøydefinisjoner tilhører én gruppe hver. Verktøylinjen viser ett ikon
+per gruppe og flyouten viser de øvrige variantene. Fill/Stroke-boksen bruker de
+samme Commands som farge-/strekpanelene og hurtigtastene. Høyresiden monterer
+ett panel; Layers-tre og overskrift finnes bare én gang. Properties gjentar
+ikke Transform-, Color- eller Stroke-editoren. Full D1.8/D1.9 med blant annet
+template-lag og kontekstuell kontrollinje gjenstår.
+
+Artboards har aktivt valg, navn og ramme, modellgrenser på 1 000 artboards og
+5 779 mm per side, størrelsespresets og en New Document-dialog. Artboard-verktøyet
+(Shift+O) oppretter, flytter, skalerer og dupliserer med Alt. Panel og statusvalg
+navigerer mellom dem. Flytting/kopiering av redigerbart innhold, rekkefølge,
+omorganisering og sletting går gjennom atomisk historikk. Første åpning av en
+eksisterende Draw-tilstand bruker det eksisterende dokumentet; New åpner dialogen.
+Eksport-AK er presisert som oppfølging i D2.5–D2.7, der eksport implementeres.
+
+Selection har åtte håndtak, Shift/Alt-regler, rotasjon, marquee, Shift-valg,
+Alt-kopi, piltaster og smart guides med fire skjermpikslers toleranse. Hand og
+Zoom kan holdes midlertidig med Space og Mod+Space. Vanlig rulling panorerer,
+Mod+rulling zoomer rundt pekeren og følger innstillingen for motsatt zoomretning.
+
+Former har faktisk form-preview, Shift/Alt/Space under tegning og klikk-dialog
+for eksakte mål. Piltaster justerer polygon-/stjernepunkter og hjørneradius;
+Mod under stjernetegning justerer indre radius. Properties redigerer levende
+hjørneradius, sider, stjerneparametre og ellipse-pievinkler.
+
+79 Draw-tester og komplett Draw-E2E er grønne, med faktiske muse-/tastaturhandlinger,
+prosjektlagring, krasj/restart og visuell kontroll i lyst/mørkt tema. Temabytte
+setter riktig Cut-scope før eksisterende bed-redraw, slik at Cut-geometri ikke
+havner over Draw. `bed.js` og sidecar er uendret. Full `npm test` stopper fortsatt
+ved den tidligere dokumenterte crop-E2E-testen etter grønne øvrige tester.
+Neste oppgave er D1.4, deretter D1.5. Fase 1 er fortsatt ikke ferdig.
+
+### Implementasjonsnotater — Pen og Direct Selection
+
+Pen (P) oppretter rette og kubiske Bézier-baner. Klikk lager hjørner, drag lager
+håndtak, Shift låser vinkler, Alt bryter håndtak og Space flytter ankeret under
+drag. Startankeret lukker uten et ekstra punkt. Begge ender kan fortsettes;
+reversering skjer først ved en faktisk endring. Hover viser neste segment og
+kontekstuell peker. Enter/Escape avslutter åpen bane, mens Escape under drag
+forkaster bare den midlertidige redigeringen. Pen kan også dele en eksisterende
+kurve og redigere synlige håndtak.
+
+Direct Selection (A) velger ankre/håndtak på baner, med Shift-valg, marquee,
+segmentvalg og piltastflytting. Alt frikobler håndtak, Shift begrenser bevegelse.
+Skjermstore ankre og håndtak ligger utenfor dokumentmodellen. Transformerte
+foreldre bruker eksplisitt konvertering mellom lokale og globale koordinater.
+Add Anchor (+) deler kubiske kurver med De Casteljau uten formendring. Delete
+Anchor (-) og Delete på valgte ankre bevarer øvrige subpaths; tomme/for korte
+subpaths fjernes. Anchor Point (Shift+C) veksler hjørne/glatt og trekker ut håndtak.
+Klikk på en live form med Anchor Point ekspanderer den med samme identitet,
+utseende og plassering; Undo gjenoppretter den eksakte formen.
+
+Alle redigeringer går gjennom Commands/History; previews endrer ikke modell,
+dirty-status eller Cut. Ett drag gir ett angresteg. Verktøyene bruker de
+eksisterende gruppene i verktøylinjen. D1.4 er fortsatt delvis: live corner
+widgets og automatisk ekspandering direkte med Direct Selection gjenstår.
+Neste oppgave er å fullføre disse før D1.7–D1.11.
+
+Verifisering: 85 Draw-enhetstester og komplett Draw-E2E passerer, inkludert
+prosjektlagring, kontinuerlig autosave og faktisk krasj/gjenstart. Den dedikerte
+Pen-testen bruker ekte muse-/tastaturhendelser og kontrollerer også Space-flytting
+i et transformert layer, kontekstuell kurvedeling og Cut-isolasjon.
+Full `npm test` stopper fortsatt i den tidligere dokumenterte Cut crop-E2E-testen
+etter grønne sidecar/bridge/main/renderer/Draw/kontrast-tester.
+
+### Implementasjonsnotater — D1.4 fullført
+
+Direct Selection viser også ankre på live former. Klikk, Shift-valg og marquee
+er midlertidige valg og endrer ikke dokumentet. Flytting, håndtaksredigering,
+nudge, ankersletting eller hjørneavrunding ekspanderer berørte former ved commit.
+Samme id, utseende, forelder og tegnerekkefølge beholdes. Ekspandering og redigering
+er én transaksjon; Undo gjenoppretter formen med dens opprinnelige parametre.
+Escape, mistet pekerfangst og vindusbytte forkaster bare forhåndsvisningen.
+
+Rette hjørner mellom rette segmenter har prikkede sirkelhåndtak. Valgte hjørner
+kan avrundes sammen; Alt-drag tar bare ett hjørne. Properties har ett kontekstuelt
+radiusfelt med blandet verdi når hjørnene er forskjellige. Radius begrenses av
+nabokantenes lengde for å unngå overlapp. Endepunkter, degenererte vinkler og
+overganger med Bézier-håndtak får ikke slike hjørne-widgets.
+
+PathData beholder ferdige kubiske kurver i `segments`. Valgfri
+`cornerData: { segments: originalankre, radii: radiusPerOriginalanker }` på en
+subpath gjør avrundingen redigerbar etter lagring og gjenåpning. Radius null
+gjenoppretter skarpe hjørner uten ekstra ankre. Modellvalideringen kontrollerer
+at kilde/radier faktisk gir den lagrede kurven. Geometrikjernen bruker allerede
+de ferdige kurvene, så avrundingen er ikke bare en visningseffekt.
+
+Flytting, rotasjon, refleksjon og jevn skalering beholder live-data. Ujevn
+skalering/skjæring av selve banen baker avrundingen inn i kurvene for å bevare
+eksakt geometri. Kurvedeling og Pen-redigering baker live-data på berørt subpath.
+Transformerte foreldre støttes uten å endre koordinatsystemet til kildeankrene.
+Trefftesting bruker alltid dokumentgeometrien, ikke Pen sin hover-preview.
+
+Verktøylinje og panelstruktur er uendret: ett sted per verktøygruppe og ett
+aktivt sidepanel. Neste oppgave er D1.7. Resten av fase 1 er fortsatt uferdig.
+
+Verifisering: 94 Draw-enhetstester og komplett Draw-E2E passerer. Den nye
+arbeidsflyten dekker utsatt formkonvertering, reversibel avrunding, radiusfelt,
+transformerte foreldre, Escape og ett angresteg. Prosjekt-IO-testen lagrer og
+gjenåpner faktiske live corner-data og tar dem gjennom autosave/krasj/gjenstart.
+Begge temaer har visuell kontroll og pikselkontroll av artwork. Cut er urørt.
+Full `npm test` har grønne sidecar/bridge/main/renderer/Draw/kontrast-tester,
+men stopper fortsatt i den kjente Cut crop-E2E-feilen ved `workflows.mjs:369`.
+
+### Implementasjonsnotater — D1.7
+
+Rotate (R), Reflect (O) og Scale (S) bruker eksisterende verktøygrupper.
+Klikk på canvas setter referansepunkt; dra selve punktet for å flytte det.
+Vanlig drag transformerer rundt referansepunktet, Shift begrenser og Alt lager
+en kopi. Rotate bruker 45-graders steg med Shift. Reflect-drag bruker aksen
+mellom start- og sluttradius, slik at startretningen speiles mot sluttretningen.
+Scale skalerer aksene separat; Shift gir jevn skalering. Kryssing av
+referansepunktet kan speile, og nullskala forhindres.
+
+Enter, dobbeltklikk på verktøyikonet, Alt-klikk på canvas og Object > Transform
+åpner dialoger med eksakte verdier, referansekoordinater, Preview, Apply og Copy.
+Positive vinkler er mot klokken. Preview er separat Paper-geometri og endrer
+ikke modell eller dirty-status. Escape/Cancel gjenoppretter visningen. Hver
+operasjon og alle dens kopier er én historikktransaksjon. Nye gruppekopier får
+nye id-er for alle etterkommere og settes rett etter originalen i samme forelder.
+
+Transform Again (Mod+D) gjentar siste vellykkede transformasjon i verdensrommet
+på det nåværende utvalget, inkludert Copy og stroke-valget. Referansepunkt og
+gjenta-minne er per arbeidsområde/fane og lagres ikke i prosjektet. Identitet
+uten Copy og et tomt utvalg lager ikke historikk eller overskriver gjenta-minnet.
+
+Eksplisitt Scale normaliserer berørte vektorstreker til verdens-mm med valgfritt
+`strokeScaling:false` på noden. Uten avkryssing beholdes synlig strektykkelse;
+med avkryssing skaleres bredde og dash-lengder med arealekvivalent faktor
+`sqrt(abs(det(matrix)))`. Dette gjelder også former og gruppebarn. Eldre noder
+beholder sin opprinnelige strekmodell til en eksplisitt Scale-operasjon utføres.
+Effektmetadata bevares uendret; faktisk effektrendering og effektskalering kommer
+i effektfasen, slik dialogen forklarer. Låste/skjulte gruppebarn som krever en
+stilendring avviser hele operasjonen atomisk gjennom modellens eksisterende vern.
+
+Neste oppgave er D1.8. Verktøylinjens og panelenes ene plassering er bevart.
+
+Verifisering: 102 Draw-enhetstester og komplett Draw-E2E passerer, med ekte
+muse-/tastaturhandlinger, filrundtur, autosave og faktisk krasj/gjenstart.
+Transformdialogen er visuelt kontrollert. Stroke-policy er med i prosjekt-IO
+og recovery-testene. Ingen endring i Cut eller sidecar.
+Adapteren konverterer verdens-mm-streker til Paper sin skjermpikselbredde ved
+hvert zoomnivå; en pikseltest ved dobbel zoom verifiserer den fysiske tykkelsen.
+Full `npm test` stopper fortsatt i den tidligere dokumenterte Cut crop-E2E-testen
+etter grønne sidecar/bridge/main/renderer/Draw/kontrast-tester.
+
+### Implementasjonsnotater — D1.8 (ferdig)
+
+**Del A — Layers og template-lag (ferdig).** Ren lagmodell i `doc/layers.mjs`.
+Lag arver kontekst nedover: Template (låst, ikke Print, alltid Preview, bilder
+dimmet til `dimImagesTo`), Print, per-lag Outline (`preview:false`) og lagfarge.
+`isOutputNode` er den felles regelen for senere eksport og Send til Cut: kun
+synlig artwork i printbare, ikke-template lag. Skjemaet har valgfrie boolske
+`preview` og `dimImages` på lag. Layers-panelet viser øverste lag først, med
+øye/template-ikon, lås, sammenfelling, lagfarge, navn, valgsirkel og
+drag-and-drop. Alt-klikk øye gir solo, Ctrl/Cmd-klikk veksler Outline/Preview.
+Layer Options åpnes med dobbeltklikk. New layer/sublayer, Collect in New Layer,
+Release to Layers (Sequence), Locate Object og Delete er hver ett angresteg.
+Utvalgsrammen følger lagfargen. Virtualisering for 500+ rader er ikke gjort.
+
+**Del B — Transform-panel (ferdig).** Ni-punkts referanse, X/Y for referansepunktet,
+W/H med lenkede proporsjoner, relative felt for Rotate by og Shear by, samt
+Scale strokes & effects og Scale corners. Avvik fra Illustrator: objektrotasjon
+lagres ikke, så vinkelfeltene er relative og nullstilles. Scale corners gjelder
+direkte valgte live rektangler og paths med `cornerData`, ikke former i grupper.
+
+**Live tilbakemelding og markører (ferdig, eierprioritet).** `tools/cursors.mjs` gir
+Illustrator-lik SVG-markør per verktøy og tilstand med CSS-fallback, også for
+midlertidige verktøy. Redigerings-previews har kontur i lagfarge, og Pen viser
+retningshåndtak live under drag og gummistrikk. Regel for videre arbeid: alle
+tegne-/redigeringsgester skal vise geometri, håndtak og endringer kontinuerlig,
+og canvas skal aldri mangle synlig markør. Verifiser med E2E midt i gesten.
+
+**Del C — Align-panel (ferdig).** Ren matematikk i `geom/align.mjs`. Align To:
+Selection, Key Object og Artboard; ett objekt mot Selection justeres mot artboard.
+Distribute Objects (kanter/sentre) og Distribute Spacing (Auto eller eksakt mm
+rundt nøkkelobjektet). Avvik: nøkkelobjektet velges i en liste i panelet, ikke ved
+å klikke på et valgt objekt. Grensene er geometriske, ikke strekgrenser.
+
+**Del D1 — Color-panel (ferdig).** RGB, HSB, CMYK, Grayscale og Hex med glider og
+tallfelt, Fill/Stroke-mål og None. Maling lagres som RGB (CMYK/Grayscale er
+visninger uten fargeprofil). Glidere oppdaterer canvas live; et drag er ett
+angresteg via `History.transaction(..., {mergeKey})`. Fargespekter/ramp er ikke laget.
+
+**Del D2 — Stroke-panel (ferdig).** Weight, Cap, Corner, Limit, Dashed line (3 par)
+og pilspisser (arrow, triangle, circle, square, bar med skala) som rendres. Align
+Stroke: bare Center; Inside/Outside er synlige, men deaktivert til Outline Stroke
+(fase 3). Ikke laget: «align dashes to corners» og width profiles (fase 4).
+
+**Del D3 — Fill/Stroke-boks og Properties (ferdig).** Swap/Default og
+Color/Gradient/None (Gradient deaktivert til fase 2). Color (`,`) gjenbruker siste
+heldekkende farge. Fyll-/strekrutene åpner Color-panelet. Properties har en
+utseende-oppsummering som lenker til Color og Stroke uten egne redigeringsfelt.
+
+D1.8 er ferdig. Fase 1 er ikke ferdig: D1.9–D1.12 gjenstår. Kjente begrensninger:
+lagliste ikke virtualisert (AK 500 objekter), objekter uten fyll og strek kan ikke
+treffes på canvas, Inside/Outside-strek og fargespekter mangler.

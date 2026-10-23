@@ -14,19 +14,29 @@
     "start": "electron .",
     "test:sidecar": "node scripts/maven.mjs test",
     "test:bridge": "npm run build:sidecar && node electron/test-bridge.mjs",
-    "test:main": "node --test electron/test-window-lifecycle.mjs electron/test-recovery-store.mjs electron/test-import-formats.mjs",
-    "test:renderer": "node --test renderer/test-engraving-recipe.mjs renderer/test-hpglimport.mjs renderer/test-job-split.mjs renderer/test-lengthToMm.mjs renderer/test-layer-model.mjs renderer/test-motion-timing.mjs renderer/test-output-quality.mjs renderer/test-pdf-vector.mjs renderer/test-process-profiles.mjs renderer/test-raster-processing.mjs renderer/test-toolpath-policy.mjs",
-    "test:e2e": "npm run build:sidecar && node electron/e2e/run.mjs",
+    "test:main": "node --test electron/test-window-lifecycle.mjs electron/test-recovery-store.mjs electron/test-project-store.mjs electron/test-import-formats.mjs electron/test-font-service.mjs electron/test-google-fonts.mjs electron/test-mcp-server.mjs electron/test-workspace-files.mjs",
+    "update:google-fonts": "node scripts/update-google-fonts.mjs",
+    "test:renderer": "node --test renderer/test-engraving-recipe.mjs renderer/test-epsimport.mjs renderer/test-hpglimport.mjs renderer/test-i18n.mjs renderer/test-job-split.mjs renderer/test-lengthToMm.mjs renderer/test-layer-model.mjs renderer/test-motion-timing.mjs renderer/test-output-quality.mjs renderer/test-pdf-vector.mjs renderer/test-process-profiles.mjs renderer/test-raster-processing.mjs renderer/test-toolpath-policy.mjs",
+    "build:icons": "node scripts/build-icons.mjs",
+    "test:draw": "node scripts/build-icons.mjs --check && node scripts/build-cursors.mjs --check && node --test --experimental-test-coverage renderer/draw/test/*.test.mjs",
+    "test:e2e": "npm run build:sidecar && node electron/e2e/run.mjs && node electron/e2e/run.mjs --draw && node electron/e2e/run.mjs --workspace-layout",
+    "test:e2e:layout": "npm run build:sidecar && node electron/e2e/run.mjs --workspace-layout",
+    "test:e2e:draw": "npm run build:sidecar && node electron/e2e/run.mjs --draw",
+    "test:e2e:theme": "npm run build:sidecar && node electron/e2e/run.mjs --theme",
+    "test:e2e:background": "npm run build:sidecar && node electron/e2e/run.mjs --background",
     "check:contrast": "node design/check-contrast.mjs",
-    "test": "npm run test:sidecar && npm run test:bridge && npm run test:main && npm run test:renderer && npm run check:contrast && npm run test:e2e",
-    "pack": "npm run bundle && electron-builder --dir && node scripts/verify-package.mjs",
-    "dist": "npm run bundle && electron-builder"
+    "test": "npm run test:sidecar && npm run test:bridge && npm run test:main && npm run test:renderer && npm run test:draw && npm run check:contrast && npm run test:e2e",
+    "pack": "npm run bundle && electron-builder --dir && node scripts/verify-package.mjs && node scripts/verify-font-package.mjs",
+    "dist": "npm run bundle && electron-builder",
+    "build:cursors": "node scripts/build-cursors.mjs"
   },
   "devDependencies": {
     "electron": "43.3.0",
     "electron-builder": "26.15.3"
   },
   "dependencies": {
+    "clipper-lib": "6.4.2",
+    "fontkit": "2.0.4",
     "paper": "^0.12.18",
     "pdfjs-dist": "^5.4.624",
     "utif": "^3.1.0"

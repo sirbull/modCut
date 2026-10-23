@@ -1,0 +1,329 @@
+{
+  "upstream": {
+    "repository": "https://github.com/storytold/vectorcraft.git",
+    "commit": "0a33cff3f6e2a1e9e672f4c3816f58cd8d3d032e",
+    "version": "0.11.0",
+    "license": "MIT OR Apache-2.0",
+    "rust": "1.95.0",
+    "wasmBindgen": "0.2.105"
+  },
+  "host": {
+    "platform": "darwin",
+    "release": "25.6.0",
+    "arch": "arm64",
+    "cpu": "Apple M1 Pro",
+    "node": "v22.12.0"
+  },
+  "wasm": {
+    "bytes": 15583658,
+    "gzipBytes": 5346187,
+    "sha256": "509d665df04d700ba1ea7dfc202cfb6b6640b599df36b95d56487789821da35e",
+    "imports": [
+      {
+        "module": "wbg",
+        "name": "__wbindgen_init_externref_table",
+        "kind": "function"
+      },
+      {
+        "module": "wbg",
+        "name": "__wbindgen_cast_2241b6af4c4b2941",
+        "kind": "function"
+      }
+    ]
+  },
+  "ok": true,
+  "initializationMs": 65.5,
+  "booleans": [
+    {
+      "name": "overlap-unite",
+      "medianMs": 0.09999990463256836,
+      "maxMs": 0.10000014305114746,
+      "relativeAreaError": 0,
+      "sampledHausdorffMm": 1.4210854715202004e-14,
+      "pass": true
+    },
+    {
+      "name": "overlap-intersect",
+      "medianMs": 0.09999990463256836,
+      "maxMs": 0.10000014305114746,
+      "relativeAreaError": 5.684341886080803e-16,
+      "sampledHausdorffMm": 7.105427357601002e-15,
+      "pass": true
+    },
+    {
+      "name": "overlap-minusFront",
+      "medianMs": 0.09999990463256836,
+      "maxMs": 0.10000014305114746,
+      "relativeAreaError": 0,
+      "sampledHausdorffMm": 1.4210854715202004e-14,
+      "pass": true
+    },
+    {
+      "name": "overlap-exclude",
+      "medianMs": 0.09999990463256836,
+      "maxMs": 0.10000014305114746,
+      "relativeAreaError": 2.27373675443232e-16,
+      "sampledHausdorffMm": 1.4210854715202004e-14,
+      "pass": true
+    },
+    {
+      "name": "contained-unite",
+      "medianMs": 0,
+      "maxMs": 0.10000014305114746,
+      "relativeAreaError": 0,
+      "sampledHausdorffMm": 1.4210854715202004e-14,
+      "pass": true
+    },
+    {
+      "name": "contained-minusFront",
+      "medianMs": 0,
+      "maxMs": 0.10000014305114746,
+      "relativeAreaError": 0,
+      "sampledHausdorffMm": 1.4210854715202004e-14,
+      "pass": true
+    },
+    {
+      "name": "disjoint-unite",
+      "medianMs": 0,
+      "maxMs": 0.10000014305114746,
+      "relativeAreaError": 0,
+      "sampledHausdorffMm": 5.329070518200751e-15,
+      "pass": true
+    },
+    {
+      "name": "disjoint-minusFront",
+      "medianMs": 0,
+      "maxMs": 0.10000014305114746,
+      "relativeAreaError": 0,
+      "sampledHausdorffMm": 5.329070518200751e-15,
+      "pass": true
+    },
+    {
+      "name": "shared-edge-unite",
+      "medianMs": 0,
+      "maxMs": 0.10000014305114746,
+      "relativeAreaError": 1.4210854715202004e-16,
+      "sampledHausdorffMm": 1.7763568394002505e-14,
+      "pass": true
+    },
+    {
+      "name": "shared-edge-minusFront",
+      "medianMs": 0,
+      "maxMs": 0.10000014305114746,
+      "relativeAreaError": 0,
+      "sampledHausdorffMm": 5.329070518200751e-15,
+      "pass": true
+    },
+    {
+      "name": "corner-touch-unite",
+      "medianMs": 0,
+      "maxMs": 0.10000014305114746,
+      "relativeAreaError": 0,
+      "sampledHausdorffMm": 5.329070518200751e-15,
+      "pass": true
+    },
+    {
+      "name": "corner-touch-minusFront",
+      "medianMs": 0,
+      "maxMs": 0.20000004768371582,
+      "relativeAreaError": 0,
+      "sampledHausdorffMm": 5.329070518200751e-15,
+      "pass": true
+    },
+    {
+      "name": "identical-unite",
+      "medianMs": 0,
+      "maxMs": 0.10000014305114746,
+      "relativeAreaError": 0,
+      "sampledHausdorffMm": 5.329070518200751e-15,
+      "pass": true
+    },
+    {
+      "name": "identical-minusFront",
+      "medianMs": 0,
+      "maxMs": 0.10000014305114746,
+      "relativeAreaError": 0,
+      "sampledHausdorffMm": 0,
+      "pass": true
+    },
+    {
+      "name": "circles-unite",
+      "medianMs": 0.20000004768371582,
+      "maxMs": 0.2999999523162842,
+      "relativeAreaError": 3.7775162746179887e-14,
+      "sampledHausdorffMm": 1.514939089248336e-7,
+      "pass": true
+    },
+    {
+      "name": "circles-intersect",
+      "medianMs": 0.19999980926513672,
+      "maxMs": 0.3000001907348633,
+      "relativeAreaError": 8.26719335824064e-13,
+      "sampledHausdorffMm": 1.0234141567270593e-7,
+      "pass": true
+    },
+    {
+      "name": "circles-minusFront",
+      "medianMs": 0.20000004768371582,
+      "maxMs": 0.2999999523162842,
+      "relativeAreaError": 1.5868406593694836e-12,
+      "sampledHausdorffMm": 1.5318470451453198e-7,
+      "pass": true
+    },
+    {
+      "name": "circles-exclude",
+      "medianMs": 0.20000004768371582,
+      "maxMs": 0.20000004768371582,
+      "relativeAreaError": 3.1546701240157324e-13,
+      "sampledHausdorffMm": 1.5352914671501968e-7,
+      "pass": true
+    },
+    {
+      "name": "tangent-circles-unite",
+      "medianMs": 0.20000004768371582,
+      "maxMs": 0.3000001907348633,
+      "relativeAreaError": 0,
+      "sampledHausdorffMm": 1.5318298792326518e-7,
+      "pass": true
+    },
+    {
+      "name": "tangent-circles-minusFront",
+      "medianMs": 0.09999990463256836,
+      "maxMs": 0.20000004768371582,
+      "relativeAreaError": 0,
+      "sampledHausdorffMm": 1.5318298792326518e-7,
+      "pass": true
+    },
+    {
+      "name": "star-unite",
+      "medianMs": 0.10000014305114746,
+      "maxMs": 0.20000004768371582,
+      "relativeAreaError": 1.0498328293235634e-15,
+      "sampledHausdorffMm": 6.217248937900877e-14,
+      "pass": true
+    },
+    {
+      "name": "star-minusFront",
+      "medianMs": 0.09999990463256836,
+      "maxMs": 0.10000014305114746,
+      "relativeAreaError": 2.2102097236187634e-15,
+      "sampledHausdorffMm": 5.953446100501797e-14,
+      "pass": true
+    },
+    {
+      "name": "hole-unite",
+      "medianMs": 0.09999990463256836,
+      "maxMs": 0.10000014305114746,
+      "relativeAreaError": 0,
+      "sampledHausdorffMm": 1.5507022626656238e-7,
+      "pass": true
+    },
+    {
+      "name": "hole-intersect",
+      "medianMs": 0.09999990463256836,
+      "maxMs": 0.10000014305114746,
+      "relativeAreaError": 0,
+      "sampledHausdorffMm": 1.5694201967896493e-7,
+      "pass": true
+    },
+    {
+      "name": "hole-minusFront",
+      "medianMs": 0.09999990463256836,
+      "maxMs": 0.5,
+      "relativeAreaError": 0,
+      "sampledHausdorffMm": 1.5694202325739566e-7,
+      "pass": true
+    },
+    {
+      "name": "hole-exclude",
+      "medianMs": 0.09999990463256836,
+      "maxMs": 0.20000004768371582,
+      "relativeAreaError": 0,
+      "sampledHausdorffMm": 1.5694202325739566e-7,
+      "pass": true
+    },
+    {
+      "name": "self-crossing-unite",
+      "medianMs": 0,
+      "maxMs": 0.10000014305114746,
+      "relativeAreaError": 0,
+      "sampledHausdorffMm": 1.4210854715202004e-14,
+      "pass": true
+    },
+    {
+      "name": "self-crossing-minusFront",
+      "medianMs": 0.09999990463256836,
+      "maxMs": 0.10000014305114746,
+      "relativeAreaError": 0,
+      "sampledHausdorffMm": 1.4210854715202004e-14,
+      "pass": true
+    },
+    {
+      "name": "glyph-contour-unite",
+      "medianMs": 0.09999990463256836,
+      "maxMs": 0.10000014305114746,
+      "relativeAreaError": 0,
+      "sampledHausdorffMm": 1.4210854715202004e-14,
+      "pass": true
+    },
+    {
+      "name": "glyph-contour-minusFront",
+      "medianMs": 0.09999990463256836,
+      "maxMs": 0.10000014305114746,
+      "relativeAreaError": 0,
+      "sampledHausdorffMm": 1.4210854715202004e-14,
+      "pass": true
+    }
+  ],
+  "traces": [
+    {
+      "pattern": "logo",
+      "width": 1600,
+      "height": 1250,
+      "samplesMs": [
+        111.5,
+        73.60000014305115,
+        70.79999995231628
+      ],
+      "medianMs": 73.60000014305115,
+      "paths": 2,
+      "anchors": 15
+    },
+    {
+      "pattern": "checkerboard",
+      "width": 1600,
+      "height": 1250,
+      "samplesMs": [
+        140.70000004768372,
+        137.09999990463257,
+        135.90000009536743
+      ],
+      "medianMs": 137.09999990463257,
+      "paths": 400,
+      "anchors": 1600
+    }
+  ],
+  "versions": {
+    "chrome": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) modCut/0.1.0 Chrome/150.0.7871.212 Electron/43.3.0 Safari/537.36"
+  },
+  "pdf": {
+    "bytes": 2208,
+    "pages": 1,
+    "pageSizePt": [
+      566.92914,
+      283.46457
+    ],
+    "operators": 10,
+    "qpdf": {
+      "status": "not-installed"
+    }
+  },
+  "upstreamChangedLines": 0,
+  "ciPlatformsExecuted": [],
+  "limitations": [
+    "Paper.js oracle is provisional; references not manually approved",
+    "Hausdorff distance is sampled at <=0.05 mm, not a certified continuous bound",
+    "Acrobat, Preview and Illustrator not manually verified",
+    "Cross-platform CI has not been executed"
+  ]
+}

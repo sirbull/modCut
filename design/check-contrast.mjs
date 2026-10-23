@@ -39,15 +39,52 @@ const PAIRS = [
   ["brand-deep", "lime", 3.0, "LARGE green text on lime (large only)"],
 ];
 
+const darkBlock = css.match(/:root\[data-theme="dark"\]\s*\{([^}]+)\}/)[1];
+const darkTokens = { ...tokens };
+for (const m of darkBlock.matchAll(/--([\w-]+):\s*(#[0-9a-fA-F]{6})\b/g)) darkTokens[m[1]] = m[2];
+const commonPairs = [
+  ...["bg", "surface", "surface-2"].flatMap((bg) => [
+    ["text", bg, 4.5, `body text on ${bg}`],
+    ["text-muted", bg, 4.5, `muted text on ${bg}`],
+    ["brand-deep", bg, 4.5, `accent text on ${bg}`],
+    ["danger", bg, 4.5, `error text on ${bg}`],
+    ["warning", bg, 4.5, `warning text on ${bg}`],
+  ]),
+  ["on-brand", "brand-fill", 4.5, "filled button"],
+  ["on-brand", "brand-fill-top", 4.5, "filled button gradient top"],
+  ["on-danger", "danger-fill", 4.5, "destructive button"],
+  ["on-accent", "brand", 4.5, "score tag"],
+];
+// Follow the CSS cascade for every fixed background and resolve token aliases.
+const neutralPalettes = ["white", "light-gray", "gray", "dark-gray"].map((background) => {
+  const values = { ...tokens, ...(["gray", "dark-gray"].includes(background) ? darkTokens : {}) };
+  for (const block of css.matchAll(/([^{}]+)\{([^{}]+)\}/g)) {
+    const selector = block[1].replace(/\/\*[\s\S]*?\*\//g, "").trim();
+    if (!selector.includes(`:root[data-background="${background}"]`) && selector !== ':root[data-background]:where(:not([data-background="green"]))') continue;
+    for (const m of block[2].matchAll(/--([\w-]+):\s*(#[0-9a-fA-F]{6}|var\(--[\w-]+\));/g)) values[m[1]] = m[2];
+  }
+  const resolve = (value) => value.startsWith("var(") ? resolve(values[value.slice(6, -1)]) : value;
+  return [background, Object.fromEntries(Object.entries(values).map(([key, value]) => [key, resolve(value)])), [
+    ...commonPairs,
+    ...["bg", "surface", "surface-2"].flatMap((bg) => [
+      ["brand-mid", bg, 3, `focus indicator on ${bg}`],
+      ["brand", bg, 3, `secondary button outline on ${bg}`],
+    ]),
+    ["text", "lime", 4.5, "mark tag"],
+  ]];
+});
 let failed = 0;
 console.log("modCut WCAG contrast check\n" + "=".repeat(52));
-for (const [fg, bg, min, label] of PAIRS) {
-  const cfg = tokens[fg], cbg = tokens[bg];
-  if (!cfg || !cbg) { console.log(`?? MISSING token ${fg}/${bg}`); failed++; continue; }
-  const r = ratio(cfg, cbg);
-  const ok = r >= min;
-  if (!ok) failed++;
-  console.log(`${ok ? "PASS" : "FAIL"}  ${r.toFixed(2).padStart(5)}:1 (>=${min})  ${label}`);
+for (const [theme, values, pairs] of [["light", tokens, [...PAIRS, ...commonPairs]], ["dark", darkTokens, commonPairs], ...neutralPalettes]) {
+  console.log(`\n${theme} theme`);
+  for (const [fg, bg, min, label] of pairs) {
+    const cfg = values[fg], cbg = values[bg];
+    if (!cfg || !cbg) { console.log(`?? MISSING token ${fg}/${bg}`); failed++; continue; }
+    const r = ratio(cfg, cbg);
+    const ok = r >= min;
+    if (!ok) failed++;
+    console.log(`${ok ? "PASS" : "FAIL"}  ${r.toFixed(2).padStart(5)}:1 (>=${min})  ${label}`);
+  }
 }
 console.log("=".repeat(52));
 console.log(failed ? `${failed} FAILURE(S)` : "All contrast pairs pass WCAG AA.");

@@ -1,3 +1,4 @@
+import { runDrawWorkflows, runDrawTabWorkflows } from "./draw-workflows.mjs";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import UTIF from "utif";
@@ -80,6 +81,7 @@ export async function runWorkflows(client, port) {
   }
   assert.ok(canvas, "modCut canvas must be ready after reload");
   await wait(300);
+  await runDrawTabWorkflows(client);
   assert.equal(await evaluate("document.querySelector('#splitJobs').checked"), false, "split by operation must be off by default");
 
   await evaluate(`import('./ui.js').then(({openModal}) => {
@@ -109,12 +111,13 @@ export async function runWorkflows(client, port) {
     await evaluate("window.focus(); document.querySelector('[data-tool=rect]').click()");
     await click({ x: canvas.left + canvas.width * 0.45, y: canvas.top + canvas.height * 0.45 });
     await wait(150);
-    shapeSteps = await evaluate("(() => { const w=document.querySelector('input[name=w]'),h=document.querySelector('input[name=h]'); return w&&h ? {wStep:w.step,hStep:h.step} : null; })()");
+    shapeSteps = await evaluate("(() => { const w=document.querySelector('input[name=width]'),h=document.querySelector('input[name=height]'); return w&&h ? {wStep:w.step,hStep:h.step} : null; })()");
   }
-  assert.deepEqual(shapeSteps, { wStep: "0.01", hStep: "0.01" }, "exact shape dimensions must allow decimals");
-  await evaluate("(() => { const form=document.querySelector('.modal form'); form.elements.w.value='12.34'; form.elements.h.value='5.67'; form.requestSubmit(); })()");
+  assert.deepEqual(shapeSteps, { wStep: "any", hStep: "any" }, "exact shape dimensions must allow decimals");
+  await evaluate("(() => { const form=document.querySelector('.modal form'); form.elements.width.value='12.34'; form.elements.height.value='5.67'; form.requestSubmit(); })()");
   await wait();
   const exactShape = await evaluate("(() => { const item=paper.project.layers[1].children.at(-1),b=item.bounds,c=document.querySelector('.bed-canvas').getBoundingClientRect(),v=paper.view.projectToView(b.topCenter); return {w:b.width,h:b.height,hit:{x:c.left+v.x,y:c.top+v.y}}; })()");
+  await runDrawWorkflows(client);
   assert.ok(near(exactShape.w, 123.4) && near(exactShape.h, 56.7), "a shape created from decimal centimetre dimensions must keep the exact size");
   assert.deepEqual(await evaluate("(() => ({op:document.querySelector('.clayer__op').value,power:+document.querySelector('[data-k=power]').value,speed:+document.querySelector('[data-k=speed]').value,freq:+document.querySelector('[data-k=freq]').value,z:+document.querySelector('[data-k=zOffset]').value}))()"), { op: "Cut", power: 100, speed: 50, freq: 500, z: -1.5 }, "new Cut layers must use the workshop defaults");
   await evaluate("(() => { const op=document.querySelector('.clayer__op'); op.value='Score'; op.dispatchEvent(new Event('change',{bubbles:true})); })()");

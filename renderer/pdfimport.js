@@ -32,6 +32,21 @@ export async function pdfToRaster(dataUrl, { dpi = DEFAULT_DPI, maxPixels = MAX_
   }
 }
 
+/** The Draw document in a PDF saved with "Preserve modCut editing capabilities", or null. */
+export async function pdfDrawDocument(dataUrl) {
+  const pdf = await openPdf(dataUrl).promise;
+  try {
+    const file = (await pdf.getAttachments())?.["modcut-draw.json"];
+    if (!file) return null;
+    const data = JSON.parse(new TextDecoder().decode(file.content));
+    return data && typeof data === "object" ? data : null;
+  } catch {
+    return null;
+  } finally {
+    destroyPdfInBackground(pdf);
+  }
+}
+
 function openPdf(dataUrl) {
   return getDocument({
     data: bytesFromDataUrl(dataUrl),

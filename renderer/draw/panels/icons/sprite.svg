@@ -1,0 +1,1142 @@
+<svg xmlns="http://www.w3.org/2000/svg">
+<symbol id="icon-adjustments" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-adjustments"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M4 10a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+  <path d="M6 4v4" />
+  <path d="M6 12v8" />
+  <path d="M10 16a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+  <path d="M12 4v10" />
+  <path d="M12 18v2" />
+  <path d="M16 7a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+  <path d="M18 4v1" />
+  <path d="M18 9v11" />
+</symbol>
+<symbol id="icon-align-box-bottom-center" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-align-box-bottom-center"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M3 5a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14" />
+  <path d="M9 15v2" />
+  <path d="M12 11v6" />
+  <path d="M15 13v4" />
+</symbol>
+<symbol id="icon-align-box-left-middle" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-align-box-left-middle"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M3 5a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14" />
+  <path d="M9 15h-2" />
+  <path d="M13 12h-6" />
+  <path d="M11 9h-4" />
+</symbol>
+<symbol id="icon-align-box-right-middle" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-align-box-right-middle"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M15 15h2" />
+  <path d="M3 5a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14" />
+  <path d="M11 12h6" />
+  <path d="M13 9h4" />
+</symbol>
+<symbol id="icon-align-box-top-center" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-align-box-top-center"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M3 5a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14" />
+  <path d="M9 9v-2" />
+  <path d="M12 13v-6" />
+  <path d="M15 11v-4" />
+</symbol>
+<symbol id="icon-align-center" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-align-center"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M4 6l16 0" />
+  <path d="M8 12l8 0" />
+  <path d="M6 18l12 0" />
+</symbol>
+<symbol id="icon-align-justified" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-align-justified"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M4 6l16 0" />
+  <path d="M4 12l16 0" />
+  <path d="M4 18l12 0" />
+</symbol>
+<symbol id="icon-align-left" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-align-left"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M4 6l16 0" />
+  <path d="M4 12l10 0" />
+  <path d="M4 18l14 0" />
+</symbol>
+<symbol id="icon-align-right" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-align-right"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M4 6l16 0" />
+  <path d="M10 12l10 0" />
+  <path d="M6 18l14 0" />
+</symbol>
+<symbol id="icon-arrows-move" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-arrows-move"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M18 9l3 3l-3 3" />
+  <path d="M15 12h6" />
+  <path d="M6 9l-3 3l3 3" />
+  <path d="M3 12h6" />
+  <path d="M9 18l3 3l3 -3" />
+  <path d="M12 15v6" />
+  <path d="M15 6l-3 -3l-3 3" />
+  <path d="M12 3v6" />
+</symbol>
+<symbol id="icon-artboard" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-artboard"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M8 9a1 1 0 0 1 1 -1h6a1 1 0 0 1 1 1v6a1 1 0 0 1 -1 1h-6a1 1 0 0 1 -1 -1l0 -6" />
+  <path d="M3 8l1 0" />
+  <path d="M3 16l1 0" />
+  <path d="M8 3l0 1" />
+  <path d="M16 3l0 1" />
+  <path d="M20 8l1 0" />
+  <path d="M20 16l1 0" />
+  <path d="M8 20l0 1" />
+  <path d="M16 20l0 1" />
+</symbol>
+<symbol id="icon-ban" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-ban"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" />
+  <path d="M5.7 5.7l12.6 12.6" />
+</symbol>
+<symbol id="icon-blend-mode" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-blend-mode"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M8 9.5a6.5 6.5 0 1 0 13 0a6.5 6.5 0 1 0 -13 0" />
+  <path d="M3 14.5a6.5 6.5 0 1 0 13 0a6.5 6.5 0 1 0 -13 0" />
+</symbol>
+<symbol id="icon-border-outer" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-border-outer"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M4 6a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2l0 -12" />
+  <path d="M12 8l0 .01" />
+  <path d="M8 12l0 .01" />
+  <path d="M12 12l0 .01" />
+  <path d="M16 12l0 .01" />
+  <path d="M12 16l0 .01" />
+</symbol>
+<symbol id="icon-brush" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-brush"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M3 21v-4a4 4 0 1 1 4 4h-4" />
+  <path d="M21 3a16 16 0 0 0 -12.8 10.2" />
+  <path d="M21 3a16 16 0 0 1 -10.2 12.8" />
+  <path d="M10.6 9a9 9 0 0 1 4.4 4.4" />
+</symbol>
+<symbol id="icon-chevron-down" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-chevron-down"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M6 9l6 6l6 -6" />
+</symbol>
+<symbol id="icon-chevron-right" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-chevron-right"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M9 6l6 6l-6 6" />
+</symbol>
+<symbol id="icon-chevron-up" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-chevron-up"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M6 15l6 -6l6 6" />
+</symbol>
+<symbol id="icon-color-swatch" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-color-swatch"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M19 3h-4a2 2 0 0 0 -2 2v12a4 4 0 0 0 8 0v-12a2 2 0 0 0 -2 -2" />
+  <path d="M13 7.35l-2 -2a2 2 0 0 0 -2.828 0l-2.828 2.828a2 2 0 0 0 0 2.828l9 9" />
+  <path d="M7.3 13h-2.3a2 2 0 0 0 -2 2v4a2 2 0 0 0 2 2h12" />
+  <path d="M17 17l0 .01" />
+</symbol>
+<symbol id="icon-contrast-2" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-contrast-2"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M3 5a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2l0 -14" />
+  <path d="M3 19h2.25c3.728 0 6.75 -3.134 6.75 -7s3.022 -7 6.75 -7h2.25" />
+</symbol>
+<symbol id="icon-copy" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-copy"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M7 9.667a2.667 2.667 0 0 1 2.667 -2.667h8.666a2.667 2.667 0 0 1 2.667 2.667v8.666a2.667 2.667 0 0 1 -2.667 2.667h-8.666a2.667 2.667 0 0 1 -2.667 -2.667l0 -8.666" />
+  <path d="M4.012 16.737a2.005 2.005 0 0 1 -1.012 -1.737v-10c0 -1.1 .9 -2 2 -2h10c.75 0 1.158 .385 1.5 1" />
+</symbol>
+<symbol id="icon-crop" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-crop"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M8 5v10a1 1 0 0 0 1 1h10" />
+  <path d="M5 8h10a1 1 0 0 1 1 1v10" />
+</symbol>
+<symbol id="icon-eye-off" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-eye-off"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M10.585 10.587a2 2 0 0 0 2.829 2.828" />
+  <path d="M16.681 16.673a8.717 8.717 0 0 1 -4.681 1.327c-3.6 0 -6.6 -2 -9 -6c1.272 -2.12 2.712 -3.678 4.32 -4.674m2.86 -1.146a9.055 9.055 0 0 1 1.82 -.18c3.6 0 6.6 2 9 6c-.666 1.11 -1.379 2.067 -2.138 2.87" />
+  <path d="M3 3l18 18" />
+</symbol>
+<symbol id="icon-eye" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-eye"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+  <path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6" />
+</symbol>
+<symbol id="icon-file-info" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-file-info"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M14 3v4a1 1 0 0 0 1 1h4" />
+  <path d="M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2" />
+  <path d="M11 14h1v4h1" />
+  <path d="M12 11h.01" />
+</symbol>
+<symbol id="icon-flip-horizontal" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-flip-horizontal"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M12 3l0 18" />
+  <path d="M16 7l0 10l5 0l-5 -10" />
+  <path d="M8 7l0 10l-5 0l5 -10" />
+</symbol>
+<symbol id="icon-flip-vertical" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-flip-vertical"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M3 12l18 0" />
+  <path d="M7 16l10 0l-10 5l0 -5" />
+  <path d="M7 8l10 0l-10 -5l0 5" />
+</symbol>
+<symbol id="icon-focus-2" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-focus-2"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M11.5 12a.5 .5 0 1 0 1 0a.5 .5 0 1 0 -1 0" fill="currentColor" />
+  <path d="M5 12a7 7 0 1 0 14 0a7 7 0 1 0 -14 0" />
+  <path d="M12 3l0 2" />
+  <path d="M3 12l2 0" />
+  <path d="M12 19l0 2" />
+  <path d="M19 12l2 0" />
+</symbol>
+<symbol id="icon-folder-plus" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-folder-plus"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M12 19h-7a2 2 0 0 1 -2 -2v-11a2 2 0 0 1 2 -2h4l3 3h7a2 2 0 0 1 2 2v3.5" />
+  <path d="M16 19h6" />
+  <path d="M19 16v6" />
+</symbol>
+<symbol id="icon-gradient-preview" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="2.5" y="5.5" width="0.61375" height="13" fill="rgb(32,32,32)" stroke="none"/><rect x="3.09375" y="5.5" width="0.61375" height="13" fill="rgb(38,38,38)" stroke="none"/><rect x="3.6875" y="5.5" width="0.61375" height="13" fill="rgb(45,45,45)" stroke="none"/><rect x="4.28125" y="5.5" width="0.61375" height="13" fill="rgb(51,51,51)" stroke="none"/><rect x="4.875" y="5.5" width="0.61375" height="13" fill="rgb(58,58,58)" stroke="none"/><rect x="5.46875" y="5.5" width="0.61375" height="13" fill="rgb(64,64,64)" stroke="none"/><rect x="6.0625" y="5.5" width="0.61375" height="13" fill="rgb(71,71,71)" stroke="none"/><rect x="6.65625" y="5.5" width="0.61375" height="13" fill="rgb(77,77,77)" stroke="none"/><rect x="7.25" y="5.5" width="0.61375" height="13" fill="rgb(84,84,84)" stroke="none"/><rect x="7.84375" y="5.5" width="0.61375" height="13" fill="rgb(90,90,90)" stroke="none"/><rect x="8.4375" y="5.5" width="0.61375" height="13" fill="rgb(97,97,97)" stroke="none"/><rect x="9.03125" y="5.5" width="0.61375" height="13" fill="rgb(103,103,103)" stroke="none"/><rect x="9.625" y="5.5" width="0.61375" height="13" fill="rgb(109,109,109)" stroke="none"/><rect x="10.21875" y="5.5" width="0.61375" height="13" fill="rgb(116,116,116)" stroke="none"/><rect x="10.8125" y="5.5" width="0.61375" height="13" fill="rgb(122,122,122)" stroke="none"/><rect x="11.40625" y="5.5" width="0.61375" height="13" fill="rgb(129,129,129)" stroke="none"/><rect x="12" y="5.5" width="0.61375" height="13" fill="rgb(135,135,135)" stroke="none"/><rect x="12.59375" y="5.5" width="0.61375" height="13" fill="rgb(142,142,142)" stroke="none"/><rect x="13.1875" y="5.5" width="0.61375" height="13" fill="rgb(148,148,148)" stroke="none"/><rect x="13.78125" y="5.5" width="0.61375" height="13" fill="rgb(155,155,155)" stroke="none"/><rect x="14.375" y="5.5" width="0.61375" height="13" fill="rgb(161,161,161)" stroke="none"/><rect x="14.96875" y="5.5" width="0.61375" height="13" fill="rgb(167,167,167)" stroke="none"/><rect x="15.5625" y="5.5" width="0.61375" height="13" fill="rgb(174,174,174)" stroke="none"/><rect x="16.15625" y="5.5" width="0.61375" height="13" fill="rgb(180,180,180)" stroke="none"/><rect x="16.75" y="5.5" width="0.61375" height="13" fill="rgb(187,187,187)" stroke="none"/><rect x="17.34375" y="5.5" width="0.61375" height="13" fill="rgb(193,193,193)" stroke="none"/><rect x="17.9375" y="5.5" width="0.61375" height="13" fill="rgb(200,200,200)" stroke="none"/><rect x="18.53125" y="5.5" width="0.61375" height="13" fill="rgb(206,206,206)" stroke="none"/><rect x="19.125" y="5.5" width="0.61375" height="13" fill="rgb(213,213,213)" stroke="none"/><rect x="19.71875" y="5.5" width="0.61375" height="13" fill="rgb(219,219,219)" stroke="none"/><rect x="20.3125" y="5.5" width="0.61375" height="13" fill="rgb(226,226,226)" stroke="none"/><rect x="20.90625" y="5.5" width="0.61375" height="13" fill="rgb(232,232,232)" stroke="none"/><rect x="2" y="5" width="20" height="14" stroke-width="1.4"/></symbol>
+<symbol id="icon-gradient-reverse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h13l-3-3M17 9l-3 3"/><path d="M20 15H7l3-3M7 15l3 3"/></symbol>
+<symbol id="icon-gradient-stroke-across" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4.8" y="4.8" width="14.4" height="14.4" stroke-opacity=".25"/><rect x="6.4" y="6.4" width="11.2" height="11.2" stroke-opacity=".6"/><rect x="8" y="8" width="8" height="8"/></symbol>
+<symbol id="icon-gradient-stroke-along" viewBox="0 0 24 24" fill="none" stroke="currentColor"><g stroke="none" fill="currentColor"><rect x="4" y="4" width="16" height="4" fill-opacity=".2"/><rect x="16" y="8" width="4" height="12" fill-opacity=".45"/><rect x="4" y="16" width="12" height="4" fill-opacity=".7"/><rect x="4" y="8" width="4" height="8"/></g></symbol>
+<symbol id="icon-gradient-stroke-within" viewBox="0 0 24 24" fill="none" stroke="currentColor"><g stroke="none" fill="currentColor"><rect x="4" y="4" width="4" height="16" fill-opacity=".2"/><rect x="8" y="4" width="8" height="4" fill-opacity=".55"/><rect x="8" y="16" width="8" height="4" fill-opacity=".55"/><rect x="16" y="4" width="4" height="16"/></g></symbol>
+<symbol id="icon-gradient-type-freeform" viewBox="0 0 24 24" fill="none" stroke="currentColor"><g stroke="none" fill="currentColor"><rect x="4" y="4" width="16" height="16" fill-opacity=".12"/><circle cx="8.5" cy="8.5" r="4" fill-opacity=".35"/><circle cx="16" cy="15.5" r="4.5" fill-opacity=".6"/></g><path d="M7 17c3-1 4-7 10-9" stroke-width="1.4" stroke-linecap="round"/><circle cx="7" cy="17" r="1.6" stroke-width="1.2"/><circle cx="17" cy="8" r="1.6" stroke-width="1.2"/><rect x="4" y="4" width="16" height="16" rx="1" stroke-width="1.5"/></symbol>
+<symbol id="icon-gradient-type-linear" viewBox="0 0 24 24" fill="none" stroke="currentColor"><g stroke="none" fill="currentColor"><rect x="4" y="4" width="4" height="16" fill-opacity=".12"/><rect x="8" y="4" width="4" height="16" fill-opacity=".38"/><rect x="12" y="4" width="4" height="16" fill-opacity=".66"/><rect x="16" y="4" width="4" height="16"/></g><rect x="4" y="4" width="16" height="16" rx="1" stroke-width="1.5"/></symbol>
+<symbol id="icon-gradient-type-radial" viewBox="0 0 24 24" fill="none" stroke="currentColor"><g stroke="none" fill="currentColor"><rect x="4" y="4" width="16" height="16" fill-opacity=".1"/><circle cx="12" cy="12" r="7" fill-opacity=".25"/><circle cx="12" cy="12" r="4.5" fill-opacity=".45"/><circle cx="12" cy="12" r="2.2"/></g><rect x="4" y="4" width="16" height="16" rx="1" stroke-width="1.5"/></symbol>
+<symbol id="icon-history" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-history"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M12 8l0 4l2 2" />
+  <path d="M3.05 11a9 9 0 1 1 .5 4m-.5 5v-5h5" />
+</symbol>
+<symbol id="icon-info-circle" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-info-circle"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0" />
+  <path d="M12 9h.01" />
+  <path d="M11 12h1v4h1" />
+</symbol>
+<symbol id="icon-keyframe-align-horizontal" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-keyframe-align-horizontal"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M12.816 16.58c-.207 .267 -.504 .42 -.816 .42c-.312 0 -.61 -.153 -.816 -.42l-2.908 -3.748a1.39 1.39 0 0 1 0 -1.664l2.908 -3.748c.207 -.267 .504 -.42 .816 -.42c.312 0 .61 .153 .816 .42l2.908 3.748a1.39 1.39 0 0 1 0 1.664l-2.908 3.748" />
+  <path d="M3 12h2" />
+  <path d="M19 12h2" />
+</symbol>
+<symbol id="icon-keyframe-align-vertical" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-keyframe-align-vertical"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M12 2v2" />
+  <path d="M12.816 16.58c-.207 .267 -.504 .42 -.816 .42c-.312 0 -.61 -.153 -.816 -.42l-2.908 -3.748a1.39 1.39 0 0 1 0 -1.664l2.908 -3.748c.207 -.267 .504 -.42 .816 -.42c.312 0 .61 .153 .816 .42l2.908 3.748a1.39 1.39 0 0 1 0 1.664l-2.908 3.748" />
+  <path d="M12 20v2" />
+</symbol>
+<symbol id="icon-layers-intersect" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-layers-intersect"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M8 6a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2l0 -8" />
+  <path d="M4 10a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2l0 -8" />
+</symbol>
+<symbol id="icon-layers-selected-bottom" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-layers-selected-bottom"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M4 14.5l4 -4" />
+  <path d="M9.496 20l4.004 -4l-4.004 4" />
+  <path d="M4.586 19.414l3.914 -3.914" />
+  <path d="M8 6a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2l0 -8" />
+  <path d="M16 16v2a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2v-8a2 2 0 0 1 2 -2h2" />
+</symbol>
+<symbol id="icon-layers-subtract" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-layers-subtract"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M8 6a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2l0 -8" />
+  <path d="M16 16v2a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2v-8a2 2 0 0 1 2 -2h2" />
+</symbol>
+<symbol id="icon-layout-align-bottom" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-layout-align-bottom"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M4 20l16 0" />
+  <path d="M9 6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-2a2 2 0 0 1 -2 -2l0 -8" />
+</symbol>
+<symbol id="icon-layout-align-center" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-layout-align-center"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M12 4l0 5" />
+  <path d="M12 15l0 5" />
+  <path d="M6 11a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v2a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2l0 -2" />
+</symbol>
+<symbol id="icon-layout-align-left" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-layout-align-left"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M4 4l0 16" />
+  <path d="M8 11a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v2a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2l0 -2" />
+</symbol>
+<symbol id="icon-layout-align-middle" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-layout-align-middle"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M4 12l5 0" />
+  <path d="M15 12l5 0" />
+  <path d="M9 8a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-2a2 2 0 0 1 -2 -2l0 -8" />
+</symbol>
+<symbol id="icon-layout-align-right" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-layout-align-right"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M20 4l0 16" />
+  <path d="M4 11a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v2a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2l0 -2" />
+</symbol>
+<symbol id="icon-layout-align-top" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-layout-align-top"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M4 4l16 0" />
+  <path d="M9 10a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-2a2 2 0 0 1 -2 -2l0 -8" />
+</symbol>
+<symbol id="icon-layout-grid" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-layout-grid"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M4 5a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1l0 -4" />
+  <path d="M14 5a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1l0 -4" />
+  <path d="M4 15a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1l0 -4" />
+  <path d="M14 15a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1l0 -4" />
+</symbol>
+<symbol id="icon-letter-case-upper" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-letter-case-upper"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M3 19v-10.5a3.5 3.5 0 0 1 7 0v10.5" />
+  <path d="M3 13h7" />
+  <path d="M14 19v-10.5a3.5 3.5 0 0 1 7 0v10.5" />
+  <path d="M14 13h7" />
+</symbol>
+<symbol id="icon-line-dashed" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-line-dashed"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M5 12h2" />
+  <path d="M17 12h2" />
+  <path d="M11 12h2" />
+</symbol>
+<symbol id="icon-link" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-link"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M9 15l6 -6" />
+  <path d="M11 6l.463 -.536a5 5 0 0 1 7.071 7.072l-.534 .464" />
+  <path d="M13 18l-.397 .534a5.068 5.068 0 0 1 -7.127 0a4.972 4.972 0 0 1 0 -7.071l.524 -.463" />
+</symbol>
+<symbol id="icon-list" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-list"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M9 6l11 0" />
+  <path d="M9 12l11 0" />
+  <path d="M9 18l11 0" />
+  <path d="M5 6l0 .01" />
+  <path d="M5 12l0 .01" />
+  <path d="M5 18l0 .01" />
+</symbol>
+<symbol id="icon-lock-open" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-lock-open"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M5 13a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v6a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2l0 -6" />
+  <path d="M11 16a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
+  <path d="M8 11v-5a4 4 0 0 1 8 0" />
+</symbol>
+<symbol id="icon-lock" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-lock"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M5 13a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v6a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-6" />
+  <path d="M11 16a1 1 0 1 0 2 0a1 1 0 0 0 -2 0" />
+  <path d="M8 11v-4a4 4 0 1 1 8 0v4" />
+</symbol>
+<symbol id="icon-map-2" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-map-2"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M12 18.5l-3 -1.5l-6 3v-13l6 -3l6 3l6 -3v7.5" />
+  <path d="M9 4v13" />
+  <path d="M15 7v5.5" />
+  <path d="M21.121 20.121a3 3 0 1 0 -4.242 0c.418 .419 1.125 1.045 2.121 1.879c1.051 -.89 1.759 -1.516 2.121 -1.879" />
+  <path d="M19 18v.01" />
+</symbol>
+<symbol id="icon-mask" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-mask"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M9 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" />
+  <path d="M4 6a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2l0 -12" />
+</symbol>
+<symbol id="icon-math-function" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-math-function"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M3 19a2 2 0 0 0 2 2c2 0 2 -4 3 -9s1 -9 3 -9a2 2 0 0 1 2 2" />
+  <path d="M5 12h6" />
+  <path d="M15 12l6 6" />
+  <path d="M15 18l6 -6" />
+</symbol>
+<symbol id="icon-menu-2" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-menu-2"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M4 6l16 0" />
+  <path d="M4 12l16 0" />
+  <path d="M4 18l16 0" />
+</symbol>
+<symbol id="icon-packages" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-packages"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M7 16.5l-5 -3l5 -3l5 3v5.5l-5 3l0 -5.5" />
+  <path d="M2 13.5v5.5l5 3" />
+  <path d="M7 16.545l5 -3.03" />
+  <path d="M17 16.5l-5 -3l5 -3l5 3v5.5l-5 3l0 -5.5" />
+  <path d="M12 19l5 3" />
+  <path d="M17 16.5l5 -3" />
+  <path d="M12 13.5v-5.5l-5 -3l5 -3l5 3v5.5" />
+  <path d="M7 5.03v5.455" />
+  <path d="M12 8l5 -3" />
+</symbol>
+<symbol id="icon-palette" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-palette"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M12 21a9 9 0 0 1 0 -18c4.97 0 9 3.582 9 8c0 1.06 -.474 2.078 -1.318 2.828c-.844 .75 -1.989 1.172 -3.182 1.172h-2.5a2 2 0 0 0 -1 3.75a1.3 1.3 0 0 1 -1 2.25" />
+  <path d="M7.5 10.5a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
+  <path d="M11.5 7.5a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
+  <path d="M15.5 10.5a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
+</symbol>
+<symbol id="icon-photo-scan" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-photo-scan"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M15 8h.01" />
+  <path d="M6 13l2.644 -2.644a1.21 1.21 0 0 1 1.712 0l3.644 3.644" />
+  <path d="M13 13l1.644 -1.644a1.21 1.21 0 0 1 1.712 0l1.644 1.644" />
+  <path d="M3 7v-2a2 2 0 0 1 2 -2h2" />
+  <path d="M3 17v2a2 2 0 0 0 2 2h2" />
+  <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+  <path d="M17 21h2a2 2 0 0 0 2 -2v-2" />
+</symbol>
+<symbol id="icon-plus" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-plus"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M12 5l0 14" />
+  <path d="M5 12l14 0" />
+</symbol>
+<symbol id="icon-recolor-brightness" viewBox="0 0 24 24" fill="none" stroke="currentColor"><g stroke="none" fill="currentColor"><circle cx="12" cy="12" r="8" fill-opacity=".3"/><circle cx="12" cy="12" r="5.4" fill-opacity=".55"/><circle cx="12" cy="12" r="2.6"/></g><circle cx="12" cy="12" r="8" stroke-width="1.5"/></symbol>
+<symbol id="icon-recolor-saturation" viewBox="0 0 24 24" fill="none" stroke="currentColor"><g stroke="none" fill="currentColor"><circle cx="12" cy="12" r="8" fill-opacity=".15"/><circle cx="12" cy="12" r="2.6"/></g><circle cx="12" cy="12" r="8" stroke-width="1.5"/></symbol>
+<symbol id="icon-recolor" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 12l3 -5.5"/><path d="M12 12l-4.5 2"/><circle cx="15.5" cy="6" r="1.5" fill="currentColor"/><circle cx="7" cy="14.5" r="1.2" fill="currentColor"/><circle cx="12" cy="12" r=".6" fill="currentColor"/></symbol>
+<symbol id="icon-search" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-search"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0" />
+  <path d="M21 21l-6 -6" />
+</symbol>
+<symbol id="icon-spacing-horizontal" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-spacing-horizontal"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M20 20h-2a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h2" />
+  <path d="M4 20h2a2 2 0 0 0 2 -2v-12a2 2 0 0 0 -2 -2h-2" />
+  <path d="M12 8v8" />
+</symbol>
+<symbol id="icon-spacing-vertical" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-spacing-vertical"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M4 20v-2a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v2" />
+  <path d="M4 4v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2" />
+  <path d="M16 12h-8" />
+</symbol>
+<symbol id="icon-square-dot" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-square-dot"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M3 5a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14" />
+  <path d="M11 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
+</symbol>
+<symbol id="icon-square-plus" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-square-plus"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M9 12h6" />
+  <path d="M12 9v6" />
+  <path d="M3 5a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14" />
+</symbol>
+<symbol id="icon-square-rounded-plus" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-square-rounded-plus"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M12 3c7.2 0 9 1.8 9 9c0 7.2 -1.8 9 -9 9c-7.2 0 -9 -1.8 -9 -9c0 -7.2 1.8 -9 9 -9" />
+  <path d="M15 12h-6" />
+  <path d="M12 9v6" />
+</symbol>
+<symbol id="icon-square" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-square"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M3 5a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14" />
+</symbol>
+<symbol id="icon-stack-2" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-stack-2"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M12 4l-8 4l8 4l8 -4l-8 -4" />
+  <path d="M4 12l8 4l8 -4" />
+  <path d="M4 16l8 4l8 -4" />
+</symbol>
+<symbol id="icon-stack-pop" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-stack-pop"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M7 9.5l-3 1.5l8 4l8 -4l-3 -1.5" />
+  <path d="M4 15l8 4l8 -4" />
+  <path d="M12 11v-7" />
+  <path d="M9 7l3 -3l3 3" />
+</symbol>
+<symbol id="icon-stack-push" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-stack-push"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M6 10l-2 1l8 4l8 -4l-2 -1" />
+  <path d="M4 15l8 4l8 -4" />
+  <path d="M12 4v7" />
+  <path d="M15 8l-3 3l-3 -3" />
+</symbol>
+<symbol id="icon-stroke-align-center" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 3v15h15" stroke-width="6"/><path d="M6 3v15h15" stroke="var(--surface, #fff)" stroke-width="1"/></symbol>
+<symbol id="icon-stroke-align-inside" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 3v12h12" stroke-width="6"/><path d="M6 3v15h15" stroke="currentColor" stroke-width="1"/></symbol>
+<symbol id="icon-stroke-align-outside" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3v18h18" stroke-width="6"/><path d="M6 3v15h15" stroke="currentColor" stroke-width="1"/></symbol>
+<symbol id="icon-stroke-cap-butt" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M8 3v18M16 3v18" stroke-opacity=".35" stroke-width="1" stroke-dasharray="2 2"/><path d="M8 12h8" stroke-width="7" stroke-linecap="butt"/></symbol>
+<symbol id="icon-stroke-cap-round" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M8 3v18M16 3v18" stroke-opacity=".35" stroke-width="1" stroke-dasharray="2 2"/><path d="M8 12h8" stroke-width="7" stroke-linecap="round"/></symbol>
+<symbol id="icon-stroke-cap-square" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M8 3v18M16 3v18" stroke-opacity=".35" stroke-width="1" stroke-dasharray="2 2"/><path d="M8 12h8" stroke-width="7" stroke-linecap="square"/></symbol>
+<symbol id="icon-stroke-flip-across" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 12h18" stroke-width="1" stroke-dasharray="2 2"/><path d="M7 3h10l-5 6zM7 21h10l-5-6z" fill="currentColor" stroke="none"/></symbol>
+<symbol id="icon-stroke-flip-along" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3v18" stroke-width="1" stroke-dasharray="2 2"/><path d="M3 7v10l6-5zM21 7v10l-6-5z" fill="currentColor" stroke="none"/></symbol>
+<symbol id="icon-stroke-join-bevel" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 21V7h15" stroke-width="7" stroke-linejoin="bevel"/><path d="M6 21V7h15" stroke="var(--surface, #fff)" stroke-opacity=".65" stroke-width="1"/></symbol>
+<symbol id="icon-stroke-join-miter" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 21V7h15" stroke-width="7" stroke-linejoin="miter"/><path d="M6 21V7h15" stroke="var(--surface, #fff)" stroke-opacity=".65" stroke-width="1"/></symbol>
+<symbol id="icon-stroke-join-round" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 21V7h15" stroke-width="7" stroke-linejoin="round"/><path d="M6 21V7h15" stroke="var(--surface, #fff)" stroke-opacity=".65" stroke-width="1"/></symbol>
+<symbol id="icon-stroke-weight" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 5h16" stroke-width="1.2"/><path d="M4 11h16" stroke-width="2.6"/><path d="M4 19h16" stroke-width="4.5"/></symbol>
+<symbol id="icon-template" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-template"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M4 5a1 1 0 0 1 1 -1h14a1 1 0 0 1 1 1v2a1 1 0 0 1 -1 1h-14a1 1 0 0 1 -1 -1l0 -2" />
+  <path d="M4 13a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v6a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1l0 -6" />
+  <path d="M14 12l6 0" />
+  <path d="M14 16l6 0" />
+  <path d="M14 20l6 0" />
+</symbol>
+<symbol id="icon-trash" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-trash"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M4 7l16 0" />
+  <path d="M10 11l0 6" />
+  <path d="M14 11l0 6" />
+  <path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12" />
+  <path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3" />
+</symbol>
+<symbol id="icon-typography" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-typography"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M4 20l3 0" />
+  <path d="M14 20l7 0" />
+  <path d="M6.9 15l6.9 0" />
+  <path d="M10.2 6.3l5.8 13.7" />
+  <path d="M5 20l6 -16l2 0l7 16" />
+</symbol>
+<symbol id="icon-unlink" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-unlink"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M17 22v-2" />
+  <path d="M9 15l6 -6" />
+  <path d="M11 6l.463 -.536a5 5 0 0 1 7.071 7.072l-.534 .464" />
+  <path d="M13 18l-.397 .534a5.068 5.068 0 0 1 -7.127 0a4.972 4.972 0 0 1 0 -7.071l.524 -.463" />
+  <path d="M20 17h2" />
+  <path d="M2 7h2" />
+  <path d="M7 2v2" />
+</symbol>
+<symbol id="icon-x" width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class="icon icon-tabler icons-tabler-outline icon-tabler-x"
+>
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M18 6l-12 12" />
+  <path d="M6 6l12 12" />
+</symbol>
+</svg>

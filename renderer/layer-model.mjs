@@ -49,3 +49,13 @@ export function setItemLayerColor(item, color) {
   if (!painted) item.strokeColor = color;
   return true;
 }
+
+/** Reuse Cut process settings by exact layer key, then by colour AND artwork kind.
+ * A black raster must never inherit a black vector's Cut/Score operation.
+ */
+export function matchingProcessLayer(layers, { key, color, raster = false }) {
+  const kind = Boolean(raster), normalized = String(color ?? "").toLowerCase();
+  return layers.find(layer => key && layer.key === key && Boolean(layer.raster) === kind)
+    ?? layers.find(layer => normalized && String(layer.color ?? "").toLowerCase() === normalized && Boolean(layer.raster) === kind)
+    ?? null;
+}

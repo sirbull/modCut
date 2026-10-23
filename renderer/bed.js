@@ -16,6 +16,9 @@ import { itemLayerColor, itemLayerKey, setItemLayerColor } from "./layer-model.m
 import { MAX_RASTER_SAMPLES, VECTOR_SAMPLE_STEP_MM, assessOutputQuality, fitRasterDpi, rasterGrid } from "./output-quality.mjs";
 import { combinedFocusOffset } from "./process-profiles.mjs";
 import { defaultMotionTiming, targetMotionSpeed, trapezoidPlan } from "./motion-timing.mjs";
+import { CURSORS, RESIZE_CURSORS, toolCursor } from './draw/tools/cursors.mjs';
+import { shapeFromDrag } from './draw/tools/shapes.mjs';
+import { constrain } from './draw/geom/path-editing.mjs';
 
 // The bed, on Paper.js. Project coordinates are millimetres (1 unit = 1 mm).
 // - Space (or middle mouse) + drag = pan (hand cursor), tracked in absolute pixels
@@ -63,6 +66,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   const focusOpacity = new Map();
   let coordsCb = null, selectionCb = null, contextCb = null, spaceDown = false, altDown = false, shiftDown = false, changeCb = null, designAngle = 0;
   let gridX = 10, gridY = 10;                 // grid spacing in mm
+  let showGrid = true, invertZoom = false;
   let currentTool = "select";                 // select | node | pen | rect | ellipse | line
   let pathOrder = "optimize";                 // ordering inside each layer only
   let drawSizeCb = null, drawClickCb = null, toolResetCb = null;
@@ -72,11 +76,18 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   let nodeHit = null, nodeEditItem = null, nodeStrokeHover = null;
 
   // --- bed + grid ---------------------------------------------------------
+  let themeTokens = getComputedStyle(document.documentElement);
+  const themeColor = (name) => themeTokens.getPropertyValue(name).trim();
+  window.addEventListener("modcut-theme-change", () => {
+    themeTokens = getComputedStyle(document.documentElement);
+    drawBed();
+    view.update();
+  });
   function drawBed() {
     bedLayer.activate();
     bedLayer.removeChildren();
     const plate = new paper.Path.Rectangle(P(0, 0), new paper.Size(bedWmm, bedHmm));
-    plate.fillColor = "white";
+    plate.fillColor = themeColor("--bed");
     plate.strokeColor = "#00AC69";
     plate.strokeWidth = 0.6;
     plate.guide = true;
@@ -84,14 +95,14 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     plate.shadowBlur = 6;
     plate.shadowOffset = P(0, 3);
     let i = 0;
-    for (let x = 0; x <= bedWmm + 0.001; x += gridX) gridLine([x, 0], [x, bedHmm], i++ % 5 === 0);
+    if (showGrid) for (let x = 0; x <= bedWmm + 0.001; x += gridX) gridLine([x, 0], [x, bedHmm], i++ % 5 === 0);
     i = 0;
-    for (let y = 0; y <= bedHmm + 0.001; y += gridY) gridLine([0, y], [bedWmm, y], i++ % 5 === 0);
+    if (showGrid) for (let y = 0; y <= bedHmm + 0.001; y += gridY) gridLine([0, y], [bedWmm, y], i++ % 5 === 0);
     designLayer.activate();
   }
   function gridLine(a, b, major) {
     const l = new paper.Path.Line(P(...a), P(...b));
-    l.strokeColor = major ? "#CFE6DC" : "#E7F5EF";
+    l.strokeColor = themeColor(major ? "--grid-major" : "--grid-minor");
     l.strokeWidth = major ? 0.4 : 0.2;
     l.guide = true;
   }
@@ -107,12 +118,22 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   }
   function setBedSize(w, h) { bedWmm = w; bedHmm = h; drawBed(); fit(); }
   function setGrid(x, y) { gridX = Math.max(0.5, x || 10); gridY = Math.max(0.5, y || 10); drawBed(); view.update(); }
+  function setViewPreferences(values) {
+    showGrid = values.showGrid;
+    invertZoom = values.invertZoom;
+    drawBed();
+    view.update();
+  }
   function setTool(t) {
+    if (drawStart || mode || nodeHit) cancelInteraction();
+    const previous = currentTool;
+    const nodePaths = [...new Set([...selectedSegments].map(segment => toSelectable(segment.path)).filter(Boolean))];
     clearNodeSelection();
     if (penPath) finishPen();
     currentTool = t;
     penHoverPoint = null; penEndpointHover = null; penInsertHover = null; penCloseHover = false;
-    clearSel(); emitSel(); drawPenOverlay();
+    if (previous === 'node') for (const item of nodePaths) addSel(item);
+    emitSel(); drawOverlay();
     if (t === "pen") setPenCursor("new");
     else setCursor(cursorForTool(t));
     view.update();
@@ -149,9 +170,43 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     if ("clipped" in item) item.clipped = false;
     if (item.children) for (const child of item.children.slice()) releaseClipping(child);
   }
-  function loadSVG(node, wMm, hMm, viewBox) {
+  // options.placement "origin" puts the SVG's top-left at the bed origin instead of centering it;
+  // options.replace clears the design inside the same undo step (Send to Cut from Draw).
+  // Draw's Send to Cut tags what it adds (`link`), so a later "Update in Cut" (`replaceLink`) can swap
+  // exactly those items, in the same undo step, keeping any move the user made in Cut.
+  const linkedTo = (item, link) => !!link && item.data?.drawLink?.doc === link.doc && item.data.drawLink.board === link.board;
+  function linkedItems(link) { return designLayer.children.filter((it) => linkedTo(it, link)); }
+  // An engraving raster from Draw: `x`, `y` is its centre on the bed, `width`/`height` its size in mm.
+  function placeRaster(dataUrl, { x, y, width, height, rotation = 0 }) {
+    const raster = new paper.Raster({ insert: false });
+    raster.data.modcutRaster = true;
+    raster.data.modcutColor = "#000000";
+    raster.data.originalDataUrl = dataUrl;
+    raster.data.rasterSettings = { ...DEFAULT_RASTER_SETTINGS };
+    raster.data.rasterMode = "Grayscale";
+    raster.smoothing = false;
+    raster.onLoad = () => {
+      if (raster.width && raster.height) raster.scale(width / raster.width, height / raster.height);
+      if (rotation) raster.rotate(rotation);
+      raster.position = P(x, y);
+      applyRasterSettings(raster);
+      view.update();
+      notifyChange();
+    };
+    raster.source = dataUrl;
+    designLayer.addChild(raster);
+    return raster;
+  }
+  function loadSVG(node, wMm, hMm, viewBox, { placement = "center", replace = false, link = null, replaceLink = null, images = [] } = {}) {
     resetGroupFocus();
     pushHistory();
+    if (replace) { abandonPenInteraction(); clearNodeSelection(); designLayer.removeChildren(); selected.clear(); }
+    let moved = null;
+    if (replaceLink) {
+      const old = linkedItems(replaceLink), sent = old[0]?.data.drawLink.topLeft;
+      if (old.length && sent) { const b = old.reduce((a, it) => a ? a.unite(it.bounds) : it.bounds.clone(), null); moved = b.topLeft.subtract(P(sent[0], sent[1])); }
+      if (old.length) { abandonPenInteraction(); clearNodeSelection(); for (const it of old) { selected.delete(it); it.remove(); } }
+    }
     designLayer.activate();
     const before = new Set(designLayer.children);
     const g = paper.project.importSVG(node, { expandShapes: true, insert: true });
@@ -160,15 +215,22 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     if (hasViewport) {
       // prepareSVG normalized the root viewport to millimetres. Center the
       // document/artboard on the bed, preserving every item's page position.
-      g.translate(P((bedWmm - wMm) / 2, (bedHmm - hMm) / 2));
+      if (placement !== "origin") g.translate(P((bedWmm - wMm) / 2, (bedHmm - hMm) / 2));
     } else {
       const sf = wMm && g.bounds.width ? wMm / g.bounds.width : MM_PER_PX;
       g.scale(sf, g.bounds.topLeft);
       g.position = P(bedWmm / 2, bedHmm / 2);
     }
+    if (moved) g.translate(moved);
+    const sentTopLeft = g.bounds.topLeft;
     if (g.className === "Group") { flattenInto(g, designLayer); g.remove(); } // single-shape SVGs import as a Path
+    // Images arrive in the SVG's millimetre space and move exactly as the paths did.
+    const shift = (hasViewport && placement !== "origin" ? P((bedWmm - wMm) / 2, (bedHmm - hMm) / 2) : P(0, 0)).add(moved ?? P(0, 0));
+    for (const image of hasViewport ? images : []) placeRaster(image.dataUrl, { ...image, x: image.x + shift.x, y: image.y + shift.y });
     clearSel();
-    for (const it of designLayer.children) if (!before.has(it) && isSelectableItem(it)) addSel(it);
+    const added = designLayer.children.filter((it) => !before.has(it));
+    if (link) for (const it of added) it.data.drawLink = { ...link, topLeft: [sentTopLeft.x - (moved?.x ?? 0), sentTopLeft.y - (moved?.y ?? 0)] };
+    for (const it of added) if (isSelectableItem(it)) addSel(it);
     designAngle = 0;
     emitSel();
     view.update();
@@ -238,12 +300,14 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     if (activeGroup) activeGroup.addChild(item);
     return item;
   }
-  function addShape(type, wMm, hMm) {
+  function addShape(type, wMm, hMm, { point, angle = 0 } = {}) {
     pushHistory();
-    const w = Math.max(0.5, wMm), h = Math.max(0.5, hMm), cx = bedWmm / 2, cy = bedHmm / 2;
+    const w = Math.max(0.001, wMm), h = Math.max(0.001, hMm), cx = bedWmm / 2, cy = bedHmm / 2;
+    const a = point ? P(point.x, point.y) : P(cx - w / 2, type === 'line' ? cy : cy - h / 2);
+    const radians = angle * Math.PI / 180;
     const item = type === "line"
-      ? makeShape("line", P(cx - w / 2, cy), P(cx + w / 2, cy))
-      : makeShape(type, P(cx - w / 2, cy - h / 2), P(cx + w / 2, cy + h / 2));
+      ? makeShape("line", a, a.add(P(Math.cos(radians) * w, Math.sin(radians) * w)))
+      : makeShape(type, a, a.add(P(w, h)));
     clearSel();
     addSel(item);
     emitSel();
@@ -611,6 +675,67 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     drawOverlay();
     view.update();
   }
+  // --- process preview: what each active layer does to its artwork --------
+  // Display only. Colours are swapped while the design layer draws and restored
+  // right after, so hit testing, export and job output keep the real artwork.
+  let processPreview = null; // { specs: [{ key, color, op }], cut, score, engrave, scoreDashed }
+  function setProcessPreview(value) {
+    processPreview = value?.enabled ? value : null;
+    // No item changed, so Paper would skip the redraw without this flag.
+    view._needsUpdate = true;
+    view.update();
+  }
+  function processOpsFor(item) {
+    const ops = new Set();
+    for (const spec of processPreview.specs) {
+      const match = spec.key ? logicalLayerKey(item) === spec.key
+        : spec.color ? logicalColor(item) === String(spec.color).toLowerCase() : true;
+      if (match) ops.add(spec.op);
+    }
+    return ops;
+  }
+  const drawDesignLayer = designLayer.draw;
+  designLayer.draw = function (ctx, ...args) {
+    if (!processPreview) return drawDesignLayer.call(this, ctx, ...args);
+    const restore = [];
+    const patch = (item, props) => {
+      const old = {};
+      for (const key of Object.keys(props)) old[key] = item[key];
+      restore.push(() => Object.assign(item, old));
+      Object.assign(item, props);
+    };
+    try {
+      for (const item of laserItems()) {
+        if (!item.visible) continue;
+        const ops = processOpsFor(item);
+        const engrave = ops.has("Engrave");
+        const line = ops.has("Cut") ? "Cut" : ops.has("Score") ? "Score" : null;
+        if (item.className === "Raster") {
+          // Cut and Score trace vector paths only; images are engraved or skipped.
+          if (!engrave) { patch(item, { visible: false }); continue; }
+          const original = item.draw;
+          patch(item, { opacity: 1, blendMode: "normal", draw: function (c, ...rest) {
+            c.save();
+            try { c.filter = "grayscale(1)"; return original.call(this, c, ...rest); } finally { c.restore(); }
+          } });
+          continue;
+        }
+        if (!engrave && !line) { patch(item, { visible: false }); continue; }
+        // Engrave reproduces the painted footprint (fill and stroke width);
+        // Cut and Score follow the centre path whatever its paint.
+        const props = { opacity: 1, blendMode: "normal", fillColor: engrave && item.fillColor ? processPreview.engrave : null };
+        if (line) Object.assign(props, {
+          strokeColor: line === "Cut" ? processPreview.cut : processPreview.score, strokeWidth: 1.5, strokeScaling: false,
+          dashArray: line === "Score" && processPreview.scoreDashed ? [6, 4] : [],
+        });
+        else props.strokeColor = item.strokeColor ? processPreview.engrave : null;
+        patch(item, props);
+      }
+      return drawDesignLayer.call(this, ctx, ...args);
+    } finally {
+      for (let i = restore.length - 1; i >= 0; i--) restore[i]();
+    }
+  };
   function updateRasterSettings(partial) {
     const raster = selectedRaster();
     if (!raster) return null;
@@ -703,7 +828,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   }
   let handles = [];
   function drawNodeOverlay() {
-    if (!selectedSegments.size && !nodeStrokeHover) return;
+    if (!['node', 'pen'].includes(currentTool)) return;
     uiLayer.activate();
     const curve = currentTool === "node" ? nodeStrokeHover?.location?.curve : null;
     if (curve) {
@@ -715,14 +840,26 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       hover.strokeCap = "round";
       hover.guide = true;
     }
-    const radius = 5 / view.zoom;
-    for (const segment of selectedSegments) {
-      if (!segment?.path) continue;
-      const marker = new paper.Path.Circle(segment.point, radius);
-      marker.name = "selected-anchor";
-      marker.fillColor = "white";
+    const paths = new Set([...selected].flatMap(item => vectorSegments(item).segments.map(segment => segment.path)));
+    for (const segment of selectedSegments) if (segment.path) paths.add(segment.path);
+    if (nodeEditItem) for (const segment of vectorSegments(nodeEditItem).segments) paths.add(segment.path);
+    const radius = 3.5 / view.zoom;
+    for (const path of paths) for (const segment of path.segments) {
+      if (path === penPath) continue;
+      const active = selectedSegments.has(segment);
+      if (active) for (const vector of [segment.handleIn, segment.handleOut]) {
+        if (!vector.length) continue;
+        const end = segment.point.add(vector);
+        const line = new paper.Path.Line(segment.point, end);
+        line.strokeColor = '#006B5C'; line.strokeWidth = 1 / view.zoom; line.guide = true;
+        const handle = new paper.Path.Circle(end, 3 / view.zoom);
+        handle.fillColor = 'white'; handle.strokeColor = '#006B5C'; handle.strokeWidth = 1 / view.zoom; handle.guide = true;
+      }
+      const marker = new paper.Path.Rectangle(new paper.Rectangle(segment.point.subtract(P(radius, radius)), new paper.Size(radius * 2, radius * 2)));
+      marker.name = active ? 'selected-anchor' : 'path-anchor';
+      marker.fillColor = active ? '#006B5C' : 'white';
       marker.strokeColor = "#006B5C";
-      marker.strokeWidth = 1.6 / view.zoom;
+      marker.strokeWidth = 1 / view.zoom;
       marker.guide = true;
     }
   }
@@ -730,25 +867,25 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     uiLayer.removeChildren();
     handles = [];
     const b = selectionBounds();
-    if (!b) { drawNodeOverlay(); drawPenOverlay(); view.update(); return; }
+    if (!b || ['node', 'pen'].includes(currentTool)) { drawNodeOverlay(); drawPenOverlay(); view.update(); return; }
     uiLayer.activate();
-    const sw = 1 / view.zoom, hs = 4 / view.zoom;
+    const sw = 1 / view.zoom, hs = 3.5 / view.zoom;
     const box = new paper.Path.Rectangle(b);
-    box.strokeColor = "#006B5C"; box.strokeWidth = sw; box.dashArray = [4 * sw, 3 * sw]; box.guide = true;
+    box.strokeColor = "#006B5C"; box.strokeWidth = 1.5 * sw; box.guide = true;
     const pts = { tl: b.topLeft, tr: b.topRight, br: b.bottomRight, bl: b.bottomLeft, tc: b.topCenter, bc: b.bottomCenter, lc: b.leftCenter, rc: b.rightCenter };
     const opp = { tl: "br", tr: "bl", br: "tl", bl: "tr", tc: "bc", bc: "tc", lc: "rc", rc: "lc" };
-    for (const k in pts) {
+    if (currentTool === 'select') for (const k in pts) {
       const p = pts[k];
       const h = new paper.Path.Rectangle(new paper.Rectangle(p.x - hs, p.y - hs, hs * 2, hs * 2));
       h.fillColor = "white"; h.strokeColor = "#006B5C"; h.strokeWidth = sw; h.guide = true;
       handles.push({ type: "scale", key: k, pos: p, anchor: pts[opp[k]] });
     }
-    const rp = b.topCenter.subtract(P(0, 20 / view.zoom));
-    const line = new paper.Path.Line(b.topCenter, rp);
-    line.strokeColor = "#006B5C"; line.strokeWidth = sw; line.guide = true;
-    const rh = new paper.Path.Circle(rp, hs);
-    rh.fillColor = "#006B5C"; rh.guide = true;
-    handles.push({ type: "rotate", pos: rp });
+    if (currentTool === 'select') {
+      const rp = b.topRight.add(P(12 / view.zoom, -12 / view.zoom));
+      const rh = new paper.Path.Circle(rp, 3 / view.zoom);
+      rh.fillColor = 'white'; rh.strokeColor = '#006B5C'; rh.strokeWidth = sw; rh.guide = true;
+      handles.push({ type: "rotate", pos: rp });
+    }
     drawNodeOverlay();
     designLayer.activate();
     drawPenOverlay();
@@ -757,27 +894,13 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   const handleAt = (pt) => handles.find((h) => pt.getDistance(h.pos) <= 7 / view.zoom) || null;
 
   // --- hover cursors ------------------------------------------------------
-  const SCALE_CURSORS = { tl: "nwse-resize", br: "nwse-resize", tr: "nesw-resize", bl: "nesw-resize", tc: "ns-resize", bc: "ns-resize", lc: "ew-resize", rc: "ew-resize" };
-  const ARROW_PATH = "M4 2 L4 19 L8.4 14.7 L11.1 21 L13.9 19.8 L11.2 13.5 L17 13.5 Z";
-  const arrowCursor = (fill, stroke) => `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'><path d='${ARROW_PATH}' fill='${fill}' stroke='${stroke}' stroke-width='1.8' stroke-linejoin='round'/></svg>`)}") 4 2, default`;
-  const SELECT_CURSOR = arrowCursor("#111111", "#ffffff");
-  const NODE_CURSOR = arrowCursor("#ffffff", "#111111");
-  const DRAW_CURSOR = "crosshair";
-  const penCursor = (badge = "") => `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'>
-    <g fill='white' stroke='#111' stroke-width='1.6' stroke-linejoin='round'><path d='M3 2l13 13-5.1 1.2-3 5.7-3-3 5.7-3L3 2z'/></g>
-    ${badge}
-  </svg>`)}") 3 2, crosshair`;
-  const PEN_NEW_CURSOR = penCursor("<path d='M22 4v9M17.5 8.5h9' fill='none' stroke='white' stroke-width='4'/><path d='M22 4v9M17.5 8.5h9' fill='none' stroke='#111' stroke-width='1.5'/>");
-  const PEN_ACTIVE_CURSOR = penCursor();
-  const PEN_CONTINUE_CURSOR = penCursor("<path d='M18 12l8-8' fill='none' stroke='white' stroke-width='4'/><path d='M18 12l8-8' fill='none' stroke='#111' stroke-width='1.8'/>");
-  const PEN_CLOSE_CURSOR = penCursor("<circle cx='22' cy='8' r='4' fill='white' stroke='#111' stroke-width='1.6'/>");
-  const PEN_ADD_CURSOR = penCursor("<circle cx='22' cy='8' r='6' fill='white' stroke='#006B5C' stroke-width='1.5'/><path d='M22 4.5v7M18.5 8h7' fill='none' stroke='#006B5C' stroke-width='1.7'/>");
-  const ROT_SVG = "<svg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 24 24' fill='none' stroke='#071411' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 11a9 9 0 0 1 15-6l3 3'/><path d='M21 3v5h-5'/><path d='M21 13a9 9 0 0 1-15 6l-3-3'/><path d='M3 21v-5h5'/></svg>";
-  const ROTATE_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(ROT_SVG)}") 11 11, grab`;
-  const cursorForTool = (tool) => tool === "select" ? SELECT_CURSOR : tool === "node" ? NODE_CURSOR : tool === "pen" ? PEN_NEW_CURSOR : DRAW_CURSOR;
+  const SCALE_CURSORS = Object.fromEntries(Object.entries(RESIZE_CURSORS).map(([key, value]) => [key, CURSORS[value]]));
+  const SELECT_CURSOR = CURSORS.select;
+  const ROTATE_CURSOR = CURSORS.rotate;
+  const cursorForTool = tool => toolCursor(tool === 'node' ? 'direct-selection' : tool === 'rect' ? 'rectangle' : tool);
   function setPenCursor(mode) {
     canvas.dataset.penCursor = mode;
-    setCursor(mode === "continue" ? PEN_CONTINUE_CURSOR : mode === "close" ? PEN_CLOSE_CURSOR : mode === "add" ? PEN_ADD_CURSOR : mode === "active" ? PEN_ACTIVE_CURSOR : PEN_NEW_CURSOR);
+    setCursor(CURSORS['pen-' + mode] || CURSORS['pen-new']);
   }
   function updateCursor(pt) {
     if (spaceDown) return; // grab already set on keydown
@@ -813,7 +936,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     if (e.key === "Shift") shiftDown = false;
   });
   window.addEventListener("blur", () => { altDown = false; shiftDown = false; });
-  window.addEventListener("keydown", (e) => { if (e.code === "Space" && !spaceDown) { spaceDown = true; if (!pan) setCursor("grab"); } });
+  window.addEventListener("keydown", (e) => { if (e.code === "Space" && !spaceDown) { spaceDown = true; if (!pan) setCursor(CURSORS.hand); } });
   window.addEventListener("keyup", (e) => { if (e.code === "Space") { spaceDown = false; if (!pan) restoreToolCursor(); } });
   window.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === "Escape") && currentTool === "pen" && penPath) finishPen(); });
   canvas.addEventListener("dblclick", (e) => {
@@ -831,7 +954,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   canvas.addEventListener("pointerdown", (e) => {
     if (!(spaceDown || e.button === 1)) return;
     pan = { sx: e.clientX, sy: e.clientY, cx: view.center.x, cy: view.center.y };
-    setCursor("grabbing");
+    setCursor(CURSORS['hand-active']);
     canvas.setPointerCapture(e.pointerId);
   });
   canvas.addEventListener("pointermove", (e) => {
@@ -844,16 +967,33 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     penHoverPoint = null; penEndpointHover = null; penInsertHover = null; penCloseHover = false;
     drawPenOverlay();
   });
-  const endPan = (e) => { if (!pan) return; pan = null; if (spaceDown) setCursor("grab"); else restoreToolCursor(); try { canvas.releasePointerCapture(e.pointerId); } catch {} };
+  const endPan = (e) => { if (!pan) return; pan = null; if (spaceDown) setCursor(CURSORS.hand); else restoreToolCursor(); try { canvas.releasePointerCapture(e.pointerId); } catch {} };
   canvas.addEventListener("pointerup", endPan);
   canvas.addEventListener("pointercancel", endPan);
 
   // --- select / move / scale / rotate / marquee (Paper tool) --------------
   const tool = new paper.Tool();
-  let mode = null, moveItems = null, marquee = null, downPt = null;
+  let mode = null, moveItems = null, moveOrigins = null, marquee = null, downPt = null;
   let anchor = null, scaleKey = null, scaleCenter = null, scaleOpposite = null, scaleDownPoint = null, scaleStartVec = null, scaleFromCenter = false, appliedScaleX = 1, appliedScaleY = 1, lastAngle = null;
   let preDrag = null, dragChanged = false;
   let drawStart = null, drawPreview = null, drawMoved = false, preDraw = null;
+
+  function beginMove(point) {
+    mode = 'move'; downPt = point.clone(); moveItems = [...selected];
+    moveOrigins = moveItems.map(item => item.position.clone());
+    preDrag = snapshot(); dragChanged = false;
+  }
+
+  function cancelInteraction() {
+    if (penPath) { finishPen(); return; }
+    if (drawPreview) drawPreview.remove();
+    drawStart = drawPreview = preDraw = null; drawMoved = false;
+    drawSizeCb?.(null);
+    marquee?.remove(); marquee = null;
+    if (dragChanged && preDrag != null) restoreFrom(preDrag);
+    mode = moveItems = nodeHit = preDrag = null; dragChanged = false;
+    drawOverlay();
+  }
 
   // Finish a drag-drawn shape but STAY in the tool (user switches tools themselves).
   function endDrawTool() { drawStart = null; drawPreview = null; drawSizeCb && drawSizeCb(null); toolResetCb && toolResetCb(); }
@@ -988,7 +1128,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   function finishPen() {
     if (!penPath) return;
     const discarded = penPath.segments.length < 2;
-    if (discarded) penPath.remove();
+    if (discarded) { selected.delete(penPath); penPath.remove(); }
     else if (!penChanged && penResumeReversed) penPath.reverse();
     else if (penChanged) { undoStack.push(preDraw); if (undoStack.length > 60) undoStack.shift(); redoStack.length = 0; }
     const committed = !discarded && penChanged;
@@ -997,7 +1137,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     penEndpointHover = penHoverPoint ? openEndpointAt(penHoverPoint) : null;
     penInsertHover = penHoverPoint && !penEndpointHover ? insertionAt(penHoverPoint) : null;
     penCloseHover = false;
-    drawPenOverlay(); updateCursor(penHoverPoint || P(-1e6, -1e6));
+    emitSel(); drawOverlay(); updateCursor(penHoverPoint || P(-1e6, -1e6));
     if (committed) { notifyChange(); toolResetCb && toolResetCb(); }
   }
   function onPenDown(e) {
@@ -1038,6 +1178,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       designLayer.activate();
       penPath = new paper.Path({ strokeColor: drawColor, strokeWidth: drawWidth, fillColor: null });
       if (activeGroup) activeGroup.addChild(penPath);
+      clearSel(); addSel(penPath); emitSel();
       penChanged = true; penResumeReversed = false;
     }
     const handle = activePenHandleAt(e.point);
@@ -1052,18 +1193,21 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       penDragSegment = penPath.lastSegment; penDragHandleKind = "symmetric";
       return;
     }
-    penDragSegment = penPath.add(e.point); penDragHandleKind = "symmetric"; penChanged = true;
+    const point = e.event.shiftKey && penPath.lastSegment
+      ? P(...constrain([e.point.x, e.point.y], [penPath.lastSegment.point.x, penPath.lastSegment.point.y])) : e.point;
+    penDragSegment = penPath.add(point); penDragHandleKind = "symmetric"; penChanged = true;
     penEndpointHover = null; penInsertHover = null; penCloseHover = false;
     drawPenOverlay(); view.update();
   }
   function onPenDrag(e) {
     if (!penPath || !penDragSegment) return;
     const seg = penDragSegment;
-    const vector = e.point.subtract(seg.point);
+    const point = e.event.shiftKey ? P(...constrain([e.point.x, e.point.y], [seg.point.x, seg.point.y])) : e.point;
+    const vector = point.subtract(seg.point);
     if (penDragHandleKind === "in") {
-      seg.handleIn = vector; seg.handleOut = vector.multiply(-1);
+      seg.handleIn = vector; if (!e.event.altKey) seg.handleOut = vector.multiply(-1);
     } else {
-      seg.handleOut = vector; seg.handleIn = vector.multiply(-1);
+      seg.handleOut = vector; if (!e.event.altKey) seg.handleIn = vector.multiply(-1);
     }
     penChanged = true; drawPenOverlay(); view.update();
   }
@@ -1085,7 +1229,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       selectedSegments.delete(segment);
       return;
     }
-    segment.selected = true;
+    segment.selected = false; // The shared-style overlay draws anchors and handles.
     selectedSegments.add(segment);
   }
   function curveSegmentsAt(hit) {
@@ -1158,7 +1302,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
         clearSel(); emitSel();
         if (!e.event.shiftKey) clearNodeSelection();
         for (const segment of target.segments) {
-          segment.selected = true;
+          segment.selected = false;
           selectedSegments.add(segment);
         }
         nodeStrokeHover = null;
@@ -1166,20 +1310,34 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
         nodeHit = { kind: "shape", segments: [...selectedSegments] };
         preDrag = snapshot(); dragChanged = false;
       }
-    } else clearNodeSelection();
+    } else { clearNodeSelection(); clearSel(); emitSel(); }
+    if (nodeHit) {
+      nodeHit.start = e.point.clone();
+      const segments = nodeHit.segments ?? [...selectedSegments];
+      nodeHit.originals = new Map(segments.map(segment => [segment, {
+        point: segment.point.clone(), in: segment.handleIn.clone(), out: segment.handleOut.clone(),
+      }]));
+    }
     drawOverlay();
   }
   function onNodeDrag(e) {
     if (!nodeHit) return;
     dragChanged = true;
-    if (nodeHit.kind === "curve" || nodeHit.kind === "shape") {
-      for (const segment of nodeHit.segments) segment.point = segment.point.add(e.delta);
+    const delta = e.point.subtract(nodeHit.start);
+    if (['curve', 'shape', 'point'].includes(nodeHit.kind)) {
+      if (e.event.shiftKey) { if (Math.abs(delta.x) > Math.abs(delta.y)) delta.y = 0; else delta.x = 0; }
+      for (const [segment, original] of nodeHit.originals) segment.point = original.point.add(delta);
     } else {
       const s = nodeHit.seg;
-      if (nodeHit.kind === "point") for (const segment of selectedSegments) segment.point = segment.point.add(e.delta);
-      else if (nodeHit.kind === "in") s.handleIn = s.handleIn.add(e.delta);
-      else s.handleOut = s.handleOut.add(e.delta);
+      const original = nodeHit.originals.get(s), kind = nodeHit.kind;
+      let end = original.point.add(original[kind]).add(delta);
+      if (e.event.shiftKey) end = P(...constrain([end.x, end.y], [original.point.x, original.point.y]));
+      const vector = end.subtract(original.point), other = kind === 'in' ? 'out' : 'in';
+      s[kind === 'in' ? 'handleIn' : 'handleOut'] = vector;
+      s[other === 'in' ? 'handleIn' : 'handleOut'] = !e.event.altKey && vector.length && original[other].length
+        ? vector.normalize(-original[other].length) : original[other];
     }
+    setCursor(CURSORS['direct-move']);
     drawOverlay();
   }
   function onNodeUp() {
@@ -1208,7 +1366,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     }
     // drag anywhere inside the selection box = move (LightBurn-style)
     const selBounds = selectionBounds();
-    if (selBounds && selBounds.contains(e.point)) { mode = "move"; moveItems = [...selected]; preDrag = snapshot(); dragChanged = false; return; }
+    if (selBounds && selBounds.contains(e.point) && !e.event.shiftKey) { beginMove(e.point); return; }
     const hit = paper.project.hitTest(e.point, { fill: true, stroke: true, tolerance: 5 / view.zoom, match: (r) => r.item && r.item.layer === designLayer && (!activeGroup || isInsideGroup(r.item)) });
     if (hit) {
       const it = toSelectable(hit.item);
@@ -1217,7 +1375,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
         else if (e.event.shiftKey) selected.has(it) ? selected.delete(it) : addSel(it);
         else if (!selected.has(it)) { clearSel(); addSel(it); }
         emitSel();
-        mode = "move"; moveItems = [...selected]; preDrag = snapshot(); dragChanged = false;
+        beginMove(e.point);
         return;
       }
     }
@@ -1226,7 +1384,8 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   };
   tool.onMouseMove = (e) => {
     coordsCb && coordsCb(e.point.x, e.point.y);
-    if (currentTool === "pen") updatePenHover(e.point);
+    if (currentTool === "pen") updatePenHover(e.event.shiftKey && penPath?.lastSegment
+      ? P(...constrain([e.point.x, e.point.y], [penPath.lastSegment.point.x, penPath.lastSegment.point.y])) : e.point);
     else if (currentTool === "node") onNodeMove(e);
     updateCursor(e.point);
   };
@@ -1238,12 +1397,24 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     if (currentTool !== "select" && drawStart) {
       drawMoved = true;
       if (drawPreview) drawPreview.remove();
-      drawPreview = makeShape(currentTool, drawStart, e.point); // real endpoints (fixes the line tool)
+      const shape = shapeFromDrag(currentTool === 'rect' ? 'rectangle' : currentTool,
+        [drawStart.x, drawStart.y], [e.point.x, e.point.y], { shift: !!e.event.shiftKey, alt: !!e.event.altKey });
+      const p = shape.params;
+      drawPreview = currentTool === 'line'
+        ? makeShape(currentTool, P(p.x1, p.y1), P(p.x2, p.y2))
+        : makeShape(currentTool, P(p.x, p.y), P(p.x + p.width, p.y + p.height));
       const b = drawPreview.bounds;
       drawSizeCb && drawSizeCb(b.width, b.height, e.event.clientX, e.event.clientY);
       return;
     }
-    if (mode === "move") { dragChanged = true; for (const it of moveItems) it.position = it.position.add(e.delta); drawOverlay(); return; }
+    if (mode === "move") {
+      const delta = e.point.subtract(downPt);
+      if (e.event.shiftKey) { if (Math.abs(delta.x) > Math.abs(delta.y)) delta.y = 0; else delta.x = 0; }
+      dragChanged = true;
+      moveItems.forEach((item, index) => { item.position = moveOrigins[index].add(delta); });
+      setCursor(CURSORS[e.event.altKey ? 'select-copy' : 'select-move']);
+      drawOverlay(); return;
+    }
     if (mode === "scale") {
       const wantsCenter = altDown || !!e.event.altKey || paper.Key.isDown("alt") || paper.Key.isDown("option");
       if (!dragChanged && wantsCenter !== scaleFromCenter) {
@@ -1300,7 +1471,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
         emitSel();
       } else {
         drawPreview && drawPreview.remove();           // a click (no drag) -> ask app for exact size
-        drawClickCb && drawClickCb(currentTool);
+        drawClickCb && drawClickCb(currentTool, { x: drawStart.x, y: drawStart.y });
       }
       endDrawTool();
       notifyChange();
@@ -1316,10 +1487,15 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       emitSel();
     }
     if ((mode === "move" || mode === "scale" || mode === "rotate") && dragChanged && preDrag != null) {
+      if (mode === 'move' && e.event.altKey) {
+        const copies = moveItems.map((item, index) => { const copy = item.clone(); item.position = moveOrigins[index]; return copy; });
+        clearSel(); for (const item of copies) addSel(item); emitSel();
+      }
       undoStack.push(preDrag); if (undoStack.length > 60) undoStack.shift(); redoStack.length = 0;
     }
     preDrag = null; dragChanged = false;
     mode = null; moveItems = null;
+    restoreToolCursor();
     notifyChange();
   };
 
@@ -1336,7 +1512,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   canvas.addEventListener("wheel", (e) => {
     e.preventDefault();
     if (e.ctrlKey || e.metaKey) { // trackpad pinch reports ctrl+wheel in Chromium; cmd/ctrl+wheel is mouse zoom.
-      zoomAt(e.offsetX, e.offsetY, Math.exp(-e.deltaY * 0.01));
+      zoomAt(e.offsetX, e.offsetY, Math.exp(e.deltaY * (invertZoom ? 0.01 : -0.01)));
     } else {
       view.center = view.center.add(wheelPanDelta(e).divide(view.zoom));
     }
@@ -1491,13 +1667,40 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   }
 
   let clipboardJSON = null;
+  let clipboardTime = 0; // lets Cut and Draw tell which copy is newest
   let pasteStep = 0;
   function copySelection() {
     const roots = selectedItems();
     if (!roots.length) return false;
     clipboardJSON = JSON.stringify(roots.map((it) => it.exportJSON({ asString: false })));
+    clipboardTime = performance.now();
     pasteStep = 0;
     return true;
+  }
+  // The copy as a millimetre SVG with the bed origin at (0, 0), for pasting in Draw. Rasters stay in Cut.
+  function clipboardSVG() {
+    if (!clipboardJSON) return null;
+    let defs;
+    try { defs = JSON.parse(clipboardJSON); } catch { return null; }
+    const group = new paper.Group({ insert: false });
+    designLayer.activate();
+    for (const def of defs) {
+      const item = designLayer.importJSON(def);
+      if (item?.className === "Layer") { group.addChildren(item.children.slice()); item.remove(); }
+      else if (item) group.addChild(item);
+    }
+    const rasters = group.getItems({ class: paper.Raster });
+    for (const raster of rasters) raster.remove();
+    // The process layer color is what Cut shows in its layer list; Draw gets the same color.
+    for (const it of group.getItems({ match: (it) => it.data?.modcutColor && it.strokeColor })) it.strokeColor = it.data.modcutColor;
+    // Each copied item on its own, so Draw gets the same objects back, not a wrapping group.
+    const b = group.bounds, svg = group.children.map((it) => it.exportSVG({ asString: true, precision: 4 })).join("");
+    group.remove();
+    if (!svg) return { svg: null, bounds: null, time: clipboardTime, warning: rasters.length ? "Images in Cut cannot be pasted in Draw yet." : null };
+    const W = bedWmm, H = bedHmm;
+    return { svg: `<svg xmlns="http://www.w3.org/2000/svg" width="${W}mm" height="${H}mm" viewBox="0 0 ${W} ${H}">${svg}</svg>`,
+      bounds: { x: b.x, y: b.y, width: b.width, height: b.height }, time: clipboardTime,
+      warning: rasters.length ? `${rasters.length} image${rasters.length === 1 ? " was" : "s were"} left out: images in Cut cannot be pasted in Draw yet.` : null };
   }
   function pasteSelection({ inPlace = false } = {}) {
     if (!clipboardJSON) return false;
@@ -1529,8 +1732,12 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     return true;
   }
   function duplicateSelection() {
+    // Duplicate leaves the clipboard as it was, as in Illustrator.
+    const saved = [clipboardJSON, clipboardTime, pasteStep];
     if (!copySelection()) return false;
-    return pasteSelection({ inPlace: false });
+    const ok = pasteSelection({ inPlace: false });
+    [clipboardJSON, clipboardTime, pasteStep] = saved;
+    return ok;
   }
 
   // --- simulation (red dot tracing the real toolpath) ---------------------
@@ -2081,7 +2288,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   const fmt = (n) => (Math.round(n * 1000) / 1000).toFixed(3).replace(/\.?0+$/, "");
   const feedFromPct = (pct, maxFeed = 12000) => Math.round((Math.max(1, Math.min(100, pct || 1)) / 100) * maxFeed);
   const powerToS = (power) => Math.round(Math.max(0, Math.min(100, power || 0)) * 10);
-  async function buildGcodeJob(specs, { maxFeed = 12000, zAxis = null, softwareFocus = false, maxRasterSamples = MAX_RASTER_SAMPLES } = {}) {
+  async function buildGcodeJob(specs, { maxFeed = 12000, zAxis = null, softwareFocus = false, ignoreFocus = false, maxRasterSamples = MAX_RASTER_SAMPLES } = {}) {
     const quality = outputQuality(specs, { maxRasterSamples });
     if (quality.blocked) throw new Error("Output quality limit: " + quality.problems.join(" "));
     // This is intentionally applied before *all* job generation. Simulation,
@@ -2089,8 +2296,11 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     const effectiveSpecs = quality.rasterAutoAdjusted
       ? specs.map((spec) => spec.op === "Engrave" ? { ...spec, dpi: Math.max(1, Number(spec.dpi || 300) * quality.rasterDpiScale) } : spec)
       : specs;
-    const machineFocusOffset = zAxis?.enabled ? Number(zAxis.globalOffset) || 0 : 0;
-    const requestedZ = specs.map((spec) => combinedFocusOffset(machineFocusOffset, spec.zOffset));
+    // ignoreFocus builds the XY program at Z 0 without focus checks: for
+    // simulation and the offline Dummy machine, where no Z axis moves.
+    const machineFocusOffset = !ignoreFocus && zAxis?.enabled ? Number(zAxis.globalOffset) || 0 : 0;
+    const focusAt = (offset) => ignoreFocus ? 0 : combinedFocusOffset(machineFocusOffset, offset);
+    const requestedZ = specs.map((spec) => focusAt(spec.zOffset));
     if (requestedZ.some((offset) => offset !== 0) && !zAxis?.enabled && !softwareFocus) {
       throw new Error("One or more layers use a focus offset, but the selected machine profile has no controlled Z axis enabled.");
     }
@@ -2098,7 +2308,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
       const outside = requestedZ.find((offset) => offset < -12.6 || offset > 12.6);
       if (outside != null) throw new Error(`Epilog software focus ${outside} mm is outside the supported range -12.6…12.6 mm.`);
     }
-    if (zAxis?.enabled) {
+    if (zAxis?.enabled && !ignoreFocus) {
       const minZ = Number(zAxis.min), maxZ = Number(zAxis.max);
       if (!Number.isFinite(minZ) || !Number.isFinite(maxZ) || minZ > 0 || maxZ < 0 || minZ >= maxZ) throw new Error("The selected machine profile has an invalid Z range.");
       const outside = requestedZ.find((offset) => offset < minZ || offset > maxZ);
@@ -2121,7 +2331,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     const zFeed = Math.max(1, Number(zAxis?.feed) || 300);
     for (const seg of softwareFocus ? [] : segs) {
       if (!seg.pts || seg.pts.length < 2) continue;
-      const nextZ = combinedFocusOffset(machineFocusOffset, seg.zOffset);
+      const nextZ = focusAt(seg.zOffset);
       if (!softwareFocus && nextZ !== currentZ) {
         lines.push("M5");
         lines.push(`G1 Z${fmt(nextZ)} F${Math.round(zFeed)} ; set combined focus position with laser off`);
@@ -2178,7 +2388,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
         power: Number(segment.power) || 0,
         speed: Number(segment.speed) || 1,
         frequency: Number(segment.freq) || 5000,
-        focus: combinedFocusOffset(machineFocusOffset, segment.zOffset),
+        focus: focusAt(segment.zOffset),
         operation: segment.op,
         color: segment.color,
         raster: !!segment.raster,
@@ -2447,7 +2657,7 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
   sizeCanvas(); drawBed(); fit(); setCursor(cursorForTool(currentTool)); // safe now: everything above is initialized
 
   return {
-    loadSVG, loadImage, clear: clearDesign, setBedSize,
+    loadSVG, linkedCount: (link) => linkedItems(link).length, loadImage, clear: clearDesign, setBedSize,
     zoomIn: () => { view.zoom = Math.min(60, view.zoom * 1.25); drawOverlay(); },
     zoomOut: () => { view.zoom = Math.max(0.05, view.zoom / 1.25); drawOverlay(); },
     fit,
@@ -2456,10 +2666,11 @@ export function createBed(stage, { bedWmm = 600, bedHmm = 400 } = {}) {
     onChange: (cb) => (changeCb = cb),
     getDesign, geometryStats, getRect, getRef, applyRect, applyAngle, startSim, startSimProgram, stopSim, estimateTime, buildGcodeJob, outputQuality,
     setSelectionMode, undo, redo, resetHistory, exportDesign, importDesign, exportSession, importSession,
-    groupSelected, ungroupSelected, arrangeSelected, copySelection, pasteSelection, duplicateSelection,
+    groupSelected, ungroupSelected, arrangeSelected, copySelection, pasteSelection, duplicateSelection, clipboardSVG, clipboardTime: () => clipboardTime,
     canUngroup, selectAll, deleteSelection,
-    setGrid, setTool, setPathOrder, getColors, addShape, finishDrawing,
-    setDrawStyle, applyStyle, getStyle, setLayerVisibility,
+    setGrid, setViewPreferences, setTool, setPathOrder, getColors, addShape, finishDrawing, cancelInteraction,
+    setDrawStyle, applyStyle, getStyle, setLayerVisibility, setProcessPreview,
+    processPreviewEnabled: () => !!processPreview,
     getSelectionInfo: () => ({ hasRaster: selectionHasRaster(), singleRaster: isSingleRasterSelection(), rasterCount: selectedRasterTargets().length, count: selected.size }),
     getRasterSettings, getRasterMode, setRasterModes, beginRasterEdit, updateRasterSettings, endRasterEdit, resetRasterSettings,
     getRasterEditorPayload, applyEngravingRecipe,

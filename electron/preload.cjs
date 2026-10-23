@@ -1,12 +1,32 @@
-const { contextBridge, ipcRenderer, webUtils } = require("electron");
+const { contextBridge, ipcRenderer, webFrame, webUtils } = require("electron");
 
 // Only surface a narrow, safe bridge to the renderer.
 contextBridge.exposeInMainWorld("modcut", {
+  setUiScale: (scale) => {
+    if ([0.8, 0.9, 1, 1.1, 1.2].includes(scale)) webFrame.setZoomFactor(scale);
+  },
+  setTheme: (preference) => ipcRenderer.invoke("setTheme", preference),
   call: (method, params) => ipcRenderer.invoke("sidecar", method, params),
+  listSystemFonts: () => ipcRenderer.invoke('listSystemFonts'),
+  listGoogleFonts: options => ipcRenderer.invoke('listGoogleFonts',options),
+  googleFontFamily: name => ipcRenderer.invoke('googleFontFamily',name),
+  shapeText: values => ipcRenderer.invoke('shapeText', values),
+  fontData: values => ipcRenderer.invoke('fontData', values),
   openImport: (options) => ipcRenderer.invoke("importFile", options),
   getPathForFile: (file) => webUtils.getPathForFile(file),
   saveDocument: (json, path, saveAs, name) => ipcRenderer.invoke("saveDocument", { json, path, saveAs, name }),
   exportSettings: (json, name) => ipcRenderer.invoke("exportSettings", { json, name }),
+  chooseExportPath: (options) => ipcRenderer.invoke("chooseExportPath", options),
+  chooseExportFolder: (options) => ipcRenderer.invoke("chooseExportFolder", options),
+  getDrawShortcuts: () => ipcRenderer.invoke("getDrawShortcuts"),
+  fontCharacters: (values) => ipcRenderer.invoke("fontCharacters", values),
+  setDrawShortcuts: (map) => ipcRenderer.invoke("setDrawShortcuts", map),
+  writeExportFiles: (options) => ipcRenderer.invoke("writeExportFiles", options),
+  saveWorkspaceFile: workspace => ipcRenderer.invoke('saveWorkspaceFile', workspace),
+  loadWorkspaceFile: () => ipcRenderer.invoke('loadWorkspaceFile'),
+  setE2EWorkspaceFile: text => ipcRenderer.invoke('setE2EWorkspaceFile', text),
+  setE2EExportPath: (name) => ipcRenderer.invoke("setE2EExportPath", name),
+  getE2EExports: () => ipcRenderer.invoke("e2eExports"),
   importSettings: () => ipcRenderer.invoke("importSettings"),
   readRecovery: () => ipcRenderer.invoke("readRecovery"),
   writeRecovery: (json) => ipcRenderer.invoke("writeRecovery", json),
@@ -14,10 +34,19 @@ contextBridge.exposeInMainWorld("modcut", {
   respondToCloseRequest: (allowed) => ipcRenderer.invoke("windowCloseResponse", !!allowed),
   onCloseRequest: (cb) => ipcRenderer.on("app-close-request", (_event, request) => cb(request)),
   setE2EImportResult: (result) => ipcRenderer.invoke("e2eSetImportResult", result),
+  getE2EWorkspaceMenu: () => ipcRenderer.invoke("e2eWorkspaceMenu"),
   requestE2EQuit: () => ipcRenderer.invoke("e2eRequestQuit"),
+  clickE2EMenuItem: (menu, item) => ipcRenderer.invoke("e2eClickMenuItem", menu, item),
+  setLaserPreviewState: value => ipcRenderer.invoke("setLaserPreviewState", value),
+  setWorkspace: (mode) => ipcRenderer.invoke("setWorkspace", mode),
   onMenu: (cb) => ipcRenderer.on("menu", (_e, cmd) => cb(cmd)),
   openImageEditor: (payload) => ipcRenderer.invoke("openImageEditor", payload),
   finishImageEditor: (result) => ipcRenderer.invoke("finishImageEditor", result),
   onImageEditorInit: (cb) => ipcRenderer.on("image-editor-init", (_event, payload) => cb(payload)),
   setImageEditorAvailable: (available) => ipcRenderer.invoke("setImageEditorAvailable", !!available),
+  setLanguage: (language) => ipcRenderer.invoke("setLanguage", language),
+  getMcpServer: () => ipcRenderer.invoke("getMcpServer"),
+  setMcpServer: (enabled) => ipcRenderer.invoke("setMcpServer", !!enabled),
+  onMcpCall: (cb) => ipcRenderer.on("mcp-call", (_event, request) => cb(request)),
+  mcpResult: (id, payload) => ipcRenderer.invoke("mcpResult", id, payload),
 });

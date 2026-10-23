@@ -101,6 +101,75 @@ settings, document units, grid, path ordering, and the selected machine and
 material identifiers. The original imported artwork does not need to travel
 beside the project file.
 
+Version 4 also contains the independent Draw document and the selected workspace.
+Older version 1–3 projects open with an empty Draw document. Autosave recovers
+Draw and Cut per tab; either workspace can trigger the unsaved-work prompt.
+Unknown Draw schemas are read-only, with original data preserved on saving.
+Use this or a newer modCut to save v4 projects; older releases may drop Draw data.
+Draw currently offers multiple artboards, artwork import and grouped drawing tools.
+New Draw documents have machine-bed, paper and screen presets. Artboards can be
+renamed, resized, rearranged and copied with their artwork. Selection supports
+resize handles, Shift/Alt scaling, smart guides and keyboard nudging. Rectangle,
+rounded rectangle, ellipse/pie, polygon, star and line tools support exact sizes.
+Each tool group has one toolbar entry; the right-hand rail opens one panel at a
+time. Layers, Transform, Color and Stroke have their own editors. Pen draws
+straight and Bézier paths, closes paths and continues either endpoint. Direct
+Selection edits anchors and handles, including marquee selection and nudging.
+Add/Delete/Anchor Point tools split curves and convert corner/smooth anchors.
+Shift constrains angles, Alt separates handles and Space moves a Pen anchor
+during dragging. Enter/Escape finishes an open path; Escape during a drag cancels
+the preview. Anchor Point can expand a live shape into an editable path, with undo.
+Direct Selection shows live-shape anchors without changing the document;
+editing an anchor expands the shape, and one undo restores the original shape.
+Dotted corner handles round straight corners, individually or together, with
+an exact radius field in Properties. Setting the radius to zero restores sharp
+corners. Grey tools are reserved for the later implementation steps.
+Rotate (R), Reflect (O) and Scale (S) use a movable reference point. Click to
+place it, drag to transform, hold Shift to constrain and Alt to copy. Enter or
+double-click the toolbar tool for an exact dialog with Preview, Apply and Copy.
+Object → Transform offers the same dialogs. Ctrl/Cmd+D repeats the last
+transformation, including Copy. Scale can retain stroke widths or scale them
+with the artwork; effect rendering remains planned for a later phase.
+The renderer retains unchanged objects, skips artwork outside the viewport and
+offers **Outline / Preview** with **Ctrl/Cmd+Y** or the Outline button. Outline
+shows vector hairlines and image frames without changing the saved artwork.
+The remaining drawing and editing tools are being built in stages; see the
+[Draw implementation plan](docs/DRAW_WORKSPACE.md).
+
+Double-click the Fill or Stroke chip to open the compact color picker. Its hue
+slider sits beside the color square. **Recent Colors** keeps the ten latest
+applied colors across documents and restarts. The screen pipette hides the dialog
+while you sample a pixel from the artboard, interface or another visible window
+on supported platforms. Escape returns to the dialog; OK applies the chosen color
+as one undo step.
+
+Type (T) places point text on click and rectangular area text on drag. Area Type in
+the same tool group also opens a default frame on click. Edit Text offers frame width
+and height in mm, with live wrapping. Text that does not fit remains editable and is
+marked with a red plus; export includes visible text, and Create Outlines / Send to Cut require all
+text to fit. Use Edit Text to reflow the frame; ordinary transforms scale the object.
+Click text with Type, double-click it with Selection,
+or use **Edit Text…** in Properties to edit it. The dialog previews text on the
+canvas, with multiline content, font family, point size, leading, bold/italic and
+paragraph alignment. Apply creates one undo step; Cancel discards the preview.
+Text persists in projects and appears in SVG, PNG and JPEG exports. The font field
+lists installed vector font families. New text keeps its shaped glyph outlines in
+the document, so its appearance and export remain stable without the font installed.
+**Send to Cut** sends text as vector outlines automatically, keeping the original
+Draw text editable. **Type > Create Outlines** (Ctrl/Cmd+Shift+O) also remains available
+to convert the Draw text to editable paths in one undo step. Editing text requires the original
+font or choosing an available replacement; font files are not embedded.
+
+Choose **Google Fonts** under **Font source** to search the full catalog (1,950
+families in the bundled snapshot). Selecting a family downloads its complete font
+files and licenses to the app cache for offline use, without installing OS fonts or
+requiring an API key. Numeric weights, available styles, variable axes and named
+instances preview on the canvas. Google font references retain the exact download
+URL, checksum and license so another computer can fetch the same version. Text is
+shaped locally. **Refresh Google Fonts catalog** updates the list. Fonts whose glyphs
+have no supported monochrome vector contours cannot be used for laser output;
+missing contours and text overflow block sending instead of omitting lettering.
+
 The file does not copy local machine profiles, connection details, drivers,
 material libraries or process-profile libraries. A receiving computer must
 therefore have the intended machine/material configured locally and the user
@@ -165,6 +234,74 @@ Only move on to hardware after the dry-run checklist passes. The full procedure,
 including GRBL setup and acceptance criteria, is in [`docs/TESTING.md`](docs/TESTING.md).
 Local-network setup and troubleshooting are in [`docs/NETWORK.md`](docs/NETWORK.md).
 
+## Appearance
+
+Open **Settings** in the toolbar or **Preferences…** in the application menu.
+**Appearance** offers three options with icons: **System**, **Light** and **Dark**.
+System is the default and follows operating-system changes automatically. Choose
+a fixed theme with Light or Dark. Appearance changes apply and save immediately.
+**Background colour** keeps the original **Green** palette or selects **White**,
+**Light gray**, **Gray** or **Dark gray**. The fixed gray tones set their own light
+or dark appearance, with matching text, icons, controls and focus indicators.
+Selecting Green restores the System/Light/Dark choice.
+The choice persists across restarts and also applies
+to Draw and Advanced Editing for Engraving. Appearance is included when exporting
+preferences. The material preview is dimmed in dark mode; artwork colours and
+laser output stay unchanged.
+
+Preferences also includes **Show grid**, **Reverse zoom direction**, **Show
+tooltips** and **Tooltip delay**. These choices apply and save immediately.
+Reverse zoom affects Cmd/Ctrl + scroll and trackpad pinch in Cut; ordinary
+scrolling still pans. Tooltips default to a one-second hover delay and can be
+shown sooner, later or disabled. Unit and grid-spacing edits use **Save**.
+Exported preferences include these options and grid spacing.
+
+## Right-click menu in Draw
+
+Right-click the canvas for Cut, Copy, Paste, Paste in Place, Undo/Redo,
+Group/Ungroup, Arrange, rulers and grid. Right-clicking an unselected object selects
+it; an existing multi-selection is preserved when clicking one of its members.
+Arrange keeps objects within their current layer or group and supports undo.
+
+| Action | Windows/Linux shortcut |
+|---|---|
+| Bring Forward / Send Backward | Ctrl+PageUp / Ctrl+PageDown |
+| Bring to Front / Send to Back | Ctrl+Shift+PageUp / Ctrl+Shift+PageDown |
+| Paste in Place | Ctrl+Shift+V |
+| Group / Ungroup | Ctrl+G / Ctrl+Shift+G |
+| Show/hide rulers / grid | Ctrl+R / Ctrl+Shift+R |
+
+These shortcuts work on Norwegian keyboards without punctuation combinations.
+On macOS, use Cmd in place of Ctrl. The menu shows your current shortcuts;
+change them in Edit > Keyboard Shortcuts. Rulers show millimetres relative to the
+active artboard. Rulers and grid affect the view only.
+
+Run `node electron/e2e/run.mjs --draw-context` for the focused interaction checks.
+
+## Laser Preview in Draw
+
+Use **View → Laser Preview** or the **Laser Preview** button beside Outline while drawing.
+Solid red lines show Cut, dashed red lines distinguish Score, black shapes show vector
+engraving, and supported images show in grayscale. Score dashes are a visual key; they do
+not create gaps in the machine path. Vector engraving shows solid strokes without arrowheads,
+as transferred by Send to Cut; normal Draw view keeps your original dashes and arrows.
+Standard transfer uses the first visible fill and stroke with constant width on paths and
+shapes, including artwork with width profiles or multiple paint layers. Extra paint stays in Draw.
+Round Corners, Zig Zag, Offset Path, Transform, Pucker & Bloat, Roughen, Twist, Free Distort,
+Warp and Scribble on individual paths/shapes are supported. Scribble uses its fill colour
+as the process identity and its own line width, matching the transferred open lines.
+Normal colour view is the default; your last choice is remembered.
+
+**Laser processes** configures this tab's actual Cut/Score/Engrave/Ignore choices. Amber dotted
+outlines or faded images indicate an unresolved process or appearance. Effects, advanced
+composites and image dithering may need expansion or checking in Cut. Clipped strokes and images
+are flagged when the transferred output can differ from the mask; **Show unresolved objects** explains why.
+Review the final machine,
+material, power and speed in Cut; the view does not predict burn depth or movement order.
+
+The first activation explains the view and offers **Don’t show this again**. Reopen the explanation
+from Help or reset it in Preferences. Toggling the view keeps the original artwork and exports.
+
 ## Commands
 
 | Command | Purpose |
@@ -173,7 +310,11 @@ Local-network setup and troubleshooting are in [`docs/NETWORK.md`](docs/NETWORK.
 | `npm run test:sidecar` | Maven/JUnit sidecar tests |
 | `npm run test:bridge` | Build the fat JAR and test Node ↔ Java JSON-RPC |
 | `npm run test:renderer` | Import, layer, raster, toolpath and quality unit tests |
+| `npm run test:draw` | Draw model/kernel/keymap/project IO tests and SVG sprite consistency |
+| `npm run build:icons` | Rebuild the Draw tool SVG sprite |
 | `npm run test:e2e` | Real Electron workflows, native close and crash recovery |
+| `npm run test:e2e:theme` | System appearance, Settings, persistence and editor theme synchronization |
+| `npm run test:e2e:background` | Background palettes, rendered contrast, keyboard, persistence and editor synchronization |
 | `npm run check:contrast` | WCAG AA palette guardrail |
 | `npm start` | Build the sidecar and start Electron |
 | `npm run pack` | Build and verify an unpacked native application |

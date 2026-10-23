@@ -1,18 +1,76 @@
+import { processColorsForDocument } from './draw/view/cut-process.mjs';
+import { createKeymap, keyOverrides, setKeyOverrides, shortcutLabel, matchShortcut } from "./draw/keymap.mjs";
+import { createCutToolbar, CUT_TOOLS, drawToolForCut } from "./ui/cut-tools.mjs";
+import { shortcutsEditor } from "./draw/ui/shortcuts-dialog.mjs";
+import { loadWorkspaces, parseWorkspace, saveWorkspace, serializeWorkspace } from "./draw/ui/workspaces.mjs";
+import { createDrawWorkspace } from "./draw/index.mjs";
+import { drawClipboard } from "./draw/doc/clipboard.mjs";
+import { PROJECT_VERSION, validateProject, createProjectDraw } from "./draw/io/project.mjs";
+import { newDrawDocument } from "./draw/doc/artboards.mjs";
+import { newDocumentDialog, documentSettingsDialog, placeOptionsDialog, saveTemplateDialog, shapeSizeDialog } from "./draw/ui/dialogs.mjs";
+import { updateDocument, updateArtboard } from "./draw/doc/commands.mjs";
+import { saveTemplate, setupFromDocument, loadStoredList, storeList, TEMPLATES_KEY } from "./draw/doc/presets.mjs";
 import { createBed } from "./bed.js";
+import { initWorkspaceChrome } from "./workspace-chrome.mjs";
 import { prepareSVG } from "./svgimport.js";
 import { dxfToSvg } from "./dxfimport.js";
 import { hpglToSvg } from "./hpglimport.js";
-import { pdfToArtwork } from "./pdfimport.js";
+import { epsToSvg } from "./epsimport.js";
+import { runMcpTool } from "./draw/mcp-runner.mjs";
+import { pdfDrawDocument, pdfToArtwork } from "./pdfimport.js";
 import { tiffToPng } from "./tiffimport.js";
-import { OPERATIONS, canAssignRasterToOperation, distinctVectorColor, isOutputLayer, operationsForLayer } from "./layer-model.mjs";
+import { OPERATIONS, canAssignRasterToOperation, distinctVectorColor, isOutputLayer, matchingProcessLayer, operationsForLayer } from "./layer-model.mjs";
 import { RASTER_MODES, applyProcessProfile, combinedFocusOffset, normalizeProcessProfile, profilesForOperation } from "./process-profiles.mjs";
 import { groupJobOperations, jobFilename } from "./job-split.mjs";
 import { defaultMotionTiming, motionTimingForMachine } from "./motion-timing.mjs";
 import { EPILOG_NATIVE_MAX_RASTER_SAMPLES, MAX_RASTER_SAMPLES } from "./output-quality.mjs";
 import { openModal, showMessageModal } from "./ui.js";
+import { loadPreferences, normalizePreferences, PREFERENCES_KEY } from "./preferences.mjs";
+import { smartGuidesSettings } from "./ui/smart-guides-settings.mjs";
+import { LANGUAGES, localizeTree, resolveLanguage, translator, watchLocalization } from "./i18n.mjs";
 import { DOCUMENT_FORMATS, IMAGE_FORMATS, PDF_FORMATS, TEXT_FORMATS, TIFF_FORMATS } from "../electron/import-formats.mjs";
 
 const $ = (id) => document.getElementById(id);
+initWorkspaceChrome();
+let preferences = loadPreferences(localStorage);
+// Language: the window is translated as it changes; the main process translates the menus.
+let language = resolveLanguage(preferences.language, navigator.languages), t = translator(language);
+function applyLanguage() {
+  const next = resolveLanguage(preferences.language, navigator.languages);
+  if (next !== language) { language = next; t = translator(language); localizeTree(document.body, t); }
+  document.documentElement.lang = language === "nb" ? "nb" : "en";
+  window.modcut.setLanguage?.(language);
+}
+watchLocalization(document.body, () => t);
+applyLanguage();
+function updatePreferences(values) {
+  preferences = normalizePreferences(values, preferences);
+  localStorage.setItem(PREFERENCES_KEY, JSON.stringify(preferences));
+  window.paper.activate();
+  bed.setViewPreferences(preferences);
+  syncProcessPreview();
+  applyLanguage();
+  window.dispatchEvent(new Event("modcut-preferences-change"));
+}
+// Process preview: draw the artwork as the laser will treat it, per active layer.
+function syncProcessPreview() {
+  $("processPreview").checked = preferences.processPreview;
+  $("previewLegend").classList.toggle("hidden", !preferences.processPreview);
+  for (const [key, name] of [["processPreviewCut", "cut"], ["processPreviewScore", "score"], ["processPreviewEngrave", "engrave"]]) {
+    $("previewLegend").style.setProperty(`--preview-${name}`, preferences[key]);
+  }
+  $("previewLegend").classList.toggle("preview-legend--solid-score", !preferences.processPreviewScoreDashed);
+  bed.setProcessPreview({
+    enabled: preferences.processPreview,
+    specs: activeLayers().map((l) => ({ key: state.mappingMode === "color" ? l.key : null, color: state.mappingMode === "color" ? l.color : null, op: l.op })),
+    cut: preferences.processPreviewCut, score: preferences.processPreviewScore, engrave: preferences.processPreviewEngrave,
+    scoreDashed: preferences.processPreviewScoreDashed,
+  });
+}
+// The offline Dummy machine never moves a Z axis, so focus offsets cannot block it.
+const isDummyMachine = () => machine().driver === "Dummy";
+const focusBlocksJob = (ops) => !isDummyMachine() && !isEpilogDriver(machine().driver) && !machine().zAxis?.enabled
+  && ops.some((op) => (Number(op.zOffset) || 0) !== 0);
 const OPS = OPERATIONS;
 const DITHERS = RASTER_MODES;
 const clampSpeedPct = (v) => Math.max(1, Math.min(100, Number(v) || 1));
@@ -156,7 +214,7 @@ function initTooltips() {
   };
   const show = (element) => {
     const label = textFor(element);
-    if (!label || target !== element) return;
+    if (!preferences.tooltips || !label || target !== element) return;
     tooltip = document.createElement("div");
     tooltip.className = "app-tooltip"; tooltip.id = "appTooltip"; tooltip.role = "tooltip";
     tooltip.textContent = label;
@@ -168,9 +226,9 @@ function initTooltips() {
     tooltip.style.left = `${left}px`;
     tooltip.style.top = `${below + box.height <= innerHeight - 8 ? below : anchor.top - box.height - 9}px`;
   };
-  const schedule = (element, delay = 1000) => {
+  const schedule = (element, delay = preferences.tooltipDelay) => {
     hide(); target = element;
-    if (!textFor(element)) { target = null; return; }
+    if (!textFor(element) || !preferences.tooltips) { target = null; return; }
     timer = setTimeout(() => show(element), delay);
   };
   document.addEventListener("pointerover", (event) => {
@@ -190,6 +248,7 @@ function initTooltips() {
   document.addEventListener("pointerdown", hide, true);
   document.addEventListener("keydown", hide, true);
   window.addEventListener("scroll", hide, true);
+  window.addEventListener("modcut-preferences-change", hide);
 }
 
 const material = () => materials.find((m) => m.id === state.materialId) || materials[0];
@@ -248,6 +307,9 @@ function initCollapsibleSections() {
 
 // --- bed --------------------------------------------------------------------
 const bed = createBed($("stage"), { bedWmm: 600, bedHmm: 400 });
+// Native Paper canvas events can activate Draw's scope. Cut's theme redraw must
+// start in its own scope before its existing theme listener creates the bed.
+window.addEventListener('modcut-theme-change',()=>window.paper.activate(),true);
 bed.onCoords((x, y) => ($("coords").textContent = `X ${dispNum(x)}  Y ${dispNum(y)} ${state.units}`));
 let selectedCount = 0;
 let activeTool = "select";
@@ -271,18 +333,138 @@ let activeTabId = null;
 let nextTabId = 1;
 let restoringTab = false;
 let recoveryTimer = null;
+let recoveryPendingSince = null;
 let closeGuardRunning = false;
+let savingDocument = false;
 const RECOVERY_VERSION = 1;
 const RECOVERY_DELAY_MS = 350;
 function pathBase(path) { return String(path || "").split(/[\\/]/).pop(); }
+function ensureDrawState(tab) {
+  if (!tab.drawState) attachDrawState(tab, createProjectDraw(tab.session?.draw, { dirty: !!tab.session?.drawDirty }));
+  return tab.drawState;
+}
+function attachDrawState(tab, drawState) {
+  tab.unsubscribeDraw?.();
+  tab.draw?.destroy(); tab.drawRoot?.remove();
+  tab.draw = null; tab.drawRoot = null;
+  tab.drawState = drawState;
+  tab.drawWarningShown = false;
+  let documentName=drawState.document.data.name;
+  tab.unsubscribeDraw = drawState.subscribe(() => {
+    if(drawState.document.data.name!==documentName){
+      documentName=drawState.document.data.name;tab.title=documentName;
+      if(tab===activeTab())$("filename").value=documentName;
+      if(tab.session){tab.session.title=documentName;tab.session.filename=documentName;}
+    }
+    if (tab === activeTab()) setFileLabel(tab.title);
+    else { tab.dirty = !!(tab.session?.cutDirty ?? tab.session?.dirty) || drawState.dirty; renderTabs(); }
+    scheduleRecovery(2000);
+  });
+}
+// A Draw document that was never set up is not stored, so it still asks for setup after reopening.
+function drawSnapshot(tab) { const draw = ensureDrawState(tab); return draw.blank ? null : draw.snapshot(); }
+function activeDocumentDirty() { return dirty || !!activeTab()?.drawState?.dirty; }
+function setWorkspace(mode) {
+  if (!["cut", "draw"].includes(mode)) return;
+  const tab = activeTab();
+  if (!tab) return;
+  // A tab without Draw data asks for document setup before anything is mounted.
+  if (mode === "draw" && !tab.draw && !ensureDrawState(tab).blank) {
+    const drawState = tab.drawState;
+    tab.drawRoot = document.createElement("div");
+    tab.drawRoot.className = "draw-project";
+    tab.drawRoot.dataset.tabId = tab.id;
+    $("drawWorkspace").append(tab.drawRoot);
+    tab.draw = createDrawWorkspace(tab.drawRoot, { state: drawState, onError: message => toast(message,"err"), onNotice: message => toast(message,"info"), onImport: () => importDrawFiles(), onSendToCut: sendDrawToCut, cutIsEmpty: () => !bed.getDesign(), cutClipboard: () => bed.clipboardTime() ? bed.clipboardSVG() : null, onExport: drawExportBridge, getPreferences:()=>preferences,setPreferences:updatePreferences,onPreferences:openSettings,getLaserProcesses:()=>{const source=tab===activeTab()?state:tab.session;return source?{mappingMode:source.mappingMode,layers:source.layers}:null;},setLaserProcesses:values=>{if(tab!==activeTab())return false;configureLaserProcesses(values);return true;}, statusHost: $("drawStatus") });
+  }
+  drawKeymap.reset();
+  tab.workspace = mode;
+  for (const item of documentTabs) if (item.drawRoot) {
+    item.draw?.closeContextMenu();
+    item.drawRoot.style.display = item === tab && mode === "draw" ? "block" : "none";
+    if (item.draw) item.draw.statusElement.hidden = item !== tab || mode !== "draw";
+  }
+  document.body.dataset.workspace = mode;
+  const button = $("workspaceToggle");
+  button.querySelector("span").textContent = mode === "draw" ? "Cut" : "Draw";
+  button.setAttribute("aria-expanded", String(mode === "draw"));
+  button.dataset.tooltip = mode === "draw" ? "Cut: laser workspace" : "Draw: vector editor";
+  button.removeAttribute("title");
+  $("add").removeAttribute("title");
+  $("newDoc").dataset.tooltip = mode === "draw" ? "New Draw document (Cmd/Ctrl+N)" : "New project tab (Cmd/Ctrl+N)";
+  $("newDoc").removeAttribute("title");
+  $("import").textContent = mode === "draw" ? "Open" : "Import";
+  $("import").removeAttribute("title");
+  $("import").dataset.tooltip = mode === "draw" ? "Open a file in a new Draw document (Cmd/Ctrl+O)" : "Import — replace the active project (Cmd/Ctrl+O)";
+  $("add").textContent = mode === "draw" ? "Import" : "Add";
+  $("add").dataset.tooltip = mode === "draw" ? "Import artwork into this Draw document (Cmd/Ctrl+Shift+P)"
+    : `Add files to the active project (${shortcutLabel('add', { workspace: 'cut', isMac: drawIsMac })})`;
+  tab.draw?.resize();
+  if (mode === "draw" && tab.drawState.warning && !tab.drawWarningShown) {
+    toast(tab.drawState.warning, "info"); tab.drawWarningShown = true;
+  }
+  closeContextMenu();
+  void window.modcut.setWorkspace(mode).then(()=>{if(tab===activeTab()&&mode==="draw")tab.draw?.syncLaserMenu(true);});
+  scheduleRecovery();
+  if (mode === "draw" && !tab.draw) void setupDrawDocument(tab);
+}
+$("workspaceToggle").addEventListener("click", () => {
+  setWorkspace(activeTab()?.workspace === "draw" ? "cut" : "draw");
+});
+
+// Draw's Send to Cut: a millimetre SVG of one artboard enters Cut through the normal SVG import path.
+async function sendDrawToCut({ svg, name, count, images = [], warnings, target, placement, link = null, cutTabId = null }) {
+  const prepared = prepareSVG(svg);
+  // Update in Cut goes to the tab that received the earlier send, when it is still open.
+  if (target === "update" && cutTabId && cutTabId !== activeTabId && documentTabs.some((tab) => tab.id === cutTabId)) switchDocumentTab(cutTabId);
+  if (target === "new-tab") newDocument("cut");
+  setWorkspace("cut");
+  bed.finishDrawing();
+  const wasEmpty = !bed.getDesign(), updating = target === "update" && !!link && bed.linkedCount(link) > 0;
+  bed.loadSVG(prepared.node, prepared.widthMm, prepared.heightMm, prepared.viewBox, { placement, replace: target === "replace", link, replaceLink: updating ? link : null, images });
+  if (wasEmpty || !["add", "update"].includes(target)) { $("filename").value = name; setFileLabel(name); }
+  syncColorsAndLayers();
+  markDirty();
+  const what = [`${count} path${count === 1 ? "" : "s"}`, images.length ? `${images.length} image${images.length === 1 ? "" : "s"}` : ""].filter(Boolean).join(", ");
+  toast(updating ? `${name} updated in Cut (${what}). Layer settings are kept; undo in Cut restores the earlier send.`
+    : `${name} sent to Cut (${what}). Undo in Cut removes the whole send.`, "ok");
+  if (target === "update" && !updating) toast("The earlier send was not found in this Cut, so the artboard was added.", "info");
+  if (warnings.length) toast(warnings.join(" "), "info");
+  return { cutTabId: activeTabId };
+}
+// Cut > Edit in Draw: the selected Cut objects become Draw objects on a new bed-sized artboard. Rasters stay in Cut.
+async function editInDraw() {
+  if (!bed.copySelection()) { toast("Select objects in Cut first.", "info"); return; }
+  const copied = bed.clipboardSVG(), tab = activeTab();
+  if (!copied?.svg) { toast(copied?.warning || "Nothing in the selection can be edited in Draw.", "info"); return; }
+  setWorkspace("draw");
+  if (!tab?.draw || document.body.dataset.workspace !== "draw") return;
+  const m = machine();
+  try { await tab.draw.editFromCut(copied, { width: m.bedW || 600, height: m.bedH || 400 }); }
+  catch (error) { toast(error.message, "err"); }
+}
+// Draw's Export As: SVG text or a PNG/JPEG data URL, written where the user chooses.
+// Draw export writes only where the user chose in the main process's save or folder dialog.
+const drawExportBridge = {
+  choosePath: (options) => window.modcut.chooseExportPath(options),
+  chooseFolder: (options) => window.modcut.chooseExportFolder(options),
+  write: (options) => window.modcut.writeExportFiles(options),
+  notify: (message, kind) => toast(message, kind),
+  // File > Package: the whole document as it would be saved (Draw and Cut).
+  documentPayload: () => documentPayload(),
+};
+$("sendToCut").addEventListener("click", () => activeTab()?.draw?.sendToCut());
+
 function activeTab() { return documentTabs.find((tab) => tab.id === activeTabId) || null; }
 function setFileLabel(name) {
   const title = name || "Untitled";
-  $("file").textContent = `${title}${dirty ? " *" : ""}`;
+  const changed = activeDocumentDirty();
+  $("file").textContent = `${title}${changed ? " *" : ""}`;
+  $("file").translate = !name;
   const tab = activeTab();
-  if (tab) { tab.title = title; tab.dirty = dirty; renderTabs(); }
+  if (tab) { tab.title = title; tab.dirty = changed; renderTabs(); }
 }
-function markDirty() { dirty = true; setFileLabel(docPath ? pathBase(docPath) : ($("file").textContent.replace(/\s\*$/, "") || "Untitled")); scheduleRecovery(); }
+function markDirty() { dirty = true; const tab = activeTab(); if (tab) tab.cutRevision = (tab.cutRevision || 0) + 1; setFileLabel(docPath ? pathBase(docPath) : ($("file").textContent.replace(/\s\*$/, "") || "Untitled")); scheduleRecovery(); }
 function markClean() { dirty = false; setFileLabel(docPath ? pathBase(docPath) : ($("file").textContent.replace(/\s\*$/, "") || "Untitled")); scheduleRecovery(); }
 
 function renderTabs() {
@@ -297,6 +479,7 @@ function renderTabs() {
     button.setAttribute("role", "tab");
     button.setAttribute("aria-selected", String(tab.id === activeTabId));
     button.title = tab.title || "Untitled";
+    button.dataset.tooltip = 'Double-click to edit document settings';
     if (tab.dirty) {
       const dot = document.createElement("span");
       dot.className = "doc-tab__dirty";
@@ -305,6 +488,7 @@ function renderTabs() {
     }
     const title = document.createElement("span");
     title.className = "doc-tab__title";
+    title.translate = false;
     title.textContent = tab.title || "Untitled";
     const close = document.createElement("span");
     close.className = "doc-tab__close";
@@ -315,8 +499,10 @@ function renderTabs() {
     button.append(title, close);
     button.addEventListener("click", (event) => {
       if (event.target.closest("[data-close-tab]")) closeDocumentTab(tab.id);
-      else switchDocumentTab(tab.id);
+      else {switchDocumentTab(tab.id);if(event.detail===2)void editDocumentSettings(tab.id);}
     });
+    button.addEventListener('dblclick',event=>{if(!event.target.closest('[data-close-tab]'))void editDocumentSettings(tab.id);});
+    button.addEventListener('keydown',event=>{if(event.key==='F2'){event.preventDefault();void editDocumentSettings(tab.id);}});
     host.append(button);
   }
   host.querySelector(".doc-tab.is-active")?.scrollIntoView({ block: "nearest", inline: "nearest" });
@@ -326,7 +512,8 @@ function captureWorkspace() {
   return {
     bed: bed.exportSession(),
     docPath,
-    dirty,
+    dirty: activeDocumentDirty(),
+    cutDirty: dirty,
     title: $("file").textContent.replace(/\s\*$/, "") || "Untitled",
     filename: $("filename").value,
     mappingMode: state.mappingMode,
@@ -372,13 +559,17 @@ function recoveryPayload() {
       id: tab.id,
       title: tab.title,
       dirty: tab.dirty,
-      session: recoverySession(tab.session),
+      session: { ...recoverySession(tab.session),
+        workspace: tab.workspace || "cut",
+        draw: drawSnapshot(tab), drawDirty: tab.drawState.dirty,
+        dirty: tab.dirty },
     })),
   };
 }
 
 async function flushRecovery() {
   if (recoveryTimer) { clearTimeout(recoveryTimer); recoveryTimer = null; }
+  recoveryPendingSince = null;
   if (!documentTabs.length) return;
   try {
     await window.modcut.writeRecovery(JSON.stringify(recoveryPayload()));
@@ -387,10 +578,12 @@ async function flushRecovery() {
   }
 }
 
-function scheduleRecovery() {
+function scheduleRecovery(delayMs = RECOVERY_DELAY_MS) {
   if (!documentTabs.length || restoringTab || closeGuardRunning) return;
+  recoveryPendingSince ??= Date.now();
   if (recoveryTimer) clearTimeout(recoveryTimer);
-  recoveryTimer = setTimeout(() => { recoveryTimer = null; void flushRecovery(); }, RECOVERY_DELAY_MS);
+  const delay = Math.min(delayMs, Math.max(0, 2000 - (Date.now() - recoveryPendingSince)));
+  recoveryTimer = setTimeout(() => { recoveryTimer = null; void flushRecovery(); }, delay);
 }
 
 async function restoreRecoverySession() {
@@ -404,6 +597,7 @@ async function restoreRecoverySession() {
       title: tab.title || "Untitled",
       dirty: !!tab.dirty,
       session: tab.session,
+      workspace: tab.session.workspace === "draw" ? "draw" : "cut",
     }));
     if (!tabs.length) return false;
     documentTabs = tabs;
@@ -425,7 +619,8 @@ function restoreWorkspace(session) {
   stopSimulate();
   closeContextMenu();
   docPath = session.docPath || null;
-  dirty = !!session.dirty;
+  dirty = !!(session.cutDirty ?? session.dirty);
+  ensureDrawState(activeTab());
   state.mappingMode = session.mappingMode || "color";
   state.layers = structuredClone(session.layers || []);
   state.units = session.units || state.units;
@@ -454,6 +649,7 @@ function restoreWorkspace(session) {
   refreshPos();
   refreshProps();
   restoringTab = false;
+  setWorkspace(activeTab()?.workspace || "cut");
   renderTabs();
 }
 
@@ -477,7 +673,9 @@ function switchRelativeTab(offset) {
 function documentPayload() {
   return {
     app: "modCut",
-    version: 3,
+    version: PROJECT_VERSION,
+    draw: drawSnapshot(activeTab()),
+    workspace: activeTab()?.workspace || "cut",
     saved: new Date().toISOString(),
     design: bed.exportDesign(),
     filename: $("filename").value,
@@ -494,20 +692,42 @@ function documentPayload() {
 }
 
 async function saveDocument(saveAs = false) {
+  if (savingDocument) return false;
+  await activeTab()?.draw?.flushText?.();
   bed.finishDrawing();
   const base = ($("filename").value.trim() || "untitled").replace(/\.[^.]+$/, "") + ".modcut";
   const json = JSON.stringify(documentPayload(), null, 2);
+  const tab = activeTab(), drawState = tab.drawState, cutRevision = tab.cutRevision || 0;
+  const commitDrawSave = drawState.captureSavepoint();
+  const savedLabel = pathBase(docPath) || tab.title;
+  savingDocument = true;
   try {
     const path = await window.modcut.saveDocument(json, docPath, saveAs, base);
     if (!path) return false;
-    docPath = path;
-    markClean();
+    if (documentTabs.includes(tab) && tab.drawState === drawState) {
+      // Do not mark another tab (or edits made during the picker/write) clean.
+      commitDrawSave();
+      const cutClean = (tab.cutRevision || 0) === cutRevision;
+      if (tab === activeTab()) {
+        docPath = path;
+        if (cutClean) dirty = false;
+        setFileLabel(pathBase(path) || savedLabel);
+      } else {
+        tab.session.docPath = path;
+        tab.session.title = tab.title = pathBase(path) || savedLabel;
+        if (cutClean) tab.session.cutDirty = false;
+        tab.dirty = !!(tab.session.cutDirty ?? tab.session.dirty) || tab.drawState.dirty;
+        tab.session.dirty = tab.dirty;
+        renderTabs();
+      }
+      scheduleRecovery();
+    }
     toast("Document saved.", "ok");
-    return true;
+    return !tab.dirty;
   } catch (e) {
     toast("Save failed: " + e.message, "err");
     return false;
-  }
+  } finally { savingDocument = false; }
 }
 
 function saveWorkDialog(tabName = null) {
@@ -545,7 +765,7 @@ function saveWorkDialog(tabName = null) {
 
 async function guardWorkBeforeContinue() {
   bed.finishDrawing();
-  if (!dirty) return true;
+  if (!activeDocumentDirty()) return true;
   const choice = await saveWorkDialog(activeTab()?.title);
   if (choice === "save") return saveDocument(false);
   if (choice === "discard") return true;
@@ -557,6 +777,7 @@ async function guardAllWorkBeforeWindowClose() {
   closeGuardRunning = true;
   if (recoveryTimer) { clearTimeout(recoveryTimer); recoveryTimer = null; }
   const originalTabId = activeTabId;
+  let accepted = false;
   try {
     captureActiveTab();
     for (const tab of documentTabs.filter((item) => item.dirty)) {
@@ -573,17 +794,20 @@ async function guardAllWorkBeforeWindowClose() {
       captureActiveTab();
     }
     await window.modcut.clearRecovery();
+    accepted = true;
     return true;
   } catch (error) {
     toast("Could not finish the close operation safely: " + error.message, "err");
     return false;
   } finally {
     closeGuardRunning = false;
+    if (!accepted) scheduleRecovery();
   }
 }
 
 function applyDocument(p, path, name) {
-  if (!p || p.app !== "modCut") throw new Error("Not a modCut document.");
+  validateProject(p);
+  const drawState = createProjectDraw(p.draw);
   bed.importDesign(p.design || "");
   docPath = path || null;
   if (p.filename) $("filename").value = p.filename;
@@ -600,14 +824,21 @@ function applyDocument(p, path, name) {
   bed.setGrid(state.gridXmm, state.gridYmm);
   if (p.pathOrder) { $("pathOrder").value = p.pathOrder; bed.setPathOrder(p.pathOrder); }
   [...$("mapmode").children].forEach((c) => c.classList.toggle("on", c.dataset.mode === state.mappingMode));
-  syncColorsAndLayers();
+  syncColorsAndLayers(drawState.document);
+  attachDrawState(activeTab(), drawState);
+  setWorkspace(p.workspace === "draw" ? "draw" : "cut");
   setFileLabel(name || pathBase(path) || "Untitled");
   markClean();
   refreshPos();
+  if (drawState.warning && !activeTab().drawWarningShown) {
+    toast(drawState.warning, "info"); activeTab().drawWarningShown = true;
+  }
 }
 
 // --- new / import / add -----------------------------------------------------
 function resetWorkspace({ filename = "job", label = "Untitled" } = {}) {
+  setWorkspace("cut");
+  attachDrawState(activeTab(), createProjectDraw());
   bed.clear();
   bed.resetHistory();
   docPath = null;
@@ -620,7 +851,25 @@ function resetWorkspace({ filename = "job", label = "Untitled" } = {}) {
   refreshPos();
 }
 
+// EPS, PostScript and older (PostScript based) Illustrator files.
+function postScriptOf(f) {
+  if (["eps", "ps"].includes(f.ext)) return f.text;
+  if (f.ext !== "ai" || !f.dataUrl) return null;
+  const head = atob(f.dataUrl.slice(f.dataUrl.indexOf(",") + 1, f.dataUrl.indexOf(",") + 1 + 1400));
+  return head.includes("%PDF-") ? null : atob(f.dataUrl.slice(f.dataUrl.indexOf(",") + 1));
+}
+function postScriptArtwork(text, name) {
+  const result = epsToSvg(text);
+  if (!result.count) throw new Error(`No artwork was found in ${name}.${result.warnings.length ? ` ${result.warnings.join(" ")}` : ""}`);
+  return { svgText: result.svg, warning: result.warnings.length ? `${name}: ${result.warnings.join(" ")}` : null };
+}
+
 async function prepareArtwork(f) {
+  const postScript = postScriptOf(f);
+  if (postScript !== null) {
+    const { svgText, warning } = postScriptArtwork(postScript, f.name);
+    return { kind: "vector", ...prepareSVG(svgText), warning };
+  }
   if (VECTOR_FILE_EXTENSIONS.has(f.ext)) {
     const svgText = f.ext === "dxf" ? dxfToSvg(f.text)
       : ["plt", "hpgl"].includes(f.ext) ? hpglToSvg(f.text)
@@ -735,7 +984,8 @@ async function placeArtwork(prepared) {
   [...$("mapmode").children].forEach((c) => c.classList.toggle("on", c.dataset.mode === "color"));
 }
 
-async function addArtworkFiles(files) {
+async function addArtworkFiles(files, drawOptions = {}) {
+  if (document.body.dataset.workspace === "draw") return addDrawArtworkFiles(files, activeTab(), drawOptions);
   bed.finishDrawing();
   const wasEmpty = !bed.getDesign();
   let added = 0;
@@ -765,6 +1015,7 @@ async function addArtworkFiles(files) {
 }
 
 async function doImport() {
+  if (document.body.dataset.workspace === "draw") return openDrawFile();
   if (!(await guardWorkBeforeContinue())) return;
   let f;
   try {
@@ -811,6 +1062,7 @@ async function doImport() {
 }
 
 async function addFiles() {
+  if (document.body.dataset.workspace === "draw") return importDrawFiles();
   let files;
   try {
     files = await window.modcut.openImport({ multiple: true, allowDocuments: false });
@@ -824,7 +1076,90 @@ async function addFiles() {
   toast(`Added ${added} file${added === 1 ? "" : "s"} to the project.`, "ok");
 }
 
-function openDocumentInNewTab(documentData, path, name) {
+async function prepareDrawArtwork(file) {
+  if (["svg","svgz"].includes(file.ext)) return { kind:"vector", svgText:file.text };
+  const postScript = postScriptOf(file);
+  if (postScript !== null) return { kind:"vector", ...postScriptArtwork(postScript, file.name) };
+  return prepareArtwork(file);
+}
+
+async function addDrawArtworkFiles(files, tab = activeTab(), { template = false } = {}) {
+  if (!tab?.draw || tab.drawState.document.readOnly) {
+    toast("Create an editable Draw document before importing artwork.","info"); return 0;
+  }
+  const workspace = tab.draw;
+  let added = 0;
+  for (const file of files) {
+    try {
+      if (file.kind === "unsupported" || file.kind === "document") {
+        if (file.reason === "document-not-addable" || file.kind === "document") {
+          await showMessageModal({title:"Open project files with Open",paragraphs:["Use Open to open a .modcut project in a new Draw tab. Import adds vector or raster artwork to the current document."]});
+        } else await showImportIssue(file);
+        continue;
+      }
+      const prepared = await prepareDrawArtwork(file);
+      if (!prepared) throw new Error("This format cannot be imported into Draw yet.");
+      if (!documentTabs.includes(tab) || tab.draw !== workspace) throw new Error("The target Draw document was closed or replaced.");
+      const result = await workspace.import(prepared,file.name,{template});
+      if (result.warning) toast(result.warning,"info");
+      added++;
+    } catch (error) { toast(`Could not import ${file.name}: ${error.message}`,"err"); }
+  }
+  return added;
+}
+
+// Place remembers the Template choice for the session, as Illustrator's Place dialog does.
+let placeAsTemplate = false;
+const isPlacedImage = (file) => [...IMAGE_FORMATS, ...TIFF_FORMATS].includes(file?.ext);
+async function importDrawFiles() {
+  const tab = activeTab();
+  if (tab?.drawState?.document.readOnly) { toast("This Draw document is read-only.","info"); return; }
+  try {
+    const files = await window.modcut.openImport({multiple:true,allowDocuments:false,intent:"draw-import"});
+    if (!files?.length) return;
+    let template = false;
+    if (files.some(isPlacedImage)) {
+      const options = await placeOptionsDialog({ template: placeAsTemplate, count: files.length });
+      if (!options) return;
+      template = placeAsTemplate = options.template;
+    }
+    const added = await addDrawArtworkFiles(files,tab,{template});
+    if (added) toast(`Imported ${added} file${added === 1 ? "" : "s"} into Draw.`,"ok");
+  } catch (error) { toast("Import failed: "+error.message,"err"); }
+}
+
+async function openDrawFile() {
+  try {
+    const file = await window.modcut.openImport({multiple:false,allowDocuments:true,intent:"draw-open"});
+    if (!file) return;
+    if (file.kind === "unsupported") return showImportIssue(file);
+    let drawData = null;
+    if (file.kind === "document") {
+      openDocumentInNewTab(JSON.parse(file.text),file.path,file.name,"draw");
+    } else if (["pdf","ai"].includes(file.ext) && postScriptOf(file) === null && (drawData = await pdfDrawDocument(file.dataUrl))) {
+      // A PDF saved with "Preserve modCut editing capabilities", or an .ai from Draw, opens as the Draw document it carries.
+      newDocument("draw", drawData);
+    } else {
+      const prepared = await prepareDrawArtwork(file);
+      if (!prepared) throw new Error("This format cannot be opened in Draw yet.");
+      const previousId = activeTabId;
+      newDocument("draw");
+      const tab = activeTab();
+      try {
+        const result = await tab.draw.import(prepared,file.name,{fitArtboard:true});
+        $("filename").value = file.name.replace(/\.[^.]+$/,""); setFileLabel(file.name);
+        if (result.warning) toast(result.warning,"info");
+      } catch (error) {
+        tab.unsubscribeDraw?.(); tab.draw?.destroy(); tab.drawRoot?.remove();
+        documentTabs = documentTabs.filter(item => item !== tab); activeTabId = previousId;
+        restoreWorkspace(activeTab()?.session); throw error;
+      }
+    }
+    toast("Opened in a new Draw document.","ok");
+  } catch (error) { toast("Open failed: "+error.message,"err"); }
+}
+
+function openDocumentInNewTab(documentData, path, name, mode = document.body.dataset.workspace === "draw" ? "draw" : null) {
   captureActiveTab();
   const previousTabId = activeTabId;
   const tab = { id: String(nextTabId++), title: name || "Untitled", dirty: false, session: null };
@@ -833,11 +1168,13 @@ function openDocumentInNewTab(documentData, path, name) {
   try {
     resetWorkspace();
     applyDocument(documentData, path, name);
+    if (mode) setWorkspace(mode);
     captureActiveTab();
     renderTabs();
     scheduleRecovery();
     return true;
   } catch (error) {
+    tab.unsubscribeDraw?.(); tab.draw?.destroy(); tab.drawRoot?.remove();
     documentTabs = documentTabs.filter((item) => item.id !== tab.id);
     activeTabId = previousTabId;
     restoreWorkspace(activeTab()?.session);
@@ -857,9 +1194,10 @@ async function droppedFilePayload(file) {
   const payload = { name: file.name, path, ext };
   if (ext === PROJECT_FILE_EXTENSION) return { ...payload, kind: "document", text: await file.text() };
   if (VECTOR_FILE_EXTENSIONS.has(ext)) {
+    const latin1 = async () => { const bytes = new Uint8Array(await file.arrayBuffer()); let out = ""; for (let i = 0; i < bytes.length; i += 8192) out += String.fromCharCode(...bytes.subarray(i, i + 8192)); return out; };
     const text = ext === "svgz"
       ? await new Response(file.stream().pipeThrough(new DecompressionStream("gzip"))).text()
-      : await file.text();
+      : ["eps", "ps"].includes(ext) ? await latin1() : await file.text();
     return { ...payload, text };
   }
   if (RASTER_FILE_EXTENSIONS.has(ext)) {
@@ -874,7 +1212,8 @@ async function droppedFilePayload(file) {
   return null;
 }
 
-async function handleDroppedFiles(fileList) {
+// In Draw, dropping images with Alt held places them as templates.
+async function handleDroppedFiles(fileList, { altKey = false } = {}) {
   const files = [...fileList];
   if (!files.length) return;
   const targetTabId = activeTabId;
@@ -907,7 +1246,7 @@ async function handleDroppedFiles(fileList) {
   let added = 0;
   if (artwork.length) {
     if (targetTabId && activeTabId !== targetTabId) switchDocumentTab(targetTabId);
-    added = await addArtworkFiles(artwork);
+    added = await addArtworkFiles(artwork, { template: altKey && artwork.every(isPlacedImage) });
   }
   if (opened) toast(`Opened ${opened} project${opened === 1 ? "" : "s"} in new tab${opened === 1 ? "" : "s"}.`, "ok");
   if (added) toast(`Added ${added} file${added === 1 ? "" : "s"} to the active project.`, "ok");
@@ -942,16 +1281,91 @@ function initFileDrop() {
     event.preventDefault();
     const files = event.dataTransfer.files;
     hide();
-    void handleDroppedFiles(files);
+    void handleDroppedFiles(files, { altKey: event.altKey });
   });
 }
 
-function newDocument() {
+let creatingDrawDocument = false;
+async function editDocumentSettings(id=activeTabId) {
+  if(creatingDrawDocument||document.querySelector('.modal-overlay'))return;
+  switchDocumentTab(id);
+  const tab=activeTab();if(!tab||tab.id!==id)return;
+  try{
+    const draw=tab.drawState;
+    if(draw&&!draw.blank){
+      if(draw.document.readOnly)return;
+      const before=draw.document.data;
+      const values=await documentSettingsDialog(before,draw.ui.artboardId,{machines:machines.map(m=>({name:m.name,width:m.bedW,height:m.bedH}))});
+      if(!values||!documentTabs.includes(tab)||tab.drawState!==draw)return;
+      if(draw.document.data!==before)throw new Error('The artwork changed while the dialog was open. Open the dialog again.');
+      const patch=Object.fromEntries(Object.entries(values.properties).filter(([key,value])=>JSON.stringify(value)!==JSON.stringify(before[key])));
+      const {artboards,...properties}=patch,commands=[];
+      if(Object.keys(properties).length)commands.push(updateDocument(properties));
+      for(const board of artboards??[]){const original=draw.document.getArtboard(board.id);
+        if(board.width!==original.width||board.height!==original.height)commands.push(updateArtboard(board.id,{width:board.width,height:board.height}));
+      }
+      if(commands.length)draw.history.transaction('Document Settings',()=>commands.forEach(command=>draw.history.execute(command)));
+      tab.draw?.artboards.choose(values.artboardId,true);
+    }else{
+      const values=await openModal({title:'Document settings',submitLabel:'Apply',className:'document-name-dialog',fields:[{key:'name',label:'Name',value:tab.title||'Untitled',required:true}]});
+      if(!values||tab!==activeTab())return;
+      const name=values.name.trim();if(!name||name===tab.title)return;
+      $("filename").value=name;markDirty();setFileLabel(name);
+    }
+    if(tab===activeTab()){captureActiveTab();document.querySelector(`.doc-tab[data-tab-id="${tab.id}"]`)?.focus();}
+    scheduleRecovery();
+  }catch(error){toast(error.message,'err');}
+}
+function openNewDrawDialog() {
+  const m=machine();
+  return newDocumentDialog({name:m.name,width:m.bedW || 600,height:m.bedH || 400},
+    {machines:machines.map(item=>({name:item.name,width:item.bedW,height:item.bedH}))});
+}
+async function requestNewDocument() {
+  if (creatingDrawDocument) return;
+  if (document.body.dataset.workspace !== "draw") return newDocument("cut");
+  creatingDrawDocument = true;
+  try {
+    const data=await openNewDrawDialog();
+    if(data) return newDocument("draw",data);
+  } catch(error) {toast(error.message,"err");}
+  finally {creatingDrawDocument=false;}
+}
+// Entering Draw on a tab with no Draw document: set it up first; Cancel returns to Cut.
+async function setupDrawDocument(tab) {
+  if (creatingDrawDocument) return;
+  creatingDrawDocument = true;
+  let data = null;
+  try { data = await openNewDrawDialog(); }
+  catch (error) { toast(error.message, "err"); }
+  finally { creatingDrawDocument = false; }
+  if (tab !== activeTab() || tab.workspace !== "draw" || tab.draw) return;
+  if (!data) return setWorkspace("cut");
+  attachDrawState(tab, createProjectDraw(data));
+  setWorkspace("draw");
+}
+async function saveDrawTemplate() {
+  const draw = activeTab()?.drawState;
+  if (document.body.dataset.workspace !== "draw" || !draw) return;
+  try {
+    const setup = setupFromDocument(draw.document.data), values = await saveTemplateDialog(draw.document.data.name || "Untitled");
+    if (!values) return;
+    if (!storeList(localStorage, TEMPLATES_KEY, saveTemplate(loadStoredList(localStorage, TEMPLATES_KEY), values.name, setup))) throw new Error("Could not save the template.");
+    toast(`Template “${values.name.trim()}” saved. Find it under Saved when you create a new document.`, "ok");
+  } catch (error) { toast(error.message, "err"); }
+}
+function newDocument(mode = document.body.dataset.workspace === "draw" ? "draw" : "cut", drawData = null) {
   captureActiveTab();
   const tab = { id: String(nextTabId++), title: "Untitled", dirty: false, session: null };
   documentTabs.push(tab);
   activeTabId = tab.id;
   resetWorkspace();
+  if (mode === "draw") {
+    const m=machine();
+    attachDrawState(tab,createProjectDraw(drawData || newDrawDocument({}, {width:m.bedW || 600,height:m.bedH || 400})));
+    setWorkspace("draw");
+    if(drawData) {$("filename").value=drawData.name;setFileLabel(drawData.name);}
+  }
   captureActiveTab();
   renderTabs();
   scheduleRecovery();
@@ -964,6 +1378,9 @@ async function closeDocumentTab(id = activeTabId) {
   if (!(await guardWorkBeforeContinue())) return;
   const index = documentTabs.findIndex((tab) => tab.id === id);
   if (index < 0) return;
+  documentTabs[index].draw?.destroy();
+  documentTabs[index].unsubscribeDraw?.();
+  documentTabs[index].drawRoot?.remove();
   documentTabs.splice(index, 1);
   if (!documentTabs.length) {
     activeTabId = null;
@@ -996,13 +1413,29 @@ const newLayer = (color, op, raster = false, key = null) => ({
 });
 // Re-read colors from the bed (import + drawn shapes) and reconcile the layer list,
 // preserving settings for colors that still exist.
-function syncColorsAndLayers() {
+function syncColorsAndLayers(drawDocument = null) {
   state.colors = bed.getColors();
   if (state.colors.some((color) => color.raster) && ["cut", "score"].includes(state.mappingMode)) {
     state.mappingMode = "color";
     [...$("mapmode").children].forEach((c) => c.classList.toggle("on", c.dataset.mode === "color"));
   }
-  syncLayers();
+  syncLayers(drawDocument);
+}
+function configureLaserProcesses(values) {
+  window.paper.activate();
+  if(state.mappingMode!=="color"){
+    const global=state.layers.find(layer=>layer.color===null);
+    state.layers=state.colors.map(color=>({...newLayer(color.color,color.raster?"Engrave":global?.op??"Cut",color.raster,color.key),...global,key:color.key,color:color.color,raster:color.raster,op:color.raster?"Engrave":global?.op??"Cut"}));
+  }
+  state.mappingMode="color";
+  for(const choice of values){
+    if(!operationsForLayer(choice.raster).includes(choice.op))continue;
+    const existing=matchingProcessLayer(state.layers,choice),index=existing?state.layers.indexOf(existing):-1;
+    const layer={...(existing??newLayer(choice.color,choice.op,choice.raster,choice.key)),...choice,output:choice.op!=="Ignore"};
+    if(index<0)state.layers.push(layer);else state.layers[index]=layer;
+  }
+  [...$("mapmode").children].forEach(item=>item.classList.toggle("on",item.dataset.mode==="color"));
+  syncRasterModes();renderLayers();markDirty();
 }
 function syncRasterModes() {
   bed.setRasterModes(state.layers.filter((layer) => layer.raster).map((layer) => ({
@@ -1010,17 +1443,19 @@ function syncRasterModes() {
     mode: layer.dither || "Grayscale",
   })));
 }
-function syncLayers() {
+function syncLayers(drawDocument = null) {
   if (state.mappingMode === "color") {
     const prev = new Map(state.layers.filter((l) => l.key).map((l) => [l.key, l]));
-    const colorsByKey = new Map(state.colors.map((color) => [color.key, color]));
+    const drawColors=processColorsForDocument(drawDocument??activeTab()?.drawState?.document)
+      .filter(color=>matchingProcessLayer(state.layers,color)&&!state.colors.some(existing=>existing.key===color.key));
+    const availableColors=[...state.colors,...drawColors];
+    const colorsByKey = new Map(availableColors.map((color) => [color.key, color]));
     const orderedColors = [
       ...state.layers.map((layer) => colorsByKey.get(layer.key)).filter(Boolean),
-      ...state.colors.filter((color) => !prev.has(color.key)),
+      ...availableColors.filter((color) => !prev.has(color.key)),
     ];
     state.layers = orderedColors.map((c) => {
-      const candidates = state.layers.filter((layer) => layer.color?.toLowerCase() === c.color.toLowerCase());
-      const existing = prev.get(c.key) || candidates.find((layer) => Boolean(layer.raster) === Boolean(c.raster));
+      const existing = matchingProcessLayer(state.layers, c);
       if (!existing) return newLayer(c.color, c.raster ? "Engrave" : "Cut", c.raster, c.key);
       const layer = { ...existing, key: c.key, color: c.color, raster: c.raster };
       if (c.raster && !canAssignRasterToOperation(layer.op)) layer.op = "Engrave";
@@ -1052,6 +1487,7 @@ function renderLayers() {
     color: state.mappingMode === "color" ? layer.color : null,
     visible: isOutputLayer(layer),
   })));
+  syncProcessPreview();
 }
 function moveLayer(index, offset) {
   const target = index + offset;
@@ -1292,6 +1728,7 @@ async function runJob(label) {
         maxFeed: machine().maxFeed || 12000,
         zAxis: machine().zAxis,
         softwareFocus: epilog,
+        ignoreFocus: isDummyMachine(),
         maxRasterSamples: rasterSampleLimitForMachine(),
       });
       jobs.push({
@@ -1387,6 +1824,8 @@ async function startSimulate() {
         maxFeed: machine().maxFeed || 12000,
         zAxis: machine().zAxis,
         softwareFocus: epilog,
+        // Focus only moves Z; the simulation shows XY, so it never blocks on it.
+        ignoreFocus: true,
         maxRasterSamples: rasterSampleLimitForMachine(),
       });
       if (buildVersion !== simBuildVersion) return;
@@ -1403,7 +1842,9 @@ async function startSimulate() {
     $("simPlay").textContent = "⏸";
     $("simProg").textContent = "0%";
     setSimSpeed(1);
-    toast("Simulating the generated machine program — red dot follows the beam.", "info");
+    toast(focusBlocksJob(specs)
+      ? `Simulating without focus offsets: ${machine().name} has no controlled Z axis, so sending this job will be blocked until the layers' Focus offset is 0 or Z is enabled.`
+      : "Simulating the generated machine program — red dot follows the beam.", "info");
   } catch (error) {
     toast("Simulation could not build the machine program: " + error.message, "err");
   } finally {
@@ -1770,16 +2211,20 @@ async function exportSettings() {
       { key: "machines", label: "Machines", type: "checkbox", value: true },
       { key: "materials", label: "Materials", type: "checkbox", value: true },
       { key: "profiles", label: "Process profiles", type: "checkbox", value: true },
-      { key: "prefs", label: "Preferences (units)", type: "checkbox", value: true },
+      { key: "prefs", label: "Preferences (appearance, workspace and units)", type: "checkbox", value: true },
+      { key: "shortcuts", label: "Keyboard shortcuts", type: "checkbox", value: true },
+      { key: "workspaces", label: "Saved Draw workspaces", type: "checkbox", value: true },
     ],
   });
   if (!v) return;
-  if (!v.machines && !v.materials && !v.profiles && !v.prefs) return toast("Nothing selected to export.", "info");
+  if (!v.machines && !v.materials && !v.profiles && !v.prefs && !v.shortcuts && !v.workspaces) return toast("Nothing selected to export.", "info");
   const payload = { app: "modCut", version: 1, exported: new Date().toISOString() };
   if (v.machines) payload.machines = machines;
   if (v.materials) payload.materials = materials;
   if (v.profiles) payload.processProfiles = processProfiles;
-  if (v.prefs) payload.prefs = { units: state.units };
+  if (v.prefs) payload.prefs = { ...preferences, units: state.units, theme: window.modcutTheme.preference, background: window.modcutTheme.background, gridUnit: state.gridUnit, gridXmm: state.gridXmm, gridYmm: state.gridYmm };
+  if (v.shortcuts) payload.drawShortcuts = keyOverrides();
+  if (v.workspaces) payload.drawWorkspaces = loadWorkspaces();
   try {
     const path = await window.modcut.exportSettings(JSON.stringify(payload, null, 2), "modcut-settings.json");
     if (path) toast("Settings exported → " + path, "ok");
@@ -1795,30 +2240,142 @@ async function importSettings() {
     if (Array.isArray(p.materials) && p.materials.length) { materials = p.materials; normalizeMaterialSpeeds(); state.materialId = materials[0].id; saveMaterials(); refreshMaterialSelect(); applyMaterialToLayers(); n++; }
     if (Array.isArray(p.processProfiles)) { processProfiles = p.processProfiles.map(normalizeProcessProfile).filter((profile) => profile.id); saveProcessProfiles(); renderLayers(); n++; }
     if (p.prefs && p.prefs.units) { setUnits(p.prefs.units); n++; }
+    if (["system", "light", "dark"].includes(p.prefs?.theme)) { window.modcutTheme.setPreference(p.prefs.theme); n++; }
+    if (window.modcutTheme.backgrounds.includes(p.prefs?.background)) { window.modcutTheme.setBackground(p.prefs.background); n++; }
+    if (p.prefs && typeof p.prefs === "object") {
+      updatePreferences(p.prefs);
+      if (["mm", "cm", "in"].includes(p.prefs.gridUnit)) state.gridUnit = p.prefs.gridUnit;
+      for (const key of ["gridXmm", "gridYmm"]) if (Number.isFinite(p.prefs[key]) && p.prefs[key] >= 0.5) state[key] = p.prefs[key];
+      persistGrid();
+      bed.setGrid(state.gridXmm, state.gridYmm);
+      n++;
+    }
+    if (p.drawShortcuts && typeof p.drawShortcuts === "object") { await saveShortcuts(p.drawShortcuts); n++; }
+    // Each workspace goes through the same checks as a workspace file; a damaged one is left out.
+    if (Array.isArray(p.drawWorkspaces)) {
+      for (const ws of p.drawWorkspaces) { try { if (ws?.panelLayout) saveWorkspace(parseWorkspace(serializeWorkspace(ws))); } catch { /* skipped */ } }
+      n++;
+    }
     toast(n ? "Settings imported." : "No recognizable settings in that file.", n ? "ok" : "info");
   } catch (e) { toast("Import failed: " + e.message, "err"); }
 }
 
-async function openSettings() {
+// Draw shortcuts are kept by the main process (it also rebuilds the menus); open Draw tabs refresh their tooltips.
+async function saveShortcuts(map) {
+  const saved = await window.modcut.setDrawShortcuts?.(map) ?? map;
+  setKeyOverrides(saved);
+  window.dispatchEvent(new Event("modcut-shortcuts-change"));
+}
+const settingsButtons = (host, buttons) => {
+  const row = document.createElement("div");
+  row.className = "form-buttons";
+  for (const [label, action, data] of buttons) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "btn btn--ghost btn--sm";
+    button.textContent = label;
+    if (data) button.dataset[data] = "";
+    button.addEventListener("click", action);
+    row.append(button);
+  }
+  host.append(row);
+};
+$("settings").addEventListener("click", () => openSettings());
+// Preferences: one window with sections on the left, as in Illustrator. `section` opens that page.
+async function openSettings(section = null) {
+  if (document.querySelector(".preferences-modal")) return;
   const gu = state.gridUnit;
+  const uiScaleLabels = ["Smallest", "Small", "Default", "Large", "Largest"];
+  const mcp = await window.modcut.getMcpServer?.().catch(() => null);
+  const mcpCommand = (status) => `claude mcp add --transport http modcut ${status.url} --header "Authorization: Bearer ${status.token}"`;
+  let shortcuts = null;
+  // Import replaces what this window shows, so it closes first and opens again on the same page.
+  const closeThen = (action) => async () => {
+    document.querySelector('.preferences-modal [data-x="cancel"]')?.click();
+    await action();
+    openSettings("Backup & transfer");
+  };
   const v = await openModal({
-    title: "Preferences", submitLabel: "Save",
+    title: "Preferences", submitLabel: "Save", className: "preferences-modal", navigation: true, initialSection: typeof section === "string" ? section : null,
     fields: [
-      { key: "units", label: "Display units", type: "select", value: state.units, options: [{ value: "mm", label: "Millimetres (mm)" }, { value: "cm", label: "Centimetres (cm)" }, { value: "in", label: "Inches (in)" }] },
-      { key: "gridUnit", label: "Grid unit", type: "select", value: gu, options: [{ value: "mm", label: "mm" }, { value: "cm", label: "cm" }, { value: "in", label: "in" }] },
-      { key: "gridX", label: "Grid spacing X", type: "number", value: +(state.gridXmm / UNIT[gu]).toFixed(3) },
-      { key: "gridY", label: "Grid spacing Y", type: "number", value: +(state.gridYmm / UNIT[gu]).toFixed(3) },
+      { key: "theme", section: "Appearance", sectionDescription: "Colours, language and the size of the interface. These apply as soon as you change them.", label: "Theme", type: "segmented", value: window.modcutTheme.preference,
+        showIf: (values) => values.background === "green",
+        onChange: (value) => window.modcutTheme.setPreference(value),
+        description: "System follows your device’s appearance automatically. Light and Dark keep a fixed theme. Changes apply and save immediately.",
+        options: [{ value: "system", label: "System", icon: "system" }, { value: "light", label: "Light", icon: "light" }, { value: "dark", label: "Dark", icon: "dark" }] },
+      { key: "background", label: "Background colour", type: "segmented", value: window.modcutTheme.background,
+        onChange: (value) => window.modcutTheme.setBackground(value),
+        description: "Choose green or a fixed gray tone. Text and buttons adapt automatically. Changes apply and save immediately.",
+        options: [{ value: "green", label: "Green", swatch: "#007A4B" }, { value: "white", label: "White", swatch: "#FFFFFF" },
+          { value: "light-gray", label: "Light gray", swatch: "#E5E5E5" }, { value: "gray", label: "Gray", swatch: "#555555" },
+          { value: "dark-gray", label: "Dark gray", swatch: "#282828" }] },
+      { key: "language", label: "Language", type: "select", value: preferences.language, description: "The language of menus, panels and messages. Applies immediately.",
+        options: LANGUAGES.map(({ id, label }) => ({ value: id, label })), onChange: (value) => updatePreferences({ language: value }) },
+      { key: "uiScale", label: "Interface size", type: "select", value: window.modcutUiScale.preference,
+        description: "Scale menus, icons, text and panels. Smaller sizes leave more room for the workspace. Applies and saves immediately.",
+        options: window.modcutUiScale.levels.map((value, index) => ({ value, label: `${uiScaleLabels[index]} (${Math.round(value * 100)}%)` })),
+        onChange: (value) => window.modcutUiScale.setPreference(value) },
+      { key: "units", section: "Units & grid", sectionDescription: "Units for sizes and positions in Cut, and the grid on the material preview.", label: "Display units", description: "Units used for the design’s position, width and height. Changing units keeps its physical size.", type: "select", value: state.units, options: [{ value: "mm", label: "Millimetres (mm)" }, { value: "cm", label: "Centimetres (cm)" }, { value: "in", label: "Inches (in)" }] },
+      { key: "showGrid", label: "Show grid", type: "checkbox", value: preferences.showGrid, description: "Show grid lines on the Cut material preview. Applies immediately; artwork and output stay unchanged.", onChange: (value) => updatePreferences({ showGrid: value }) },
+      { key: "gridUnit", label: "Grid unit", description: "Units used for the grid spacing below, independently of the display units.", type: "select", value: gu, options: [{ value: "mm", label: "Millimetres (mm)" }, { value: "cm", label: "Centimetres (cm)" }, { value: "in", label: "Inches (in)" }] },
+      { key: "gridX", label: "Grid spacing X", description: "Horizontal distance between vertical grid lines, in the selected grid unit.", type: "number", step: "any", min: 0.001, value: +(state.gridXmm / UNIT[gu]).toFixed(3) },
+      { key: "gridY", label: "Grid spacing Y", description: "Vertical distance between horizontal grid lines, in the selected grid unit.", type: "number", step: "any", min: 0.001, value: +(state.gridYmm / UNIT[gu]).toFixed(3) },
+      { key: "processPreviewCut", section: "Process preview", sectionDescription: "Colours used by the Preview switch next to Simulate, which shows what is cut, scored and engraved. Display only; the job is unchanged.",
+        label: "Cut lines", type: "color", value: preferences.processPreviewCut, description: "Colour of paths cut through. Applies immediately.", onChange: (value) => updatePreferences({ processPreviewCut: value }) },
+      { key: "processPreviewScore", label: "Score lines", type: "color", value: preferences.processPreviewScore, description: "Colour of paths scored on the surface. Applies immediately.", onChange: (value) => updatePreferences({ processPreviewScore: value }) },
+      { key: "processPreviewScoreDashed", label: "Dashed score lines", type: "checkbox", value: preferences.processPreviewScoreDashed, description: "Draw score lines dashed, so they stand apart from cut lines even in similar colours.", onChange: (value) => updatePreferences({ processPreviewScoreDashed: value }) },
+      { key: "processPreviewEngrave", label: "Engraved areas", type: "color", value: preferences.processPreviewEngrave, description: "Colour of engraved fills and strokes. Engraved images are shown in grayscale. Applies immediately.", onChange: (value) => updatePreferences({ processPreviewEngrave: value }) },
+      { key: "smartGuides", section: "Smart Guides", type: "custom",
+        sectionDescription: "Visual help for selecting and moving in Draw. Changes apply and save immediately.",
+        render: host => smartGuidesSettings(host, preferences, updatePreferences) },
+      { key: "invertZoom", section: "Navigation & help", sectionDescription: "Zooming, tooltips and explanations.", label: "Reverse zoom direction", type: "checkbox", value: preferences.invertZoom, description: "Reverse Cmd/Ctrl + scroll and trackpad pinch zoom in Cut. Panning stays the same. Applies immediately.", onChange: (value) => updatePreferences({ invertZoom: value }) },
+      { key: "tooltips", label: "Show tooltips", type: "checkbox", value: preferences.tooltips, description: "Show explanations when hovering over or focusing toolbar buttons. Applies immediately.", onChange: (value) => updatePreferences({ tooltips: value }) },
+      { key: "hideLaserPreviewIntro", label: "Skip Laser Preview explanation", type: "checkbox", value: preferences.hideLaserPreviewIntro, description: "Turn this off to show the explanation on the next activation. You can also open it from Help.", onChange: value => updatePreferences({ hideLaserPreviewIntro: value }) },
+      { key: "tooltipDelay", label: "Tooltip delay", type: "select", value: preferences.tooltipDelay, description: "How long to hover before showing a tooltip. Keyboard help appears sooner. Applies immediately.", showIf: (values) => values.tooltips, options: [{ value: 350, label: "Quick · 0.35 seconds" }, { value: 1000, label: "Normal · 1 second" }, { value: 1800, label: "Relaxed · 1.8 seconds" }], onChange: (value) => updatePreferences({ tooltipDelay: value }) },
+      { key: "shortcuts", section: "Keyboard shortcuts", type: "custom",
+        sectionDescription: "Click a shortcut and press the new keys. Backspace removes it, Escape stops. Changed shortcuts are shown in bold and are saved with Save.",
+        render: (host) => {
+          shortcuts = shortcutsEditor(host, { isMac: drawIsMac });
+          // Enter in the search field filters; it does not save the window.
+          host.querySelector("input")?.addEventListener("keydown", (event) => { if (event.key === "Enter") event.preventDefault(); });
+          settingsButtons(host, [["Reset all to defaults", () => shortcuts.reset(), "shortcutsReset"]]);
+        },
+        read: () => shortcuts.read() },
+      ...(mcp ? [
+        { key: "mcp", section: "Automation", sectionDescription: "Let other programs on this computer work with modCut.", label: "Let AI agents draw in modCut (MCP server)", type: "switch", value: mcp.enabled,
+          description: "Runs a local MCP server so an agent such as Claude Code can read and change the active Draw document. Only programs on this computer with the token below can connect. Every change is an undo step.",
+          onChange: async (value) => {
+            const status = await window.modcut.setMcpServer(value);
+            const field = document.querySelector('.preferences-modal [name="mcpCommand"]');
+            if (field) field.value = mcpCommand(status);
+            if (status.error) toast(`MCP server: ${status.error}`, "err");
+            else toast(value ? `MCP server running at ${status.url}` : "MCP server stopped.", "ok");
+          } },
+        { key: "mcpCommand", label: "Connect Claude Code", type: "text", readOnly: true, value: mcpCommand(mcp), showIf: (values) => values.mcp,
+          description: "Run this command in a terminal on this computer. Keep the token private: it lets a program change your drawings." },
+      ] : []),
+      { key: "backup", section: "Backup & transfer", type: "custom",
+        sectionDescription: "Save all your settings in one file: machines, materials, process profiles, preferences, keyboard shortcuts and Draw workspaces. Use it as a backup or to set up modCut the same way on another computer.",
+        render: (host) => settingsButtons(host, [["Export settings…", exportSettings, "settingsExport"], ["Import settings…", closeThen(importSettings), "settingsImport"]]),
+        description: "Export saves what is stored now; save changes in this window first. Import replaces the parts found in the file." },
     ],
   });
   if (!v) return;
+  if (JSON.stringify(v.shortcuts) !== JSON.stringify(keyOverrides())) {
+    try { await saveShortcuts(v.shortcuts); } catch (e) { toast(`Shortcuts were not saved: ${e.message}`, "err"); }
+  }
   setUnits(v.units);
   state.gridUnit = v.gridUnit;
   state.gridXmm = Math.max(0.5, v.gridX * UNIT[v.gridUnit]);
   state.gridYmm = Math.max(0.5, v.gridY * UNIT[v.gridUnit]);
+  persistGrid();
+  bed.setGrid(state.gridXmm, state.gridYmm);
+  scheduleRecovery();
+}
+function persistGrid() {
   localStorage.setItem("modcut_gridX", state.gridXmm);
   localStorage.setItem("modcut_gridY", state.gridYmm);
   localStorage.setItem("modcut_gridUnit", state.gridUnit);
-  bed.setGrid(state.gridXmm, state.gridYmm);
 }
 function setUnits(u) { state.units = u; localStorage.setItem("modcut_units", u); $("units").value = u; refreshPos(); }
 
@@ -1831,8 +2388,8 @@ function togglePanel() {
 }
 
 // --- wire UI ----------------------------------------------------------------
-$("newDoc").addEventListener("click", newDocument);
-$("addTab").addEventListener("click", newDocument);
+$("newDoc").addEventListener("click", () => requestNewDocument());
+$("addTab").addEventListener("click", () => requestNewDocument());
 $("import").addEventListener("click", doImport);
 $("add").addEventListener("click", addFiles);
 $("zoomIn").addEventListener("click", bed.zoomIn);
@@ -1848,8 +2405,7 @@ $("selMode").addEventListener("click", () => {
   $("selMode").textContent = selWhole ? "Mark whole" : "Mark elements";
 });
 
-// draw tools (select / rectangle / ellipse / line)
-const updateToolButtons = (tool) => [...$("tools").children].forEach((b) => b.classList.toggle("tool-on", b.dataset.tool === tool));
+// Cut shares Draw's toolbar, tool groups, metadata and customized tool shortcuts.
 const selectTool = (tool) => {
   activeTool = tool;
   bed.setTool(tool);
@@ -1857,9 +2413,11 @@ const selectTool = (tool) => {
     const style = bed.getStyle();
     bed.setDrawStyle(distinctVectorColor(style.color, state.colors), style.width);
   }
-  updateToolButtons(tool); refreshProps(); refreshPropsVisibility();
+  cutToolbar.update(); refreshProps(); refreshPropsVisibility();
 };
-$("tools").addEventListener("click", (e) => { const b = e.target.closest("button[data-tool]"); if (b) selectTool(b.dataset.tool); });
+const cutToolbar = createCutToolbar($("tools"), () => activeTool, selectTool);
+window.addEventListener('modcut-shortcuts-change', () => cutToolbar.update());
+$("workspaceToggle").addEventListener('click', () => cutToolbar.close());
 bed.onToolReset(() => syncColorsAndLayers()); // after a draw: sync colours, keep the tool active
 bed.onDrawSize((wMm, hMm, x, y) => {
   const el = $("drawsize");
@@ -1868,13 +2426,12 @@ bed.onDrawSize((wMm, hMm, x, y) => {
   el.style.left = x + 16 + "px"; el.style.top = y + 16 + "px";
   el.classList.remove("hidden");
 });
-bed.onDrawClick(async (type) => {
-  const v = await openModal({ title: `New ${type}`, submitLabel: "Add", fields: [
-    { key: "w", label: `Width (${state.units})`, type: "number", min: 0.01, step: 0.01, required: true, value: toDisp(50) },
-    { key: "h", label: `Height (${state.units})`, type: "number", min: 0.01, step: 0.01, required: true, value: toDisp(50) },
-  ] });
+bed.onDrawClick(async (type, point) => {
+  const units = state.units;
+  const v = await shapeSizeDialog(drawToolForCut(type), { units, width: toDisp(40), height: toDisp(30), lineLength: toDisp(40) });
   if (!v) return;
-  bed.addShape(type, toMm(v.w), toMm(v.h));
+  const mm = value => value * ({ mm: 1, cm: 10, in: 25.4 }[units] || 1);
+  bed.addShape(type, mm(v.width ?? v.lineLength), mm(v.height ?? 0), { point, angle: Number(v.angle ?? 0) });
   syncColorsAndLayers();
 });
 $("pathOrder").addEventListener("change", (e) => { bed.setPathOrder(e.target.value); markDirty(); });
@@ -1883,11 +2440,25 @@ $("filename").addEventListener("input", (e) => {
   markDirty();
 });
 
+// Cut and Draw share copy and paste: Paste takes whichever copy is newest. A Draw copy arrives as its
+// cut SVG, placed relative to the bed origin as its artboard would be by Send to Cut.
+function pasteFromDraw() {
+  const clip = drawClipboard.get();
+  if (!clip || drawClipboard.time() <= bed.clipboardTime()) return null;
+  if (!clip.cut?.count) { toast(clip.cut?.errors?.join(" ") || "Nothing in the Draw copy can be pasted in Cut.", "err"); return false; }
+  const prepared = prepareSVG(clip.cut.svg);
+  bed.finishDrawing();
+  bed.loadSVG(prepared.node, prepared.widthMm, prepared.heightMm, prepared.viewBox, { placement: "origin" });
+  markDirty();
+  const notes = [...clip.cut.errors, ...clip.cut.warnings];
+  if (notes.length) toast(notes.join(" "), "info");
+  return true;
+}
 function editAction(action) {
   const ok = ({
     copy: () => bed.copySelection(),
-    paste: () => bed.pasteSelection(),
-    "paste-in-place": () => bed.pasteSelection({ inPlace: true }),
+    paste: () => pasteFromDraw() ?? bed.pasteSelection(),
+    "paste-in-place": () => pasteFromDraw() ?? bed.pasteSelection({ inPlace: true }),
     duplicate: () => bed.duplicateSelection(),
     "select-all": () => bed.selectAll(),
     delete: () => bed.deleteSelection(),
@@ -1904,12 +2475,69 @@ function editAction(action) {
   return ok;
 }
 
+// Capture before Cut's window handlers; Draw shortcuts come only from keymap.mjs.
+const drawIsMac = /Mac|iPhone|iPad/.test(navigator.platform);
+const drawActions = {
+  new: requestNewDocument, import: doImport, add: addFiles, "close-tab": closeDocumentTab,
+  "save-document": () => saveDocument(false), "save-document-as": () => saveDocument(true),
+  "save-document-template": saveDrawTemplate,
+  "next-tab": () => switchRelativeTab(1), "previous-tab": () => switchRelativeTab(-1),
+  preferences: openSettings,
+  place: importDrawFiles,
+};
+const drawKeymap = createKeymap({
+  isMac: drawIsMac,
+  isEnabled: (entry) => !!entry && (entry.temporary || Object.hasOwn(drawActions,entry.command) || activeTab()?.draw?.canHandle(entry.command)
+    || entry.command.startsWith("tool.") && activeTab()?.draw?.availableTool(entry.command.slice(5))),
+  onTemporaryToolChange: value => activeTab()?.draw?.setTemporaryTool(value),
+  dispatch: (command) => Object.hasOwn(drawActions,command) ? drawActions[command]() : activeTab()?.draw?.handle(command),
+});
+const drawKeyContext = (event) => ({ workspace: "draw",
+  editable: !!event.target.closest?.("input, select, textarea, [contenteditable]:not([contenteditable=false]), [role=textbox]") });
+window.addEventListener("keydown", (event) => {
+  if (document.body.dataset.workspace !== "draw") return;
+  activeTab()?.draw?.eyedropperModifiers(event);
+  if (document.querySelector('.modal-overlay')) {drawKeymap.reset();return;}
+  if(event.target.closest?.('.draw-font-browser'))return;
+  if(event.target.closest?.('.draw-inline-text')){
+    if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='s'){event.preventDefault();event.stopImmediatePropagation();void saveDocument(event.shiftKey);}
+    return;
+  }
+  if (event.target.closest?.('.draw-artboard-rename, .draw-stroke-choices')) return;
+  // Panel chrome handles its own activation, removal and keyboard reordering.
+  if (event.target.closest?.('[data-panel-resize]') && ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key)) return;
+  const panelButton = event.target.closest?.('.draw-panel-rail [data-draw-panel]');
+  if (panelButton && !event.ctrlKey && !event.metaKey && !event.shiftKey &&
+      (event.altKey && ['ArrowUp','ArrowDown'].includes(event.key) || !event.altKey && ['Delete','Backspace'].includes(event.key))) return;
+  if (!event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && ['Enter',' '].includes(event.key) &&
+      event.target.closest?.('.draw-panel-rail button, .draw-panel-window button, .draw-dock-heading button')) return;
+  if (event.target.closest?.('.draw-context-menu')) {
+    if (['ArrowDown','ArrowUp','Home','End','ArrowRight','ArrowLeft','Escape','Tab','Enter',' '].includes(event.key) && !event.ctrlKey && !event.metaKey && !event.altKey) return;
+    activeTab()?.draw?.closeContextMenu();
+  }
+  // Number fields with scrubby titles step their own value with the arrow keys.
+  if ((event.key === "ArrowUp" || event.key === "ArrowDown") && event.target.closest?.("[data-draw-scrub-input]")) return;
+  event.stopImmediatePropagation();
+  drawKeymap.keydown(event, drawKeyContext(event));
+  activeTab()?.draw?.pathModifiers(event);
+}, true);
+window.addEventListener("keyup", (event) => {
+  if (document.body.dataset.workspace === "draw") {activeTab()?.draw?.eyedropperModifiers(event);drawKeymap.keyup(event, drawKeyContext(event));activeTab()?.draw?.pathModifiers(event);}
+}, true);
+window.addEventListener("blur", () => drawKeymap.reset());
+
 // keyboard shortcuts (ignore while typing in a field)
 window.addEventListener("keydown", (e) => {
+  if (document.body.dataset.workspace === "draw") return;
   const t = document.activeElement && document.activeElement.tagName;
   if (t === "INPUT" || t === "SELECT" || t === "TEXTAREA") return;
   const key = e.key.toLowerCase();
   const mod = e.metaKey || e.ctrlKey;
+  if (document.querySelector('.modal-overlay')) return;
+  if (key === 'escape') { cutToolbar.close(true); bed.cancelInteraction(); return; }
+  const binding = matchShortcut(e, { isMac: /Mac/.test(navigator.platform) });
+  const sharedTool = binding?.command?.startsWith('tool.') && CUT_TOOLS[binding.command.slice(5)];
+  if (sharedTool) { e.preventDefault(); cutToolbar.close(); selectTool(sharedTool); return; }
   if (mod) {
     if (key === "+" || key === "=") {
       e.preventDefault();
@@ -1956,7 +2584,7 @@ window.addEventListener("keydown", (e) => {
       e.preventDefault();
       if (command === "import") doImport();
       else if (command === "add") addFiles();
-      else if (command === "new") newDocument();
+      else if (command === "new") requestNewDocument();
       else if (command === "close-tab") closeDocumentTab();
       else if (command === "save-document") saveDocument(false);
       else if (command === "save-document-as") saveDocument(true);
@@ -1970,8 +2598,6 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (e.altKey || e.ctrlKey || e.metaKey) return;
-  const tool = { v: "select", a: "node", p: "pen", m: "rect", c: "ellipse", l: "line" }[key];
-  if (tool) selectTool(tool);
 });
 
 // properties (color + stroke width) — for the selection, or defaults for new shapes
@@ -2124,6 +2750,8 @@ function openContextMenu(info) {
     <button data-act="move-to-top">Move to top <kbd>⇧⌘U</kbd></button>
     <button data-act="move-to-bottom">Move to bottom <kbd>⌥⇧⌘N</kbd></button>
     <div class="ctx-menu__sep"></div>
+    <button data-act="edit-in-draw">Edit in Draw</button>
+    <div class="ctx-menu__sep"></div>
     <button data-act="delete" class="ctx-menu__danger">${deleteLabel} <kbd>⌫</kbd></button>`;
   ctxMenu.style.left = Math.min(info.x, window.innerWidth - 252) + "px";
   ctxMenu.style.top = Math.max(8, Math.min(info.y, window.innerHeight - 420)) + "px";
@@ -2142,6 +2770,7 @@ function openContextMenu(info) {
     const b = e.target.closest("button[data-act]");
     if (!b || b.disabled) return;
     if (b.dataset.act === "advanced-image-editor") void openAdvancedImageEditor();
+    else if (b.dataset.act === "edit-in-draw") void editInDraw();
     else editAction(b.dataset.act);
     closeContextMenu();
   });
@@ -2166,6 +2795,7 @@ $("splitJobs").addEventListener("change", (event) => {
     ? "Jobs will be sent as one file per operation type."
     : "Cut, Score and Engrave will be sent together in one file.", "info");
 });
+$("processPreview").addEventListener("change", (event) => updatePreferences({ processPreview: event.target.checked }));
 
 // simulate controls
 $("simPlay").addEventListener("click", () => {
@@ -2210,8 +2840,15 @@ $("mapmode").addEventListener("click", (e) => {
   markDirty();
 });
 
-window.modcut.onMenu((cmd) => ({
-  new: newDocument, import: doImport, add: addFiles, "close-tab": closeDocumentTab,
+window.modcut.onMenu((cmd) => {
+  if(document.body.dataset.workspace==='draw' && document.querySelector('.modal-overlay')) return;
+  if (cmd === "workspace-cut" || cmd === "workspace-draw") return setWorkspace(cmd.slice(10));
+  if (document.body.dataset.workspace === "draw" && activeTab()?.draw?.canHandle(cmd)) return activeTab()?.draw?.handle(cmd);
+  if (document.body.dataset.workspace === "draw" && ![
+    "new", "import", "add", "close-tab", "save-document", "save-document-as", "save-document-template", "docs", "about", "preferences",
+  ].includes(cmd)) return;
+  return ({
+  new: requestNewDocument, import: doImport, add: addFiles, "close-tab": closeDocumentTab,
   "zoom-in": bed.zoomIn, "zoom-out": bed.zoomOut, "zoom-fit": bed.fit,
   "toggle-panel": togglePanel, frame, simulate: startSimulate, connect,
   undo: () => editAction("undo"), redo: () => editAction("redo"),
@@ -2225,11 +2862,13 @@ window.modcut.onMenu((cmd) => ({
   "add-material": addMaterial, materials: openMaterialLibrary,
   "add-process-profile": addProcessProfile, "process-profiles": openProcessProfileLibrary,
   "save-document": () => saveDocument(false), "save-document-as": () => saveDocument(true),
+  "save-document-template": saveDrawTemplate,
   save: () => runJob("Save"), export: () => runJob("Export"), preferences: openSettings,
   "export-settings": exportSettings, "import-settings": importSettings,
   docs: () => window.open("../docs/index.html"),
   about: showAbout,
-}[cmd]?.()));
+}[cmd]?.());
+});
 window.modcut.onCloseRequest(async () => {
   const allowed = await guardAllWorkBeforeWindowClose();
   await window.modcut.respondToCloseRequest(allowed);
@@ -2242,6 +2881,8 @@ initFileDrop();
 refreshMachines(state.machineId);
 bed.setGrid(state.gridXmm, state.gridYmm);
 initializeDocumentTabs();
+bed.setViewPreferences(preferences);
+syncProcessPreview();
 void restoreRecoverySession().then((restored) => { if (!restored) scheduleRecovery(); });
 refreshProps();
 refreshPropsVisibility();
@@ -2257,3 +2898,17 @@ refreshPropsVisibility();
   }
 })();
 setInterval(pollMachineStatus, 500);
+
+// MCP: an AI agent's tool calls (Preferences > Automation) run against the active Draw tab.
+window.modcut.onMcpCall?.(async ({ id, name, args }) => {
+  try {
+    const tab = activeTab(), workspace = document.body.dataset.workspace === "draw" ? tab?.draw ?? null : null;
+    const result = await runMcpTool(workspace, name, args, {
+      newDocument: async ({ name: title, width, height }) => {
+        newDocument("draw", newDrawDocument({ name: title || "Untitled", preset: "custom", width, height }));
+        return activeTab()?.draw ?? null;
+      },
+    });
+    window.modcut.mcpResult(id, { result });
+  } catch (error) { window.modcut.mcpResult(id, { error: error?.message || String(error) }); }
+});

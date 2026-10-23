@@ -5,6 +5,7 @@
    ========================================================================== */
 
 :root {
+  color-scheme: light;
   /* ---- Brand ramp -------------------------------------------------------- */
   --brand-deep:  #006B5C;  /* dark teal-green — links, text accents, outlines  */
   --brand:       #00AC69;  /* gradient bottom — fills, active states, controls */
@@ -29,9 +30,15 @@
   --text:       #071411;   /* near-black, green-tinted — body text            */
   --text-muted: #435A50;   /* secondary text — passes AA on bg + surface      */
   --on-brand:   #FFFFFF;   /* text on darker filled controls                   */
+  --on-accent:  #071411;
+  --on-danger:  #FFFFFF;
+  --bed: #FFFFFF;
+  --grid-major: #CFE6DC;
+  --grid-minor: #E7F5EF;
 
   /* ---- Feedback (kept OUT of the green ramp so they read as distinct) ---- */
   --danger:  #B4321F;      /* cut/stop/destructive — solid, white text        */
+  --danger-fill: #B4321F;
   --warning: #94610E;
   --ok:      var(--brand);
 
@@ -53,16 +60,91 @@
   --lh: 1.5;
 }
 
-/* Light is the default. Dark is opt-in only (data-theme="dark"), never auto —
-   the makerspace wanted a bright, white UI. ponytail: add prefers-color-scheme
-   back if users ask for auto-dark. */
+/* App windows resolve system / light / dark in renderer/theme.js before paint. */
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --bg:        #071411;
   --surface:   #0D221E;
   --surface-2: #14352F;
   --border:    #24584F;
   --text:      #E9F7EF;
   --text-muted:#A6C6B8;
+  --brand-deep: #73DCC1;
+  --lime: #14352F;
+  --lime-bright: #0D221E;
+  --danger: #FF9987;
+  --warning: #E8BA68;
+  /* A subdued material preview keeps black artwork visible without recolouring it. */
+  --bed: #91A69C;
+  --grid-major: #728C80;
+  --grid-minor: #869C91;
+  --shadow-1: 0 1px 3px rgba(0,0,0,.28);
+  --shadow-2: 0 6px 20px rgba(0,0,0,.4), 0 2px 6px rgba(0,0,0,.25);
+}
+
+/* Fixed neutral backgrounds override the green theme. Controls share the same
+   semantic tokens, including contrast-safe accents, focus and feedback colours. */
+:root[data-background]:where(:not([data-background="green"])) {
+  --text: #191919;
+  --text-muted: #454545;
+  --brand-deep: #005B4E;
+  --brand: #007A4B;
+  --brand-mid: #007D6B;
+  --on-accent: #FFFFFF;
+  --danger: #A52B1A;
+  --warning: #704506;
+  --lime: var(--surface-2);
+  --lime-bright: var(--surface);
+  --bed: #FFFFFF;
+  --grid-major: #C4C4C4;
+  --grid-minor: #E2E2E2;
+  --shadow-1: 0 1px 3px rgba(0,0,0,.12);
+  --shadow-2: 0 6px 20px rgba(0,0,0,.18);
+}
+
+:root[data-background="white"] {
+  --bg: #FFFFFF;
+  --surface: #FFFFFF;
+  --surface-2: #EEEEEE;
+  --border: #B8B8B8;
+}
+
+:root[data-background="light-gray"] {
+  --bg: #EEEEEE;
+  --surface: #E5E5E5;
+  --surface-2: #D7D7D7;
+  --border: #A0A0A0;
+}
+
+:root[data-background="gray"],
+:root[data-background="dark-gray"] {
+  --text: #F5F5F5;
+  --text-muted: #E0E0E0;
+  --brand-deep: #9BF4DF;
+  --brand: #73DCC1;
+  --brand-mid: #73DCC1;
+  --on-accent: #071411;
+  --danger: #FFD6CE;
+  --warning: #FFE0A0;
+  --bed: #AAAAAA;
+  --grid-major: #858585;
+  --grid-minor: #9C9C9C;
+  --shadow-1: 0 1px 3px rgba(0,0,0,.28);
+  --shadow-2: 0 6px 20px rgba(0,0,0,.4);
+}
+
+:root[data-background="gray"] {
+  --bg: #606060;
+  --surface: #555555;
+  --surface-2: #484848;
+  --border: #858585;
+}
+
+:root[data-background="dark-gray"] {
+  --bg: #303030;
+  --surface: #282828;
+  --surface-2: #202020;
+  --border: #666666;
 }
 
 /* ============================================================================
@@ -107,7 +189,7 @@ a:hover { text-decoration: underline; }
 .btn--ghost { background: var(--surface-2); color: var(--text); }
 .btn--ghost:hover { filter: brightness(.97); }
 
-.btn--danger { background: var(--danger); color: #fff; }
+.btn--danger { background: var(--danger-fill); color: var(--on-danger); }
 .btn--danger:hover { filter: brightness(1.06); }
 
 .btn--sm { padding: 6px 14px; font-size: var(--fs-sm); }
@@ -170,9 +252,9 @@ input[type="checkbox"]:focus-visible { outline: 2px solid var(--brand-mid); outl
   border-radius: var(--r-pill); font: 700 var(--fs-xs)/1 var(--font-sans);
   letter-spacing: .04em; text-transform: uppercase;
 }
-.op-tag--cut     { background: var(--danger);     color: #fff; }
-.op-tag--engrave { background: var(--brand-deep); color: #fff; }
-.op-tag--score   { background: var(--brand);      color: var(--text); }
+.op-tag--cut     { background: var(--danger-fill); color: var(--on-danger); }
+.op-tag--engrave { background: var(--brand-fill); color: var(--on-brand); }
+.op-tag--score   { background: var(--brand);      color: var(--on-accent); }
 .op-tag--mark    { background: var(--lime);       color: var(--text); } /* text on lime = --text */
 
 /* --- Toggle ------------------------------------------------------------- */

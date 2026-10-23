@@ -1,0 +1,62 @@
+﻿import assert from 'node:assert/strict';
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { inputHelpers, wait } from './cdp.mjs';
+import { activeDraw as active, submitNewDrawDialog, rememberTabs, enterDraw } from './draw-test-helpers.mjs';
+
+export async function runDrawTextWorkflows(client) {
+  const {evaluate,command}=client,{click,key}=inputHelpers(client),restore=await rememberTabs(evaluate);
+  const until=async(expr,note)=>{for(let i=0;i<200;i++){if(await evaluate(expr))return;await wait(50);}assert.fail(note+': '+await evaluate("JSON.stringify({error:[...document.querySelectorAll('.toast')].map(t=>t.textContent),editor:document.querySelector('.draw-inline-text')?.outerHTML})"));};
+  const ready=()=>until("document.querySelector('.draw-inline-text')?.dataset.textReady==='true'",'Live text ready');
+  await enterDraw(evaluate);await evaluate("document.querySelector('#newDoc').click()");
+  await submitNewDrawDialog(evaluate,{preset:'custom',width:120,height:80,name:'Inline text proof'});
+  const at=(x,y)=>evaluate(`(async()=>{const w=${active},b=w.state.document.data.artboards[0],p=w.scope.view.projectToView(new w.scope.Point(b.x+${x},b.y+${y})),r=w.scope.view.element.getBoundingClientRect();return {x:r.x+p.x,y:r.y+p.y};})()`);
+  const snapshot=()=>evaluate(`(async()=>${active}.state.document.serialize())()`),before=await snapshot();
+  await key('t');await click(await at(15,25));await until("!!document.querySelector('.draw-inline-text')",'Inline editor');
+  assert.equal(await evaluate("!!document.querySelector('.draw-text-dialog')"),false,'Typing has no modal');
+  assert.equal(await snapshot(),before,'Clicking without typing creates no object');
+  await command('Input.insertText',{text:'Horten ÆØÅ\nmodCut'});await ready();
+  let node=await evaluate(`(async()=>{const w=${active};return w.state.document.getNode(w.state.selection.ids[0])})()`);
+  assert.equal(node.content.runs.map(r=>r.text).join(''),'Horten ÆØÅ\nmodCut');assert.equal(node.layout.lineWidths.length,2);
+  assert.notEqual(await snapshot(),before,'Typing updates the document immediately');
+  // Select a substring on the artboard and change its size in Properties while selection is retained.
+  await evaluate("(()=>{const el=document.querySelector('.draw-inline-text'),r=document.createRange();r.setStart(el.firstChild.firstChild,0);r.setEnd(el.firstChild.firstChild,6);getSelection().removeAllRanges();getSelection().addRange(r);})()");await wait(30);
+  await evaluate("(()=>{const el=document.querySelector('.draw-project[style*=block] [data-draw-field=prop-font-size]');el.focus();el.value='40';el.dispatchEvent(new Event('input',{bubbles:true}));})()");await ready();
+  let styled=await evaluate(`(async()=>${active}.state.document.getNode('${node.id}'))()`);
+  assert.equal(styled.content.runs[0].text,'Horten');assert.equal(styled.content.runs[0].character.fontSize,40);
+  assert.equal(styled.character.fontSize,24,'The rest keeps its size');
+  await evaluate("document.querySelector('.draw-project[style*=block] [data-draw-field=prop-font-family]').click()");
+  await until("document.querySelectorAll('.draw-font-result').length>1",'Font rows');
+  assert.ok(await evaluate("document.querySelectorAll('.draw-font-result').length>10"),'Lists installed families');
+  assert.equal(await evaluate("document.querySelector('.draw-font-specimen').textContent"),'Horten','Preview uses selected text');
+  const family=await evaluate("(async()=>{const fonts=await window.modcut.listSystemFonts();return fonts.find(f=>f.fontWeight==='normal'&&f.fontStyle==='normal'&&/Georgia|DejaVu Serif|Liberation Serif/.test(f.family))?.family??fonts.find(f=>f.family!=='Arial'&&f.fontWeight==='normal'&&f.fontStyle==='normal').family})()");
+  await evaluate(`(()=>{const s=document.querySelector('.draw-font-browser input');s.value=${JSON.stringify(family)};s.dispatchEvent(new Event('input'));})()`);
+  await evaluate(`document.querySelector('[data-font-family=${JSON.stringify(family)}]').click()`);await ready();
+  styled=await evaluate(`(async()=>${active}.state.document.getNode('${node.id}'))()`);
+  assert.equal(styled.content.runs[0].character.fontFamily,family,'Changing family styles only selected characters');
+  assert.equal(styled.content.runs[1].character?.fontFamily,undefined);
+  await evaluate("(()=>{const el=document.querySelector('.draw-project[style*=block] [data-draw-field=prop-font-weight]');el.value='bold';el.dispatchEvent(new Event('change',{bubbles:true}));})()");await ready();
+  styled=await evaluate(`(async()=>${active}.state.document.getNode('${node.id}'))()`);assert.equal(styled.content.runs[0].character.fontFamily,family,'Weight preserves the selected range font');assert.equal(styled.content.runs[0].character.fontWeight,'bold');
+  await key('Escape');await until("!document.querySelector('.draw-inline-text')",'Finish editing');
+  const svg=await evaluate(`(async()=>{const w=${active};return w.exportBoard(w.state.ui.artboardId,'svg')})()`);
+  assert.match(svg,/<path[\s>]/);assert.doesNotMatch(svg,/<text[\s>]/);
+  assert.ok(await evaluate(`(async()=>{const w=${active},cut=w.cutSvg(w.state.ui.artboardId);return cut.textCount===1&&cut.count>0&&!cut.errors.length})()`));
+  assert.equal(await evaluate(`(async()=>{const w=${active},{createProjectDraw}=await import('./draw/io/project.mjs');return createProjectDraw(JSON.parse(w.state.document.serialize())).document.serialize()===w.state.document.serialize()})()`),true);
+  const screenshot=await command('Page.captureScreenshot',{format:'png'});await writeFile(join(tmpdir(),'modcut-inline-text.png'),Buffer.from(screenshot.data,'base64'));
+  await evaluate(`(async()=>{const w=${active};w.handle('undo')})()`);assert.equal(await snapshot(),before,'One undo removes the typing session');
+  await evaluate(`(async()=>{const w=${active};w.handle('redo');w.select(['${node.id}']);w.handle('edit-text')})()`);
+  await until("!!document.querySelector('.draw-inline-text')",'Reopen inline editor');
+  assert.equal(await evaluate("document.querySelector('.draw-inline-text').textContent"),'Horten ÆØÅ\nmodCut');
+  await key('Escape');await wait(50);
+  // A native drag creates an area text frame, with live wrapping.
+  const a=await at(15,40),b=await at(90,65);
+  await command('Input.dispatchMouseEvent',{type:'mousePressed',x:a.x,y:a.y,button:'left',buttons:1,clickCount:1});
+  await command('Input.dispatchMouseEvent',{type:'mouseMoved',x:b.x,y:b.y,button:'left',buttons:1});
+  await command('Input.dispatchMouseEvent',{type:'mouseReleased',x:b.x,y:b.y,button:'left',buttons:0,clickCount:1});
+  await until("!!document.querySelector('.draw-inline-text')",'Area editor');await command('Input.insertText',{text:'Live area text wraps inside its frame.'});await ready();
+  node=await evaluate(`(async()=>{const w=${active};return w.state.document.getNode(w.state.selection.ids[0])})()`);
+  assert.equal(node.kind,'area');assert.ok(Math.abs(node.frame.width-75)<1);assert.ok(node.layout.lineWidths.length>1);
+  await key('Escape');await restore();
+  console.log('PASS inline Type: no dialog, Unicode, selected range live size/family, font previews, area drag/wrapping, export, save/reload and undo');
+}
