@@ -148,7 +148,10 @@
 
 /* --- material add row --------------------------------------------------- */
 .row-add { display: flex; gap: var(--sp-2); }
-.row-add .select { flex: 1; }
+.row-add .select { flex: 1; box-sizing: border-box; height: 34px; padding-block: 0; }
+/* The round buttons beside the menu are as tall as it. */
+.row-add .btn--sm.btn--icon { width: 34px; height: 34px; }
+.toolbar__options .btn--sm.btn--icon { width: 25px; height: 25px; }
 
 /* --- bottom action bar -------------------------------------------------- */
 /* Items keep their text on one line; in a narrow window the bar wraps to a second row instead of overflowing. */
@@ -215,6 +218,8 @@
 .about-copy { margin: var(--sp-2) auto 0; color: var(--text-muted); max-width: 28ch; }
 .about-meta { margin-top: var(--sp-4); font-size: var(--fs-xs); color: var(--text-muted); font-family: var(--font-mono); }
 .field { display: block; margin-bottom: var(--sp-3); }
+/* A colour field is a swatch, not a full-width text box (the padding squeezed the swatch to a line). */
+.input[type="color"] { width: 64px; height: 36px; padding: 3px; cursor: pointer; }
 .field > span { display: block; font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin-bottom: 4px; }
 .preferences-modal { width: min(540px, 92vw); }
 .preferences-modal .panel__header { position: sticky; top: 0; z-index: 2; background: var(--surface); }

@@ -52,6 +52,33 @@ export async function runUiAuditWorkflows(client, { out = join(tmpdir(), 'modcut
     await audit(`draw-panel-${id}`, '.draw-project[style*=block]');
     await evaluate("document.querySelectorAll('.draw-floating-panel').forEach(p=>p.querySelector('[aria-label^=Close]')?.click())");
   }
+  // The control bar's » menu, when the bar is too narrow for every group.
+  if (await evaluate("!!document.querySelector('.draw-project[style*=block] .draw-cb-more:not([hidden])')")) {
+    await evaluate("document.querySelector('.draw-project[style*=block] .draw-cb-more').click()");
+    await audit('draw-control-more', '.draw-project[style*=block] .draw-cb-overflow');
+    await evaluate("document.querySelector('.draw-project[style*=block] .draw-cb-more').click()");
+  }
+
+  // Dialogs: object commands with the rectangle selected, then each tool's options.
+  const escape = async () => { for (const type of ['keyDown', 'keyUp']) await command('Input.dispatchKeyEvent', { type, key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 }); };
+  const dialog = async (screen, open) => {
+    await evaluate(`(async()=>{const w=${active};${open}})()`);
+    for (let i = 0; i < 30 && !await evaluate("!!document.querySelector('.modal-overlay')"); i++) await wait(50);
+    if (!await evaluate("!!document.querySelector('.modal-overlay')")) { report.set(`no-dialog ${screen}`, { screen, kind: 'no-dialog', el: open }); return; }
+    await audit(screen, '.modal-overlay');
+    for (let i = 0; i < 5 && await evaluate("!!document.querySelector('.modal-overlay')"); i++) {
+      await evaluate("document.querySelector('.modal-overlay [data-x=cancel]')?.click()"); await wait(80);
+      if (await evaluate("!!document.querySelector('.modal-overlay')")) { await escape(); await wait(80); }
+    }
+  };
+  const target = await evaluate(`(async()=>(${active}.state.selection.ids[0]))()`);
+  for (const cmd of ['rotate-dialog', 'scale-dialog', 'reflect-dialog', 'shear-dialog', 'transform-each', 'offset-path', 'simplify', 'expand', 'average',
+    'split-into-grid', 'blend-options', 'save-selection', 'export-as', 'keyboard-shortcuts', 'workspace-new',
+    'effect-drop-shadow', 'effect-gaussian-blur', 'effect-zig-zag', 'effect-outer-glow'])
+    await dialog(`draw-dialog-${cmd}`, `w.select(['${target}']);w.handle('${cmd}');`);
+  for (const tool of ['rectangle', 'ellipse', 'polygon', 'star', 'pencil', 'paintbrush', 'blob-brush', 'eraser', 'magic-wand', 'rotate', 'scale'])
+    await dialog(`draw-tool-dialog-${tool}`, `w.select(['${target}']);w.setTool('${tool}');w.handle('tool-dialog');`);
+  await evaluate(`(async()=>{${active}.setTool('select')})()`);
   await command('Emulation.clearDeviceMetricsOverride');
 
   const issues = [...report.values()];
@@ -125,7 +152,8 @@ function pageAudit(selector) {
     // Fields and menus that share a row should share a height.
     const rows = new Map();
     for (const e of root.querySelectorAll('select, input, button')) {
-      if (!shown(e) || !(control(e) || e.matches('.draw-select, .select')) ) continue;
+      // The Draw/Cut switch in the toolbar is larger on purpose.
+      if (!shown(e) || !(control(e) || e.matches('.draw-select, .select, .btn')) || e.matches('.toolbar__actions .btn--primary')) continue;
       const row = e.parentElement?.closest('div, label, fieldset'), r = e.getBoundingClientRect();
       const host = row?.parentElement ?? row; if (!host) continue;
       const list = rows.get(host) ?? []; list.push({ e, r }); rows.set(host, list);

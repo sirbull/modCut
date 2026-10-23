@@ -60,7 +60,7 @@ export async function runDrawControlWorkflows(client) {
   await evaluate(`document.querySelector('${bar} [data-draw-cb-align=right]').click()`);
   const right = await bounds(id);
   assert.ok(Math.abs(right[0] + right[2] - (board[0] + 120)) < .01, `Align right moves a single object to the artboard edge: ${right}`);
-  assert.ok(await evaluate(`!!document.querySelector('${bar} [data-draw-cb=expand-shape]')`), 'Expand Shape is offered for live shapes');
+  assert.ok(await evaluate(`!!document.querySelector('${root} :is(.draw-control-bar,.draw-cb-overflow) [data-draw-cb=expand-shape]')`), 'Expand Shape is offered for live shapes (in the bar or under »)');
 
   // Equal gaps use spatial order and fixed endpoints, even if the Align panel targets the artboard or a key object.
   const distributed = await evaluate(`(async()=>{const w=${active},{shapeFromDrag}=await import('./draw/tools/shapes.mjs'),{insertNode}=await import('./draw/doc/commands.mjs');
@@ -85,6 +85,21 @@ export async function runDrawControlWorkflows(client) {
   const shot = await client.command('Page.captureScreenshot', { format:'png' });
   await writeFile(join(tmpdir(),'modcut-draw-control-spacing.png'),Buffer.from(shot.data,'base64'));
   await evaluate(`(async()=>{const w=${active};w.state.ui.alignTo='selection';w.select(['${id}']);})()`);
+
+  // A narrow window: groups past the edge move under », whose menu still works; a wide one brings them back.
+  await client.command('Emulation.setDeviceMetricsOverride', { width: 900, height: 650, deviceScaleFactor: 1, mobile: false });
+  await until(`!document.querySelector('${bar} .draw-cb-more').hidden`, '» appears when the bar is too narrow');
+  const narrow = await evaluate(`(()=>{const b=document.querySelector('${bar}');return {fits:b.scrollWidth<=b.clientWidth+1,moved:document.querySelectorAll('${root} .draw-cb-overflow .draw-cb-group').length,inBar:!!b.querySelector('[data-draw-cb-align]')};})()`);
+  assert.ok(narrow.fits && narrow.moved > 0 && !narrow.inBar, JSON.stringify(narrow));
+  await evaluate(`document.querySelector('${bar} .draw-cb-more').click()`);
+  assert.equal(await evaluate(`document.querySelector('${root} .draw-cb-overflow').hidden`), false);
+  await evaluate(`document.querySelector('${root} .draw-cb-overflow [data-draw-cb-align=left]').click()`);
+  assert.ok(Math.abs((await bounds(id))[0] - board[0]) < .01, 'Align left works from the » menu');
+  await until(`!document.querySelector('${root} .draw-cb-overflow').hidden`, 'the menu stays open after a re-render');
+  await evaluate("document.querySelector('.draw-stage canvas')?.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}))");
+  assert.equal(await evaluate(`document.querySelector('${root} .draw-cb-overflow').hidden`), true, 'a click elsewhere closes it');
+  await client.command('Emulation.clearDeviceMetricsOverride');
+  await until(`!!document.querySelector('${bar} [data-draw-cb-align]') && document.querySelectorAll('${root} .draw-cb-overflow .draw-cb-group').length<${narrow.moved}`, 'a wider window brings groups back into the bar');
 
   // Artboard tool: the active artboard's name and size.
   await evaluate(`(async()=>(${active}.setTool('artboard')))()`);

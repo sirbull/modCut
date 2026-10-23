@@ -661,7 +661,8 @@ body[data-workspace="draw"] #sendToCut { display: inline-flex; }
 .draw-export-note { margin: 0; color: var(--text-muted); font-size: var(--fs-sm); }
 .draw-export-error { min-height: 1em; margin: 8px 0 0; color: var(--danger); font-size: var(--fs-sm); }
 .draw-pdf-top { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 220px); align-items: end; gap: 10px; }
-.draw-pdf-save-preset { margin-bottom: 4px; }
+/* As tall as the preset menu beside it. */
+.draw-pdf-save-preset { box-sizing: border-box; height: 36px; }
 .draw-pdf-preset-name { grid-column: 1 / -1; display: flex; gap: 8px; }
 .draw-pdf-split { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 14px; min-height: 380px; }
 .draw-pdf-nav { display: flex; flex-direction: column; gap: 2px; padding: 4px; border: 1px solid var(--border); border-radius: 6px; align-self: start; }
